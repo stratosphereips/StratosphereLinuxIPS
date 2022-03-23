@@ -194,39 +194,6 @@ class Module(Module, multiprocessing.Process):
 
         return False
 
-    def get_ip_info(self, ip):
-        """ Return ani domain/server/dns info we have about this daddr """
-
-        # Get info from our cache db ip data may have SNI or reverse_dns or both
-        ip_data = __database__.getIPData(ip)
-        if ip_data:
-            rev_dns = ip_data.get('reverse_dns',False)
-            if rev_dns :
-                return rev_dns
-
-            ip_sni = ip_data.get('SNI',False)
-            if ip_sni:
-                server_name = ip_sni[0]['server_name']
-                if server_name:
-                    return server_name
-        # we don't have cached info about this ip, was it resolved?
-        ip_info = __database__.get_dns_resolution(ip)
-        ip_info = ip_info.get('domains', [])
-
-        if ip_info:
-            return ip_info
-
-        # we have no info about this ip in our db, resolve it
-        try:
-            dns_resolution = socket.gethostbyaddr(ip)[0]
-            # make sure we were able to resolve it
-            if validators.domain(dns_resolution):
-                return dns_resolution
-        except socket.herror:
-           # can't resolve this ip
-            return False
-
-        return False
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
@@ -285,26 +252,7 @@ class Module(Module, multiprocessing.Process):
             and not self.is_p2p(dport, proto, daddr)
             and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
-            confidence = 1
-            threat_level = 'high'
-            category = 'Anomaly.Connection'
-            type_detection  = 'dstip'
-            type_evidence = 'UnknownPort'
-            detection_info = daddr
-            ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
-                          f'destination IP {daddr}. {ip_identification}'
-            # get the sni/reverse dns of this daddr
-            ip_info = self.get_ip_info(daddr)
-            if ip_info:
-                description += f' ({ip_info})'
-
-            if not twid:
-                twid = ''
-            __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                     threat_level, confidence, description,
-                                     timestamp, category, port=dport, proto=proto,profileid=profileid,
-                                     twid=twid, uid=uid)
+            self.helper.set_evidence_unknown_port(daddr, dport, proto, timestamp, profileid, twid, uid)
 
     def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
         """
@@ -365,18 +313,7 @@ class Module(Module, multiprocessing.Process):
             # happened within more than 2 seconds
             return False
 
-        confidence = 0.7
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
-        type_detection = 'srcip'
-        type_evidence = 'DNS-ARPA-Scan'
-        description = f'performing DNS ARPA scan. Scanned {self.arpa_scan_threshold} hosts within 2 seconds.'
-        detection_info = profileid.split('_')[1]
-        conn_count = self.arpa_scan_threshold
-        if not twid: twid = ''
-        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                 description, stime, category,
-                                 conn_count=conn_count, profileid=profileid, twid=twid)
+        self.helper.set_evidence_dns_arpa_scan(self.arpa_scan_threshold, stime, profileid, twid, uid)
         # empty the list of arpa queries timestamps, we don't need thm anymore
         self.dns_arpa_queries[profileid] = []
 
@@ -430,34 +367,7 @@ class Module(Module, multiprocessing.Process):
                     return False
 
                 #self.print(f'Alerting after timer conn without dns on {daddr},
-                # uid {uid}. time {datetime.datetime.now()}')
-                threat_level = 'high'
-                category = 'Anomaly.Connection'
-                type_detection  = 'dstip'
-                source_target_tag = 'Malware'
-                type_evidence = 'ConnectionWithoutDNS'
-                detection_info = daddr
-                # the first 5 hours the confidence of connection w/o dns
-                # is 0.1  in case of interface only, until slips learns all the dns
-                start_time = __database__.get_slips_start_time()
-                now = time.time()
-                confidence = 0.8
-                if type(start_time) == datetime.datetime:
-                    if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
-                        confidence = 0.1
-                else:
-                    # start_time is float
-                    if '-i' in sys.argv and (now - start_time < 18000):
-                        confidence = 0.1
-
-                ip_identification = __database__.getIPIdentification(daddr)
-                description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
-                if not twid:
-                    twid = ''
-                __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                         threat_level, confidence, description,
-                                         timestamp, category, source_target_tag=source_target_tag,
-                                         profileid=profileid, twid=twid, uid=uid)
+                self.set_evidence_conn_without_dns(daddr, timestamp, profileid, twid, uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 try:
@@ -543,22 +453,13 @@ class Module(Module, multiprocessing.Process):
             for ip in answers:
                 if self.check_if_connection_was_made_by_different_version(profileid, twid, ip):
                     return False
-            confidence = 0.8
-            threat_level = 'low'
-            category = 'Anomaly.Traffic'
-            type_detection  = 'dstdomain'
-            type_evidence = 'DNSWithoutConnection'
-            detection_info = domain
-            description = f'domain {domain} resolved with no connection'
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+            self.helper.set_evidence_DNS_without_conn( domain, timestamp, profileid, twid, uid)
             # This UID will never appear again, so we can remove it and
             # free some memory
             try:
                 self.connections_checked_in_dns_conn_timer_thread.remove(uid)
             except ValueError:
                 pass
-
     def check_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully
@@ -1021,21 +922,8 @@ class Module(Module, multiprocessing.Process):
                         # We're looking for port scans in notice.log in the note field
                         if 'Port_Scan' in note:
                             # Vertical port scan
-                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
-                            confidence = 1
-                            threat_level = 'medium'
-                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-                            description = 'vertical port scan by Zeek engine. ' + msg
-                            type_evidence = 'PortScanType1'
-                            category = 'Recon.Scanning'
-                            type_detection = 'dstip'
-                            source_target_tag = "Recon"
-                            conn_count = int(msg.split("scanned")[1].split("ports")[0])
-                            detection_info = flow.get('scanning_ip','')
-                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
-                                                     confidence, description, timestamp, category,
-                                                     source_target_tag=source_target_tag, conn_count=conn_count,
-                                                     profileid=profileid, twid=twid, uid=uid)
+                            scanning_ip = flow.get('scanning_ip','')
+                            self.helper.set_evidence_vertical_portscan(msg, scanning_ip, timestamp, profileid, twid, uid)
 
                         # --- Detect SSL cert validation failed ---
                         if 'SSL certificate validation failed' in msg \
@@ -1051,40 +939,11 @@ class Module(Module, multiprocessing.Process):
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
                             # Horizontal port scan
-                            # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
-                            confidence = 1
-                            threat_level = 'medium'
-                            description = 'horizontal port scan by Zeek engine. ' + msg
-                            type_evidence = 'PortScanType2'
-                            type_detection = 'dport'
-                            source_target_tag = 'Recon'
-                            detection_info = flow.get('scanned_port','')
-                            category = 'Recon.Scanning'
-                            # get the number of unique hosts scanned on a specific port
-                            conn_count = int(msg.split("least")[1].split("unique")[0])
-                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
-                                                     confidence, description, timestamp, category,
-                                                     source_target_tag=source_target_tag, conn_count=conn_count,
-                                                     profileid=profileid, twid=twid, uid=uid)
-
+                            scanned_port = flow.get('scanned_port','')
+                            self.helper.set_evidence_horizontal_portscan(msg, scanned_port, timestamp, profileid, twid, uid)
                         # --- Detect password guessing by zeek ---
                         if 'Password_Guessing' in note:
-                            # Vertical port scan
-                            # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
-                            confidence = 1
-                            threat_level = 'high'
-                            category = 'Attempt.Login'
-                            # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-                            description = 'password guessing by Zeek enegine. ' + msg
-                            type_evidence = 'Password_Guessing'
-                            type_detection = 'srcip'
-                            source_target_tag = 'Malware'
-                            detection_info = flow.get('scanning_ip','')
-                            conn_count = int(msg.split("in ")[1].split("connections")[0])
-                            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
-                                                     confidence, description, timestamp, category,
-                                                     conn_count=conn_count, source_target_tag=source_target_tag,
-                                                     profileid=profileid, twid=twid, uid=uid)
+                            self.helper.set_evidence_pw_guessing(msg, timestamp, profileid, twid, uid)
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = self.c4.get_message(timeout=self.timeout)

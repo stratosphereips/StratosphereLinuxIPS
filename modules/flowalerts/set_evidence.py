@@ -4,8 +4,138 @@ from slips_files.core.database import __database__
 # Your imports
 import json
 import datetime
+import time
+import sys
 
 class Helper:
+    def set_evidence_DNS_without_conn(self, domain, timestamp, profileid, twid, uid):
+        confidence = 0.8
+        threat_level = 'low'
+        category = 'Anomaly.Traffic'
+        type_detection  = 'dstdomain'
+        type_evidence = 'DNSWithoutConnection'
+        detection_info = domain
+        description = f'domain {domain} resolved with no connection'
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_conn_without_dns(self, daddr, timestamp, profileid, twid, uid):
+        # uid {uid}. time {datetime.datetime.now()}')
+                threat_level = 'high'
+                category = 'Anomaly.Connection'
+                type_detection = 'dstip'
+                source_target_tag = 'Malware'
+                type_evidence = 'ConnectionWithoutDNS'
+                detection_info = daddr
+                # the first 5 hours the confidence of connection w/o dns
+                # is 0.1  in case of interface only, until slips learns all the dns
+                start_time = __database__.get_slips_start_time()
+                now = time.time()
+                confidence = 0.8
+                if type(start_time) == datetime.datetime:
+                    if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
+                        confidence = 0.1
+                else:
+                    # start_time is float
+                    if '-i' in sys.argv and (now - start_time < 18000):
+                        confidence = 0.1
+
+                ip_identification = __database__.getIPIdentification(daddr)
+                description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
+                if not twid:
+                    twid = ''
+                __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                         threat_level, confidence, description,
+                                         timestamp, category, source_target_tag=source_target_tag,
+                                         profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_dns_arpa_scan(arpa_scan_threshold, stime, profileid, twid, uid):
+        confidence = 0.7
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        type_detection = 'srcip'
+        type_evidence = 'DNS-ARPA-Scan'
+        description = f'performing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
+        detection_info = profileid.split('_')[1]
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, stime, category,
+                                 conn_count=arpa_scan_threshold, profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_unknown_port(daddr, dport, proto, timestamp, profileid, twid, uid):
+        confidence = 1
+        threat_level = 'high'
+        category = 'Anomaly.Connection'
+        type_detection = 'dstip'
+        type_evidence = 'UnknownPort'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Connection to unknown destination port {dport}/{proto.upper()} ' \
+                      f'destination IP {daddr}. {ip_identification}'
+        if not twid:
+            twid = ''
+        __database__.setEvidence(type_evidence, type_detection, detection_info,
+                                 threat_level, confidence, description,
+                                 timestamp, category, port=dport, proto=proto,
+                                 profileid=profileid,
+                                 twid=twid, uid=uid)
+
+    def set_evidence_pw_guessing(self, msg, timestamp, profileid, twid, uid):
+        #222.186.30.112 appears to be guessing SSH passwords (seen in 30 connections)
+        # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+        confidence = 1
+        threat_level = 'high'
+        category = 'Attempt.Login'
+        description = 'password guessing by Zeek enegine. ' + msg
+        type_evidence = 'Password_Guessing'
+        type_detection = 'srcip'
+        source_target_tag = 'Malware'
+        detection_info = msg.split(' appears')[0]
+        conn_count = int(msg.split("in ")[1].split("connections")[0])
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                 confidence, description, timestamp, category,
+                                 conn_count=conn_count, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+    def set_evidence_horizontal_portscan(self, msg, scanned_port, timestamp, profileid, twid, uid ):
+        # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
+        confidence = 1
+        threat_level = 'medium'
+        description = 'horizontal port scan by Zeek engine. ' + msg
+        type_evidence = 'PortScanType2'
+        type_detection = 'dport'
+        source_target_tag = 'Recon'
+        detection_info = scanned_port
+        category = 'Recon.Scanning'
+        # get the number of unique hosts scanned on a specific port
+        conn_count = int(msg.split("least")[1].split("unique")[0])
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                 confidence, description, timestamp, category,
+                                 source_target_tag=source_target_tag, conn_count=conn_count,
+                                 profileid=profileid, twid=twid, uid=uid)
+
+
+    def set_evidence_vertical_portscan(self, msg, scanning_ip, timestamp, profileid, twid, uid ):
+        # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
+        confidence = 1
+        threat_level = 'medium'
+        # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
+        description = 'vertical port scan by Zeek engine. ' + msg
+        type_evidence = 'PortScanType1'
+        category = 'Recon.Scanning'
+        type_detection = 'dstip'
+        source_target_tag = "Recon"
+        conn_count = int(msg.split("scanned")[1].split("ports")[0])
+        detection_info = scanning_ip
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level,
+                                 confidence, description, timestamp, category,
+                                 source_target_tag=source_target_tag, conn_count=conn_count,
+                                 profileid=profileid, twid=twid, uid=uid)
+
     def set_evidence_ssh_successful(self, profileid, twid, saddr,
                                     daddr, size, uid, timestamp,
                                     by='', ip_state='ip'):
