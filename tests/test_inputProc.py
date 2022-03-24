@@ -62,10 +62,10 @@ def test_handle_nfdump(outputQueue,
 
 @pytest.mark.skipif('nfdump' not in shutil.which('nfdump') , reason="nfdump is not installed")
 @pytest.mark.parametrize("input_type,input_information", [('binetflow','dataset/test2.binetflow'),
-                                                          ('binetflow','dataset/test3.binetflow'),
-                                                          ('binetflow','dataset/test4.binetflow'),
                                                           ('binetflow','dataset/test5.binetflow')
                                                           ])
+#                                                           ('binetflow','dataset/test3.binetflow'),
+#                                                           ('binetflow','dataset/test4.binetflow'),
 def test_handle_binetflow(outputQueue,
                           profilerQueue,
                           input_type,
