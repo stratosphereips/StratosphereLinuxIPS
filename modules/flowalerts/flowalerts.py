@@ -367,7 +367,7 @@ class Module(Module, multiprocessing.Process):
                     return False
 
                 #self.print(f'Alerting after timer conn without dns on {daddr},
-                self.set_evidence_conn_without_dns(daddr, timestamp, profileid, twid, uid)
+                self.helper.set_evidence_conn_without_dns(daddr, timestamp, profileid, twid, uid)
                 # This UID will never appear again, so we can remove it and
                 # free some memory
                 try:
@@ -658,7 +658,7 @@ class Module(Module, multiprocessing.Process):
                         if current_reconnections[key] >= 5:
                             description = f"Multiple reconnection attempts to Destination IP: {daddr} " \
                                           f"from IP: {saddr} reconnections: {current_reconnections[key]}"
-                            self.set_evidence_for_multiple_reconnection_attempts(profileid, twid,
+                            self.helper.set_evidence_for_multiple_reconnection_attempts(profileid, twid,
                                                                                  daddr, description,
                                                                                  uid, timestamp)
 

@@ -27,6 +27,7 @@ import traceback
 import os
 import binascii
 import base64
+import validators
 from re import split
 from tzlocal import get_localzone
 from .whitelist import Whitelist

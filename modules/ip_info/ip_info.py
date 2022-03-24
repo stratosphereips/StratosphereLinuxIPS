@@ -13,6 +13,7 @@ import maxminddb
 import ipaddress
 import whois
 import socket
+import requests
 import json
 from contextlib import redirect_stdout
 
