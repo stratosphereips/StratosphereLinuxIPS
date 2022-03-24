@@ -132,6 +132,7 @@ dump.rdb
 package-lock.json
 modules/blessed/node_modules/
 alerts.*
+errors.log
 nohup.out
 modules/threat_intelligence/remote_data_files/*
 node_modules/
