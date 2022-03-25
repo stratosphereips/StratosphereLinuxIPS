@@ -596,12 +596,26 @@ which hosts are alive in a network or large number of IP addresses using PING/IC
 
 
 We detect a scan every threshold. So we generate an evidence when there is 
-5,10,15,.. etc. ICMP established connections to different IPs.
+5,10,15, .. etc. ICMP established connections to different IPs.
 
 
 We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
 and ICMP-AddressMaskScan using Slips' own zeek script located in 
 zeek-scripts/icmps-scans.zeek
+
+# Connections Made By Slips
+
+Slips uses online databases to query information about many different things, for example (user agents, mac vendors etc.)
+
+The list below contains all connections made by Slips
+
+http://useragentstring.com -> For getting user agent info if no info was found in Zeek
+https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
+http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
+http://asnlookup.com/api/lookup -> For getting ASN info about whitelisted organizations if no info was found in slips_files/
+http://ipinfo.io/json -> For getting your public IP
+https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
+
 
 ---
 
