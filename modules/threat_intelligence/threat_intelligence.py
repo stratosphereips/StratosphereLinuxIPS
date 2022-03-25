@@ -46,6 +46,11 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.path_to_local_threat_intelligence_data = 'modules/threat_intelligence/local_data_files/'
 
+        if not os.path.exists(self.path_to_local_threat_intelligence_data):
+            os.mkdir(self.path_to_local_threat_intelligence_data)
+
+
+
     def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state=''):
         '''
         Set an evidence for a malicious IP met in the timewindow
