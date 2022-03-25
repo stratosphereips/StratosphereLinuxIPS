@@ -153,7 +153,7 @@ class Module(Module, multiprocessing.Process):
             return 0
         try:
             score = int(response['positives']) / int(response['total'])
-        except (ZeroDivisionError, TypeError):
+        except (ZeroDivisionError, TypeError, KeyError):
             score = 0
         self.counter += 1
         return score
