@@ -36,6 +36,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-tzlocal \
     nfdump \
     tshark \
+    whois \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara

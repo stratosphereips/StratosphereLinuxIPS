@@ -8,8 +8,8 @@ echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04
 
 echo "[+] Executing 'sudo apt-get update'"
 sudo apt-get update
-echo "[+] Executing 'sudo apt-get -y install tshark iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek'"
-sudo apt-get -y install tshark iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek
+echo "[+] Executing 'sudo apt-get -y install tshark whois iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek'"
+sudo apt-get -y install tshark whois iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek
 
 # create a symlink to zeek so that slips can find it
 echo "[+] Executing 'ln -s /opt/zeek/bin/zeek /usr/local/bin/bro'"
