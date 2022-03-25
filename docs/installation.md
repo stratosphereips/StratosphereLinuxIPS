@@ -39,7 +39,13 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 ## Installing Slips in your own computer.
 
-Slips is dependent on three major elements: Python 3.7+, Zeek and Redis database. To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
+Slips is dependent on three major elements: 
+
+Python 3.8
+Zeek
+Redis database
+
+To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
 
 **Instructions to download everything for Slips are below.**
 <br>
@@ -60,7 +66,7 @@ Update the repository of packages so you see the latest versions:
 	
 Install the required packages (-y to install without asking for approval):
 
-	apt-get -y install curl git redis python3.7-minimal python3-redis python3-pip python3-watchdog nodejs npm
+    apt-get -y install tshark iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek
 	
 Even though we just installed pip3, the package installer for Python (3.7), we need to upgrade it to its latest version:
 
