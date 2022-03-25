@@ -638,7 +638,7 @@ if __name__ == '__main__':
         # If we need zeek (bro), test if we can run it.
         # Need to be assign to something because we pass it to inputProcess later
         zeek_bro = None
-        if input_type not in ('pcap' , 'interface'):
+        if input_type in ('pcap' , 'interface'):
             zeek_bro = check_zeek_or_bro()
             if zeek_bro is False:
                 # If we do not have bro or zeek, terminate Slips.
