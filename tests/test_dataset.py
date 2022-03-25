@@ -59,7 +59,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    output_file = f'{output_dir}slips_output.txt'    
+    output_file = f'{output_dir}slips_output.txt'
     command = f'./slips.py -c slips.conf -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
@@ -72,8 +72,16 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
 
 
 @pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence,  output_dir",
-     [('dataset/sample_zeek_files', 4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
-      ('dataset/sample_zeek_files-2', 20,'horizontal port scan', 'sample_zeek_files-2/')])
+     [('dataset/sample_zeek_files', 4,
+
+       ['SSL certificate validation failed with (certificate is not yet valid)',
+        'performing bad SMTP login to 80.75.42.226',
+        'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
+        'multiple empty HTTP connections to bing.com'],
+
+       'sample_zeek_files/'),
+
+      ('dataset/sample_zeek_files-2', 20, 'horizontal port scan', 'sample_zeek_files-2/')])
 def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence, output_dir):
     import time
     time.sleep(3)
@@ -89,7 +97,12 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
-    assert is_evidence_present(log_file, expected_evidence) == True
+    if type(expected_evidence) == list:
+        # make sure all the expected evidence are there
+        for evidence in expected_evidence:
+            assert is_evidence_present(log_file, evidence) == True
+    else:
+        assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
