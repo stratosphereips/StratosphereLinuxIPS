@@ -608,3 +608,18 @@ zeek-scripts/icmps-scans.zeek
 If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
+## Zeek Scripts
+
+Slips is shipped with it's own custom zeek scripts to be able to extend zeek functionality and 
+customize the detections
+
+### Detect DoH
+
+In the ```detect_DoH.zeek``` script, slips has it's own list of ips that belong to dns/doh servers,
+
+When slips encouters a connection to any IP of that list on port 443/tcp, it assumes it's a DoH connetion,
+
+and times out the connection after 1h so that the connection won't take too long to appear in slips.
+
+
+
