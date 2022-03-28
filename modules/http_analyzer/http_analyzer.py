@@ -276,9 +276,7 @@ class Module(Module, multiprocessing.Process):
             threat_level = 'low'
             category = 'Anomaly.Behaviour'
             confidence = 1
-            description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}" ' \
-                          f'while connecting to {host}{uri}. '
-
+            description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}"'
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, timestamp, category, source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
