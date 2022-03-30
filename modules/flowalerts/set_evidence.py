@@ -81,7 +81,7 @@ class Helper:
                                          profileid=profileid, twid=twid, uid=uid)
 
 
-    def set_evidence_dns_arpa_scan(arpa_scan_threshold, stime, profileid, twid, uid):
+    def set_evidence_dns_arpa_scan(self, arpa_scan_threshold, stime, profileid, twid, uid):
         confidence = 0.7
         threat_level = 'medium'
         category = 'Recon.Scanning'
@@ -230,7 +230,7 @@ class Helper:
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_multiple_reconnection_attempts(self,profileid, twid, ip, description, uid, timestamp):
+    def set_evidence_for_multiple_reconnection_attempts(self, profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for Reconnection Attempts.
         '''
@@ -246,7 +246,7 @@ class Helper:
                                  timestamp, category, profileid=profileid,
                                  twid=twid, uid=uid)
 
-    def set_evidence_for_connection_to_multiple_ports(self,profileid, twid, ip, description, uid, timestamp):
+    def set_evidence_for_connection_to_multiple_ports(self, profileid, twid, ip, description, uid, timestamp):
         '''
         Set evidence for connection to multiple ports.
         '''

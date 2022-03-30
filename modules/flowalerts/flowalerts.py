@@ -204,7 +204,7 @@ class Module(Module, multiprocessing.Process):
             # there's an organization that's known to use this port,
             # check if the daddr belongs to the range of this org
             organization_info = json.loads(organization_info)
-            # can be an ip or a range
+            # get the organization ip or range
             org_ip = organization_info['ip']
             # org_name = organization_info['org_name']
 
@@ -240,15 +240,16 @@ class Module(Module, multiprocessing.Process):
         """ Checks dports that are not in our slips_files/ports_info/ files"""
         portproto = f'{dport}/{proto}'
         port_info = __database__.get_port_info(portproto)
-        if not port_info:
-            # we don't have port info in our database
-            # is it a port that is known to be used by a specific organization
-            if self.port_belongs_to_an_org(daddr, portproto, profileid):
-                return False
+        if port_info:
+            # it's a known port
+            return False
+        # we don't have port info in our database
+        # is it a port that is known to be used by a specific organization
+        if self.port_belongs_to_an_org(daddr, portproto, profileid):
+            return False
 
 
-        if (not port_info
-            and not 'icmp' in proto
+        if (not 'icmp' in proto
             and not self.is_p2p(dport, proto, daddr)
             and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
@@ -424,7 +425,7 @@ class Module(Module, multiprocessing.Process):
                 timer.start()
             elif uid in self.connections_checked_in_conn_dns_timer_thread:
                 # It means we already checked this conn with the Timer process
-                # (we waited 5 seconds for the dns to arrive after the connection was made)
+                # (we waited 15 seconds for the dns to arrive after the connection was made)
                 # but still no dns resolution for it.
                 # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
                 if self.check_if_resolution_was_made_by_different_version(profileid, daddr):

@@ -158,7 +158,7 @@ class InputProcess(multiprocessing.Process):
                         # We already opened this file
                         # self.print(f'Old File found {filename}', 0, 6)
                     except KeyError:
-                        # First time openning this file.
+                        # First time opening this file.
                         # Ignore the files that do not contain data. These are the zeek log files that we don't use
                         should_be_ignored = False
                         ignored_files = ['capture_loss','loaded_scripts','packet_filter', 'stats', 'weird', 'reporter']
@@ -252,7 +252,7 @@ class InputProcess(multiprocessing.Process):
                     file_with_earliest_flow = files_sorted_by_ts[0]
                 except IndexError:
                     # No more sorted keys. Just loop waiting for more lines
-                    # It may happened that we check all the files in the folder, and there is still no file for us.
+                    # It may happen that we check all the files in the folder, and there is still no file for us.
                     # To cover this case, just refresh the list of files
                     # self.print('Getting new files...')
                     # print(cache_lines)
