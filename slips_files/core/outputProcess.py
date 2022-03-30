@@ -47,6 +47,12 @@ class OutputProcess(multiprocessing.Process):
         __database__.start(self.config)
 
     def create_errors_log(self):
+        if '-o' in sys.argv:
+            output_dir = sys.argv[sys.argv.index('-o')+1]
+            # add / to the end of output dir if not there
+            output_dir = output_dir if output_dir.endswith('/') else f'{output_dir}/'
+            self.errors_logfile = self.errors_logfile.replace('output/', output_dir)
+
         open(self.errors_logfile, 'w').close()
         branch_info = utils.get_branch_info()
         if branch_info != False:
