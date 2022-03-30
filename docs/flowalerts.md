@@ -45,6 +45,7 @@ This detection will ignore certain IP addresses for which a connection without D
 - IPv6 local-link IPs
 - Multicast IPs
 - Broadcast IPs only if they are private
+- Well known organizations (facebook, apple, google, twitter, and microsoft)
 
 
 ## Successful SSH connections
@@ -147,13 +148,33 @@ Slips uses whois python library to get the creation date of every domain met in 
 
 If a domain's age is less than 60 days, slips sets an alert.
 
+Not all domains are supported, here's the list of supported TLDs.
+
+    ['.ac_uk', '.am', '.amsterdam', '.ar', '.at', '.au',
+    '.bank', '.be', '.biz', '.br', '.by', '.ca', '.cc',
+    '.cl', '.club', '.cn', '.co', '.co_il', '.co_jp', '.com',
+    '.com_au', '.com_tr', '.cr', '.cz', '.de', '.download', '.edu',
+    '.education', '.eu', '.fi', '.fm', '.fr', '.frl', '.game', '.global_',
+    '.hk', '.id_', '.ie', '.im', '.in_', '.info', '.ink', '.io',
+    '.ir', '.is_', '.it', '.jp', '.kr', '.kz', '.link', '.lt', '.lv',
+    '.me', '.mobi', '.mu', '.mx', '.name', '.net', '.ninja',
+    '.nl', '.nu', '.nyc', '.nz', '.online', '.org', '.pe',
+    '.pharmacy', '.pl', '.press', '.pro', '.pt', '.pub', '.pw',
+    '.rest', '.ru', '.ru_rf', '.rw', '.sale', '.se', '.security',
+    '.sh', '.site', '.space', '.store', '.tech', '.tel', '.theatre',
+    '.tickets', '.trade', '.tv', '.ua', '.uk', '.us', '.uz', '.video',
+    '.website', '.wiki', '.work', '.xyz', '.za']
+
 ## Bad SMTP logins
 
-Slips uses zeek to detect SMTP connections, When zeek detects a bad smtp login, slips also detects it.
+Slips uses zeek to detect SMTP connections, 
+When zeek detects a bad smtp login, it logs it to smtp.log, then slips reads
+this file and sets an evidence.
 
 ## SMTP bruteforce
 
-Slips detects a SMTP bruteforce when 3 or more bad SMTP logins happen within 10 seconds.
+Slips detects a SMTP bruteforce when 3 or more bad SMTP 
+logins happen within 10 seconds.
 
 ---
 
@@ -169,3 +190,11 @@ Slips gathers AS, hostname, SNI, rDNS and any available data about this IP and y
     Detected SSL certificate validation failed with (certificate has expired) Destination IP: 
     216.58.201.70. AS: GOOGLE, US, SNI: 2542116.fls.doubleclick.net, rDNS: prg03s01-in-f70.1e100.net
 
+
+## DNS ARPA Scans
+
+Whenever slips sees a new domain in dns.log, if the domain ends with '.in-addr.arpa'
+slips keeps trach of this domain and the source IP that made the DNS request.
+
+Then, if the source IP is seen doing 10 or more ARPA queries within 2 seconds,
+slips generates an ARPA scan detection.

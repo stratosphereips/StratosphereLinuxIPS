@@ -393,10 +393,17 @@ to search for Geolocation.
 Slips is shipped with an offline database ```databases/macaddress-db.json``` for 
 MAC address vendor mapping.
 
+This database is a combination of 2 different online databases, but the format of them
+is changed to a format slips understands and to reduce the size of the db.
+
 Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
 database using the OUI.
 
-If the vendor isn't found in the offline MAC database, Slips tries to get the MAc using the online database https://www.macvendorlookup.com
+If the vendor isn't found in the offline MAC database,
+Slips tries to get the MAc using the online database https://www.macvendorlookup.com
+
+The offline database is updated manually and shipped with slips, you can find it in 
+the ```databases/``` dir.
 
 Slips makes sure it doesn't perform duplicate searches of the same MAC Address either online, or offline.
 
@@ -467,6 +474,7 @@ Available detection are:
 - Multiple empty connections
 - Suspicious user agents
 - Incompatible user agents
+- Multiple user agents
 
 ### Multiple empty connections
 
@@ -501,6 +509,21 @@ Available keywords for Apple: ('macos', 'ios', 'apple', 'os x', 'mac', 'macintos
 Available keywords for Microsoft: ('microsoft', 'windows', 'nt') 
 
 Available keywords for Android: ('android', 'google')
+
+### Multiple user agents
+
+Slips stores the MAC address and vendor of every IP it sees 
+(if available) in the redis database. Then, when an IP iss seen 
+using a different user agent than the one stored in the database, it tries to extract
+os info from the user agent string, either by performing an online
+query to http://useragentstring.com or by using zeek.
+
+If an IP is detected using different user agents that refer to different
+operating systems, an alert of type 'Multiple user agents' is made
+
+for example, if an IP is detected using a macOS user agent then an android user agent,
+slips detects this with 'low' threat level
+
 
 
 ## Leak Detector Module
@@ -635,5 +658,15 @@ When slips encouters a connection to any IP of that list on port 443/tcp, it ass
 
 and times out the connection after 1h so that the connection won't take too long to appear in slips.
 
+### Detect ICMP Scans
+
+In the ```zeek-scripts/icmps-scans.zeek``` script, we 
+check the type of ICMP in every ICMP packet seen in the network,
+
+and we detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
+and ICMP-AddressMaskScan based on the icmp type
+
+We detect a scan every threshold. So we generate an evidence when there is 
+5,10,15, .. etc. ICMP established connections to different IPs.
 
 
