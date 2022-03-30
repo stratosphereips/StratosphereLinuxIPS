@@ -7,13 +7,21 @@
   - Update our list of ports used by specific organizations to minimize false positive 'unknown destination port' alerts
   - Add support for Russia-Ukraine IoCs
   - Detect incompatible user agents by comparing mac vendors with user agents found in http traffic.
+  - Detect the use of multiple user agents, for example Linux UA, then Apple UA, then MAC UA.
   - The default time to wait to alert on DNS without resolution now is 30 mins
   - The time to wait for DNS without resolution now works in interface capture mode and in reading any file
   - detect ICMP timestamp scan, Address scan and address mask scan
   - Support deleting of large log files (arp.log) in case the user doesn't want a copy of the log files after slips is done
   - Update our offline MAC vendor database and add support for getting unknown vendors from an online database
   - Fix FP Multiple reconnection attempts
-  - 
+  - Added a zeek script to recognize DoH flows for more real-time experience while using slips
+  - Change the structure of slips files by splitting large modules into smaller files.
+  - Reduce false positives by disabling 'connections without DNS' to a well known org
+  - Fix 'multiple reconnection attemps' alerts
+  - Update the list of our special organization ports
+  - Document all the internet connections made by slips
+  - Fix install.sh
+  - Add errors.log to output/ dir to log errors encountered by slips.
 -0.8.4
 * Slips
   - Add support for local JA3 feeds
@@ -33,6 +41,7 @@
   - Fix problem stopping slips. 
   - Fix problem with redis stopping on error writing to disk.
   - Fix false positive 'not valid yet' SSL alerts
+  - Descrease the amount of false positive C&C alerts
 
 * Kalipso
   - Fix Kalipso in docker issue
