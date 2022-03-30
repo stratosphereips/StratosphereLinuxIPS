@@ -20,6 +20,8 @@ import multiprocessing
 import sys
 import io
 from .database import __database__
+from slips_files.common.slips_utils import utils
+from datetime import datetime
 import os
 
 # Output Process
@@ -30,7 +32,8 @@ class OutputProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         # create the file and clear it
-        open('output/errors.log', 'w').close()
+        self.errors_logfile = 'output/errors.log'
+        self.create_errors_log()
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -39,10 +42,19 @@ class OutputProcess(multiprocessing.Process):
         if stdout != '':
             self.change_stdout(stdout)
         if self.verbose > 2:
-            print('Verbosity: {}. Debugging: {}'.format(str(self.verbose), str(self.debug)))
+            print(f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}')
         # Start the DB
         __database__.start(self.config)
 
+    def create_errors_log(self):
+        open(self.errors_logfile, 'w').close()
+        branch_info = utils.get_branch_info()
+        if branch_info != False:
+            # it's false when we're in docker because there's no .git/ there
+            commit, branch = branch_info[0], branch_info[1]
+            now = datetime.now()
+            with open(self.errors_logfile, 'w') as f:
+                f.write(f'Using {branch} - {commit} - {now}\n\n')
 
     def change_stdout(self, file):
         # io.TextIOWrapper creates a file object of this file
@@ -143,7 +155,7 @@ class OutputProcess(multiprocessing.Process):
         # make sure thee msg is an error. debug_level==1 is the one printing errors
         if debug_level == 1:
             # it's an error. we should log it
-            with open('output/errors.log', 'a') as errors_logfile:
+            with open(self.errors_logfile, 'a') as errors_logfile:
                 errors_logfile.write(f'{sender}{msg}\n')
 
     def shutdown_gracefully(self):
@@ -153,14 +165,12 @@ class OutputProcess(multiprocessing.Process):
         while True:
             try:
                 line = self.queue.get()
-                if 'quiet' == line:
+                if line == 'quiet':
                     self.quiet = True
-                # if timewindows are not updated for 25 seconds,
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 elif 'stop_process' in line:
                     self.shutdown_gracefully()
                     return True
-                elif 'stop' != line:
+                elif line != 'stop':
                     if not self.quiet:
                         self.output_line(line)
                 else:
