@@ -137,7 +137,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # Discard some type of flows that they dont have ports
             dataset = dataset[dataset.proto != 'arp']
-            dataset = dataset[dataset.proto != 'arp']
+            dataset = dataset[dataset.proto != 'ARP']
             dataset = dataset[dataset.proto != 'icmp']
             dataset = dataset[dataset.proto != 'igmp']
             dataset = dataset[dataset.proto != 'ipv6-icmp']
@@ -290,9 +290,9 @@ class Module(Module, multiprocessing.Process):
         try:
             # Store the real label if there is one
             y_flow = self.flow['label']
-            # Drop the real label
+            # remove the real label column
             self.flow = self.flow.drop('label', axis=1)
-            # Drop the label predictions of the other modules
+            # remove the label predictions column of the other modules
             X_flow = self.flow.drop('module_labels', axis=1)
             # Scale the flow
             X_flow = self.scaler.transform(X_flow)
@@ -300,7 +300,7 @@ class Module(Module, multiprocessing.Process):
             return pred
         except Exception as inst:
             # Stop the timer
-            self.print('Error in detect()')
+            self.print('Error in detect() X_flow:')
             self.print(X_flow)
             self.print(type(inst))
             self.print(inst)
