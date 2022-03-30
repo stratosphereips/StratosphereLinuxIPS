@@ -66,8 +66,6 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Behaviour'
             confidence = 1
             description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
-            if not twid:
-                twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, timestamp, category,source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
@@ -192,9 +190,10 @@ class Module(Module, multiprocessing.Process):
 
                     return True
 
-    def get_user_agent_info(self, user_agent, profileid) -> bool:
+    def get_user_agent_info(self, user_agent, profileid):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
+        returns a dict with
         """
         # some zeek http flows don't have a user agent field
         if not user_agent:
@@ -202,7 +201,7 @@ class Module(Module, multiprocessing.Process):
         # don't make a request again if we already have a user agent associated with this profile
         if __database__.get_user_agent_from_profile(profileid) != None:
             # this profile already has a user agent
-            return True
+            return False
 
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
         UA_info = {'user_agent': user_agent}
@@ -232,8 +231,55 @@ class Module(Module, multiprocessing.Process):
             'os_type': os_type,
             'browser': browser,
         })
+        __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
+        return UA_info
+
+
+    def extract_info_from_UA(self, user_agent, profileid):
+        """
+        Zeek sometimes collects infpo about a specific UA, in this case the UA starts with
+        'server-bag'
+        """
+        if __database__.get_user_agent_from_profile(profileid) != None:
+            # this profile already has a user agent
+            return True
+        # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
+        user_agent = user_agent.replace('server-bag', '').replace(']','').replace('[','')
+        UA_info = {'user_agent': user_agent}
+        os_name = user_agent.split(',')[0]
+        os_type = os_name + user_agent.split(',')[1]
+        UA_info.update({
+            'os_name':os_name,
+            'os_type': os_type,
+            # server bag UAs don't have browser info
+            'browser': '',
+        })
         UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
+
+    def check_multiple_UAs(self, cached_ua: dict, user_agent: dict, host, uri, timestamp, profileid, twid, uid):
+        """
+        Detect if the user is using an Apple UA, then android, then linux etc.
+        :param user_agent: UA of the current flow
+        :param cached_ua: UA of this profile from the db
+        """
+        if not cached_ua:
+            return False
+
+        cached_ua = cached_ua['user_agent']
+        # todo now the first UA seen is considered the only valid one and slips will setevidence everytime another one is used, is that correct?
+        if cached_ua not in user_agent:
+            type_detection = 'srcip'
+            source_target_tag = 'UsingSuspiciousUserAgent'
+            detection_info = profileid.split("_")[1]
+            type_evidence = 'IncompatibleUserAgent'
+            threat_level = 'low'
+            category = 'Anomaly.Behaviour'
+            confidence = 1
+            description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}"'
+            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                     description, timestamp, category, source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -263,8 +309,19 @@ class Module(Module, multiprocessing.Process):
                     # find the UA of this profileid if we don't have it
                     # get the last used ua of this profile
                     cached_ua = __database__.get_user_agent_from_profile(profileid)
-                    if not cached_ua or (cached_ua and cached_ua['user_agent'] != user_agent):
+                    if cached_ua:
+                        self.check_multiple_UAs(cached_ua, user_agent, host, uri, timestamp, profileid, twid, uid)
+
+                    if (
+                        not cached_ua
+                        or cached_ua.get('user_agent', '') != user_agent
+                        and 'server-bag' not in user_agent
+                    ):
                         self.get_user_agent_info(user_agent, profileid)
+
+                    if 'server-bag' in user_agent:
+                        self.extract_info_from_UA(user_agent, profileid)
+
                     self.check_incompatible_user_agent(host, uri, timestamp, profileid, twid, uid)
 
             except KeyboardInterrupt:

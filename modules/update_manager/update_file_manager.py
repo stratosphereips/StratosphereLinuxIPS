@@ -194,7 +194,7 @@ class UpdateFileManager:
                         port = line.split(',')[1]
                         proto = line.split(',')[2]
                         # descr = line.split(',')[3]
-                        __database__.set_port_info(str(port)+'/'+proto, name)
+                        __database__.set_port_info(f'{str(port)}/{proto}', name)
 
             # Store the new hash of file in the database
             file_info = { 'hash': self.new_hash }
@@ -218,28 +218,20 @@ class UpdateFileManager:
         file_info = __database__.get_TI_file_info(file_path)
         old_hash = file_info.get('hash', False)
 
-        if not old_hash:
-            # the file is not in our db, first time seeing it, we should update
+        if not old_hash or old_hash != new_hash:
+            # first time seeing the file, OR we should update it
             self.new_hash = new_hash
             return True
 
-        elif old_hash == new_hash:
+        else:
             # The 2 hashes are identical. File is up to date.
             return False
 
-        elif old_hash != new_hash:
-            # File was changed. Load the new one
-            # this will be used for storing the new hash
-            # in the db once the update is done
-            self.new_hash =  new_hash
-            return True
-
     def download_file(self, file_to_download):
-
         # Retry 3 times to get the TI file if an error occured
-        for _try in range(3):
+        for _try in range(5):
             try:
-                response = requests.get(file_to_download,  timeout=10)
+                response = requests.get(file_to_download, timeout=10)
                 if response.status_code != 200:
                     error = f'An error occurred while downloading the file {file_to_download}. Aborting'
                 else:
@@ -260,10 +252,9 @@ class UpdateFileManager:
         Called when the file doesn't have an e-tag
         :param response: the output of a request done with requests library
         """
-        last_modified = response.headers.get('Last-Modified', False)
-        return last_modified
+        return response.headers.get('Last-Modified', False)
 
-    def __check_if_update(self, file_to_download: str) :
+    def __check_if_update(self, file_to_download: str):
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
@@ -322,14 +313,13 @@ class UpdateFileManager:
                     self.new_e_tag = new_e_tag
                     return response
 
-                elif old_e_tag == new_e_tag:
+                else:
+                    # old_e_tag == new_e_tag
                     self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
-                    malicious_file_info = {}
-                    malicious_file_info['e-tag'] = new_e_tag
-                    malicious_file_info['time'] = self.new_update_time
+                    malicious_file_info = {'e-tag': new_e_tag, 'time': self.new_update_time}
                     __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
                     return False
 
@@ -344,12 +334,11 @@ class UpdateFileManager:
             self.loaded_ti_files += 1
         return False
 
-    def get_e_tag_from_web(self, response) :
+    def get_e_tag_from_web(self, response):
         """
         :param response: the output of a request done with requests library
         """
-        e_tag = response.headers.get('ETag', False)
-        return e_tag
+        return response.headers.get('ETag', False)
 
     def sanitize(self, string):
         """
@@ -458,7 +447,7 @@ class UpdateFileManager:
                                                           'threat_level': self.ssl_feeds[url]['threat_level'],
                                                           'tags': self.ssl_feeds[url]['tags']})
                 else:
-                    self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
+                    self.print(f'The data {data} is not valid. It was found in {filename}.', 3, 3)
                     continue
         # Add all loaded malicious sha1 to the database
         __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
@@ -498,9 +487,7 @@ class UpdateFileManager:
                 return False
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
-            file_info = {}
-            file_info['e-tag'] = self.new_e_tag
-            file_info['time'] = self.new_update_time
+            file_info = {'e-tag': self.new_e_tag, 'time': self.new_update_time}
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
             self.print(f'Successfully updated remote file {link_to_download}')
@@ -552,7 +539,7 @@ class UpdateFileManager:
             __database__.set_TI_file_info('riskiq_domains', malicious_file_info)
             return True
         except Exception as e:
-            self.print(f'An error occurred while updating RiskIQ feed.', 0, 1)
+            self.print('An error occurred while updating RiskIQ feed.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
             return False
 
@@ -686,7 +673,7 @@ class UpdateFileManager:
                                                               'threat_level': self.ja3_feeds[url]['threat_level'],
                                                               'tags': self.ja3_feeds[url]['tags'] })
                     else:
-                        self.print('The data {} is not valid. It was found in {}.'.format(data, filename), 3, 3)
+                        self.print(f'The data {data} is not valid. It was found in {filename}.', 3, 3)
                         continue
 
             # Add all loaded malicious ja3 to the database
@@ -728,15 +715,14 @@ class UpdateFileManager:
 
         if validators.domain(data):
             return 'domain'
-        else:
-            # some ti files have / at the end of domains, remove it
-            if data.endswith('/'):
-                data = data[:-1]
-            domain =  data
-            if domain.startswith('http://'): data= data[7:]
-            if domain.startswith('https://'): data= data[8:]
-            if validators.domain(data):
-                return 'domain'
+        # some ti files have / at the end of domains, remove it
+        if data.endswith('/'):
+            data = data[:-1]
+        domain =  data
+        if domain.startswith('http://'): data= data[7:]
+        if domain.startswith('https://'): data= data[8:]
+        if validators.domain(data):
+            return 'domain'
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         # to support nsec/full-results-2019-05-15.json
