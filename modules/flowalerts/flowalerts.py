@@ -94,7 +94,7 @@ class Module(Module, multiprocessing.Process):
                 return True
             return False
         except Exception as inst:
-            self.print(f'Problem on function is_ignored_ip()', 0, 1)
+            self.print('Problem on function is_ignored_ip()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)

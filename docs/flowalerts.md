@@ -45,7 +45,18 @@ This detection will ignore certain IP addresses for which a connection without D
 - IPv6 local-link IPs
 - Multicast IPs
 - Broadcast IPs only if they are private
-- Well known organizations (facebook, apple, google, twitter, and microsoft)
+- Well known organizations 
+
+
+DNS resolutions of well known orgs might be done using DoH, in this case, slips
+doesn't know about the DNS resolution because the resolved domain won't be in dns.log
+so we simply ignore alerts of thiss time about well known org such as (facebook, apple, google, twitter, and microsoft)
+
+Slips uses it's own lists of organizations info (IPs, IP ranges, domains, and ASNs) stored in ```slips_files/organizations_info``` to check
+whether the IP/domain of each flow belong to a known org or not.
+
+check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
+of the docs for info on how slips detects DoH.
 
 
 ## Successful SSH connections
