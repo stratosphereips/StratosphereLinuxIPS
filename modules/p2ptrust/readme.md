@@ -33,6 +33,18 @@ Pigeon uses the JSON format to communicate with the module or with other Pigeons
 format, see the thesis.
 
 
+To install:
+1. download and install go: 
+curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
+rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz 
+export PATH=$PATH:/usr/local/go/bin
+
+2. build the pigeon
+git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && go build
+
+3. Add pigeon to path, make sur ethe cwd where the p2p4slips binary is
+export PATH=$PATH:$(pwd)
+
 ##### Dovecot experiments
 
 Experiments are not essential to the module, and the whole project runs just fine without them. They are useful for
