@@ -75,7 +75,7 @@ RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
     && export PATH=$PATH:/usr/local/go/bin
 
 # build the pigeon and Add pigeon to path
-RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && go build && export PATH=$PATH:$(pwd)
+RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}

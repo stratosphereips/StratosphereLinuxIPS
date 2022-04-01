@@ -46,6 +46,19 @@ python3 setup.py build && python3 setup.py install
 echo "[+] Executing 'python3 -m pip install yara-python'"
 python3 -m pip install yara-python && cd ..
 
+
+echo "[+] Installing go'"
+# download and install go:
+RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && export PATH=$PATH:/usr/local/go/bin
+
+echo "[+] Installing p2p4slips'"
+# build the pigeon and Add pigeon to path
+RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
+
+
 # running slips for the first time
 echo "[+] Executing 'redis-server --daemonize yes'"
 redis-server --daemonize yes
