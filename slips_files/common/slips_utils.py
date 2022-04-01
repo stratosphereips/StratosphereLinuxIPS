@@ -157,16 +157,15 @@ class Utils(object):
         """
         try:
             repo = Repo('.')
-
             # add branch name and commit
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
+            return (commit, branch)
         except:
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
 
-        return (commit, branch)
 
     def format_timestamp(self, timestamp):
         """
