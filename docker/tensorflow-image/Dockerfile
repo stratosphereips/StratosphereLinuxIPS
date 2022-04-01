@@ -34,6 +34,7 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-tzlocal \
 	nfdump \
 	tshark \
+    git \
     whois \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
@@ -51,7 +52,7 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
 
 
 # Copy slips from the current directory into slips dir inside the container
-COPY . ${SLIPS_DIR}/
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
 
@@ -70,7 +71,19 @@ RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN npm install async fs blessed blessed-contrib clipboardy chalk@4.1.2 strip-ansi redis@3.1.2 sorted-array-async yargs
+RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
+
+
+
+# download and install go:
+RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
+    && rm -rf /usr/local/go \
+    && tar -C /usr/local -xzf go.tar.gz \
+    && export PATH=$PATH:/usr/local/go/bin
+
+# build the pigeon and Add pigeon to path
+RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
+
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
