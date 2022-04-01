@@ -155,7 +155,12 @@ class Utils(object):
             # we can't add repo metadata
             return False
         # add branch name and commit
-        branch = repo.active_branch.name
+        try:
+            branch = repo.active_branch.name
+        except TypeError:
+            # detached head
+            return False
+
         commit = repo.active_branch.commit.hexsha
         return (commit, branch)
 
