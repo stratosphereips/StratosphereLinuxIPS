@@ -346,7 +346,7 @@ class GoDirector:
         :param message: A string sent from go, should be json as specified above
         :return: None
         """
-
+        ip_address, reliability, peerid, timestamp = '', '', '', ''
         try:
             peerid = data["peerid"]
         except KeyError:
@@ -378,7 +378,10 @@ class GoDirector:
                 self.print(f"IP address {ip_address} is invalid", 0, 1 )
                 return
             self.trustdb.insert_go_ip_pairing(peerid, ip_address, timestamp=timestamp)
-            self.print(f"[The Network -> Slips] Peer update or new peer {peerid} with IP: {ip_address} Reliability: {reliability} ", 1, 0)
+            self.print(f"[The Network -> Slips] Peer update or new peer {peerid} "
+                       f"with IP: {ip_address} "
+                       f"Reliability: {reliability } ", 1, 0)
+
 
         except KeyError:
             self.print("IP address missing", 0, 1)
