@@ -247,10 +247,11 @@ class Trust(Module, multiprocessing.Process):
         happens when a msg is sent in the gopy_channel.
         """
         try:
-            msg = json.dumps(msg["data"])
-            self.go_director.handle_gopy_data(msg)
+            data: str = msg["data"]
+            data: dict = json.loads(data)
+            self.go_director.handle_gopy_data(data)
         except Exception as e:
-            self.printer.print(f"Exception {e} in gopy_callback", 0, 1)
+            self.printer.print(f"Exception in gopy_callback: {e} ", 0, 1)
 
     # def update_callback(self, msg: Dict):
     #     try:

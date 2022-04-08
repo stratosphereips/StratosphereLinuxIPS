@@ -49,12 +49,11 @@ class GoDirector:
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print("[TrustDB] " + text, verbose, debug)
 
-    def handle_gopy_data(self, data: str):
+    def handle_gopy_data(self, data_dict: dict):
         """
         Method that receives raw data from peers sent into p2p_gopy redis channel
         """
         try:
-            data_dict = json.loads(data)
             message_type = data_dict["message_type"]
             message_contents = data_dict["message_contents"]
 
@@ -203,13 +202,14 @@ class GoDirector:
 
         key = data["key"]
         self.print(f"[The Network -> Slips] Peer request about {key} reporter: {reporter}", 2, 0)
+        print(f"[The Network -> Slips] Peer request about {key} reporter: {reporter}")
 
         if self.override_p2p:
-            print("Overriding p2p")
+            # print("Overriding p2p")
             # calls respond_to_message_request in p2ptrust.py
             self.request_func(key, reporter)
         else:
-            self.print("Not overriding p2p")
+            # self.print("Not overriding p2p")
             self.respond_to_message_request(key, reporter)
 
     def respond_to_message_request(self, key, reporter):
@@ -220,6 +220,8 @@ class GoDirector:
         if score is not None:
             send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
             self.print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.", 2, 0)
+            # print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
+            # print(f"[debugging] slips just used {self.pygo_channel} to send evaluation to go")
         else:
             send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
             self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
@@ -272,6 +274,7 @@ class GoDirector:
 
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
         self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}", 2, 0)
+        print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}")
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
