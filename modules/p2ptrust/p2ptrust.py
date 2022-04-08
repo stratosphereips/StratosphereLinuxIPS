@@ -88,6 +88,8 @@ class Trust(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         self.port = self.get_available_port()
+        self.host = self.get_local_IP()
+
         self.rename_with_port = rename_with_port
         self.gopy_channel_raw = gopy_channel
         self.pygo_channel_raw = pygo_channel
@@ -140,6 +142,13 @@ class Trust(Module, multiprocessing.Process):
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
 
+    def get_local_IP(self ):
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+
     def get_available_port(self):
         for port in range(32768, 65535):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -155,7 +164,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: do not drop tables on startup
         self.trust_db = trustdb.TrustDB(self.sql_db_name, self.printer, drop_tables_on_startup=True)
         self.reputation_model = reputation_model.BaseModel(self.printer, self.trust_db, self.config)
-
+        # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(self.printer,
                                       self.trust_db,
                                       self.config,
@@ -174,17 +183,27 @@ class Trust(Module, multiprocessing.Process):
                 return
             executable = [self.pigeon_binary]
             port_param = ["-port", str(self.port)]
+            # if '-ip' in sys.argv:
+            #     ip_to_listen_on = sys.argv[sys.argv.index('-ip')+1]
+            #     host_param = ["-host", ip_to_listen_on ]
+            #     print(f"P2P modules is listening on ip {ip_to_listen_on} port: {self.port}, using '-ip' parameter")
+            # else:
+            host_param = ["-host", self.host ]
+            self.print(f"P2p is listening on {self.host} port {self.port} determined by p2p module")
+
             keyfile_param = ["-key-file", self.pigeon_key_file]
-            rename_with_port_param = ["-rename-with-port", str(self.rename_with_port).lower()]
+            # rename_with_port_param = ["-rename-with-port", str(self.rename_with_port).lower()]
             pygo_channel_param = ["-redis-channel-pygo", self.pygo_channel_raw]
             gopy_channel_param = ["-redis-channel-gopy", self.gopy_channel_raw]
             executable.extend(port_param)
+            executable.extend(host_param)
             executable.extend(keyfile_param)
-            executable.extend(rename_with_port_param)
+            # executable.extend(rename_with_port_param)
             executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
             outfile = open(self.pigeon_logfile, "+w")
             self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
+            # print(f"[debugging] runnning pigeon: {executable}")
 
     def new_evidence_callback(self, msg: Dict):
         """
@@ -401,8 +420,9 @@ class Trust(Module, multiprocessing.Process):
         ip_info = validate_slips_data(message_data)
         if ip_info is None:
             # IP address is not valid, aborting
+            # print(f"DEBUGGING: IP address is not valid: {ip_info}, not asking the network")
             return
-        # ip_info is  {
+        # ip_info is {
         #             'ip': str(saddr),
         #             'profileid' : str(profileid),
         #             'twid' :  str(twid),
@@ -419,6 +439,7 @@ class Trust(Module, multiprocessing.Process):
         score, confidence, network_score, timestamp = self.trust_db.get_cached_network_opinion("ip", ip_address)
         if score is not None and time.time() - timestamp < cache_age:
             # cached value is ok, do nothing
+            # print("DEBUGGING:  cached value is ok, not asking the network.")
             return
 
         # if cached value is old, ask the peers
@@ -442,9 +463,11 @@ class Trust(Module, multiprocessing.Process):
         # no data in db - this happens when testing, if there is not enough data on peers
         if combined_score is None:
             self.print(f"No data received from network about {ip_address}\n", 0 , 2)
+            print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
         else:
-            self.print(f"Network shared some data about {ip_address}, "
+            self.print(f"The Network shared some data about {ip_address}, "
                        f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n", 0, 2)
+
             # save it to IPsInfo hash in p2p4slips key in the db
             utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
                                        self.storage_name)
