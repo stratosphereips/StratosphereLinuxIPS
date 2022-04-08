@@ -690,10 +690,8 @@ class Database(object):
             proto = columns['proto'].upper()
             daddr = columns['daddr']
             saddr = columns['saddr']
-            starttime = columns['starttime']
             uid = columns['uid']
             starttime = str(columns['starttime'])
-            uid = columns['uid']
             # Depending if the traffic is going out or not, we are Client or Server
             # Set the type of ip as Dst if we are a client, or Src if we are a server
             if role == 'Client':

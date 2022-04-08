@@ -622,7 +622,6 @@ class EvidenceProcess(multiprocessing.Process):
         human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
         alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
-
     def decide_blocking(self, ip, profileid, twid):
         """
         Decide whether to block or not and send to the blocking module
@@ -643,6 +642,11 @@ class EvidenceProcess(multiprocessing.Process):
         # __database__.publish('new_blocking', blocking_data)
         __database__.markProfileTWAsBlocked(profileid, twid)
         return True
+
+    def shutdown_gracefully(self):
+        self.logfile.close()
+        self.jsonfile.close()
+        __database__.publish('finished_modules','EvidenceProcess')
 
     def run(self):
         # add metadata to alerts.log
