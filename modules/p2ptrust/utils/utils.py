@@ -270,7 +270,7 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
     It will look for the recipient and send the message to him.
      Use "*" to broadcast to everybody.
 
-    :param message: The message to send
+    :param message: The message to send base64 encoded
     :param recipient: The peerID of the peer that should get the message,
                         or "*" to broadcast the message
     :return: None
@@ -279,7 +279,7 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
     data_raw = {"message": message, "recipient": recipient}
     data_json = json.dumps(data_raw)
     __database__.publish(channel_name, data_json)
-
+    # only channel used right now is self.pygo_channel defined in p2ptrst.py
     decoded_data = base64.b64decode(message)
     data_json = json.loads(decoded_data.decode('utf-8'))
 
