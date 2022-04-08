@@ -56,7 +56,6 @@ class GoDirector:
         try:
             message_type = data_dict["message_type"]
             message_contents = data_dict["message_contents"]
-
             if message_type == "peer_update":
                 # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
@@ -82,6 +81,8 @@ class GoDirector:
         They are parsed and inserted into the database.
         If a message does not comply with the format, the reporter's reputation is lowered.
         """
+        # "message_type":"go_data",
+        # "message_contents":{"reporter":"aconcagua","report_time":1649445643,"message":"eyJtZXNzYWdlX3R5cGUiOiAicmVxdWVzdCIsICJrZXlfdHlwZSI6ICJpcCIsICJrZXkiOiAiMTQ3LjMyLjgzLjEzMiIsICJldmFsdWF0aW9uX3R5cGUiOiAic2NvcmVfY29uZmlkZW5jZSJ9"}}
 
         # check that the data was parsed correctly in the go part of the app
         # if there were any issues, the reports list will be empty
@@ -107,8 +108,10 @@ class GoDirector:
 
         reporter = report[key_reporter]
         message = report[key_message]
-
+        # decode b64
         message_type, data = self.validate_message(message)
+
+        self.print(f"[The Network -> Slips] Received msg {data} from peer {reporter}, message_type: {message_type}")
 
         if message_type == "report":
             # a peer reporting an IP
@@ -127,6 +130,7 @@ class GoDirector:
 
         else:
             # TODO: lower reputation
+            self.print(f"Peer {report} sent unknown message type {message_type}: {data}")
             self.print("Peer sent unknown message type", 0, 2)
 
     def validate_message(self, message: str) -> (str, dict):
@@ -272,8 +276,9 @@ class GoDirector:
             return
 
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
-        self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}", 2, 0)
-        print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}")
+        if evaluation != None:
+            self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}", 2, 0)
+            print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}")
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
