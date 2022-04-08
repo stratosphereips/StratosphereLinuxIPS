@@ -51,15 +51,6 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make install
 
 
-# Copy slips from the current directory into slips dir inside the container
-RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
-
-
-# Upgrade pip3 and install Slips requirements
-RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
-
 
 # manually install tensorflow==2.4.1
 RUN pip3 install --ignore-installed tensorflow==2.4.1
@@ -67,6 +58,13 @@ RUN pip3 install --ignore-installed tensorflow==2.4.1
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 RUN cd StratosphereLinuxIPS && chmod 774 slips.py
+
+
+# Upgrade pip3 and install Slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+
+
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
@@ -78,6 +76,18 @@ RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
     && rm -rf /usr/local/go \
     && tar -C /usr/local -xzf go.tar.gz \
     && export PATH=$PATH:/usr/local/go/bin
+
+# download and install go and add it to path:
+RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
+    && tar -C /usr/local -xzf go.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+
+# build the pigeon and Add pigeon to path
+RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips \
+    && git checkout alya-better-prints \
+    && /usr/local/go/bin/go build
+ENV PATH="/p2p4slips:${PATH}"
 
 # build the pigeon and Add pigeon to path
 RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
