@@ -70,15 +70,16 @@ RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 ch
 
 # download and install go and add it to path:
 RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
-    && tar -C /usr/local -xzf go.tar.gz
-ENV PATH="/usr/local/go/bin:${PATH}"
+    && tar -C /usr/local -xzf go.tar.gz\
+    && echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc \
+    && source ~/.bashrc
 
 
 # build the pigeon and Add pigeon to path
 RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips \
-    && git checkout alya-better-prints \
-    && /usr/local/go/bin/go build
-ENV PATH="/p2p4slips:${PATH}"
+    && /usr/local/go/bin/go build \
+    && echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc \
+    && source ~/.bashrc
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
