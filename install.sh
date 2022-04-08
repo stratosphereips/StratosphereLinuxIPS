@@ -51,8 +51,9 @@ echo "[+] Installing go'"
 # download and install go:
 curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
     && rm -rf /usr/local/go \
-    && tar -C /usr/local -xzf go.tar.gz \
-    && export PATH=$PATH:/usr/local/go/bin
+    && sudo tar -C /usr/local -xzf go.tar.gz \
+    && echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc \
+    && source ~/.bashrc
 
 echo "[+] Installing p2p4slips'"
 # build the pigeon and Add pigeon to path
