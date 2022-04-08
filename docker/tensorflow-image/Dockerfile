@@ -51,15 +51,6 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make install
 
 
-# Copy slips from the current directory into slips dir inside the container
-RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
-
-
-# Upgrade pip3 and install Slips requirements
-RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
-
 
 # manually install tensorflow==2.4.1
 RUN pip3 install --ignore-installed tensorflow==2.4.1
@@ -68,18 +59,35 @@ RUN pip3 install --ignore-installed tensorflow==2.4.1
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
+
+# Upgrade pip3 and install Slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+
+
+
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
 RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
-
-
 
 # download and install go:
 RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
     && rm -rf /usr/local/go \
     && tar -C /usr/local -xzf go.tar.gz \
     && export PATH=$PATH:/usr/local/go/bin
+
+# download and install go and add it to path:
+RUN curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
+    && tar -C /usr/local -xzf go.tar.gz
+ENV PATH="/usr/local/go/bin:${PATH}"
+
+
+# build the pigeon and Add pigeon to path
+RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips \
+    && git checkout alya-better-prints \
+    && /usr/local/go/bin/go build
+ENV PATH="/p2p4slips:${PATH}"
 
 # build the pigeon and Add pigeon to path
 RUN git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
