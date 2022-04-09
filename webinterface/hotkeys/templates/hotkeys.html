@@ -3,11 +3,8 @@
 
 <head>
   <title>{{ title }}</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet"
-    integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
-  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.25/css/dataTables.bootstrap5.css">
-  <link rel="stylesheet" type="text/css"
-    href="https://cdn.datatables.net/v/bs5/dt-1.11.3/sl-1.3.3/datatables.min.css" />
+  <link href="{{url_for('static', filename='bootstrap/css/bootstrap.min.css')}}" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='DataTables-1.11.5/css/dataTables.bootstrap5.min.css')}}"/>
 </head>
 
 <body>
@@ -187,19 +184,16 @@
 
   </div>
 
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"
-    integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"
-    crossorigin="anonymous"></script>
-  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"
-    integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM"
-    crossorigin="anonymous"></script>
-  <script type="text/javascript" charset="utf8"
-    src="https://cdn.datatables.net/1.10.25/js/jquery.dataTables.js"></script>
-  <script type="text/javascript" charset="utf8"
-    src="https://cdn.datatables.net/1.10.25/js/dataTables.bootstrap5.js"></script>
-  <script type="text/javascript" charset="utf8" src=" {{url_for('hotkeys.static', filename='js/hotkeys.js')}}"
-    rel="stylesheet"></script>
+  <script src="{{url_for('static', filename='jQuery-3.6.0/jquery-3.6.0.min.js')}}"></script>
+  <script src= "{{url_for('static', filename='bootstrap/js/bootstrap.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/jquery.dataTables.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/dataTables.bootstrap5.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('hotkeys.static', filename='js/hotkeys.js')}}"></script>
+
+  <!--FIXME find what this library is for-->
+  <!--  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"-->
+  <!--    integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"-->
+  <!--    crossorigin="anonymous"></script>-->
 </body>
 
 </html>
