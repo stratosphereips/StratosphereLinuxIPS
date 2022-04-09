@@ -8,7 +8,7 @@ hotkeys = Blueprint('hotkeys', __name__,  static_folder='static',static_url_path
 # Connection to Slips redis database
 config = ""
 
-__database__ =redis.StrictRedis(host='localhost',
+__database__ = redis.StrictRedis(host='localhost',
                                            port=6379,
                                            db=0,
                                            charset="utf-8",
@@ -43,7 +43,8 @@ def set_ip_info(ip):
     '''
     ip_info = json.loads(__cache__.hget('IPsInfo', ip))
     data = []
-    # Hardcoded fields due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
+
+    # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
     geocountry = ip_info.get('geocountry', '-')
     asn = ip_info.get('asn', '-')
     asnorg = [asn.get('asnorg','-') if isinstance(asn, dict) else '-']
