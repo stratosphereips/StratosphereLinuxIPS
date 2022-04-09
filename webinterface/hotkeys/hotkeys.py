@@ -17,11 +17,6 @@ __database__ = redis.StrictRedis(host='localhost',
                                            decode_responses=True,
                                            health_check_interval=30)
 
-# pubsub = __database__.pubsub()
-# c1 = pubsub.subscribe('tw_modified')
-# message = c1.get_message()
-# if message:
-#     print(message)
 
 __cache__ = redis.StrictRedis(host='localhost',
                                                 port=6379,
@@ -32,9 +27,19 @@ __cache__ = redis.StrictRedis(host='localhost',
                                                 decode_responses=True,
                                                 health_check_interval=30)
 
+# TODO: POC that we can receive data and update the web
+# p = __database__.pubsub()
+# p.subscribe('evidence_added')
+# p.get_message()
+# while True:
+#     message = p.get_message()
+#     if( message and type(message['data']) == str and message['data'] != 'stop_process' and message['channel'] == 'evidence_added'):
+#         print(message)
+
 @hotkeys.route('/')
 def index():
     return render_template('hotkeys.html', title='Slips')
+
 
 @hotkeys.route('/info/<ip>')
 def set_ip_info(ip):
