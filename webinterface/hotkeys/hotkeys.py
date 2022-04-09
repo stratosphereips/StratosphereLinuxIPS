@@ -60,13 +60,14 @@ def set_ip_info(ip):
 @hotkeys.route('/profiles_tws')
 def profile_tws():
     '''
-    Set profiles and their timewindows data.
+    Set profiles and their timewindows data into the tree.
     '''
-    profile_tws = __database__.hgetall('Profiles_TWs')
+    profiles = __database__.smembers('profiles')
     data = []
     id = 0
-    for profileid, tws in profile_tws.items():
-        data.append({"id": str(id), "profile": profileid.split("_")[1], "tws": json.loads(tws)})
+    for profileid in profiles:
+        tws = __database__.zrange("tws" + profileid, 0, -1)
+        data.append({"id": str(id), "profile": profileid.split("_")[1], "tws": tws})
         id = id + 1
     # start = request.args.get('start', type=int)
     # length = request.args.get('length', type=int)
