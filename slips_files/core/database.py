@@ -214,13 +214,22 @@ class Database(object):
             self.r.hmset(profileid, {'dhcp': 'true'})
 
 
-    def get_mac_addr_from_profile(self,profileid) -> str:
+    def get_mac_addr_from_profile(self, profileid) -> str:
         """
-        Retuns MAC info about a certain profile, doesn't return the vendor
-        return the mac address or None
+        Retuns MAC info about a certain profile,
+        returns a mac addr or None
         """
         MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
+
+    def get_mac_vendor_from_profile(self, profileid) -> str:
+        """
+        Retuns MAC vendor about a certain profile,
+        returns the mac vendor or None
+        """
+        MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
+        return MAC_vendor
+
 
     def get_IP_of_MAC(self, MAC):
         """
@@ -1043,7 +1052,7 @@ class Database(object):
         type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
         type_detection: the type of value causing the detection e.g. dport, dip, flow
         detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
-        threat_level: determine the importance of the evidence on a scale from 0 to 1.
+        threat_level: determine the importance of the evidence, available options are : info, low, medium, high, critical
         confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
         uid: needed to get the flow from the database
         category: what is this evidence category according to IDEA categories
@@ -1130,9 +1139,10 @@ class Database(object):
 
 
 
-    def deleteEvidence(self,profileid, twid, key):
-        """ Delete evidence from the database
-        key is a dict with type_detection, detection_info, type_evidence as keys
+    def deleteEvidence(self,profileid, twid, description: str):
+        """
+        Delete evidence from the database
+        :param description: teh description of the evidence
         """
 
         current_evidence = self.getEvidenceForTW(profileid, twid)
@@ -1140,10 +1150,11 @@ class Database(object):
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-        key_json = json.dumps(key)
+
         # Delete the key regardless of whether it is in the dictionary
-        current_evidence.pop(key_json, None)
+        current_evidence.pop(description, None)
         current_evidence_json = json.dumps(current_evidence)
+
         self.r.hset(profileid + self.separator + twid, 'Evidence', str(current_evidence_json))
         self.r.hset('evidence'+profileid, twid, current_evidence_json)
 
@@ -1988,6 +1999,8 @@ class Database(object):
         Retrieve the organization info that uses this port
         :param portproto: portnumber.lower() + / + protocol
         """
+        # this key is used to store the ports the are known to be used
+        #  by certain organizations
         return self.rcache.hget('organization_port', portproto.lower())
 
     def add_zeek_file(self, filename):
@@ -2416,7 +2429,7 @@ class Database(object):
         if data:
             data = json.loads(data)
         else:
-            data = ''
+            data = {}
         return data
 
 

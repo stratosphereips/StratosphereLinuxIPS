@@ -18,7 +18,7 @@
 import multiprocessing
 from slips_files.core.database import __database__
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import configparser
 from os import path
 from colorama import Fore, Style
@@ -70,10 +70,18 @@ class EvidenceProcess(multiprocessing.Process):
             self.logs_jsonfile = False
         self.timeout = 0.0000001
         # this list will have our local and public ips
-        try:
-            self.our_ips = self.get_IP()
-        except Exception:
-            pass
+
+        self.our_ips = self.get_IP()
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
+        self.threat_levels = {
+            'info': 0,
+            'low' : 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1
+        }
 
     def setup_notifications(self):
         """
@@ -140,7 +148,6 @@ class EvidenceProcess(multiprocessing.Process):
         finally:
             s.close()
         # get public ip
-        #IPs.append(requests.get('http://ipinfo.io/json').json()['ip'])
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
@@ -214,7 +221,7 @@ class EvidenceProcess(multiprocessing.Process):
 
     def format_evidence_string(self, profileid, twid, ip, detection_module, detection_type, detection_info, description):
         '''
-        Function to format the evidence to be displayed according to the detection module.
+        Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
         :return : string with a correct evidence displacement
         '''
         evidence_string = ''
@@ -246,7 +253,7 @@ class EvidenceProcess(multiprocessing.Process):
         # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
         # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
-        return f'• {evidence_string}'
+        return f'{evidence_string}'
 
     def clean_evidence_log_file(self, output_folder):
         '''
@@ -381,7 +388,7 @@ class EvidenceProcess(multiprocessing.Process):
         except (IndexError, KeyError):
             whitelisted_orgs = {}
         try:
-            whitelisted_mac = json.loads(whitelist['organizations'])
+            whitelisted_mac = json.loads(whitelist['mac'])
         except (IndexError, KeyError):
             whitelisted_mac = {}
 
@@ -426,7 +433,7 @@ class EvidenceProcess(multiprocessing.Process):
             data_type = 'ip'
 
         # Check IPs
-        if data_type is 'ip':
+        if data_type == 'ip':
             # Check that the IP in the content of the alert is whitelisted
             # Was the evidence coming as a src or dst?
             ip = data
@@ -457,14 +464,14 @@ class EvidenceProcess(multiprocessing.Process):
                         from_ = whitelisted_mac[mac]['from']
                         what_to_ignore = whitelisted_mac[mac]['what_to_ignore']
                         # do we want to whitelist alerts?
-                        if ('flows' in what_to_ignore or 'both' in what_to_ignore):
+                        if ('alerts' in what_to_ignore or 'both' in what_to_ignore):
                             if is_srcip and ('src' in from_ or 'both' in from_) :
                                 return True
                             if is_dstip and ('dst' in from_ or 'both' in from_):
                                 return True
 
         # Check domains
-        if data_type is 'domain':
+        if data_type == 'domain':
             is_srcdomain = type_detection in ('srcdomain')
             is_dstdomain = type_detection in ('dstdomain')
             domain = data
@@ -483,72 +490,67 @@ class EvidenceProcess(multiprocessing.Process):
                     if ignore_alerts_from_domain or ignore_alerts_to_domain:
                         #self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
                         return True
-
         # Check orgs
         if whitelisted_orgs:
-            # Check if the IP in the alert belongs to a whitelisted organization
-            if data_type is 'ip':
-                is_srcorg = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
-                is_dstorg = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
-                ip = data
-                for org in whitelisted_orgs:
-                    from_ =  whitelisted_orgs[org]['from']
-                    what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
-                    ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
-                    ignore_alerts_from_org = ignore_alerts and is_srcorg and ('src' in from_ or 'both' in from_)
-                    ignore_alerts_to_org = ignore_alerts and is_dstorg and ('dst' in from_ or 'both' in from_)
+            is_src = type_detection in ('sip', 'srcip', 'sport', 'inTuple', 'srcdomain')
+            is_dst = type_detection in ('dip', 'dstip', 'dport', 'outTuple', 'dstdomain')
+            for org in whitelisted_orgs:
+                from_ =  whitelisted_orgs[org]['from']
+                what_to_ignore = whitelisted_orgs[org]['what_to_ignore']
+                ignore_alerts = 'alerts' in what_to_ignore or 'both' in what_to_ignore
+                ignore_alerts_from_org = ignore_alerts and is_src and ('src' in from_ or 'both' in from_)
+                ignore_alerts_to_org = ignore_alerts and is_dst and ('dst' in from_ or 'both' in from_)
 
+                # Check if the IP in the alert belongs to a whitelisted organization
+                if data_type == 'ip':
+                    ip = data
                     if ignore_alerts_from_org or ignore_alerts_to_org:
                         # Method 1: using asn
                         # Check if the IP in the content of the alert has ASN info in the db
                         ip_data = __database__.getIPData(ip)
                         if ip_data:
-                            ip_asn = ip_data.get('asn',{'asnorg':''})
-
+                            ip_asn = ip_data.get('asn',{'asnorg':''})['asnorg']
                             # make sure the asn field contains a value
-                            if (ip_asn['asnorg'] not in ('','Unknown')
-                                and (org.lower() in ip_asn['asnorg'].lower()
-                                        or ip_asn['asnorg'] in whitelisted_orgs[org].get('asn',''))):
+                            if (ip_asn not in ('','Unknown')
+                                and (org.lower() in ip_asn.lower()
+                                        or ip_asn in whitelisted_orgs[org].get('asn',''))):
                                 # this ip belongs to a whitelisted org, ignore alert
                                 #self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
                                 return True
 
-                        # Method 2 using the organization's list of ips
-                        # ip doesn't have asn info, search in the list of organization IPs
-                        try:
-                            org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
-                            ip = ipaddress.ip_address(ip)
-                            for network in org_subnets:
-                                # check if ip belongs to this network
-                                if ip in ipaddress.ip_network(network):
-                                    #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
-                                    return True
-                        except (KeyError,TypeError):
-                            # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
-                            # and ip doesn't have asn info.
-                            pass
-
-                        # Method 3 Check if the domains of this flow belong to this org domains
-                        domains_to_check_dst, domains_to_check_src = self.get_domains_of_flow(flow)
-                        # which list of the above should be used? src or dst or both?
-                        if ignore_alerts_to_org and ignore_alerts_from_org: domains_to_check = domains_to_check_src + domains_to_check_dst
-                        elif ignore_alerts_from_org : domains_to_check = domains_to_check_src
-                        elif ignore_alerts_to_org : domains_to_check = domains_to_check_dst
-                        try:
-                            org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
-                            # domains to check are usually 1 or 2 domains
-                            for flow_domain in domains_to_check:
-                                if org in flow_domain:
-                                    return True
-                                for domain in org_domains:
-                                    # match subdomains too
-                                    if domain in flow_domain:
-                                        return True
-                        except (KeyError,TypeError):
-                            # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
-                            # and ip doesn't have asn info.
-                            # so we don't know how to link this ip to the whitelisted org!
-                            pass
+                    # Method 2 using the organization's list of ips
+                    # ip doesn't have asn info, search in the list of organization IPs
+                    try:
+                        org_subnets = json.loads(whitelisted_orgs[org]['IPs'])
+                        ip = ipaddress.ip_address(ip)
+                        for network in org_subnets:
+                            # check if ip belongs to this network
+                            if ip in ipaddress.ip_network(network):
+                                #self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
+                                return True
+                    except (KeyError, TypeError):
+                        # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
+                        # and ip doesn't have asn info.
+                        pass
+                if data_type == 'domain':
+                    flow_domain = data
+                    # Method 3 Check if the domains of this flow belong to this org domains
+                    try:
+                        org_domains = json.loads(whitelisted_orgs[org].get('domains','{}'))
+                        if org in flow_domain:
+                            # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                            return True
+                        for domain in org_domains:
+                            # match subdomains too
+                            if domain in flow_domain:
+                                # self.print(f"The src domain of this flow ({flow_domain}) is "
+                                #             f"a subdomain of {org} domain: {domain}")
+                                return True
+                    except (KeyError,TypeError):
+                        # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
+                        # and ip doesn't have asn info.
+                        # so we don't know how to link this ip to the whitelisted org!
+                        pass
         return False
 
     def show_popup(self, alert_to_log: str):
@@ -561,23 +563,54 @@ class EvidenceProcess(multiprocessing.Process):
         elif platform.system() == 'Darwin':
             os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
 
+    def get_ts_format(self, timestamp):
+        """
+        returns the appropriate format of the given ts
+        """
+        if '+' in timestamp:
+            # timestamp contains UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S%z"
+        else:
+            # timestamp doesn't contain UTC offset, set the new format accordingly
+            newformat = "%Y-%m-%d %H:%M:%S"
+
+        # is the seconds field a float?
+        if '.' in timestamp:
+            # append .f to the seconds field
+            newformat = newformat.replace('S','S.%f')
+        return newformat
+
     def format_timestamp(self, timestamp):
         """
         Function to unify timestamps printed to log files, notification and cli.
         :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-        returns the date and time in RFC3339 format (IDEA standard)
+        returns the date and time in RFC3339 format (IDEA standard) as str by default
         """
-        if timestamp and (isinstance(timestamp, datetime) or type(timestamp)==float):
+        if timestamp and (isinstance(timestamp, datetime)):
+            # The timestamp is a datetime
+            timestamp = timestamp.strftime(self.get_ts_format(timestamp))
+        elif timestamp and type(timestamp) == float:
+            # The timestamp is a float
             timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
         elif ' ' in timestamp:
+            # self.print(f'DATETIME: {timestamp}')
+            # The timestamp is a string with spaces
             timestamp = timestamp.replace('/','-')
-            dt_string = "2020-12-18 3:11:09"
+            #dt_string = "2020-12-18 3:11:09"
             # format of incoming ts
-            format = "%Y-%m-%d %H:%M:%S"
-            # convert to datetime obj
-            timestamp = datetime.strptime(dt_string, format)
+            try:
+                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
+                # convert to datetime obj
+                timestamp = datetime.strptime(timestamp, newformat)
+            except ValueError:
+                # The string did not have a time zone
+                newformat = "%Y-%m-%d %H:%M:%S.%f"
+                # convert to datetime obj
+                timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
             timestamp = timestamp.astimezone().isoformat()
+
+
         return timestamp
 
     def add_to_log_folder(self, data):
@@ -595,6 +628,7 @@ class EvidenceProcess(multiprocessing.Process):
                     confidence, category, conn_count, source_target_tag):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
+        Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
         """
         IDEA_dict = {'Format': 'IDEA0',
                      'ID': str(uuid4()),
@@ -664,15 +698,35 @@ class EvidenceProcess(multiprocessing.Process):
     def format_evidence_causing_this_alert(self, all_evidence, profileid, twid, flow_datetime) -> str:
         """
         Function to format the string with all evidence causing an alert
+        flow_datetime: time of the last evidence received
         """
         # alerts in slips consists of several evidence, each evidence has a threat_level
         # once we reach a certain threshold of accumulated threat_levels, we produce an alert
         # Now instead of printing the last evidence only, we print all of them
+        try:
 
+            twid_num = twid.split('timewindow')[1]
+            srcip = profileid.split(self.separator)[1]
+            # Get the start time of this TW
+            tw_start_time_str = self.format_timestamp(float(__database__.getTimeTW(profileid, twid)))
+            tw_start_time_datetime = datetime.strptime(tw_start_time_str, self.get_ts_format(tw_start_time_str).replace(' ','T'))
+            # Convert the tw width to deltatime
+            tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            # Get the stop time of the TW
+            tw_stop_time_datetime = tw_start_time_datetime + tw_width_in_seconds_delta
+            tw_stop_time_str = tw_stop_time_datetime.strftime("%Y-%m-%dT%H:%M:%S.%f%z")
 
-        srcip = profileid.split(self.separator)[1]
-        alert_to_print = f'IP {srcip} is infected in {twid} given the following evidence:\n'
+            alert_to_print = f'{Fore.RED}IP {srcip} detected as infected in timewindow {twid_num} ' \
+                             f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on format_evidence_causing_this_alert() line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
 
+ 
         for evidence in all_evidence.values():
             # Deserialize evidence
             evidence = json.loads(evidence)
@@ -683,22 +737,16 @@ class EvidenceProcess(multiprocessing.Process):
 
             # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
             evidence_string = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
+            alert_to_print += f'\t{Fore.CYAN}• {evidence_string}{Style.RESET_ALL}\n'
 
-            # if the evidence takes more than 1 line in the terminal, split it into 2 lines
-            if len(evidence_string)>107:
-                evidence_string = evidence_string[:107]+'\n\t\t   '+ evidence_string[107:]
-                evidence_string.replace('\n\t\t   .','\n\t\t   ')
-
-            alert_to_print += f'\t\t {evidence_string}\n'
-
-        # the datetime printed will be of the last evidence only
+        # Add the timestamp to the alert. The datetime printed will be of the last evidence only
         if '.' in flow_datetime:
             format = '%Y-%m-%dT%H:%M:%S.%f%z'
         else:
             # e.g  2020-12-18T03:11:09+02:00
             format = '%Y-%m-%dT%H:%M:%S%z'
         human_readable_datetime = datetime.strptime(flow_datetime, format).strftime("%Y/%m/%d %H:%M:%S")
-        alert_to_print = f'{human_readable_datetime} {alert_to_print}'
+        alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
 
@@ -732,24 +780,21 @@ class EvidenceProcess(multiprocessing.Process):
                     uid = data.get('uid')
                     # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
                     tags = data.get('tags',False)
-                    confidence = data.get('confidence',False)
-                    threat_level = data.get('threat_level',False)
+                    confidence = data.get('confidence', False)
+                    threat_level = data.get('threat_level', False)
                     category = data.get('category',False)
                     conn_count = data.get('conn_count',False)
-                    source_target_tag = data.get('source_target_tag',False)
+                    source_target_tag = data.get('source_target_tag', False)
 
-                    # Ignore alert if ip is whitelisted
-                    flow = __database__.get_flow(profileid,twid,uid)
+                    # Ignore alert if IP is whitelisted
+                    flow = __database__.get_flow(profileid, twid, uid)
                     if flow and self.is_whitelisted(srcip, detection_info, type_detection, description, flow):
                         # Modules add evidence to the db before reaching this point, so
                         # remove evidence from db so it will be completely ignored
-                        key = {'type_detection' : type_detection,
-                                'detection_info' : detection_info ,
-                                'type_evidence' : type_evidence,
-                                'description': description}
-                        __database__.deleteEvidence(profileid, twid, key)
+                        __database__.deleteEvidence(profileid, twid, description)
                         continue
 
+                    # Format the time to a common style given multiple type of time variables
                     flow_datetime = self.format_timestamp(timestamp)
 
                     # prepare evidence for text log file
@@ -773,7 +818,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     source_target_tag)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence[2:])
+                    self.addDataToLogFile(flow_datetime +  f': Src IP {srcip:15}. ' + evidence)
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
                     __database__.setEvidenceFoAllProfiles(IDEA_dict)
@@ -806,6 +851,14 @@ class EvidenceProcess(multiprocessing.Process):
                             confidence = float(evidence.get('confidence'))
                             threat_level = evidence.get('threat_level')
                             description = evidence.get('description')
+                            # each threat level is a string, get the numerical value of it
+                            try:
+                                threat_level = self.threat_levels[threat_level.lower()]
+                            except KeyError:
+                                self.print(f"Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
+                                self.print(f"Description: {description}")
+                                threat_level = 0
+
 
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
@@ -821,11 +874,8 @@ class EvidenceProcess(multiprocessing.Process):
                         if accumulated_threat_level >= detection_threshold_in_this_width:
                             # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(profileid, twid):
-                                # now that this evidence is being printed, it's no longer evidence, it's an alert
-                                # alert_to_print = self.format_evidence_string(profileid, twid, srcip, type_evidence, type_detection, detection_info, description)
-
                                 alert_to_print = self.format_evidence_causing_this_alert(tw_evidence, profileid, twid, flow_datetime)
-                                self.print(f'{Fore.RED} {alert_to_print}{Style.RESET_ALL}', 1, 0)
+                                self.print(f'{alert_to_print}', 1, 0)
 
                                 # Add to log files that this srcip is being blocked
                                 blocked_srcip_to_log = self.format_blocked_srcip_evidence(profileid, twid, flow_datetime)
@@ -842,6 +892,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 self.add_to_log_folder(blocked_srcip_dict)
 
                                 if self.popup_alerts:
+                                    # remove the colors from the aletss before printing
+                                    alert_to_print = alert_to_print.replace(Fore.RED, '').replace(Fore.CYAN, '').replace(Style.RESET_ALL,'')
                                     self.show_popup(alert_to_print)
 
                                 # Send to the blocking module.

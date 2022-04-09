@@ -7,10 +7,15 @@ import platform
 import pytest
 import os
 
+IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
 # ignore all tests if not using linux
 pytestmark = pytest.mark.skipif(platform.system() != 'Linux', reason='Blocking is supported only in Linux with root priveledges')
-pytestmark = pytest.mark.skipif(os.geteuid() != 0, reason='Blocking is supported only with root priveledges')
-
+# When using docker in github actions,  we can't use --cap-add NET_ADMIN
+# so all blocking module unit tests will fail because we don't have admin privs
+# we use this environment variable to check if slips is
+# running in github actions
+pytestmark = pytest.mark.skipif(os.geteuid() != 0 or IS_DEPENDENCY_IMAGE != False ,
+                                reason='Blocking is supported only with root priveledges')
 
 def do_nothing(*args):
     """ Used to override the print function because using the print causes broken pipes """
