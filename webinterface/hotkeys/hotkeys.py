@@ -83,17 +83,16 @@ def profile_tws():
         'draw': request.args.get('draw', type=int)
     }
 
-@hotkeys.route('/outtuples/<ip>/<timewindow>')
-def set_outtuples(ip, timewindow):
+@hotkeys.route('/outtuples/<profile>/<timewindow>')
+def set_outtuples(profile, timewindow):
     """
-    Create a datatable with Slips alerts.
-    Data is stored in a route "/alerts/<ip>".
+    Create a datatable with Slips outtuples.
     """
-    outtuples = __database__.hget(ip + '_'+ timewindow,'OutTuples')
+    outtuples = __database__.hget(profile + '_'+ timewindow, 'OutTuples')
     outtuples = json.loads(outtuples)
     data = []
     for key,value in outtuples.items():
-        data.add({'tuple':key,'string':value[0]})
+        data.append({'tuple':key,'string':value[0]})
     data_length = len(outtuples)
     total_filtered = len(outtuples)
     search = request.args.get('search[value]')
@@ -115,12 +114,12 @@ def set_outtuples(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-@hotkeys.route('/timeline_flows/profile_<ip>/<timewindow>')
-def set_timeline_flows(ip, timewindow):
+@hotkeys.route('/timeline_flows/<profile>/<timewindow>')
+def set_timeline_flows(profile, timewindow):
     """
     Set timeline flows of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
-    timeline = __database__.hgetall('profile_'+ip+"_"+timewindow+"_flows")
+    timeline = __database__.hgetall(profile+"_"+timewindow+"_flows")
     data = [json.loads(value) for key,value in timeline.items()]
     data_length = len(data)
     total_filtered = len(data)
@@ -145,12 +144,12 @@ def set_timeline_flows(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-@hotkeys.route('/timeline/profile_<ip>/<timewindow>')
-def set_timeline(ip, timewindow):
+@hotkeys.route('/timeline/<profile>/<timewindow>')
+def set_timeline(profile, timewindow):
     """
     Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
     """
-    timeline = __database__.zrange('profile_'+ip+"_"+timewindow+"_timeline", 0, -1)
+    timeline = __database__.zrange(profile+"_"+timewindow+"_timeline", 0, -1)
     data = [json.loads(line) for line in timeline]
     data_length = len(data)
     total_filtered = len(data)
