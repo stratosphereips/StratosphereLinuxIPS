@@ -35,8 +35,6 @@ __cache__ = redis.StrictRedis(host='localhost',
 """
 Helper functions for testing
 """
-
-
 def is_json(myjson):
   try:
     json.loads(myjson)
@@ -45,6 +43,9 @@ def is_json(myjson):
   return True
 
 
+"""
+Test functions
+"""
 def test_type_profiles_correct():
     test_key = "profiles"
     assert __database__.type(test_key) == TYPE_SET
