@@ -1,9 +1,9 @@
+from flask import Blueprint
 from flask import Flask, render_template, request
 import redis
 import json
-# from slips_files.core.database import __database__
 
-app = Flask(__name__)
+hotkeys = Blueprint('hotkeys', __name__,  static_folder='static',static_url_path='/hotkeys/static', template_folder='templates')
 
 # Connection to Slips redis database
 config = ""
@@ -17,6 +17,12 @@ __database__ =redis.StrictRedis(host='localhost',
                                            decode_responses=True,
                                            health_check_interval=30)
 
+# pubsub = __database__.pubsub()
+# c1 = pubsub.subscribe('tw_modified')
+# message = c1.get_message()
+# if message:
+#     print(message)
+
 __cache__ = redis.StrictRedis(host='localhost',
                                                 port=6379,
                                                 db=1,
@@ -26,11 +32,11 @@ __cache__ = redis.StrictRedis(host='localhost',
                                                 decode_responses=True,
                                                 health_check_interval=30)
 
-@app.route('/')
+@hotkeys.route('/')
 def index():
-    return render_template('interface.html', title='Slips')
+    return render_template('hotkeys.html', title='Slips')
 
-@app.route('/info/<ip>')
+@hotkeys.route('/info/<ip>')
 def set_ip_info(ip):
     '''
     Set info about the ip in route /info/<ip> (geocountry, asn, TI)
@@ -51,7 +57,7 @@ def set_ip_info(ip):
         'draw': request.args.get('draw', type=int)
     }
 
-@app.route('/profiles_tws')
+@hotkeys.route('/profiles_tws')
 def profile_tws():
     '''
     Set profiles and their timewindows data.
@@ -75,7 +81,7 @@ def profile_tws():
         'draw': request.args.get('draw', type=int)
     }
 
-@app.route('/outtuples/<ip>/<timewindow>')
+@hotkeys.route('/outtuples/<ip>/<timewindow>')
 def set_outtuples(ip, timewindow):
     """
     Create a datatable with Slips alerts.
@@ -85,7 +91,7 @@ def set_outtuples(ip, timewindow):
     outtuples = json.loads(outtuples)
     data = []
     for key,value in outtuples.items():
-        data.append({'tuple':key,'string':value[0]})
+        data.add({'tuple':key,'string':value[0]})
     data_length = len(outtuples)
     total_filtered = len(outtuples)
     search = request.args.get('search[value]')
@@ -107,7 +113,7 @@ def set_outtuples(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-@app.route('/timeline_flows/profile_<ip>/<timewindow>')
+@hotkeys.route('/timeline_flows/profile_<ip>/<timewindow>')
 def set_timeline_flows(ip, timewindow):
     """
     Set timeline flows of a chosen profile and timewindow. Supports pagination, sorting and seraching.
@@ -137,7 +143,7 @@ def set_timeline_flows(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-@app.route('/timeline/profile_<ip>/<timewindow>')
+@hotkeys.route('/timeline/profile_<ip>/<timewindow>')
 def set_timeline(ip, timewindow):
     """
     Set timeline data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
@@ -167,7 +173,7 @@ def set_timeline(ip, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-@app.route('/alerts/profile_<ip>/<timewindow>')
+@hotkeys.route('/alerts/profile_<ip>/<timewindow>')
 def set_alerts(ip, timewindow):
     """
     Set alerts data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
@@ -196,7 +202,3 @@ def set_alerts(ip, timewindow):
         'recordsTotal': data_length,
         'draw': request.args.get('draw', type=int)
     }
-
-
-if __name__ == '__main__':
-    app.run()
