@@ -1,3 +1,4 @@
+from slips_files.common.slips_utils import utils
 import os
 import redis
 import time
@@ -1479,7 +1480,7 @@ class Database(object):
 
     def getIPData(self, ip: str):
         """
-        Return information about this IP
+        Return information about this IP from IPsInfo
         Returns a dictionary or False if there is no IP in the database
         We need to separate these three cases:
         1- IP is in the DB without data. Return empty dict.
@@ -2950,6 +2951,25 @@ class Database(object):
         :param network_evaluation: a dict with {'score': ..,'confidence': .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
+
+    def set_score_confidence(self, ip: str, threat_level: str, confidence):
+        """
+        Function to set the score and confidence of the given ip in the db
+        These 2 values will be needed when sharing with peers
+        :param threat_level: low, medium, high, etc.
+        :apram confidence: from 0 to 1 how sure are we of the score?
+        """
+        # get the numerical value of this threat level
+        score = utils.threat_levels[threat_level.lower()]
+        score_confidence = {'score': score, 'confidence': confidence }
+        cached_ip_data = self.getIPData(ip)
+        if cached_ip_data is False:
+            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
+        else:
+            # append the score and conf. to the already existing data
+            cached_ip_data.update(score_confidence)
+            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
+
 
 
 __database__ = Database()

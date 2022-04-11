@@ -12,6 +12,7 @@ import datetime
 import sys
 import asyncio
 
+
 class UpdateFileManager:
 
     def __init__(self, outputqueue, config):
@@ -989,7 +990,6 @@ class UpdateFileManager:
                                 or ip_obj.is_multicast
                                 or ip_obj.is_link_local):
                             continue
-
                         try:
                             # we already have info about this ip?
                             old_ip_info = json.loads(malicious_ips_dict[str(data)])
@@ -1004,17 +1004,21 @@ class UpdateFileManager:
                             threat_level = str(max(int(old_ip_info['threat_level']),
                                                    int(self.url_feeds[link_to_download]['threat_level'])))
                             malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
-                                                                        'source':source,
-                                                                        'threat_level':threat_level,
+                                                                        'source': source,
+                                                                        'threat_level': threat_level,
                                                                         'tags': tags})
                             # print(f'Dulicate ip {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
-
                         except KeyError:
+                            threat_level = self.url_feeds[link_to_download]['threat_level']
                             # We don't have info about this IP, Store the ip in our local dict
                             malicious_ips_dict[str(data)] = json.dumps({'description': description,
-                                                                        'source':data_file_name,
-                                                                        'threat_level':self.url_feeds[link_to_download]['threat_level'],
+                                                                        'source': data_file_name,
+                                                                        'threat_level': threat_level,
                                                                         'tags': self.url_feeds[link_to_download]['tags']})
+                            # set the score and confidence of this ip = the same as the ones given in slips.conf
+                            # todo for now the confidence is 1
+                            __database__.set_score_confidence(data, threat_level, 1)
+
                     elif data_type == 'ip_range':
                         # make sure we're not blacklisting a private or multicast ip range
                         # get network address from range
