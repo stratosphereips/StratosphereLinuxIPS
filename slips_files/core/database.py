@@ -1296,15 +1296,15 @@ class Database(object):
         self.r.hset(profileid + self.separator + twid, 'Evidence', current_evidence)
         self.r.hset('evidence'+profileid, twid, current_evidence)
 
-        # an alert is generated for this profile, change the threat level to = 1, and confidence = 1
+        # an alert is generated for this profile,
+        # change the score to = 1, and confidence = 1
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            self.r.hset(profileid, 'threat_level', 1)
-            self.r.hset(profileid, 'confidence', 1)
+            ip = profileid.split('_')[1]
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.r.hset(f'profileid_{detection_info}', 'threat_level', 1)
-            self.r.hset(f'profileid_{detection_info}', 'confidence', 1)
+            ip = detection_info
+        self.set_score_confidence(ip, 'critical', 1)
 
         return True
 
