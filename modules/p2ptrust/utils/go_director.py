@@ -363,23 +363,23 @@ class GoDirector:
             timestamp = data["timestamp"]
             timestamp = validate_timestamp(timestamp)
             if timestamp is None:
-                self.print("Timestamp is invalid", 0, 1)
+                self.print("Timestamp is invalid", 2, 0)
         except KeyError:
-            self.print(f"Timestamp is missing from data {data}", 0, 1)
+            self.print(f"Timestamp is missing from data {data}", 2, 0)
             timestamp = None
 
         try:
             reliability = float(data["reliability"])
             self.trustdb.insert_go_reliability(peerid, reliability, timestamp=timestamp)
         except KeyError:
-            self.print("Reliability missing", 0, 1)
+            self.print("Reliability missing", 2, 0)
         except ValueError:
-            self.print("Reliability is not a float", 0, 1)
+            self.print("Reliability is not a float", 2, 0)
 
         try:
             ip_address = data["ip"]
             if not validate_ip_address(ip_address):
-                self.print(f"IP address {ip_address} is invalid", 0, 1 )
+                self.print(f"IP address {ip_address} is invalid", 2, 0)
                 return
             self.trustdb.insert_go_ip_pairing(peerid, ip_address, timestamp=timestamp)
             self.print(f"[The Network -> Slips] Peer update or new peer {peerid} "
