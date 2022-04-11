@@ -24,6 +24,7 @@ from datetime import datetime, timedelta
 import configparser
 from os import path
 from colorama import Fore, Style
+from slips_files.common.slips_utils import Utils
 import ipaddress
 import sys
 import re
@@ -79,13 +80,6 @@ class EvidenceProcess(multiprocessing.Process):
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
-        self.threat_levels = {
-            'info': 0,
-            'low' : 0.2,
-            'medium': 0.5,
-            'high': 0.8,
-            'critical': 1
-        }
         # flag to only add commit and hash to the firs alert in alerts.json
         self.is_first_alert = True
 
@@ -782,7 +776,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # each threat level is a string, get the numerical value of it
                             try:
-                                threat_level = self.threat_levels[threat_level.lower()]
+                                threat_level = utils.threat_levels[threat_level.lower()]
                             except KeyError:
                                 self.print(f"Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}", 0 , 1)
                                 self.print(f"Description: {description}")

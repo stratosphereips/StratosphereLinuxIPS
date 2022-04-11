@@ -17,6 +17,13 @@ class Utils(object):
     def __init__(self):
         self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
+        self.threat_levels = {
+            'info': 0,
+            'low': 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1
+        }
 
     def timeit(method):
         def timed(*args, **kw):

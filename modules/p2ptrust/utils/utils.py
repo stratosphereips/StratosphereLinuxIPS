@@ -115,7 +115,7 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
     :param ip_info: The redis data for one IP address
     :return: Tuple with score and confidence. If data is not there, (None, None) is returned instead.
     """
-
+    # the higher the score, the more malicious this ip
     try:
         score = ip_info["score"]
         confidence = ip_info["confidence"]

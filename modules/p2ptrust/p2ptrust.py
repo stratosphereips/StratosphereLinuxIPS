@@ -89,7 +89,6 @@ class Trust(Module, multiprocessing.Process):
         self.config = config
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
-
         self.rename_with_port = rename_with_port
         self.gopy_channel_raw = gopy_channel
         self.pygo_channel_raw = pygo_channel
@@ -119,18 +118,8 @@ class Trust(Module, multiprocessing.Process):
             self.storage_name += str(self.port)
 
         self.timeout = None
-
-        # Start the db
-        __database__.start(self.config)
-
-        self.sql_db_name = self.data_dir + "trustdb.db"
-        if rename_sql_db_file:
-            self.sql_db_name += str(pigeon_port)
-
-        # todo don't duplicate this dict, move it to slips_utils
-        # all evidence slips detects has threat levels of strings
-        # each string should have a corresponding int value to be able to calculate
-        # the accumulated threat level and alert
+        # they have to be defined here because the variable name utils is already taken
+        #TODO rename one of them
         self.threat_levels = {
             'info': 0,
             'low' : 0.2,
@@ -138,6 +127,17 @@ class Trust(Module, multiprocessing.Process):
             'high': 0.8,
             'critical': 1
         }
+        # Start the db
+        __database__.start(self.config)
+
+        self.sql_db_name = self.data_dir + "trustdb.db"
+        if rename_sql_db_file:
+            self.sql_db_name += str(pigeon_port)
+        # todo don't duplicate this dict, move it to slips_utils
+        # all evidence slips detects has threat levels of strings
+        # each string should have a corresponding int value to be able to calculate
+        # the accumulated threat level and alert
+
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
