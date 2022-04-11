@@ -388,5 +388,5 @@ class GoDirector:
 
 
         except KeyError:
-            self.print("IP address missing", 0, 1)
+            self.print("IP address missing", 2, 0)
             return

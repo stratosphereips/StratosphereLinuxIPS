@@ -1301,10 +1301,10 @@ class Database(object):
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
             ip = profileid.split('_')[1]
+            self.set_score_confidence(ip, 'critical', 1)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
-            ip = detection_info
-        self.set_score_confidence(ip, 'critical', 1)
+            self.set_score_confidence(detection_info, 'critical', 1)
 
         return True
 
