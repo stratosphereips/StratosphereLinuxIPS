@@ -218,7 +218,8 @@ class Module(Module, multiprocessing.Process):
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
         # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
-
+        if not response.text:
+            return False
         json_response = json.loads(response.text)
         # the above website returns unknown if it has no info about this UA,
         # remove the 'unknown' from the string before storing in the db
