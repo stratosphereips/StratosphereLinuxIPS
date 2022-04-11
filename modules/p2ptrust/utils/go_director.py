@@ -227,7 +227,7 @@ class GoDirector:
             # print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
             # print(f"[debugging] slips just used {self.pygo_channel} to send evaluation to go")
         else:
-            send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
+            # send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
             self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
             self.print(f"[DEBUGGING] [Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}")
 
