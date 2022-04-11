@@ -111,7 +111,7 @@ class GoDirector:
         # decode b64
         message_type, data = self.validate_message(message)
 
-        self.print(f"[The Network -> Slips] Received msg {data} from peer {reporter}, message_type: {message_type}")
+        self.print(f"[The Network -> Slips] Received msg {data} from peer {reporter}")
 
         if message_type == "report":
             # a peer reporting an IP
@@ -204,8 +204,8 @@ class GoDirector:
             return
 
         key = data["key"]
-        self.print(f"[The Network -> Slips] Peer request about {key} reporter: {reporter}", 2, 0)
-        print(f"[The Network -> Slips] Peer request about {key} reporter: {reporter}")
+        self.print(f"[The Network -> Slips] request about {key} from: {reporter}", 2, 0)
+        print(f"[The Network -> Slips] request about {key} from: {reporter}")
 
         if self.override_p2p:
             # print("Overriding p2p")
