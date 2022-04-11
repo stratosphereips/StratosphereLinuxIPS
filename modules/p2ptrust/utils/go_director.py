@@ -205,7 +205,6 @@ class GoDirector:
 
         key = data["key"]
         self.print(f"[The Network -> Slips] request about {key} from: {reporter}", 2, 0)
-        print(f"[The Network -> Slips] request about {key} from: {reporter}")
 
         if self.override_p2p:
             # print("Overriding p2p")
@@ -223,13 +222,12 @@ class GoDirector:
         if score is not None:
             send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
             self.print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.", 2, 0)
-            self.print(f"[************DEBUGGING************] [Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
             # print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
-            # print(f"[debugging] slips just used {self.pygo_channel} to send evaluation to go")
         else:
             # send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
-            self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
-            self.print(f"[DEBUGGING] [Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}")
+            # self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
+            self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}", 2, 0)
+            # self.print(f"[DEBUGGING] [Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}")
 
     def process_message_report(self, reporter: str, report_time: int, data: dict):
         """
@@ -280,7 +278,6 @@ class GoDirector:
         self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
         if evaluation != None:
             self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}", 2, 0)
-            print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}")
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
@@ -387,7 +384,7 @@ class GoDirector:
             self.trustdb.insert_go_ip_pairing(peerid, ip_address, timestamp=timestamp)
             self.print(f"[The Network -> Slips] Peer update or new peer {peerid} "
                        f"with IP: {ip_address} "
-                       f"Reliability: {reliability } ", 1, 0)
+                       f"Reliability: {reliability } ", 2, 0)
 
 
         except KeyError:
