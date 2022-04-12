@@ -622,16 +622,19 @@ class Module(Module, multiprocessing.Process):
 
         # found NXDOMAIN by this profile
         try:
-            self.nxdomains[profileid_twid] +=1
+            # make sure all domains are unique
+            if query not in self.nxdomains[profileid_twid]:
+                self.nxdomains[profileid_twid].append(query)
         except KeyError:
             # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: 1})
+            self.nxdomains.update({profileid_twid: [query]})
             return False
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
-        if (self.nxdomains[profileid_twid] % 5 == 0 and
-            self.nxdomains[profileid_twid] >= self.nxdomains_threshold):
-            self.helper.set_evidence_DGA(self.nxdomains[profileid_twid], stime, profileid, twid, uid)
+        number_of_nxdomains = len(self.nxdomains[profileid_twid])
+        if (number_of_nxdomains % 5 == 0 and
+            number_of_nxdomains >= self.nxdomains_threshold):
+            self.helper.set_evidence_DGA(number_of_nxdomains, stime, profileid, twid, uid)
             return True
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
