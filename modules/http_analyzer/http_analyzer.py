@@ -257,29 +257,36 @@ class Module(Module, multiprocessing.Process):
         UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
 
-    def check_multiple_UAs(self, cached_ua: dict, user_agent: dict, host, uri, timestamp, profileid, twid, uid):
+    def check_multiple_UAs(self, cached_ua: dict, user_agent: dict, timestamp, profileid, twid, uid):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
         :param user_agent: UA of the current flow
         :param cached_ua: UA of this profile from the db
         """
-        if not cached_ua:
+        if not cached_ua or not user_agent:
             return False
 
         cached_ua = cached_ua['user_agent']
-        # todo now the first UA seen is considered the only valid one and slips will setevidence everytime another one is used, is that correct?
-        if cached_ua not in user_agent:
-            type_detection = 'srcip'
-            source_target_tag = 'UsingSuspiciousUserAgent'
-            detection_info = profileid.split("_")[1]
-            type_evidence = 'IncompatibleUserAgent'
-            threat_level = 'low'
-            category = 'Anomaly.Behaviour'
-            confidence = 1
-            description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}"'
-            __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
-                                     description, timestamp, category, source_target_tag=source_target_tag,
-                                     profileid=profileid, twid=twid, uid=uid)
+        # todo now the first UA seen is considered the only valid one and slips
+        #  will setevidence everytime another one is used, is that correct?
+        for keyword in cached_ua:
+            # loop through each word in UA
+            if keyword in user_agent:
+                # for example if the cached UA is Microsoft NCSI and the current is Microsoft BITS/7.5
+                # we will find the keyword 'microsoft' in both keywords, so we shouldn't alert
+                return False
+
+        type_detection = 'srcip'
+        source_target_tag = 'UsingSuspiciousUserAgent'
+        detection_info = profileid.split("_")[1]
+        type_evidence = 'IncompatibleUserAgent'
+        threat_level = 'low'
+        category = 'Anomaly.Behaviour'
+        confidence = 1
+        description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}"'
+        __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
+                                 description, timestamp, category, source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
@@ -310,7 +317,7 @@ class Module(Module, multiprocessing.Process):
                     # get the last used ua of this profile
                     cached_ua = __database__.get_user_agent_from_profile(profileid)
                     if cached_ua:
-                        self.check_multiple_UAs(cached_ua, user_agent, host, uri, timestamp, profileid, twid, uid)
+                        self.check_multiple_UAs(cached_ua, user_agent,timestamp, profileid, twid, uid)
 
                     if (
                         not cached_ua
