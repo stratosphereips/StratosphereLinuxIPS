@@ -26,7 +26,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        self.timeout = 0.0000001
+        # self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = sys.argv[sys.argv.index('-f')+1]
