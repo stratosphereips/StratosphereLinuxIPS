@@ -114,6 +114,8 @@ class Module(Module, multiprocessing.Process):
         # Don't use 'in' since 192.168.1.1 is in 192.168.1.117 and that is wrong
         if self.gateway == saddr:
             return False
+        if saddr == '0.0.0.0':
+            return False
 
         try:
             # Get together all the arp requests for each IP in this TW
