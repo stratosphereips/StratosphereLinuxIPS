@@ -66,7 +66,7 @@ class EvidenceProcess(multiprocessing.Process):
         # clear alerts.json
         self.jsonfile = self.clean_file(output_folder , 'alerts.json')
 
-        self.timeout = 0.0000001
+        self.timeout = 0
         # this list will have our local and public ips
         self.our_ips = utils.get_own_IPs()
         if not self.our_ips:
