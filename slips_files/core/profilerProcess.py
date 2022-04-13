@@ -1027,7 +1027,7 @@ class ProfilerProcess(multiprocessing.Process):
             # 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364,
             # 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1,
             # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
-            # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
+            # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', "is_DoH":false, 'type': './zeek_files/conn'}
 
             self.column_values.update({
                 'type' :  'conn',
@@ -1046,7 +1046,8 @@ class ProfilerProcess(multiprocessing.Process):
                 'pkts' : line.get('orig_bytes',0) + line.get('resp_pkts',0),
                 'bytes' :  line.get('orig_bytes',0) + line.get('resp_bytes',0),
                 'state_hist' : line.get('history', line.get('conn_state','')),
-                'smac' : line.get('orig_l2_addr',''),
+                'smac': line.get('orig_l2_addr',''),
+                'is_DoH': line.get('is_DoH','false'),
                 'dmac' : line.get('resp_l2_addr','')})
 
         elif 'dns' in file_type:
