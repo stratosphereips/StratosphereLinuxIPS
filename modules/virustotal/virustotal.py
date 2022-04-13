@@ -424,7 +424,7 @@ class Module(Module, multiprocessing.Process):
                 response = self.http.request("GET", self.url, fields=params)
                 break
             except urllib3.exceptions.MaxRetryError:
-                self.print("Network is not available, waiting 10s")
+                self.print("Network is not available, waiting 10s", 2, 0)
                 time.sleep(10)
 
         if response.status != 200:
