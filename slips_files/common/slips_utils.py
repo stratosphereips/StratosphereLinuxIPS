@@ -159,7 +159,7 @@ class Utils(object):
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
             return (commit, branch)
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             # Error:  git returned: b'' or detached head
             return False
 
