@@ -156,7 +156,12 @@ class Utils(object):
             return False
         # add branch name and commit
         branch = repo.active_branch.name
-        commit = repo.active_branch.commit.hexsha
+        try:
+            commit = repo.active_branch.commit.hexsha
+        except ValueError:
+             # Error: SHA could not be resolved, git returned: b''
+            commit = ''
+
         return (commit, branch)
 
     def format_timestamp(self, timestamp):
