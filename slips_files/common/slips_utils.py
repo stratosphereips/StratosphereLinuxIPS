@@ -159,8 +159,8 @@ class Utils(object):
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
             return (commit, branch)
-        except ValueError:
-            # Error:  git returned: b''
+        except ValueError, TypeError:
+            # Error:  git returned: b'' or detached head
             return False
 
     def format_timestamp(self, timestamp):
