@@ -1,0 +1,660 @@
+# Various telemetry endpoints (hosts and domains) used by mobile location tracking libraries
+# Contact: mobiletrackers [at] protonmail.ch
+# 
+# Version 1.22 - 20211004
+#
+# xmodesocial - e65912e897bd9e6f41865a8ab0eb9b15fef4bc0af68eb8217f5360fb1c53f423 - 13.1Trainer_95.19-.apk
+bin5y4muil.execute-api.us-east-1.amazonaws.com
+# unknown, possibly xmodesocial - e65912e897bd9e6f41865a8ab0eb9b15fef4bc0af68eb8217f5360fb1c53f423 - 13.1Trainer_95.19-.apk
+8balwalz1i.execute-api.us-east-2.amazonaws.com
+# unknowns - e65912e897bd9e6f41865a8ab0eb9b15fef4bc0af68eb8217f5360fb1c53f423 - 13.1Trainer_95.19-.apk
+api.smartechmetrics.com
+ck-running-apps-700f1.firebaseio.com
+pie.wirelessregistry.com
+# unknowns - 010f7bb33f35cc650b7d6104b07102eb0dbaf79bcec1f1c6255fdcaffefe6b68 - com.davidsukhin.com.sukhin.snowdaycalculator.SnowDay
+# URLs below stored as base64 and encrypted xor 0x09 ->
+udata.elephantdata.net
+atb.bearclod.com
+#pDNS data for the IPs associated with atb.bearclod.com ->
+alb.bearclod.com
+aly.bearclod.com
+alz.bearclod.com
+atb.bearclod.com
+bivitis.bearclod.com
+brt.bearclod.com
+brul.bearclod.com
+hfstat.bearclod.com
+hkn01.bearclod.com
+ply.bearclod.com
+zoo.bearclod.com
+# crashlytics - 4711634730d5367756bba4d776d846b01b8d0373336ea877a2c20b1da0a95477 - com.sgiggle.production_5.2.229629_1538560344.apk
+settings.crashlytics.com
+e.crashlytics.com
+# starbolt - cb9b9de8616e55849b9140e7915b2ba237818625828acfa55b59f5268f589e91 - com.kellytechnology.Forecast_Now
+sdk.starbolt.io
+dmp.starbolt.io
+devices.starbolt.io
+# sense360 ? - cb9b9de8616e55849b9140e7915b2ba237818625828acfa55b59f5268f589e91 - com.kellytechnology.Forecast_Now
+android-quinoa-config-prod.sense360eng.com
+survey-notify-event.sense360eng.com
+quinoa-personal-identify-prod.sense360eng.com
+# appmeasurement - cb9b9de8616e55849b9140e7915b2ba237818625828acfa55b59f5268f589e91 - com.kellytechnology.Forecast_Now
+app-measurement.com
+# newrelic - 2d4c9c037db43704f52968c9c363cbdf382cbb6a4b9143825f6e8b523b7c0c01 - com.crowdcompass.appmQaIam3e7C.apk
+mobile-collector.newrelic.com
+mobile-crash.newrelic.com
+# Xiao mi related telemetry endpoints - see https://twitter.com/hookgab/status/1255859289945780225
+data.mistat.india.xiaomi.com
+data.mistat.intl.xiaomi.com
+data.mistat.rus.xiaomi.com
+tracking.rus.miui.com
+tracking.intl.miui.com
+tracking.india.miui.com
+# from https://twitter.com/cybergibbons/status/1256703550954057729
+sa.api.intl.miui.com
+sa.api.india.miui.com
+sa.api.rus.miui.com
+# new xmodesocial - from https://mobile.twitter.com/guardianiosapp/status/1262545645941874689
+api.myendpoint.io
+# aggressive advertisers - https://securelist.com/in-app-advertising-in-android/97065/
+# 1eeda6306a2b12f78902a1bc0b7a7961 – com.android.ggtoolkit_tw_xd
+# 134283b8efedc3d7244ba1b3a52e4a92  – com.xprodev.cutcam
+# 3aba867b8b91c17531e58a9054657e10 – com.powerd.cleaner
+ti.domainforlite.com
+uu.domainforlite.com
+# pDNS resolutions for uu.domainforlite.com, hosting on 47.252.80.195
+adserver.hahamobi.com
+analytics.hahamobi.com
+analytics.salmonads.com
+api.salmonads.com
+dat.funheroic.com
+lg.luckyforworlds.com
+lg.requestads.com
+lg.smardroid.com
+log.adywind.com
+log.mobpowertech.com
+net.hahamobi.com
+net.salmonads.com
+us01.salmonads.com
+uu.domainforlite.com
+# mobile ads, 2020-07-07, additions from https://securelist.com/pig-in-a-poke-smartphone-adware/97607/
+www.ywupscsff.com
+www.mzeibiyr.com
+i151125.infourl.net
+www.jueoxdr.com
+ufz.doesxyz.com
+htapi.getapiv8.com
+stable.icecyber.org
+404mobi.com
+51ginkgo.com
+lbjg7.com
+bigdata800.com
+apd1.warnlog.com
+apd1.thunup.com
+# mintegral, 2020-08-30, described at: https://snyk.io/research/sour-mint-malicious-sdk/
+n.systemlog.me
+setting.rayjump.com
+analytics.rayjump.com
+# from pDNS on n.systemlog.me ->
+net.cleverjp.com
+# from fake NEXTALIVE (moonfair) application - https://www.zdnet.com/article/google-removes-android-app-that-was-used-to-spy-on-belarusian-protesters/
+arcpi.nextialive.roimaster.site
+api.nextialive.roimaster.site
+ws.nextialive.roimaster.site
+nextialive.roimaster.site
+api.dev.chat.roimaster.site
+dev.chat.roimaster.site
+# Joker download URLs / hosts as described by ZScaler - https://www.zscaler.com/blogs/security-research/joker-playing-hide-and-seek-google-play
+2j1i9uqw.oss-eu-central-1.aliyuncs.com
+blackdragon03.oss-ap-southeast-5.aliyuncs.com
+blackdragon.oss-ap-southeast-5.aliyuncs.com
+fgcxweasqw.oss-eu-central-1.aliyuncs.com
+jk8681oy.oss-eu-central-1.aliyuncs.com
+laodaoo.oss-ap-southeast-5.aliyuncs.com
+laodaoo.oss-ap-southeast-5.aliyuncs.com
+n47n.oss-ap-southeast-5.aliyuncs.com
+nineth03.oss-ap-southeast-5.aliyuncs.com
+proxy48.oss-eu-central-1.aliyuncs.com
+rinimae.oss-ap-southeast-5.aliyuncs.com
+sahar.oss-us-east-1.aliyuncs.com
+# Cerberus C2s as described by BitDefender - https://labs.bitdefender.com/2020/09/apps-on-google-play-tainted-with-cerberus-banker-malware/
+2fapass.club
+androidradio.life
+downdating.club
+fitnessstrategy.xyz
+groovefitness.xyz
+loversfinder.xyz
+positivefitness.club
+safeyourdata.xyz
+sport4ever.club
+vipyoga.today
+weatherclub.club
+yoga4u.xyz
+# unknown (?) telemetry receiving endpoints from:
+# 066de93f181e9cbcb8611c675bbcb0fc - com.speedcamera.detector.radar.detector.direction
+yqchpwxvbg.execute-api.us-east-1.amazonaws.com
+pn8sm7rjuc.execute-api.us-east-1.amazonaws.com
+# venntel / gravy analytics from https://github.com/sociam/PROWISH/blob/master/data/200appsdynamic.csv
+# venntel / gravy analytics from https://fil.forbrukerradet.no/wp-content/uploads/2020/01/2020-01-14-out-of-control-final-version.pdf
+# gravy analytics docs - http://developers.findgravy.com/products/gold-api/docs/index2.html
+api.findgravy.com
+nwzhmwux-api.findgravy.com
+zmq5ytc1-api.findgravy.com
+mtm1nwmx-api.findgravy.com
+gravyanalytics.com
+# 51ec8159efb88a852005b94f0fd9891016b75f4b40d24608ee8a5c8d34826a3e - com.usatoday.android.news
+ws.findgravy.com
+api.foozor.com
+testapi.foozor.com
+# potentially related hosts on top of findgravy.com
+img01.findgravy.com
+img02.findgravy.com
+img03.findgravy.com
+img04.findgravy.com
+# 51ec8159efb88a852005b94f0fd9891016b75f4b40d24608ee8a5c8d34826a3e - com.usatoday.android.news
+pushapi.localytics.com
+analytics.localytics.com
+profile.localytics.com
+# cuebiq location sdk from ->
+# 2dc269d7237c97edefa653a379eca897a23f46adcf14705801041817bf5d1e7e - net.androgames.compass
+in.cuebiq.com
+ingestion-api.kiwi.sand.cuebiq.ai
+# nodle.io sdk from ->
+# 2dc269d7237c97edefa653a379eca897a23f46adcf14705801041817bf5d1e7e - net.androgames.compass
+dev.nodle.io
+us-central1-production-242307.cloudfunctions.net
+# unknown sdk from 2dc269d7237c97edefa653a379eca897a23f46adcf14705801041817bf5d1e7e - net.androgames.compass possibly xmode related
+api.smartechmetrics.com
+# more crashlytics hosts from 2dc269d7237c97edefa653a379eca897a23f46adcf14705801041817bf5d1e7e - net.androgames.compass
+firebase-settings.crashlytics.com
+update.crashlytics.com
+reports.crashlytics.com
+# 2dc269d7237c97edefa653a379eca897a23f46adcf14705801041817bf5d1e7e - net.androgames.compass ->
+pixelprose.fr
+# appsflyer from b8ce13566a048108b4321f5277e4d95a5d5743da4f082fbca30074439acf5a15 - com.unacademyapp
+onelink.me
+onelnk.com
+app.aflink.com
+t.appsflyer.com
+# others various telemetry endpoints (not necessarily location related) from from b8ce13566a048108b4321f5277e4d95a5d5743da4f082fbca30074439acf5a15 - com.unacademyapp
+api.mixpanel.com
+decide.mixpanel.com
+cdn.optimizely.com
+logx.optimizely.com
+outline.truecaller.com
+api4.truecaller.com
+c.webengage.com
+p.webengage.com
+api.branch.io
+bnc.lt
+cdn.branch.io
+e.crashlytics.com
+settings.crashlytics.com
+js.intercomcdn.com
+mobile-sdk-api.intercom.io
+# Clevertap's wzrkt.com - also see https://twitter.com/fs0c131y/status/977267255309463554
+wzrkt.com
+in.wzrkt.com
+# subdomains from wzrkt.com - https://subdomainfinder.c99.nl/scans/2020-04-19/wzrkt.com
+api.wzrkt.com
+cb.wzrkt.com
+eu1-spiky.wzrkt.com
+eu1.alb.wzrkt.com
+eu1.wzrkt.com
+in.cb.wzrkt.com
+in1-spiky.wzrkt.com
+in1.alb.wzrkt.com
+in1.wzrkt.com
+sg1-spiky.wzrkt.com
+sg1.cb.wzrkt.com
+sg1.wzrkt.com
+sk1-spiky.wzrkt.com
+sk1-staging-1.wzrkt.com
+sk1-staging-10.wzrkt.com
+sk1-staging-2.wzrkt.com
+sk1-staging-3.wzrkt.com
+sk1-staging-4.wzrkt.com
+sk1-staging-5.wzrkt.com
+sk1-staging-6.wzrkt.com
+sk1-staging-7.wzrkt.com
+sk1-staging-8.wzrkt.com
+sk1-staging-9.wzrkt.com
+sk1.wzrkt.com
+us1-spiky.wzrkt.com
+us1.cb.wzrkt.com
+us1.wzrkt.com
+# from cb9f6bb72a9766ba8c805c25769b47c46751052706bb41ed333db0b42cd586ff - 	com.byjus.thelearningapp
+# also see https://digitalwatchdog.org/wp-content/uploads/2020/09/IDAC-Ed-Tech-Report_AppendixB_SensitiveData.pdf
+api.tllms.com
+marketing.tllms.com
+# from 09f5bcadde3351eb3f509f5a471cbd7bb00536292da560bcf8ee59eb73116f00 - luo.speedometergps
+# teragence ->
+control.teragence.net
+pfsense02-01.is-61194.teragence.net
+# tutela ->
+upload-tutelawest.s3-accelerate.amazonaws.com
+reporting-util.tutelatechnologies.com
+hail-reporting.tutelatechnologies.com
+thepopulator.tutelatechnologies.com
+# huq
+api.huqindustries.co.uk
+report.huqindustries.co.uk
+charles.huqindustries.co.uk
+# IOCs from https://www.whiteops.com/blog/somewhere-over-the-rainbowmix
+api.pythonexample.com
+# Predicio - from Funny Weather - pl.lawiusz.funnyweather.release.apk - 6d23151e69a57f67111d4969594316576577ae8a2015aff336ab6ef0fb2a07b4
+# see https://www.vice.com/en/article/epdpdm/ice-dhs-fbi-location-data-venntel-apps
+sdk.predic.io
+# Kinesis endpoint from Funny Weather:
+kinesis.ap-southeast-1.amazonaws.com
+# Complementics endpoints from 4ba50272718c95af20940912c7968410d797fbc07dcce2bad8183b94887b0ab4
+sdk-as.complementics.com
+static.complementics.com
+# Goontact from https://blog.lookout.com/lookout-discovers-new-spyware-goontact-used-by-sextortionists-for-blackmail
+redvios.com
+v-talk.top
+v-talk.vip
+ladysizi.top
+mmbox.top
+oncamera.top
+oncast.top
+mimibox.top
+voicecontrol.top
+signaltalk.top
+oncamera.vip
+dalbam.vip
+mimimsg.net
+signal-live.vip
+tele-gram.vip
+vtalk.vip
+a-video.vip
+livetalk.vip
+livetalk.top
+download-file.top
+grd77.cn
+mimicwt.net
+super-voice.vip
+mimi18s.top
+momomsg.top
+live-live.vip
+zerobyte.top
+zerobt.net
+w-video.vip
+ser-chat.com
+tocast.vip
+videosound.vip
+twi-tter.vip
+my-player.vip
+voicesupport.vip
+# Joker from https://research.checkpoint.com/2020/new-joker-variant-hits-google-play-with-an-old-trick/
+gd-1301476296.cos.na-toronto.myqcloud.com
+# Related to: https://github.com/greatsuspender/thegreatsuspender/issues/1175
+# and: https://www.theregister.com/2021/01/07/great_suspender_malware/
+cdn.owebanalytics.com
+static.trckingbyte.com
+static.trckpath.com
+static.privacytrck.com
+rctphvxwnjhx.pw
+hanstrackr.com
+# Postlo spyware - https://twitter.com/ESETresearch/status/1374889857403785218?s=20
+api.mainrepo.org
+# EvilEye malware C2s mentioned at https://about.fb.com/news/2021/03/taking-action-against-hackers-in-china/
+anayurt.net
+apkprue.info
+geo2ipapi.org
+gotossl.ml
+icptime.com
+istiqlaihaber.com
+misran.org
+newyorkingsite.com
+playgoog1e.com
+preservtyg.com
+sslportservices.com
+strunhvgpk.com
+uhtpuerdfbnm.com
+uyghur-news.com
+uyghur-soft-market.com
+uyghurhaber.com
+www.apkhl.pw
+apkhl.pw
+www.apkpure.bz
+apkpure.bz
+# Xcodespy - https://labs.sentinelone.com/new-macos-malware-xcodespy-targets-xcode-developers-with-eggshell-backdoor/
+www.liveupdate.cc
+www.appmarket.co
+www.recentnews.cc
+www.truckrental.cc
+www.everestnote.com
+www.alinbox.co
+www.suppro.co
+# APKPure compromise by Triada malware - https://securelist.com/apkpure-android-app-store-infected/101845/
+wcf.seven1029.com
+foodin.site
+# Triada from https://securelist.com/triada-trojan-in-whatsapp-mod/103679/
+# Trojan.AndroidOS.Triada.ef b1aa5d5bf39fee0b1e201d835e4dc8de
+t1k22.c8xwor.com
+dgmxn.c8xwor.com
+# Tutela technologies - f9db002cbc6e5b6de37fb15aefaaf3934a700a7a2f9d5949f3cd6bb8c7dfc1bc - org.speedspot.speedanalytics
+upload-tutelawest.s3-accelerate.amazonaws.com
+reporting.tutelatechnologies.com
+video-url.tutelatechnologies.com
+hail-reporting.tutelatechnologies.com
+d3clybje3sun07.cloudfront.net
+# speedspot - reports GPS location, other data - SpeedtestResultViews.java - inside f9db002cbc6e5b6de37fb15aefaaf3934a700a7a2f9d5949f3cd6bb8c7dfc1bc
+api.speedspot.org
+www.speedcheck.org
+net.etrality.com
+a2.etrality.com
+a1.etrality.com
+c4.etrality.com
+b3.etrality.com
+c3.etrality.com
+b2.etrality.com
+c2.etrality.com
+b1.etrality.com
+c1.etrality.com
+wpc.A3CD.edgecastcdn.net
+speedspot.speedspot.netdna-cdn.com
+www.speedspot5.com
+www.speedspot1.com
+www.speedspot7.com
+www.speedspot2.com
+www.speedspot3.com
+www.speedspot4.com
+www.speedspot6.com
+#Kochava endpoints, from rugabunda https://beta.pithus.org/report/844aa271ef47f7807ab3ccc63952e2215298701a6851857c22456317927f08fd
+co.akisinn.info
+co.dewrain.life
+co.vaicore.site
+co.vaicore.xyz
+int.akisinn.info
+int.akisinn.me
+int.akisinn.site
+int.dewrain.life
+int.dewrain.site
+int.dewrain.world
+int.vaicore.site
+int.vaicore.store
+int.vaicore.xyz
+int.vlancaa.site
+int.vlancaa.fun
+tok.vaicore.xyz
+vaicore.xyz
+web.ab-salute.com
+smart.link
+# Adeco and inappertising - see https://www.occrp.org/en/investigations/how-a-russian-mobile-app-developer-recruited-phones-into-a-secret-ad-watching-robot-army
+# Ultimate-Mortal-Kombat-3-v1-1.apk - https://www.virustotal.com/gui/file/dc078b004830ff03a27371bbc1c4a7b5882d5a0fb577a8477c09e8b3bfe0d6d3/details
+cfg.inappertising.org
+stats.inappertising.org
+app-stats.net2share.com
+s.net2share.com
+adeco.adecosystems.com
+dd.adecosystems.com
+# GriftHorse Android from - https://blog.zimperium.com/grifthorse-android-trojan-steals-millions-from-over-10-million-victims-globally/
+hotofecro.com
+alaiblompass.com
+heartratteandpulsetracker.com
+icoonectedtrack.com
+ospocatracker.com
+laalaslirayeblection.com
+iblompass.com
+smalllcalllrecorder.com
+anguaganslatast.com
+oroscopemestry.com
+blompascator.com
+leunoon.com
+arindocation.com
+rooitor.com
+mychattranslator.club
+rulapptoplan.com
+rportranslator.com
+muslimasauda.com
+martpolocator.com
+wfupppx.com
+scandocnotes.com
+freecoupon21.com
+ponyvideochat.com
+ludamec.com
+chat-transa.com
+soulscanneryh.com
+d3cameraplan.com
+qibla-ultima.com
+zoofanimalm.com
+ciaolvc.com
+heartrateproxhealthmonitor.com
+bus-metrolis.com
+truck-rouddrive.com
+locatinfind.com
+camerdentifier.com
+locatorqiafindlocation.com
+cocachar.com
+squishyp.com
+antranslaro.com
+ftphotom.com
+lockul.com
+fingerprihanger.com
+locatorshar.com
+kfcwsa.com
+gpsphonuetrackerfamilylocator.com
+cailrecorder.com
+tqiblacompas.com
+kvprojectop.com
+pikchoeditor.com
+streetprocarsracingss.com
+nemaeovies.com
+aecodero.com
+ivlewepapallrbkragonucd.com
+heartrateandmealtracker.com
+phonecontrolblockspamcalls.com
+etcotater.com
+canopoument.com
+locxfindxlocx.com
+mnesytrlatr.com
+huntcontactz.com
+intelgenttran.com
+facenalyer.com
+fnbdeiegpslocoiatntcrkaer.com
+trcalluecodr.com
+qrreaderpro.com
+itranstxtvoicepht.com
+qiberiblaon.com
+iconylc.com
+lsepeanitor.com
+fxkwboard.com
+dehcoveanager.com
+tickeakhatsp.com
+phoneboster.com
+phonfinbyclap.com
+aralaper.com
+qibdirctiowa.com
+islsrickers.com
+feartranslator.com
+vpnzfep.com
+snaplens-pt.com
+qiblassirection.com
+easyvshow.com
+qibla-quran.com
+qrcodesscan.com
+hoolives.com
+burivingsim.com
+coupongiftsnstashop.com
+fingdefend.com
+projectormp.com
+forzahmobile.com
+artateulseonitor.com
+sslasmr.com
+bagscaner.com
+phonecallerscreen.com
+datingappswmt.com
+lifeel-scan.com
+colorizerset.club
+expresscreditcash.com
+ccallerx.com
+transatitonneap.com
+lasouncherio.com
+claptfindzmphone.com
+mirrorscreencasttvv.com
+ircleocatinder.com
+mobleingsder.com
+proocallerr.com
+frecalwolwid.com
+allelpcoonmber.com
+faspulhearratmoni.com
+fincconttact.com
+uncherdroid.com
+iveilembercker.com
+lepamcker.com
+lockaaocker.com
+onarchbylap.com
+secontranslatpr.com
+tgscontakcs.com
+lockaaocker.com
+callwhozdine.com
+perargero.com
+mylocatorplus.club
+comclap.club
+callerids.club
+instantspeechtranslation.club
+photoeditorbest.club
+piction.club
+driveriders.club
+skycoachgg.club
+ffitnesstrainer.club
+racerscardriver.club
+fitnessdias.club
+meetingonlinechat.club
+fitnessgymup.club
+editsbackground.club
+cutcutpro.club
+drivingexpiriencesimulator.club
+clipbuddy.club
+horoscopefortune.club
+ludospeakeasy.club
+fitnesspoint.club
+wallvoluminousfourk.club
+cvectorart.club
+ludospeakv2.club
+callrecordpro.club
+carracer.club
+slimesimulator.club
+offroaderssurvive.club
+lending-online.club
+controlcenterios.club
+callerids.club
+carracer.club
+streetracingg.club
+checkheart.club
+keyboardthemes.club
+whatsmesticker.club
+batterychargingeffect.club
+luxoreditor.club
+lionflix.club
+amazingvideoeditor.club
+zodiachand.club
+zeusalmighty.club
+pharaohsadventure.club
+batterylivewallpaperhd.club
+comqubla.club
+safelock.club
+heartrhythm.club
+easybassbooster.club
+comphotolab.club
+
+# GriftHorse Second-Stage Domain
+
+678ikmbtui.com
+
+# GriftHorse Third-Stage Domains
+
+safe-link.mobi
+at.gogameportal.club
+activate-your-account-now.com
+continue-to-get-content-now.com
+your-access-here.com
+app.buenosocial.club
+join.crazymob.co
+vl.denrok.space
+www.timpromos.com.br
+campaignmanager.fun.moobig.com
+get-your-access-now.com
+v.mobzones.com
+mt2-sdp4.mt-2.co
+go.whatabookmark.com
+lp.shoopadoo.com
+es.mobiplus.me
+af.to.123games.club
+be.startdownload.mobi
+za.startdownload.mobi
+n.appspool.net
+wap.trend-tech.net
+fr.chillaxgames.mobi
+tracking.hexilo.com
+# Suspected GriftHorse from pDNS 	185.255.179.131 / 185.255.179.132 ->
+1g7kvrv.xyz
+2fnoqifq.com
+2g8cvdii.com
+2oafxcbq.xyz
+5rfvbnji9.com
+7lc6jc.xyz
+7nvdx0.xyz
+8sghnct.xyz
+berf4o.xyz
+blfnf9y.com
+brlyp4pg.com
+chulahfi.xyz
+cmvkvncsse.xyz
+cophico.pw
+cwkjravqsj.xyz
+dhfvbsihjf.com
+dsfhskln.com
+eksndtpf.org
+emraiyz.xyz
+eok8wd5v.net
+erbfzk.com
+ersokbkj.com
+fdfjhks.com
+ffnbafc.xyz
+hrvxkxq.xyz
+il0baz.com
+jduzuyd.com
+jsdfbhsa.com
+jydfoafcaf.xyz
+kgr0aixa.xyz
+krkmyvlmdg.xyz
+lgdzbch.com
+liahkhe.xyz
+lljmbbk.com
+lmbbnrhiuj.xyz
+lwvurdsjk.org
+lxghjoxzns.com
+mnfbodivbv.com
+mt5vsuf1.net
+nfrmg1y.xyz
+nwluoodzct.xyz
+ocheyhv.xyz
+okjojihgv.com
+olimob.net
+ortn13der.xyz
+poiuwhejgr.com
+pwtgnp.pw
+qtwjhuj.com
+rfjdhxbz.com
+sjkfsdkg.com
+trfvbnji7.com
+urtyhfds.com
+v9czaci.xyz
+vortnomade.net
+w9x7itu.xyz
+www.mnfbodivbv.com
+www.okjojihgv.com
+y0vvbm.xyz
+yq0z3d.xyz
+
+# TangleBot domains, research based on - https://www.cloudmark.com/en/blog/mobile/tanglebot-new-advanced-sms-malware-targets-mobile-users-across-us-and-canada-covid-19
+covid19-ca.link
+hydro-ca.link
+sock.godforgiveuss.live
+sock.hhhhrkanandda.xyz
+sock.nmnmnmfsamsfan.xyz
+socktest.ankatras.xyz
+vaccine-appointment.link
