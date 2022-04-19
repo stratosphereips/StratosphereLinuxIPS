@@ -734,6 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line[26]
             except IndexError:
                 self.column_values['resp_fuids'] = ''
+
         elif 'ssl.log' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
@@ -797,6 +798,12 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['ja3s'] = line[22]
             except IndexError:
                 self.column_values['ja3s'] = ''
+
+            try:
+                self.column_values['is_DoH'] = line[23]
+            except IndexError:
+                self.column_values['is_DoH'] = ''
+
 
         elif 'ssh.log' in new_line['type']:
             self.column_values['type'] = 'ssh'
