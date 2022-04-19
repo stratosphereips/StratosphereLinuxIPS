@@ -45,7 +45,7 @@ class Module(Module, multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         # Channel timeout
-        self.timeout = 0.0000001
+        self.timeout = 0
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
         # To plot the scores of training

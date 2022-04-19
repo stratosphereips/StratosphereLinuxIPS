@@ -464,7 +464,7 @@ class InputProcess(multiprocessing.Process):
             # we have our own copy pf local.zeek in __load__.zeek
             command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} ' \
                       f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins ' \
-                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
+                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} &'
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)

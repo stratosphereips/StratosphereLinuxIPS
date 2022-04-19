@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-        self.timeout = 0.0000001
+        self.timeout = 0
         self.__read_configuration()
 
     def __read_configuration(self):
@@ -431,7 +431,7 @@ class Module(Module, multiprocessing.Process):
 
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
-                if utils.is_msg_intended_for(message, 'give_threat_intelligence' ):
+                if utils.is_msg_intended_for(message, 'give_threat_intelligence'):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
                     data = json.loads(message['data'])
                     # Extract data from dict

@@ -26,7 +26,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0.0000001
+        self.timeout = 0
         self.read_configuration()
 
 

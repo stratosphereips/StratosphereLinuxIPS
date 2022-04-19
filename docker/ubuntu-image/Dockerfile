@@ -22,7 +22,7 @@ RUN apt update && apt install -y --no-install-recommends \
 # Install Slips dependencies.
 RUN apt update && apt install -y --no-install-recommends \
     python3 \
-    redis-server \ 
+    redis-server \
     zeek \
     python3-pip \
     python3-certifi \

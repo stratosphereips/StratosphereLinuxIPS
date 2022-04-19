@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
             # blocking isn't supported, exit module
             self.print('Mac OS blocking is not supported yet.')
             sys.exit()
-        self.timeout = 0.0000001
+        self.timeout = 0
         self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
