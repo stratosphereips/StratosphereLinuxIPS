@@ -19,13 +19,13 @@ __database__ = redis.StrictRedis(host='localhost',
 
 
 __cache__ = redis.StrictRedis(host='localhost',
-                                                port=6379,
-                                                db=1,
-                                                charset="utf-8",
-                                                socket_keepalive=True,
-                                                retry_on_timeout=True,
-                                                decode_responses=True,
-                                                health_check_interval=30)
+                                            port=6379,
+                                            db=1,
+                                            charset="utf-8",
+                                            socket_keepalive=True,
+                                            retry_on_timeout=True,
+                                            decode_responses=True,
+                                            health_check_interval=30)
 
 # TODO: POC that we can receive data and update the web
 # p = __database__.pubsub()
