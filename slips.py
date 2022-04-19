@@ -35,6 +35,7 @@ import modules
 import importlib
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
+from slips_files.common.slips_utils import utils
 import errno
 import subprocess
 import re
@@ -211,7 +212,6 @@ def prepare_zeek_scripts():
         home_network = config.get('parameters', 'home_network')
     except (configparser.NoOptionError, configparser.NoSectionError, NameError):
         # There is a conf, but there is no option, or no section or no configuration file specified
-        from slips_files.common.slips_utils import utils
         home_network = utils.home_network_ranges
 
     zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
