@@ -14,6 +14,7 @@ import platform
 import re
 import ast
 from uuid import uuid4
+from slips_files.common.slips_utils import utils
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -34,10 +35,9 @@ class Database(object):
         self.normal_label = 'normal'
         self.malicious_label = 'malicious'
         self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        self.sudo = 'sudo '
         if self.running_in_docker:
-            self.sudo =''
-        else:
-            self.sudo = 'sudo '
+            self.sudo = ''
 
 
     def read_configuration(self):
@@ -78,6 +78,13 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # if we failed to read a value, it will be enabled by default.
             self.disabled_detections  = []
+
+        # get home network from slips.conf
+        try:
+            self.home_network = self.config.get('parameters', 'home_network')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.home_network = utils.home_network_ranges
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -170,14 +177,36 @@ class Database(object):
         """ Set the output queue"""
         self.outputqueue = outputqueue
 
+    def should_add(self, profileid: str) -> bool:
+        """
+        determine whether we should add the given profile to the db or not based on the home_network param
+        is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
+        """
+        # make sure the user specified a home network
+        if self.home_network == utils.home_network_ranges:
+            # no home_network is specified
+            return True
+
+        ip = profileid.split(self.separator)[1]
+        try:
+            ip_obj = ipaddress.IPv4Address(ip)
+        except ipaddress.AddressValueError:
+            ip_obj = ipaddress.IPv6Address(ip)
+
+        if ip_obj in ipaddress.ip_network(self.home_network):
+            return True
+
+        return False
+
     def addProfile(self, profileid, starttime, duration):
         """
-        Add a new profile to the DB. Both the list of profiles and the hasmap of profile data
+        Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
         Duration is only needed for registration purposes in the profile. Nothing operational
         """
         try:
-            if not self.r.sismember('profiles', str(profileid)):
+            # make sure we don't add public ips if the user specified a home_network
+            if not self.r.sismember('profiles', str(profileid)) and self.should_add(profileid):
                 # Add the profile to the index. The index is called 'profiles'
                 self.r.sadd('profiles', str(profileid))
                 # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
