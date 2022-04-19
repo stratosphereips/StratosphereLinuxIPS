@@ -179,32 +179,36 @@ def set_timeline(profile, timewindow):
         'draw': request.args.get('draw', type=int)
     }
 
-# @hotkeys.route('/alerts/<profile>/<timewindow>')
-# def set_alerts(profile, timewindow):
-#     """
-#     Set alerts data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
-#     """
-#     timeline = __database__.zrange(profile+"_"+timewindow+"_timeline", 0, -1)
-#     data = [json.loads(line) for line in timeline]
-#     data_length = len(data)
-#     total_filtered = len(data)
-#     search = request.args.get('search[value]')
-#
-#     # search
-#     if search:
-#         data = [element for element in data if element['proto'].lower() == search.lower()]
-#         total_filtered = len(data)
-#
-#     # pagination
-#     start = request.args.get('start', type=int)
-#     length = request.args.get('length', type=int)
-#     data_page = []
-#     if start and length:
-#         data_page = data[start:(start + length)]
-#
-#     return {
-#         'data': data_page if data_page else data,
-#         'recordsFiltered': total_filtered,
-#         'recordsTotal': data_length,
-#         'draw': request.args.get('draw', type=int)
-#     }
+@hotkeys.route('/alerts/<profile>/<timewindow>')
+def set_alerts(profile, timewindow):
+    """
+    Set alerts data of a chosen profile and timewindow. Supports pagination, sorting and seraching.
+    """
+    print("data")
+
+    alerts = __database__.hget("evidence" + profile, timewindow)
+    alerts = json.loads(alerts)
+    data = [json.loads(value) for key,value in alerts.items()]
+    print(data)
+    data_length = len(data)
+    total_filtered = len(data)
+    search = request.args.get('search[value]')
+
+    # search
+    if search:
+        data = [element for element in data if element['proto'].lower() == search.lower()]
+        total_filtered = len(data)
+
+    # pagination
+    start = request.args.get('start', type=int)
+    length = request.args.get('length', type=int)
+    data_page = []
+    if start and length:
+        data_page = data[start:(start + length)]
+
+    return {
+        'data': data_page if data_page else data,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }

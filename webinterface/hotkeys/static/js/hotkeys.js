@@ -110,6 +110,27 @@ let operate_hotkeys = function () {
         ]
     });
 
+    let alerts = $('#table_alerts').DataTable({
+        "bDestroy": true,
+        columns: [
+            { data: 'profileid' },
+            { data: 'twid'},
+            { data: 'type_detection' },
+            { data: 'detection_info'},
+            { data: 'type_evidence' },
+            { data: 'description'},
+            { data: 'stime'},
+            { data: 'uid' },
+            { data: 'confidence'},
+            { data: 'threat_level'},
+            { data: 'category' }
+        ]
+    });
+
+//"{\"domain 0.debian.pool.ntp.org resolved with no connection\": \"{\\\"profileid\\\": \\\"profile_192.168.2.16\\\",
+//\\\"twid\\\": \\\"timewindow1\\\", \\\"type_detection\\\": \\\"dstdomain\\\", \\\"detection_info\\\": \\\"0.debian.pool.ntp.org\\\",
+//\\\"type_evidence\\\": \\\"DNSWithoutConnection\\\", \\\"description\\\": \\\"domain 0.debian.pool.ntp.org resolved with no connection\\\",
+//\\\"stime\\\": 1520628615.698819, \\\"uid\\\": \\\"CXSJnM1kDZ5tjRt2Sk\\\", \\\"confidence\\\": 0.8, \\\"threat_level\\\": \\\"low\\\", \\\"category\\\": \\\"Anomaly.Traffic\\\"}\",
     function hide_hotkey() {
         x = document.getElementById(last_active_hotkey);
         x.style.display = "none"
@@ -147,6 +168,13 @@ let operate_hotkeys = function () {
             x.style.display = "block"
         },
 
+        update_alerts: function () {
+            let link = '/alerts/' + profile + '/' + timewindow;
+            alerts.ajax.url(link).load();
+            x = document.getElementById("alerts");
+            x.style.display = "block"
+        },
+
         onclick_buttons: function () {
             $("#buttons .btn").click(function () {
                 $("#buttons .btn").removeClass('active');
@@ -160,7 +188,6 @@ let operate_hotkeys = function () {
         }
     }
 }
-2
 
 let ipinfo = $('#ipinfo').DataTable({
     "bDestroy": true,
@@ -195,12 +222,18 @@ let hotkey_hook = {
         else if (active_hotkey == 'outtuples') {
             hotkey_hook.set_timewindow_outtuples();
         }
+        else if (active_hotkey == 'alerts') {
+            hotkey_hook.set_alerts();
+        }
     },
     'set_timeline_flows': function () {
         hotkeys.update_timeline_flows();
     },
     'set_timeline': function () {
         hotkeys.update_timeline();
+    },
+    'set_alerts': function(){
+        hotkeys.update_alerts();
     },
     'set_timewindow_outtuples': function () {
         hotkeys.update_outtuples();
