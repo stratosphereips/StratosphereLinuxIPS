@@ -332,9 +332,12 @@ class Module(Module, multiprocessing.Process):
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
+                # SNI is a list of dicts, each dict contains the 'server_name' and 'port'
                 SNI = SNI[0]
                 if SNI in (None, ''):
                     SNI = False
+                elif type(SNI) == dict:
+                    SNI = SNI.get('server_name', False)
         except (KeyError, TypeError):
             # No SNI data for this ip
             SNI = False
@@ -353,6 +356,7 @@ class Module(Module, multiprocessing.Process):
                     return True
             # remove the asn from ram
             org_asn = ''
+
             if flow_domain:
                 # we have the rdns or sni of this flow , now check
                 if org in flow_domain:
@@ -362,6 +366,7 @@ class Module(Module, multiprocessing.Process):
                 org_domains = json.loads(__database__.get_org_info(org, 'domains'))
 
                 flow_TLD = flow_domain.split(".")[-1]
+
                 for org_domain in org_domains:
                     org_domain_TLD = org_domain.split(".")[-1]
                     # make sure the 2 domains have the same same top level domain
