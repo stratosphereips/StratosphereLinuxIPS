@@ -41,8 +41,6 @@ hook SSL::log_policy(rec: SSL::Info, id: Log::ID, filter: Log::Filter)
 
         if (hostname in doh_hostnames){
             rec$is_DoH = T;
-
-            print fmt("@@@@@@@DETECTED AN SSL TO D0H SERVERR domain %s  ", hostname);
         }
     }
 
@@ -51,7 +49,5 @@ hook SSL::log_policy(rec: SSL::Info, id: Log::ID, filter: Log::Filter)
 
     if ( daddr in doh_ips ){
         rec$is_DoH = T;
-        print fmt("@@@@@@@DETECTED AN SSL TO D0H SERVERR %s  ", daddr);
-
        }
 }
