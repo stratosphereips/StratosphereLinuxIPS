@@ -1,0 +1,234 @@
+<!doctype html>
+<html>
+
+<head>
+  <title>{{ title }}</title>
+  <link href="{{url_for('static', filename='bootstrap/css/bootstrap.min.css')}}" rel="stylesheet">
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='DataTables-1.11.5/css/dataTables.bootstrap5.min.css')}}"/>
+</head>
+
+<body>
+  <header class="d-flex flex-wrap bg-light sticky-top justify-content-center px-3 py-3 mb-4 border-bottom">
+    <a href="/" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none">
+      <svg class="bi me-2" width="40" height="32">
+        <use xlink:href="#bootstrap"></use>
+      </svg>
+      <span class="fs-4">SLIPS V0.1.2</span>
+    </a>
+    <ul class="nav nav-pills">
+      <li class="nav-item"><a href="#" class="nav-link active" aria-current="page">Home</a></li>
+      <li class="nav-item"><a href="#" class="nav-link">Docs</a></li>
+      <li class="nav-item"><a href="#" class="nav-link">Blogs</a></li>
+      <li class="nav-item"><a href="#" class="nav-link">Github</a></li>
+      <li class="nav-item"><a href="#" class="nav-link">Twitter</a></li>
+    </ul>
+  </header>
+
+  <div class="container-fluid mt-2">
+    <div class="row">
+      <div class="col col-md-3 mx-3">
+        <style type="text/css">
+          .table_block {
+            border-radius: 15px;
+            border-style: solid;
+          }
+        </style>
+
+        <table id="profiles" class="table table_block">
+          <thead>
+            <tr>
+              <th></th>
+              <th> Profiles </th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+
+      <!--        <div class = "col col-md-8">-->
+      <!--            <table id="alerts" class="table table-striped">-->
+      <!--              <thead>-->
+      <!--                <tr>-->
+      <!--                  <th>timestamp</th>-->
+      <!--                  <th>profileid</th>-->
+      <!--                  <th>twid</th>-->
+      <!--                  <th>detected_ip</th>-->
+      <!--                  <th>detection_module</th>-->
+      <!--                  <th>detection_info</th>-->
+      <!--                  <th>description</th>-->
+      <!--                </tr>-->
+      <!--              </thead>-->
+      <!--              <tfoot>-->
+      <!--              <tr>-->
+      <!--                  <th>timestamp</th>-->
+      <!--                  <th>profileid</th>-->
+      <!--                  <th>twid</th>-->
+      <!--                  <th>detected_ip</th>-->
+      <!--                  <th>detection_module</th>-->
+      <!--                  <th>detection_info</th>-->
+      <!--                  <th>description</th>-->
+      <!--                </tr>-->
+      <!--              </tfoot>-->
+      <!--          </table>-->
+      <!--        </div>-->
+
+      <div class="col col-md-8">
+        <style type="text/css">
+          .table_block {
+            border-radius: 15px;
+            border-style: solid;
+          }
+        </style>
+        <table id="ipinfo" class="table table_block">
+          <thead>
+            <tr>
+              <th>IP</th>
+              <th>geocountry</th>
+              <th>reverse_dns</th>
+              <th>asnorg</th>
+            </tr>
+          </thead>
+        </table>
+
+        <nav class="navbar navbar-light bg-light">
+          <form class="form-inline">
+            <div id="buttons">
+              <button class="btn btn-outline-success active" type="button" id="button_timeline"
+                onclick="hotkey_hook.set_timeline();">timeline</button>
+              <button class="btn btn-outline-secondary" type="button" id="button_timeline_flows"
+                onclick="hotkey_hook.set_timeline_flows();">flows</button>
+              <button class="btn btn-outline-secondary" type="button" id="button_outtuples"
+                onclick="hotkey_hook.set_timewindow_outtuples();">outtuples</button>
+              <button class="btn btn-outline-secondary" type="button" id="button_alerts"
+                onclick="hotkey_hook.set_alerts();">alerts</button>
+            </div>
+          </form>
+        </nav>
+
+        <div id="timeline">
+          <table id="table_timeline" class="table table-striped">
+            <thead>
+              <tr>
+                <th>timestamp</th>
+                <th>dport_name</th>
+                <th>preposition</th>
+                <th>daddr</th>
+              </tr>
+            </thead>
+            <tfoot>
+              <tr>
+                <th>timestamp</th>
+                <th>dport_name</th>
+                <th>preposition</th>
+                <th>daddr</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <div id="alerts" style="display:none;">
+          <table id="table_alerts" class="table table-striped">
+            <thead>
+              <tr>
+                <th>profileid</th>
+                <th>twid</th>
+                <th>type_detection</th>
+                <th>detection_info</th>
+                <th>type_evidence</th>
+                <th>description</th>
+                <th>stime</th>
+                <th>uid</th>
+                <th>confidence</th>
+                <th>threat_level</th>
+                <th>category</th>
+              </tr>
+            </thead>
+            <tfoot>
+              <tr>
+                <th>profileid</th>
+                <th>twid</th>
+                <th>type_detection</th>
+                <th>detection_info</th>
+                <th>type_evidence</th>
+                <th>description</th>
+                <th>stime</th>
+                <th>uid</th>
+                <th>confidence</th>
+                <th>threat_level</th>
+                <th>category</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div id="timeline_flows" style="display:none;">
+          <table id="table_timeline_flows" class="table table-striped">
+            <thead>
+              <tr>
+                <th>timestamp</th>
+                <th>dur</th>
+                <th>saddr</th>
+                <th>sport</th>
+                <th>daddr</th>
+                <th>dport</th>
+                <th>proto</th>
+                <th>origstate</th>
+                <th>state</th>
+                <th>pkts</th>
+                <th>allbytes</th>
+                <th>spkts</th>
+                <th>sbytes</th>
+              </tr>
+            </thead>
+            <tfoot>
+              <tr>
+                <th>timestamp</th>
+                <th>dur</th>
+                <th>saddr</th>
+                <th>sport</th>
+                <th>daddr</th>
+                <th>dport</th>
+                <th>proto</th>
+                <th>origstate</th>
+                <th>state</th>
+                <th>pkts</th>
+                <th>allbytes</th>
+                <th>spkts</th>
+                <th>sbytes</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <div id="outtuples" style="display:none;">
+          <table id="table_outtuples" class="table table-striped">
+            <thead>
+              <tr>
+                <th>timestamp</th>
+                <th>dport_name</th>
+              </tr>
+            </thead>
+            <tfoot>
+              <tr>
+                <th>timestamp</th>
+                <th>dport_name</th>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="{{url_for('static', filename='jQuery-3.6.0/jquery-3.6.0.min.js')}}"></script>
+  <script src= "{{url_for('static', filename='bootstrap/js/bootstrap.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/jquery.dataTables.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/dataTables.bootstrap5.min.js')}}"></script>
+  <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('hotkeys.static', filename='js/hotkeys.js')}}"></script>
+
+  <!--FIXME find what this library is for-->
+  <!--  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"-->
+  <!--    integrity="sha384-UO2eT0CpHqdSJQ6hJty5KVphtPhzWj9WO1clHTMGa3JDZwrnQq4sF86dIHNDz0W1"-->
+  <!--    crossorigin="anonymous"></script>-->
+</body>
+
+</html>
