@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.8.1
+Slips v0.8.5
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
@@ -42,9 +42,12 @@ This documentation gives an overview how Slips works, how to use it and how to h
    self 
    installation
    usage
-   detection_modules
    architecture
-   contributing
-   training
-   threatintelligence
+   detection_modules
    flowalerts
+   training
+   exporting
+   slips_in_action
+   contributing
+
+

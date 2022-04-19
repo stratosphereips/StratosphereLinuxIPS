@@ -4,41 +4,35 @@ The module of flow alerts has several behavioral techniques to detect attacks by
 
 The detection techniques are:
 
-- Detect long connections
-- Detect successful SSH connections using Slips technique
-- Detect successful SSH connections using Zeek technique
-- Detect SSH bruteforcing using Zeek technique
-- Detect connections without DNS resolution
-- Detect DNS resolutions to IPs that were never used
-- Detect connections to unknown ports
-- Detect data exfiltration
-- Detect malicious JA3 files
-- Detect connections to port 0
-- Detect self-signed certificates using Zeek
-- Detect invalid certificates using Zeek
-- Detect multiple reconnection attempts to the same dst port with not established flows
-- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing 
-- Detect DGA
-- 
-The details of each detection follows.
-
-## Detect connections without DNS resolution
-This detection will ignore certain IP addresses for which a connection without DNS is ok. The exceptions are:
-
-- If Slips runs in a network device (as opposed to, for example, a pcap) ignore all connections that happen in the first 1 minute of operation of Slips. 
-This is because most DNS resolutions already happen and there are many false positives.
-=======
-- Detect multiple reconnection attempts to the same destination port with not established flows
-- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing 
-- Detect DGA
+- Long connections
+- Successful SSH connections 
+- Connections without DNS resolution
+- DNS resolutions to IPs that were never used
+- Connections to unknown ports
+- Data exfiltration
+- Malicious JA3 hashes
+- Connections to port 0
+- Multiple reconnection attempts 
+- Alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing 
+- DGA
+- Connection to multiple ports
+- Malicious SSL certificates
+- Young domains
+- Bad SMTP logins
+- SMTP login bruteforce
+- DNS ARPA Scans
 
 The details of each detection follows.
 
 
-## Detect long connections
+## Long Connections
 Detect connections that are long, except the multicast connections.
 
-## Detect connections without DNS resolution
+By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minutes). 
+
+This threshold can be changed ```slips.conf``` by changing the value of  ```long_connection_threshold```  
+
+## Connections without DNS resolution
 This will detect connections done without a previous DNS resolution. The idea is that a connection without a DNS resolution is slightly suspicious.
 
 If Slips runs by capturing packets directly from a network device (as opposed to, for example, a PCAP file), this detection will ignore all connections that happen in the first 3 minute of operation of Slips. This is because most times Slips is started when the computer is already running, and many DNS connections were already done. So waiting 3 minutes decreases the amount of False Positives.
@@ -51,9 +45,28 @@ This detection will ignore certain IP addresses for which a connection without D
 - IPv6 local-link IPs
 - Multicast IPs
 - Broadcast IPs only if they are private
+- Well known organizations 
 
 
-## Detect DNS resolutions without a connection
+DNS resolutions of well known orgs might be done using DoH, in this case, slips
+doesn't know about the DNS resolution because the resolved domain won't be in dns.log
+so we simply ignore alerts of thiss time about well known org such as (facebook, apple, google, twitter, and microsoft)
+
+Slips uses it's own lists of organizations info (IPs, IP ranges, domains, and ASNs) stored in ```slips_files/organizations_info``` to check
+whether the IP/domain of each flow belong to a known org or not.
+
+check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
+of the docs for info on how slips detects DoH.
+
+
+## Successful SSH connections
+
+Slips detects successful SSH connections using 2 ways
+
+1. Using Zeek. Zeek logs successful SSH connection to ssh.log by default
+2. if all bytes sent in a SSH connection is more than 4290 bytes
+
+## DNS resolutions without a connection
 This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
 
 The domains that are excepted are:
@@ -65,14 +78,134 @@ The domains that are excepted are:
 - Ignore WPAD domain from Windows
 - Ignore domains without a TLD such as the Chrome test domains.
 
-## Detect DGA
 
-When the dns server fails to resolve a domain, it responds back with NXDOMAIN code.
+
+## Connection to unknown ports
+
+Slips has a list of known ports located in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+
+It also has a list of ports that belong to a specific organization in ```slips_files/ports_info/ports_used_by_specific_orgs.csv```
+
+For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS). 
+
+any port that isn't in the above 2 files is considered unknown to Slips.
+
+## Data exfiltration
+
+Slips generate a 'possible data exfiltration alerts when the number of uploaded files to any IP exceeds 700 MBs.
+
+The number of MBs can be modified by editting the value of ```data_exfiltration_threshold``` in ```slips.conf``` 
+
+## Malicious JA3 and JA3s hashes
+
+Slips uses JA3 hashes to detect C&C servers (JA3s) and infected clients (JA3)
+
+Slips is shipped with it’s own zeek scripts that add JA3 and JA3s fingerprints to the SSL log files generated by zeek.
+
+Slips supports JA3 feeds in addition to having more than 40 different threat intelligence feeds. 
+The JA3 feeds contain JA3 fingerprints that are identified as malicious. 
+The JA3 threat intelligence feed used by Slips now is Abuse.ch JA3 feed.
+And you can add other JA3 TI feeds in ```ja3_feeds``` in ```slips.conf```.
+
+## Connections to port 0
+
+There has been a significant rise in the number of attacks listed as Port 0.
+Last year, these equated to 10% of all attacks, but now it’s up to almost 25%. 
+
+Slips detects any connection to port 0 using any protocol other than 'IGMP' and 'ICMP' as malicious.
+
+
+## Multiple reconnection attempts 
+
+Multiple reconnection attempts in Slips are 5 or more not established flows (reconnections) to the same destination IP.
+
+
+
+## Zeek alerts
+
+By default, Slips depends on Zeek for detecting different behaviours, for example 
+Self-signed certs, invalid certs, port-scans and address scans, and password guessing.
+
+Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
+Check  []() section for more info #todo
+
+
+## DGA
+
+When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
 To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
 
 Then we alert when there is 10 or more NXDOMAINs.
 
-Every 10,15,20 ..etc slips generates an alert.
+Every 10,15,20 ..etc slips generates an evidence.
 
-## Still under construction...
+## Connection to multiple ports
+
+When Slips encounters a connection to or from a specific IP and a specific port, it scans previous connections looking for connection to/from that same IP using a different port.
+
+It alerts when finding two or more connections to the same IP.
+
+## Malicious SSL certificates
+
+Slips uses SSL certificates sha1 hashes to detect C&C servers.
+
+Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
+And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
+
+## Young Domains
+
+Slips uses whois python library to get the creation date of every domain met in the dns flows.
+
+If a domain's age is less than 60 days, slips sets an alert.
+
+Not all domains are supported, here's the list of supported TLDs.
+
+    ['.ac_uk', '.am', '.amsterdam', '.ar', '.at', '.au',
+    '.bank', '.be', '.biz', '.br', '.by', '.ca', '.cc',
+    '.cl', '.club', '.cn', '.co', '.co_il', '.co_jp', '.com',
+    '.com_au', '.com_tr', '.cr', '.cz', '.de', '.download', '.edu',
+    '.education', '.eu', '.fi', '.fm', '.fr', '.frl', '.game', '.global_',
+    '.hk', '.id_', '.ie', '.im', '.in_', '.info', '.ink', '.io',
+    '.ir', '.is_', '.it', '.jp', '.kr', '.kz', '.link', '.lt', '.lv',
+    '.me', '.mobi', '.mu', '.mx', '.name', '.net', '.ninja',
+    '.nl', '.nu', '.nyc', '.nz', '.online', '.org', '.pe',
+    '.pharmacy', '.pl', '.press', '.pro', '.pt', '.pub', '.pw',
+    '.rest', '.ru', '.ru_rf', '.rw', '.sale', '.se', '.security',
+    '.sh', '.site', '.space', '.store', '.tech', '.tel', '.theatre',
+    '.tickets', '.trade', '.tv', '.ua', '.uk', '.us', '.uz', '.video',
+    '.website', '.wiki', '.work', '.xyz', '.za']
+
+## Bad SMTP logins
+
+Slips uses zeek to detect SMTP connections, 
+When zeek detects a bad smtp login, it logs it to smtp.log, then slips reads
+this file and sets an evidence.
+
+## SMTP bruteforce
+
+Slips detects a SMTP bruteforce when 3 or more bad SMTP 
+logins happen within 10 seconds.
+
+---
+
+With every generated evidence, Slips gathers as much info 
+about the malicious IP and prints it with the alert.
+
+So instead of having an alerts saying:
+
+    Detected SSL certificate validation failed with (certificate has expired) Destination IP: 216.58.201.70.
+
+Slips gathers AS, hostname, SNI, rDNS and any available data about this IP and you get an alert saying:
+
+    Detected SSL certificate validation failed with (certificate has expired) Destination IP: 
+    216.58.201.70. AS: GOOGLE, US, SNI: 2542116.fls.doubleclick.net, rDNS: prg03s01-in-f70.1e100.net
+
+
+## DNS ARPA Scans
+
+Whenever slips sees a new domain in dns.log, if the domain ends with '.in-addr.arpa'
+slips keeps trach of this domain and the source IP that made the DNS request.
+
+Then, if the source IP is seen doing 10 or more ARPA queries within 2 seconds,
+slips generates an ARPA scan detection.

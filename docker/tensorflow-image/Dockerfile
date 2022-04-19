@@ -11,6 +11,8 @@ RUN apt update && apt install -y --no-install-recommends \
     wget \
     ca-certificates \
     git \
+    curl \
+    gnupg \
  && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_18.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
  && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_18.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
 
@@ -29,16 +31,12 @@ RUN apt update && apt install -y --no-install-recommends \
 	net-tools \
 	iptables \
 	iproute2 \
+    python3-tzlocal \
 	nfdump \
 	tshark \
+    git \
+    whois \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-
-# Upgrade pip3
-RUN pip3 install --upgrade pip
-
-# To avoid user interaction with tzdata
-ENV DEBIAN_FRONTEND=noninteractive
-
 
 # Requirements for compiling yara
 RUN apt install -y automake libtool make gcc pkg-config
@@ -52,23 +50,31 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make \
   && make install
 
-# Install Slips python requirements
-RUN pip3 install wheel redis setuptools validators colorama maxminddb pandas
-RUN pip3 install sklearn urllib3 scipy watchdog slackclient stix2 cabby
-RUN pip3 install ipwhois pytest pytest-xdist yara-python
-RUN pip3 install --ignore-installed six
-RUN pip3 install --upgrade tensorflow==2.4.1
+
+# Copy slips from the current directory into slips dir inside the container
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
+
+
+# Upgrade pip3 and install Slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+
+
+# manually install tensorflow==2.4.1
+RUN pip3 install --ignore-installed tensorflow==2.4.1
 
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 RUN cd StratosphereLinuxIPS && chmod 774 slips.py
 
 # For Kalipso:
-RUN curl -sL https://deb.nodesource.com/setup_10.x  | bash -
+RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
-RUN npm install async fs blessed blessed-contrib clipboardy chalk strip-ansi redis sorted-array-async yargs
+RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
 
 # Switch to Slips installation dir when login.
-WORKDIR /StratosphereLinuxIPS
+WORKDIR ${SLIPS_DIR}
+
 CMD redis-server --daemonize yes && /bin/bash
 

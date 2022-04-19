@@ -1,13 +1,16 @@
 <h1 align="center"> 
 
-Slips v0.8.3
+Slips v0.8.5
 </h1>
 
 Slips is a behavioral-based Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels to provide good visualisation for the analyst.
 Slips is a modular software.
 
-<h3 align="center"> 
-Behavioral based Intrusion Prevention System<br><br>
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
+
+<h3 align="center"> Slips is a behavioral based Intrusion Prevention System<br><br>
+
 
 Slips documentation is [here](https://stratospherelinuxips.readthedocs.io/en/develop/) <br>
 
@@ -33,7 +36,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | CESNET | Send and receive alerts from warden servers |✅|
 | RiskIQ | Module to get different information from RiskIQ  |✅|
 | ARP | module to check for ARP attacks in ARP traffic  |✅|
-| ExportingAlerts | module to export alerts to slack, STIX or suricata format |✅|
+| ExportingAlerts | module to export alerts to slack, STIX or suricata-like JSON format |✅|
 | http_analyzer | module to analyze HTTP traffic |✅|
 | blocking | module to block malicious IPs connecting to the device |✅|
 | flowmldetection | module to detect malicious flows using ML pretrained models |✅|
@@ -69,7 +72,7 @@ The easiest way to run Slips is inside a docker. Current version of Slips docker
 
         mkdir ~/dataset
         cp <some-place>/myfile.pcap ~/dataset
-        docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        docker run -it --rm --net=host -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
         ./slips.py -c slips.conf -f dataset/myfile.pcap
 
 ## How to build Slips docker from Dockerfile:
@@ -128,6 +131,11 @@ All contributors are welcomed! How you can help?
 - Run Slips and report bugs and needed features, and suggest ideas
 - Pull requests with a solved GitHub issue and new feature
 - Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
+
+### Getting in touch
+
+Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
+
 
 ## Acknowledgments
 Slips was funded by the following organizations.

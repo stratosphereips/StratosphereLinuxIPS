@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
@@ -35,6 +36,11 @@ class Module(Module, multiprocessing.Process):
             pass
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
         self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
+
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -155,7 +161,9 @@ class Module(Module, multiprocessing.Process):
                 category = 'Malware'
                 confidence = 0.9
                 threat_level = 'high'
-                description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {dport}/{proto}"
+                portproto = f'{dport}/{proto}'
+                port_info = __database__.get_port_info(portproto)
+                description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {port_info if port_info else ''} {portproto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
                 profileid = f'profile_{srcip}'
@@ -172,6 +180,7 @@ class Module(Module, multiprocessing.Process):
                         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                                  threat_level, confidence, description, ts,
                                                  category, source_target_tag=source_target_tag,
+                                                 port=dport, proto=proto,
                                                  profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
@@ -219,6 +228,7 @@ class Module(Module, multiprocessing.Process):
             # run the yara rules on the given pcap
             self.find_matches()
         except KeyboardInterrupt:
+            self.shutdown_gracefully()
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

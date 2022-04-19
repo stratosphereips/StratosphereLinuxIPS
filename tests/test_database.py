@@ -140,7 +140,8 @@ def test_module_labels(database):
     uid = '1234'
     database.set_module_label_to_flow(profileid,twid, uid, module_name, module_label )
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert labels ==  {'test': 'malicious'}
+    assert 'test' in labels
+    assert labels['test'] == 'malicious'
 
 def test_setInfoForDomains(database):
     """ tests setInfoForDomains, setNewDomain and getDomainData """
@@ -149,7 +150,8 @@ def test_setInfoForDomains(database):
     database.setInfoForDomains(domain,domain_data)
 
     stored_data = database.getDomainData(domain)
-    assert  stored_data == {'threatintelligence': 'sample data'}
+    assert 'threatintelligence' in stored_data
+    assert stored_data['threatintelligence'] == 'sample data'
 
 def test_subscribe(database):
     # invalid channel
@@ -164,5 +166,6 @@ def test_profile_moddule_labels(database):
     module_name = 'test'
     database.set_profile_module_label(profileid, module_name, module_label )
     labels = database.get_profile_modules_labels(profileid)
-    assert labels ==  {'test': 'malicious'}
+    assert 'test' in labels
+    assert labels['test'] == 'malicious'
 

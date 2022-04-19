@@ -1,16 +1,3 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
@@ -117,7 +104,7 @@ class Module(Module, multiprocessing.Process):
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
                 if message and message['channel'] == 'tw_closed':
                     data = message['data']
@@ -135,8 +122,10 @@ class Module(Module, multiprocessing.Process):
                         self.set_label_per_flow_dstip(profileid, twid)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                # Confirm that the module is done processing
+                self.shutdown_gracefully()
+                return True
+
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

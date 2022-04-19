@@ -22,25 +22,16 @@ def has_errors(output_file):
     """ function to parse slips_output file and check for errors """
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     with open(output_file ,'r') as f:
-        lines_printed = False
         for line in f:
-            if lines_printed:
-                lines_printed+=1
-                print(line)
-                if lines_printed ==4:
-                    return True
-            elif '<class' in line or 'error' in line:
-                # print the line that has errors and the following 4 lines
-                lines_printed = 1
-                print(line)
-                # return True
+            if '<class' in line or 'error' in line:
+                return True
 
     return False
 
 
 @pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
-                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port 23'),
-                          ('dataset/arp-only.pcap',3,'pcap2/','performing an ARP scan')])
+                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port  23'),
+                          ('dataset/arp-only.pcap',3,'pcap2/','performing an arp scan')])
 def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
         os.mkdir(output_dir)
@@ -51,7 +42,6 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
-    # profiles = get_profiles(output_dir)
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
@@ -61,15 +51,15 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
 @pytest.mark.skipif( 'nfdump' not in shutil.which('nfdump'), reason="nfdump is not installed")
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
      ('dataset/test2.binetflow',1,'C&C channel','test2/'),
-    ('dataset/test3.binetflow',20,'horizontal port scan to port 3389','test3/'),
-      ('dataset/test4.binetflow',2,'horizontal port scan to port 81','test4/'),
-     ('dataset/test5.binetflow',4,'C&C channel','test5/')])
+    ('dataset/test3.binetflow',20,'horizontal port scan to port  3389','test3/'),
+      ('dataset/test4.binetflow',2,'horizontal port scan to port  81','test4/'),
+     ('dataset/test5.binetflow', 4 , 'Long Connection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    output_file = f'{output_dir}slips_output.txt'    
+    output_file = f'{output_dir}slips_output.txt'
     command = f'./slips.py -c slips.conf -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
@@ -82,9 +72,17 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
 
 
 @pytest.mark.parametrize("zeek_dir_path,expected_profiles, expected_evidence,  output_dir",
-     [('dataset/sample_zeek_files',4,'SSL certificate validation failed with (certificate is not yet valid)','sample_zeek_files/'),
-      ('dataset/sample_zeek_files-2',20,'horizontal port scan','sample_zeek_files-2/')])
-def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,  output_dir):
+     [('dataset/sample_zeek_files', 4,
+
+       ['SSL certificate validation failed with (certificate is not yet valid)',
+        'performing bad SMTP login to 80.75.42.226',
+        'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
+        'multiple empty HTTP connections to bing.com'],
+
+       'sample_zeek_files/'),
+
+      ('dataset/sample_zeek_files-2', 20, 'horizontal port scan', 'sample_zeek_files-2/')])
+def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence, output_dir):
     import time
     time.sleep(3)
     try:
@@ -99,12 +97,21 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
     log_file = output_dir + alerts_file
-    assert is_evidence_present(log_file, expected_evidence) == True
+    if type(expected_evidence) == list:
+        # make sure all the expected evidence are there
+        for evidence in expected_evidence:
+            assert is_evidence_present(log_file, evidence) == True
+    else:
+        assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
 @pytest.mark.parametrize("conn_log_path, expected_profiles, expected_evidence,  output_dir",
-     [('dataset/sample_zeek_files/conn.log',4,'C&C channel','conn_log/'),
-      ('dataset/sample_zeek_files-2/conn.log',5,'C&C channel','conn_log-2/')])
+     [('dataset/sample_zeek_files/conn.log',4,
+       'a connection without DNS resolution to IP: 185.33.223.203','conn_log/'),
+
+      ('dataset/sample_zeek_files-2/conn.log',5,
+       'connection without DNS resolution to IP: 2a04:4e42:41::223','conn_log-2/')])
+
 def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evidence,  output_dir):
     try:
         os.mkdir(output_dir)
@@ -150,7 +157,7 @@ def test_nfdump(database, nfdump_path,  output_dir):
     # this function returns when slips is done
     os.system(command)
     profiles = int(database.getProfilesLen())
-    expected_evidence = 'C&C channel'
+    expected_evidence = 'Connection to unknown destination port 902/TCP'
     assert has_errors(output_file) == False
     # make sure slips generated profiles for this file (can't the number of profiles exactly because slips doesn't generate a const number of profiles per file)
     assert profiles > 0

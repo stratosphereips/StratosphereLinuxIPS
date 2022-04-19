@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import platform
+from slips_files.common.slips_utils import utils
 import traceback
 import sys
 
@@ -135,8 +135,9 @@ class Module(Module, multiprocessing.Process):
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
                     critical_warning_dport_name = ''
-                    dns_resolution = ''
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]
@@ -207,6 +208,8 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]
@@ -252,8 +255,8 @@ class Module(Module, multiprocessing.Process):
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
                     activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
-                elif 'ARP' in proto:
-                    activity = {'timestamp': timestamp_human, 'dport_name': 'ARP' ,'preposition': 'to', 'daddr': daddr}
+                elif 'arp' in proto:
+                    activity = {'timestamp': timestamp_human, 'dport_name': 'arp' ,'preposition': 'to', 'daddr': daddr}
 
 
             #################################
@@ -322,6 +325,10 @@ class Module(Module, multiprocessing.Process):
             self.print(traceback.format_exc())
             return True
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Main loop function
         while True:
@@ -331,11 +338,10 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
 
-                if __database__.is_msg_intended_for(message, 'new_flow'):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)
@@ -349,8 +355,8 @@ class Module(Module, multiprocessing.Process):
                     # Process the flow
                     return_value = self.process_flow(profileid, twid, flow, timestamp)
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

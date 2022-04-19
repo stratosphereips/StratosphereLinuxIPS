@@ -12,7 +12,7 @@ __pycache__/
 # Ignore the secret api key of virustotal
 api_key_secret
 
-# Ignore the secret slack bot token of ExportingAlerts module
+# Ignore the secret slack bot token of exporting_alerts module
 slack_bot_token_secret
 
 # Ignore the results folders
@@ -132,8 +132,9 @@ dump.rdb
 package-lock.json
 modules/blessed/node_modules/
 alerts.*
+errors.log
 nohup.out
-modules/ThreatIntelligence1/remote_data_files/*
+modules/threat_intelligence/remote_data_files/*
 node_modules/
 
 # compiled yara rules

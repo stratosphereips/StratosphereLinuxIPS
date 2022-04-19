@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-
+from slips_files.common.slips_utils import utils
 import sys
 import configparser
 import time
@@ -290,9 +290,9 @@ class Module(Module, multiprocessing.Process):
         try:
             # Store the real label if there is one
             y_flow = self.flow['label']
-            # Drop the real label
+            # remove the real label column
             self.flow = self.flow.drop('label', axis=1)
-            # Drop the label predictions of the other modules
+            # remove the label predictions column of the other modules
             X_flow = self.flow.drop('module_labels', axis=1)
             # Scale the flow
             X_flow = self.scaler.transform(X_flow)
@@ -300,7 +300,7 @@ class Module(Module, multiprocessing.Process):
             return pred
         except Exception as inst:
             # Stop the timer
-            self.print('Error in detect()')
+            self.print('Error in detect() X_flow:')
             self.print(X_flow)
             self.print(type(inst))
             self.print(inst)
@@ -359,65 +359,66 @@ class Module(Module, multiprocessing.Process):
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        self.store_model()
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         # Load the model first
-        try:
-            # Load the model
-            self.read_model()
+        # Load the model
+        self.read_model()
 
-            while True:
-                try:
-                    message = self.c1.get_message(timeout=self.timeout)
+        while True:
+            try:
+                message = self.c1.get_message(timeout=self.timeout)
 
-                    if message and message['data'] == 'stop_process':
-                        # Confirm that the module is done processing
-                        self.store_model()
-                        __database__.publish('finished_modules', self.name)
-                        return True
-                    if __database__.is_msg_intended_for(message, 'new_flow'):
-                        data = message['data']
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow that is now in json format
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow = json.loads(flow)
-                        # Convert the common fields to something that can
-                        # be interpreted
-                        # Get the uid which is the key
-                        uid = next(iter(flow))
-                        self.flow_dict = json.loads(flow[uid])
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
 
-                        if self.mode == 'train':
-                            # We are training
+                if utils.is_msg_intended_for(message, 'new_flow'):
+                    data = message['data']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow that is now in json format
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    # Convert the common fields to something that can
+                    # be interpreted
+                    # Get the uid which is the key
+                    uid = next(iter(flow))
+                    self.flow_dict = json.loads(flow[uid])
 
-                            # Is the amount in the DB of labels enough to retrain?
-                            # Use labeled flows
-                            labels = __database__.get_labels()
-                            sum_labeled_flows = sum([i[1] for i in labels])
-                            if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
-                                # We get here every 'self.minimum_lables_to_retrain' amount of labels
-                                # So for example we retrain every 100 labels and only when we have at least 100 labels
-                                self.print(f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.')
-                                # Process all flows in the DB and make them ready for pandas
-                                self.process_flows()
-                                # Train an algorithm
-                                self.train()
-                        elif self.mode == 'test':
-                            # We are testing, which means using the model to detect
-                            self.process_flow()
-                            
-                            # After processing the flow, it may happen that we delete icmp/arp/etc
-                            # so the dataframe can be empty
-                            if self.flow.empty:
-                                continue
+                    if self.mode == 'train':
+                        # We are training
 
+                        # Is the amount in the DB of labels enough to retrain?
+                        # Use labeled flows
+                        labels = __database__.get_labels()
+                        sum_labeled_flows = sum([i[1] for i in labels])
+                        if sum_labeled_flows >= self.minimum_lables_to_retrain and sum_labeled_flows%self.minimum_lables_to_retrain == 1:
+                            # We get here every 'self.minimum_lables_to_retrain' amount of labels
+                            # So for example we retrain every 100 labels and only when we have at least 100 labels
+                            self.print(f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.')
+                            # Process all flows in the DB and make them ready for pandas
+                            self.process_flows()
+                            # Train an algorithm
+                            self.train()
+                    elif self.mode == 'test':
+                        # We are testing, which means using the model to detect
+                        self.process_flow()
+
+                        # After processing the flow, it may happen that we delete icmp/arp/etc
+                        # so the dataframe can be empty
+                        if not self.flow.empty:
                             # Predict
                             pred = self.detect()
                             label = self.flow_dict["label"]
-                            
+
                             # Report
                             if label and label != 'unknown' and label != pred[0]:
                                 # If the user specified a label in test mode, and the label
@@ -428,21 +429,12 @@ class Module(Module, multiprocessing.Process):
                                 self.set_evidence_malicious_flow(self.flow_dict['saddr'], self.flow_dict['sport'], self.flow_dict['daddr'], self.flow_dict['dport'], profileid, twid, uid)
                                 self.print(f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}', 0, 2)
 
-                except Exception as inst:
-                    # Stop the timer
-                    self.print('Error in run()')
-                    self.print(type(inst))
-                    self.print(inst)
-                    return True
-
-        except KeyboardInterrupt:
-            self.print('Storing the model on disk before stopping')
-            self.store_model()
-            self.print('Model stored')
-            return True
-        except Exception as inst:
-            # Stop the timer
-            self.print('Error in run()')
-            self.print(type(inst))
-            self.print(inst)
-            return True
+            except KeyboardInterrupt:
+                self.shutdown_gracefully()
+                return True
+            except Exception as inst:
+                # Stop the timer
+                self.print('Error in run()')
+                self.print(type(inst), 0, 1)
+                self.print(inst, 0, 1)
+                return True
