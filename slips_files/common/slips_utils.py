@@ -149,15 +149,19 @@ class Utils(object):
         Returns a tuple containing (commit,branch)
         """
         try:
-            repo = Repo('.')
-        except:
-            # when in docker, we copy the repo instead of clone it so there's no .git files
-            # we can't add repo metadata
+            try:
+                repo = Repo('.')
+            except:
+                # when in docker, we copy the repo instead of clone it so there's no .git files
+                # we can't add repo metadata
+                return False
+            # add branch name and commit
+            branch = repo.active_branch.name
+            commit = repo.active_branch.commit.hexsha
+            return (commit, branch)
+        except (ValueError, TypeError):
+            # Error:  git returned: b'' or detached head
             return False
-        # add branch name and commit
-        branch = repo.active_branch.name
-        commit = repo.active_branch.commit.hexsha
-        return (commit, branch)
 
     def format_timestamp(self, timestamp):
         """

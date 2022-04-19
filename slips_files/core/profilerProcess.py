@@ -734,6 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['resp_fuids'] = line[26]
             except IndexError:
                 self.column_values['resp_fuids'] = ''
+
         elif 'ssl.log' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
@@ -797,6 +798,12 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['ja3s'] = line[22]
             except IndexError:
                 self.column_values['ja3s'] = ''
+
+            try:
+                self.column_values['is_DoH'] = line[23]
+            except IndexError:
+                self.column_values['is_DoH'] = ''
+
 
         elif 'ssh.log' in new_line['type']:
             self.column_values['type'] = 'ssh'
@@ -1027,7 +1034,7 @@ class ProfilerProcess(multiprocessing.Process):
             # 'id.resp_h': '192.168.2.1', 'id.resp_p': 53, 'proto': 'udp', 'service': 'dns', 'duration': 0.008364,
             # 'orig_bytes': 30, 'resp_bytes': 94, 'conn_state': 'SF', 'missed_bytes': 0, 'history': 'Dd', 'orig_pkts': 1,
             # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
-            # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', "is_DoH":false, 'type': './zeek_files/conn'}
+            # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
 
             self.column_values.update({
                 'type' :  'conn',
@@ -1047,7 +1054,6 @@ class ProfilerProcess(multiprocessing.Process):
                 'bytes' :  line.get('orig_bytes',0) + line.get('resp_bytes',0),
                 'state_hist' : line.get('history', line.get('conn_state','')),
                 'smac': line.get('orig_l2_addr',''),
-                'is_DoH': line.get('is_DoH','false'),
                 'dmac' : line.get('resp_l2_addr','')})
 
         elif 'dns' in file_type:
@@ -1097,7 +1103,8 @@ class ProfilerProcess(multiprocessing.Process):
                  'validation_status' : line.get('validation_status',''),
                  'curve' : line.get('curve',''),
                  'server_name' : line.get('server_name',''),
-                 'ja3' : line.get('ja3',''),
+                 'ja3': line.get('ja3',''),
+                 'is_DoH': line.get('is_DoH', 'false'),
                  'ja3s' : line.get('ja3s','')})
 
         elif 'ssh' in file_type:
@@ -1847,7 +1854,8 @@ class ProfilerProcess(multiprocessing.Process):
                                              self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
                                              self.column_values['issuer'], self.column_values['validation_status'],
                                              self.column_values['curve'], self.column_values['server_name'],
-                                             self.column_values['ja3'], self.column_values['ja3s'])
+                                             self.column_values['ja3'], self.column_values['ja3s'],
+                                             self.column_values['is_DoH'])
                 elif flow_type == 'ssh':
                     __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
                                              self.column_values['auth_attempts'], self.column_values['auth_success'],
