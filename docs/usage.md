@@ -244,8 +244,10 @@ Each IP address that appears in the network traffic of the input is represented 
 
 Slips needs to know your home network to be able to use specific zeek scripts. 
 
-If ```home_network``` is not defined, Slips uses all ranges ```'92.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+If ```home_network``` is not defined, Slips uses all ranges ```'192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
 
+
+When the ```home_network``` parameter is set, slips creates profiles only for ips inside the home network, check the analysis direction below.
 
 **Analysis Direction**
 
