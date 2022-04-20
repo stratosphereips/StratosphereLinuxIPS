@@ -500,7 +500,7 @@ class InputProcess(multiprocessing.Process):
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-            if not self.given_path or self.given_path is '-':
+            if self.input_type == 'stdin':
                 self.read_from_stdin()
             elif self.input_type is 'zeek_folder':
                 # is a zeek folder
