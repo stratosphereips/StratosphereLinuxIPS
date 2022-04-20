@@ -409,7 +409,8 @@ class ProfilerProcess(multiprocessing.Process):
                     if data['event_type']:
                         # found the key, is suricata
                         self.input_type = 'suricata'
-                except ValueError:
+                except (ValueError, KeyError):
+                    data = str(data)
                     # not suricata, data is a tab or comma separated str
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
@@ -431,7 +432,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             self.separator = '	'
                             self.input_type = 'zeek-tabs'
-
+                # print(f"@@@@@@@@@@@@@ line is {self.input_type}")
                 return self.input_type
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
