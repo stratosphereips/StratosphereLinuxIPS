@@ -587,6 +587,7 @@ if __name__ == '__main__':
                 os._exit(-1)
 
             if input_information != 'stdin':
+                line_type = False
                 # default value
                 input_type = 'file'
                 # Get the type of file
@@ -631,6 +632,10 @@ if __name__ == '__main__':
                                 input_type = 'zeek_log_file'
             else:
                 input_type = 'stdin'
+                line_type = input("Enter the flow type, available options are:\nargus, argus-tabs, suricata, zeek, zeek-tabs or nfdump\n")
+                if line_type.lower() not in ('argus', 'argus-tabs', 'suricata', 'zeek', 'zeek-tabs', 'nfdump'):
+                    print(f"[Main] invalid line type {line_type}")
+                    sys.exit(-1)
 
         elif args.db:
             input_type = 'database'
