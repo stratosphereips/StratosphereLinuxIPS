@@ -851,7 +851,8 @@ if __name__ == '__main__':
         # Input process
         # Create the input process and start it
         inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue,
-                                    input_type, input_information, config, args.pcapfilter, zeek_bro)
+                                    input_type, input_information, config,
+                                    args.pcapfilter, zeek_bro, line_type)
         inputProcess.start()
         outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
         time.sleep(0.5)
@@ -937,12 +938,11 @@ if __name__ == '__main__':
                 # If there were no modified TW in the last timewindow time,
                 # then start counting down
                 else:
-                    # don't shutdown slips if it's being debugged
-                    if amount_of_modified == 0 and not is_debugger_active():
+                    # don't shutdown slips if it's being debugged or reading flows from stdin
+                    if amount_of_modified == 0 and not is_debugger_active() and input_type != 'stdin':
                         # print('Counter to stop Slips. Amount of modified
                         # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                         if minimum_intervals_to_wait == 0:
-                            # If the user specified -s, save the database before stopping
                             shutdown_gracefully(input_information)
                             break
                         minimum_intervals_to_wait -= 1
