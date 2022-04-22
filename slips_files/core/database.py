@@ -206,9 +206,21 @@ class Database(object):
         """
         Used to associate this profile with it's used software and version
         """
-        self.r.hmset(profileid, {'software': software,
-                                 'version-major': version_major ,
-                                'version-minor': version_minor})
+        self.r.hmset(profileid,{'used_software': {'software': software,
+                                                 'version-major': version_major ,
+                                                'version-minor': version_minor}})
+
+    def get_software_from_profile(self, profileid):
+        """
+        returns a dict with software, major_version, minor_version
+        """
+        if not profileid:
+            return False
+
+        used_software = self.r.hmget(profileid, 'used_software')[0]
+        if used_software:
+            used_software = json.loads(used_software)
+            return used_software
 
 
     def get_user_agent_from_profile(self, profileid) -> str:
@@ -1738,19 +1750,17 @@ class Database(object):
         self.pubsub = self.r.pubsub()
         supported_channels = ['tw_modified', 'evidence_added', 'new_ip',  'new_flow',
                               'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
-                              'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
-                              'dns_info_change', 'tw_closed', 'core_messages',
+                              'give_threat_intelligence', 'new_letters', 'ip_info_change',
+                              'dns_info_change', 'dns_info_change', 'tw_closed', 'core_messages',
                               'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                               'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                              'new_service',  'new_arp', 'new_MAC', 'new_alert', 'new_smtp']
-        for supported_channel in supported_channels:
-            if supported_channel in channel:
-                self.pubsub.subscribe(channel)
-                break
-        else:
-            # channel isn't in supported_channels
-            return False
-        return self.pubsub
+                              'new_service',  'new_arp', 'new_MAC', 'new_alert', 'new_smtp',
+                              'new_software']
+        if channel in supported_channels:
+            self.pubsub.subscribe(channel)
+            return self.pubsub
+        return False
+
 
     def publish(self, channel, data):
         """ Publish something """
