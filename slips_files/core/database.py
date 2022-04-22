@@ -214,6 +214,15 @@ class Database(object):
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
 
+    def add_software_to_profile(self, profileid, software, version_major, version_minor):
+        """
+        Used to associate this profile with it's used software and version
+        """
+        self.r.hmset(profileid, {'software': software,
+                                 'version-major': version_major ,
+                                'version-minor': version_minor})
+
+
     def get_user_agent_from_profile(self, profileid) -> str:
         """
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
