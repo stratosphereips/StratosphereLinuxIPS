@@ -1,7 +1,7 @@
 -0.8.6
 * Slips
-  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
-
+ - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
+ - Parse zeek software.log and extract software type, version and user agent from it
 -0.8.5
 * Slips
   - Detect young domains that was registered less than 60 days ago.
