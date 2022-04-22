@@ -1,6 +1,7 @@
 -0.8.6
 * Slips
  - Parse zeek software.log and extract software type, version and user agent from it
+ - Detect multiple SSH client versions. slips will now alert if an IP is detected using OpenSSH_8.1 then OpenSSH_7.1 for example
 -0.8.5
 * Slips
   - Detect young domains that was registered less than 60 days ago.
