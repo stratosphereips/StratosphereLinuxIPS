@@ -633,7 +633,7 @@ class Module(Module, multiprocessing.Process):
         if f'{cached_major_v}_{cached_minor_v}' == f'{major_v}_{minor_v}':
             # they're using the same ssh version
             return False
-        # self.helper.set_evidence_multiple_ssh_versions()
+        self.helper.set_evidence_multiple_ssh_versions()
         return True
 
 
