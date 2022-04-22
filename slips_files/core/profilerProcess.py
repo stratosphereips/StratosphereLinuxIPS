@@ -1231,6 +1231,15 @@ class ProfilerProcess(multiprocessing.Process):
                                 'port_num' : line.get('port_num', ''),
                                 'port_proto' : line.get('port_proto', ''),
                                 'service' : line.get('service', '')})
+        elif 'software' in file_type:
+            software_type = line.get('software_type', '')
+            # store info about everything except http:broswer
+            # we're already reading browser UA from http.log
+            if software_type == "HTTP::BROWSER":
+                return True
+            self.column_values.update({'type' : 'software',
+                                'software_type' : software_type,
+                                'unparsed_version': line.get('unparsed_version', '')})
         else:
             return False
         return True
@@ -1672,7 +1681,7 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.column_values:
                     return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp'):
+                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1948,6 +1957,8 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
                                           saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
                                           proto='ARP', uid=uid)
+                elif flow_type == 'software':
+                    __database__.add_user_agent_to_profile(profileid,  self.column_values['unparsed_version'])
 
             def store_features_going_in(profileid, twid, starttime):
                 """
