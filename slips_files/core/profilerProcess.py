@@ -1340,6 +1340,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Process the line and extract columns for nfdump
         """
+        self.separator = ','
         self.column_values = {
             'starttime' : False,
             'endtime' : False,
