@@ -1224,7 +1224,7 @@ class ProfilerProcess(multiprocessing.Process):
                                 'src_hw' : line.get('orig_hw',''),
                                 'operation' : line.get('operation','') })
         elif 'known_services' in file_type:
-            self.column_values.update({'type' : 'known_services',
+            self.column_values.update({'type': 'known_services',
                                 'saddr' : line.get('host', ''),
                                 # this file doesn't have a daddr field, but we need it in add_flow_to_profile
                                 'daddr' : '0.0.0.0',
@@ -1238,8 +1238,12 @@ class ProfilerProcess(multiprocessing.Process):
             if software_type == "HTTP::BROWSER":
                 return True
             self.column_values.update({'type' : 'software',
-                                'software_type' : software_type,
-                                'unparsed_version': line.get('unparsed_version', '')})
+                                       'saddr': line.get('host', ''),
+                                       'software_type': software_type,
+                                       'unparsed_version': line.get('unparsed_version', ''),
+                                       'version.major':  line.get('version.major', ''),
+                                       'version.minor':   line.get('version.minor', '')
+                                       })
         else:
             return False
         return True
@@ -1688,7 +1692,6 @@ class ProfilerProcess(multiprocessing.Process):
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-
             try:
                 # seconds.
                 # make sure starttime is a datetime obj (not a str) so we can get the timestamp
@@ -1798,7 +1801,12 @@ class ProfilerProcess(multiprocessing.Process):
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
-
+            elif 'software' in flow_type:
+                __database__.add_user_agent_to_profile(profileid, self.column_values['unparsed_version'])
+                __database__.add_software_to_profile(profileid,
+                                                     self.column_values['software_type'],
+                                                     self.column_values['version.major'],
+                                                     self.column_values['version.minor'])
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -1957,8 +1965,6 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
                                           saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
                                           proto='ARP', uid=uid)
-                elif flow_type == 'software':
-                    __database__.add_user_agent_to_profile(profileid,  self.column_values['unparsed_version'])
 
             def store_features_going_in(profileid, twid, starttime):
                 """
