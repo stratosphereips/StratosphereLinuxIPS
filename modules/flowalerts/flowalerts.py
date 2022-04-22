@@ -46,6 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
+        self.c8 = __database__.subscribe('new_software')
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
@@ -1101,6 +1102,13 @@ class Module(Module, multiprocessing.Process):
                                 # remove the first element so we can check the next 3 logins
                                 self.smtp_bruteforce_cache[profileid].pop(0)
 
+                # --- Detect multiple used SSH versions ---
+                message = self.c8.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_software'):
+                    pass
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
