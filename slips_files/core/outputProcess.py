@@ -162,7 +162,8 @@ class OutputProcess(multiprocessing.Process):
         if debug_level == 1:
             # it's an error. we should log it
             with open(self.errors_logfile, 'a') as errors_logfile:
-                errors_logfile.write(f'{sender}{msg}\n')
+                date_time = datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
+                errors_logfile.write(f'{date_time} {sender}{msg}\n')
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
