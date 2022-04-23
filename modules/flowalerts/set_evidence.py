@@ -22,7 +22,11 @@ class Helper:
                                  stime, category,
                                  profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_multiple_ssh_versions(self, srcip, cached_versions, crrent_versions, timestamp, twid, uid):
+    def set_evidence_multiple_ssh_versions(self, srcip, cached_versions, current_versions, timestamp, twid, uid):
+        """
+        :param cached_versions: major.minor
+        :param current_versions: major.minor
+        """
         profileid = f'profile_{srcip}'
         confidence = 0.9
         threat_level = 'medium'
@@ -30,7 +34,7 @@ class Helper:
         type_detection = 'srcip'
         type_evidence = 'MultipleSSHVersions'
         detection_info = srcip
-        description = f'Possible SSH bruteforce by using multiple SSH versions {cached_versions} then {crrent_versions}'
+        description = f'Possible SSH bruteforce by using multiple SSH versions {cached_versions} then {current_versions}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid,
