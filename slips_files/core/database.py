@@ -218,9 +218,10 @@ class Database(object):
         """
         Used to associate this profile with it's used software and version
         """
-        self.r.hmset(profileid,{'used_software': {'software': software,
-                                                 'version-major': version_major ,
-                                                'version-minor': version_minor}})
+        sw_dict = {'software': software,
+                    'version-major': version_major,
+                    'version-minor': version_minor}
+        self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
 
     def get_software_from_profile(self, profileid):
         """
