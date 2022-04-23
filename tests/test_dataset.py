@@ -77,7 +77,8 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
        ['SSL certificate validation failed with (certificate is not yet valid)',
         'performing bad SMTP login to 80.75.42.226',
         'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
-        'multiple empty HTTP connections to bing.com'],
+        'multiple empty HTTP connections to bing.com',
+        'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1'],
 
        'sample_zeek_files/'),
 
