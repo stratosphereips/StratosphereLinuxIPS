@@ -1810,8 +1810,9 @@ class ProfilerProcess(multiprocessing.Process):
                                                      self.column_values['version.minor'])
                 # change the datetime to epoch to be able to use json
                 epoch_time = self.column_values['starttime'].timestamp()
-                self.column_values.update({'starttime': epoch_time})
-                __database__.publish('new_software', json.dumps(self.column_values) )
+                self.column_values.update({'starttime': epoch_time,
+                                           'twid': self.get_timewindow(epoch_time, profileid)})
+                __database__.publish('new_software', json.dumps(self.column_values))
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
