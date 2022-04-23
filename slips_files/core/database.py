@@ -669,6 +669,7 @@ class Database(object):
             sbytes = columns['sbytes']
             pkts = columns['pkts']
             spkts = columns['spkts']
+            dpkts = columns['dpkts']
             state = columns['state']
             proto = columns['proto'].upper()
             daddr = columns['daddr']
@@ -769,10 +770,12 @@ class Database(object):
             # Get the state. Established, NotEstablished
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
-            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs')
+            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key,
+                                                  summaryState, proto, role, 'IPs')
             try:
                 innerdata = prev_data[str(ip_as_obj)]
-                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport, innerdata), 3, 0)
+                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport,
+                                                                                    innerdata), 3, 0)
                 # We had this port
                 # We need to add all the data
                 innerdata['totalflows'] += 1
@@ -781,10 +784,10 @@ class Database(object):
                 # Store for each dstip, the dstports
                 temp_dstports= innerdata['dstports']
                 try:
-                    temp_dstports[str(dport)] += int(pkts)
+                    temp_dstports[str(dport)] += int(dpkts)
                 except KeyError:
                     # First time for this ip in the inner dictionary
-                    temp_dstports[str(dport)] = int(pkts)
+                    temp_dstports[str(dport)] = int(dpkts)
                 innerdata['dstports'] = temp_dstports
                 prev_data[str(ip_as_obj)] = innerdata
                 self.print('add_ips() Adding for dst port {}. POST Data: {}'.format(dport, innerdata),3,0)
@@ -797,7 +800,7 @@ class Database(object):
                 innerdata['stime'] = starttime
                 innerdata['uid'] = uid
                 temp_dstports = {}
-                temp_dstports[str(dport)] = int(pkts)
+                temp_dstports[str(dport)] = int(dpkts)
                 innerdata['dstports'] = temp_dstports
                 self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata),3,0)
                 prev_data[str(ip_as_obj)] = innerdata
@@ -2626,10 +2629,17 @@ class Database(object):
         else:
             return domain_description, False
 
-    def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
+    def getDataFromProfileTW(self, profileid: str, twid: str,
+                             direction: str, state : str,
+                             protocol: str, role: str,
+                             type_data: str) -> dict:
         """
-        Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)
-        direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports
+        Get the info about a certain role (Client or Server),
+        for a particular protocol (TCP, UDP, ICMP, etc.) for a
+        particular State (Established, etc.)
+        direction: 'Dst' or 'Src'. This is used to know if you
+        want the data of the src ip or ports, or the data from
+        the dst ips or ports
         state: can be 'Established' or 'NotEstablished'
         protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
         role: can be 'Client' or 'Server'
