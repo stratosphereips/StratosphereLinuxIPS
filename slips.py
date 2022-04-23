@@ -269,9 +269,10 @@ def add_metadata():
         f.write(f'Slips version: {version}\n')
         f.write(f'Branch: {branch}\n')
         f.write(f'Commit: {commit}\n')
-        f.write(f'Date: {now}\n')
+        f.write(f'Slips start date: {now}\n')
 
     print(f'[Main] Metadata added to {metadata_dir}')
+    return info_path
 
 
 def shutdown_gracefully(input_information):
@@ -437,7 +438,11 @@ def shutdown_gracefully(input_information):
 
         if delete_zeek_files:
             shutil.rmtree('zeek_files')
-
+        # add slips end date in the metadata dir
+        if 'yes' in enable_metadata.lower():
+            with open(info_path, 'a') as f:
+                now = datetime.now()
+                f.write(f'Slips end date: {now}\n')
         os._exit(-1)
         return True
     except KeyboardInterrupt:
@@ -861,7 +866,7 @@ if __name__ == '__main__':
 
         enable_metadata = read_configuration(config, 'parameters', 'metadata_dir')
         if 'yes' in enable_metadata.lower():
-            add_metadata()
+            info_path = add_metadata()
 
         # Store the host IP address if input type is interface
         if input_type == 'interface':
