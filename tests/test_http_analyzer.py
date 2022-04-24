@@ -70,7 +70,7 @@ def test_check_incompatible_user_agent(outputQueue, database):
                                                        uid) == True
 
 
-def test_extract_info_from_UA(outputQueue, database):
+def test_extract_info_from_UA(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)
     # use another profile, because the default
     # one already has a ua in the db
@@ -78,3 +78,32 @@ def test_extract_info_from_UA(outputQueue, database):
     server_bag_ua = 'server-bag[macOS,11.5.1,20G80,MacBookAir10,1]'
     assert http_analyzer.extract_info_from_UA(server_bag_ua, profileid) == \
            '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", "browser": ""}'
+
+def test_check_multiple_UAs(outputQueue):
+    http_analyzer = create_http_analyzer_instance(outputQueue)
+    safari_ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) ' \
+                'AppleWebKit/605.1.15 (KHTML, like Gecko) ' \
+                'Version/15.3 Safari/605.1.15'
+    mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
+
+    # old ua
+    cached_ua = {'os_type': 'Fedora',
+                 'os_name': 'Linux'}
+    # current ua
+    user_agent = mozilla_ua
+    # should set evidence
+    assert http_analyzer.check_multiple_UAs(cached_ua,
+                                            user_agent,
+                                            timestamp,
+                                            profileid,
+                                            twid,
+                                            uid) == False
+    # in this case we should alert
+    user_agent = safari_ua
+    assert http_analyzer.check_multiple_UAs(cached_ua,
+                                            user_agent,
+                                            timestamp,
+                                            profileid,
+                                            twid,
+                                            uid) == True
+
