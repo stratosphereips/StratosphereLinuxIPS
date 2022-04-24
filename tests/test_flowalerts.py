@@ -9,6 +9,7 @@ uid = 'CAeDWs37BipkfP21u8'
 timestamp = 1635765895.037696
 saddr = '192.168.1.1'
 daddr = '192.168.1.2'
+dst_profileid = f'profile_{daddr}'
 
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -69,4 +70,19 @@ def test_check_long_connection(database, outputQueue):
 	assert 'flowalerts-long-connection' in module_labels
 	assert module_labels['flowalerts-long-connection'] == 'malicious'
 
+def test_port_belongs_to_an_org(database, outputQueue):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	# store in the db that both ips have apple as a vendor
+	MAC_info = {
+		'MAC' : '123', 'Vendor': 'Apple, Inc'
+	}
+	database.add_mac_addr_to_profile(profileid, MAC_info)
+	database.add_mac_addr_to_profile(dst_profileid, MAC_info)
 
+	# belongs to apple
+	portproto = '65509/tcp'
+	database.set_organization_of_port('apple', '', portproto)
+	assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) == True
+	# doesn't belong to any org
+	portproto = '65508/tcp'
+	assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) == False

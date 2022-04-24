@@ -2201,7 +2201,7 @@ class Database(object):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
         :param portproto: portnumber.lower() + / + protocol
-        :param ip: can be a single org ip, or a range
+        :param ip: can be a single org ip, or a range or ''
         """
         org_info = {'org_name': organization, 'ip': ip}
         org_info = json.dumps(org_info)
