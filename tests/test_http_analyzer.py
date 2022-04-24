@@ -70,3 +70,11 @@ def test_check_incompatible_user_agent(outputQueue, database):
                                                        uid) == True
 
 
+def test_extract_info_from_UA(outputQueue, database):
+    http_analyzer = create_http_analyzer_instance(outputQueue)
+    # use another profile, because the default
+    # one already has a ua in the db
+    profileid = 'profile_192.168.1.2'
+    server_bag_ua = 'server-bag[macOS,11.5.1,20G80,MacBookAir10,1]'
+    assert http_analyzer.extract_info_from_UA(server_bag_ua, profileid) == \
+           '{"user_agent": "macOS,11.5.1,20G80,MacBookAir10,1", "os_name": "macOS", "os_type": "macOS11.5.1", "browser": ""}'

@@ -234,7 +234,6 @@ class Module(Module, multiprocessing.Process):
         __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
-
     def extract_info_from_UA(self, user_agent, profileid):
         """
         Zeek sometimes collects info about a specific UA, in this case the UA starts with
@@ -256,6 +255,7 @@ class Module(Module, multiprocessing.Process):
         })
         UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
+        return UA_info
 
     def check_multiple_UAs(self, cached_ua: dict, user_agent: dict, timestamp, profileid, twid, uid):
         """
