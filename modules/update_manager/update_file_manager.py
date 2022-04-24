@@ -183,7 +183,7 @@ class UpdateFileManager:
 
     def update_local_file(self, file_path) -> bool:
         """
-        Returns True if update was sucessfull
+        Returns True if update was successful
         """
         try:
             # each file is updated differently
@@ -720,7 +720,7 @@ class UpdateFileManager:
         # some ti files have / at the end of domains, remove it
         if data.endswith('/'):
             data = data[:-1]
-        domain =  data
+        domain = data
         if domain.startswith('http://'): data= data[7:]
         if domain.startswith('https://'): data= data[8:]
         if validators.domain(data):

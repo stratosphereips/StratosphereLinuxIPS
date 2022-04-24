@@ -79,14 +79,13 @@ class Module(Module, multiprocessing.Process):
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
 
-
     def is_ignored_ip(self, ip) -> bool:
         """
-        This function checks if an IP is an special list of IPs that
+        This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
         """
         try:
-            ip_obj =  ipaddress.ip_address(ip)
+            ip_obj = ipaddress.ip_address(ip)
             # Is the IP multicast, private? (including localhost)
             # local_link or reserved?
             # The broadcast address 255.255.255.255 is reserved.
@@ -188,7 +187,6 @@ class Module(Module, multiprocessing.Process):
                 return True
 
         return False
-
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
@@ -380,7 +378,6 @@ class Module(Module, multiprocessing.Process):
             org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
             if ip in org_ips:
                 return True
-
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -609,7 +606,6 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
-
 
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
