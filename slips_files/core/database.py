@@ -196,9 +196,10 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
-    def add_user_agent_to_profile(self, profileid, user_agent: str):
+    def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
+        :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
 

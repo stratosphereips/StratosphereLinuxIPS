@@ -149,23 +149,18 @@ class Module(Module, multiprocessing.Process):
         """
         if type(dur) == str:
             dur = float(dur)
+        module_name = "flowalerts-long-connection"
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
             # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
-            module_name = "flowalerts-long-connection"
-            module_label = self.malicious_label
 
-            __database__.set_module_label_to_flow(profileid,
-                                                  twid,
-                                                  uid,
-                                                  module_name,
-                                                  module_label)
+            module_label = self.malicious_label
             self.helper.set_evidence_long_connection(daddr, dur, profileid, twid, uid, timestamp, ip_state='ip')
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
-            module_name = "flowalerts-long-connection"
             module_label = self.normal_label
-            __database__.set_module_label_to_flow(profileid,
+
+        __database__.set_module_label_to_flow(profileid,
                                                   twid,
                                                   uid,
                                                   module_name,
@@ -533,6 +528,7 @@ class Module(Module, multiprocessing.Process):
                 self.connections_checked_in_dns_conn_timer_thread.remove(uid)
             except ValueError:
                 pass
+
     def check_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully

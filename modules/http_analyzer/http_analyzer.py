@@ -141,7 +141,7 @@ class Module(Module, multiprocessing.Process):
             return False
         vendor = vendor.lower()
 
-        user_agent:str = __database__.get_user_agent_from_profile(profileid)
+        user_agent: dict = __database__.get_user_agent_from_profile(profileid)
         if not user_agent:
             return False
         os_type = user_agent.get('os_type', '').lower()
@@ -237,7 +237,7 @@ class Module(Module, multiprocessing.Process):
 
     def extract_info_from_UA(self, user_agent, profileid):
         """
-        Zeek sometimes collects infpo about a specific UA, in this case the UA starts with
+        Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
         if __database__.get_user_agent_from_profile(profileid) != None:
