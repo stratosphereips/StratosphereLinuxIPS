@@ -266,14 +266,16 @@ class Module(Module, multiprocessing.Process):
         if not cached_ua or not user_agent:
             return False
 
-        cached_ua = cached_ua['user_agent']
+        os_type = cached_ua['os_type']
+        os_name = cached_ua['os_name']
         # todo now the first UA seen is considered the only valid one and slips
         #  will setevidence everytime another one is used, is that correct?
-        for keyword in cached_ua:
+        for keyword in (os_type, os_name):
             # loop through each word in UA
             if keyword in user_agent:
-                # for example if the cached UA is Microsoft NCSI and the current is Microsoft BITS/7.5
-                # we will find the keyword 'microsoft' in both keywords, so we shouldn't alert
+                # for example if the os of the cached UA is Linux and the current UA
+                # is Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0)
+                # we will find the keyword 'Linux' in both UAs, so we shouldn't alert
                 return False
 
         type_detection = 'srcip'
@@ -287,7 +289,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                  description, timestamp, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
-
+        return True
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
