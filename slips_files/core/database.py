@@ -203,7 +203,7 @@ class Database(object):
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
 
-    def get_user_agent_from_profile(self, profileid) -> str:
+    def get_user_agent_from_profile(self, profileid) -> dict:
         """
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
         used by a certain profile or None
@@ -252,6 +252,7 @@ class Database(object):
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
             self.r.hmset(profileid, MAC_info)
+            return True
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -308,11 +309,12 @@ class Database(object):
                     ipv6 = json.dumps(ipv6)
 
                 self.r.hmset(f'profileid_{found_ip}', {'IPv6': ipv6})
+
             else:
                 # both are ipv4 and are claiming to have the same mac address
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
-                pass
+                return False
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
