@@ -149,7 +149,7 @@ class UpdateFileManager:
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def read_ports_info(self, ports_info_filepath):
+    def read_ports_info(self, ports_info_filepath) -> int:
         """
         Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
         and store it in the db
@@ -159,13 +159,14 @@ class UpdateFileManager:
         # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
 
-        with open(ports_info_filepath,'r') as f:
+        with open(ports_info_filepath, 'r') as f:
             line_number = 0
             while True:
                 line = f.readline()
-                line_number +=1
+                line_number += 1
                 # reached the end of file
-                if not line: break
+                if not line:
+                    break
                 # skip the header and the comments at the begining
                 if line.startswith('#') or line.startswith('"Organization"'):
                     continue
@@ -174,9 +175,11 @@ class UpdateFileManager:
                     organization, ip = line[0], line[1]
                     portproto = f'{line[2]}/{line[3].lower().strip()}'
                     __database__.set_organization_of_port(organization, ip, portproto)
+
                 except IndexError:
                     self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
                     continue
+        return line_number
 
     def update_local_file(self, file_path) -> bool:
         """
@@ -356,7 +359,6 @@ class UpdateFileManager:
 
         with open(full_path, 'w') as f:
             f.write(response.text)
-
 
     def parse_ssl_feed(self, url, full_path):
         """
