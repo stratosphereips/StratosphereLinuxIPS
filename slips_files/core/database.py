@@ -270,7 +270,7 @@ class Database(object):
                     and validators.ipv4(found_ip)):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
                 self.r.hmset(profileid, {'IPv4': found_ip})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': json.dumps([incoming_ip])})
+                self.r.hmset(f'profile_{found_ip}', {'IPv6': json.dumps([incoming_ip])})
 
                 # add the incoming ipv6 to the list of ips that belong to this mac
                 cached_ips.append(incoming_ip)
@@ -281,7 +281,7 @@ class Database(object):
                   and validators.ipv4(incoming_ip)):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
                 self.r.hmset(profileid, {'IPv6': json.dumps([found_ip])})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
+                self.r.hmset(f'profile_{found_ip}', {'IPv4': incoming_ip})
 
                 # add the incoming ipv4 to the list of ips that belong to this mac
                 cached_ips.append(incoming_ip)
@@ -299,7 +299,7 @@ class Database(object):
                 self.r.hmset(profileid, {'IPv6': ipv6})
 
                 # add this ipv6 to the list of ipv6 of the found ip
-                ipv6 = self.r.hmget(f'profileid_{found_ip}', 'IPv6')
+                ipv6 = self.r.hmget(f'profile_{found_ip}', 'IPv6')
                 if not ipv6 or ipv6 == [None] :
                     ipv6 = json.dumps([incoming_ip])
                 else:
@@ -308,7 +308,7 @@ class Database(object):
                     ipv6.append(incoming_ip)
                     ipv6 = json.dumps(ipv6)
 
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': ipv6})
+                self.r.hmset(f'profile_{found_ip}', {'IPv6': ipv6})
 
             else:
                 # both are ipv4 and are claiming to have the same mac address

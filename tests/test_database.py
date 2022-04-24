@@ -171,7 +171,7 @@ def test_profile_moddule_labels(database):
 
 def test_add_mac_addr_to_profile(database):
     ipv4 = '192.168.1.5'
-    profileid_ipv4 = f'profileid_{ipv4}'
+    profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
     # first associate this ip with some mac
     assert database.add_mac_addr_to_profile(profileid_ipv4, MAC_info) == True
@@ -180,14 +180,14 @@ def test_add_mac_addr_to_profile(database):
     # now claim that we found another profile
     # that has the same mac as this one
     # both ipv4
-    profileid = 'profileid_192.168.1.6'
+    profileid = 'profile_192.168.1.6'
     assert database.add_mac_addr_to_profile(profileid, MAC_info) == False
     # this ip shouldnt be added to the profile as they're both ipv4
     assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
 
     # now claim that another ipv6 has this mac
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
-    profileid_ipv6 = f'profileid_{ipv6}'
+    profileid_ipv6 = f'profile_{ipv6}'
     database.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
     # make sure the mac is associated with his ipv6
     assert ipv6 in database.r.hget('MAC', MAC_info['MAC'])

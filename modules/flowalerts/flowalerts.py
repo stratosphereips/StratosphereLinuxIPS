@@ -170,7 +170,7 @@ class Module(Module, multiprocessing.Process):
         P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
         OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
         """
-        if proto.lower() == 'udp' and int(dport)>30000:
+        if proto.lower() == 'udp' and int(dport) > 30000:
             try:
                 # trying to connct to 1 ip on more than 5 unknown ports
                 if self.p2p_daddrs[daddr] >= 6:
@@ -274,7 +274,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # get the ips contacted by the other_ip
-        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profileid_{other_ip}', twid)
+        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profile_{other_ip}', twid)
         if not contacted_ips:
             return False
 
