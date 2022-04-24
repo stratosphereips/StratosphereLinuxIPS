@@ -86,3 +86,15 @@ def test_port_belongs_to_an_org(database, outputQueue):
 	# doesn't belong to any org
 	portproto = '65508/tcp'
 	assert flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) == False
+
+def test_check_unknown_port(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	database.set_port_info('23/udp', 'telnet')
+	# now we have info 23 udp
+	assert flowalerts.check_unknown_port('23',
+										 'udp',
+										 daddr,
+										 profileid,
+										 twid,
+										 uid,
+										 timestamp) == False

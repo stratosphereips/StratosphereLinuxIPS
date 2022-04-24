@@ -230,14 +230,17 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
-        """ Checks dports that are not in our slips_files/ports_info/ files"""
+        """
+        Checks dports that are not in our
+        slips_files/ports_info/services.csv"""
         portproto = f'{dport}/{proto}'
         port_info = __database__.get_port_info(portproto)
         if port_info:
             # it's a known port
             return False
         # we don't have port info in our database
-        # is it a port that is known to be used by a specific organization
+        # is it a port that is known to be used by
+        # a specific organization
         if self.port_belongs_to_an_org(daddr, portproto, profileid):
             return False
 
@@ -247,6 +250,7 @@ class Module(Module, multiprocessing.Process):
             and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
             self.helper.set_evidence_unknown_port(daddr, dport, proto, timestamp, profileid, twid, uid)
+            return True
 
     def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
         """
