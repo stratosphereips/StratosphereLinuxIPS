@@ -86,7 +86,6 @@ class UpdateManager(Module, multiprocessing.Process):
         '''
         self.update_manager.update()
 
-
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
         self.timer_manager.cancel()

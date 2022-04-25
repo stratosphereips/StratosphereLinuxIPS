@@ -240,9 +240,10 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
-    def add_user_agent_to_profile(self, profileid, user_agent: str):
+    def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
+        :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
 
@@ -266,6 +267,7 @@ class Database(object):
         if used_software:
             used_software = json.loads(used_software)
             return used_software
+
 
 
     def get_user_agent_from_profile(self, profileid) -> str:
@@ -307,6 +309,12 @@ class Database(object):
         """
         return self.r.hget('MAC', MAC)
 
+    def set_ipv6_of_profile(self, profileid, ip):
+        self.r.hmset(profileid, {'IPv6': json.dumps([ip])})
+
+    def set_ipv4_of_profile(self, profileid, ip):
+        self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
+
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
@@ -334,6 +342,7 @@ class Database(object):
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
             self.r.hmset(profileid, MAC_info)
+            return True
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -350,23 +359,33 @@ class Database(object):
             if (validators.ipv6(incoming_ip)
                     and validators.ipv4(found_ip)):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
-                self.r.hmset(profileid, {'IPv4': found_ip})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': json.dumps([incoming_ip])})
+                self.set_ipv4_of_profile(profileid, found_ip)
+                self.set_ipv6_of_profile(f'profile_{found_ip}', incoming_ip)
+                # add the incoming ipv6 to the list of ips that belong to this mac
+                cached_ips.append(incoming_ip)
+                cached_ips = json.dumps(cached_ips)
+                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
             elif (validators.ipv6(found_ip)
                   and validators.ipv4(incoming_ip)):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
-                self.r.hmset(profileid, {'IPv6': json.dumps([found_ip])})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
+                self.set_ipv6_of_profile(profileid, found_ip)
+                self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
 
             elif (validators.ipv6(found_ip) and validators.ipv6(incoming_ip)):
                 # a computer is allowed to have many ipv6
                 # add this ipv6 to the list of ipv6 of the incoming ip
 
+                ipv6 = self.r.hmget(profileid, 'IPv6')
+                if not ipv6 or ipv6 == [None] :
+                    ipv6 = json.loads(ipv6)
+                    ipv6.append(incoming_ip)
+                    ipv6 = json.dumps(ipv6)
+                self.set_ipv6_of_profile(profileid, ipv6)
+
                 # add this ipv6 to the list of ipv6 of the found ip
-                ipv6 = self.r.hmget(f'profileid_{found_ip}', 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    # first time finding an ipv6 for this profile
+                ipv6 = self.r.hmget(f'profile_{found_ip}', 'IPv6')
+                if not ipv6 or ipv6 == [None] :
                     ipv6 = json.dumps([incoming_ip])
                 else:
                     # found a list of ipv6 in the db
@@ -374,17 +393,13 @@ class Database(object):
                     ipv6.append(incoming_ip)
                     ipv6 = json.dumps(ipv6)
 
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': ipv6})
+                self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
+
             else:
                 # both are ipv4 and are claiming to have the same mac address
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
-
-            # add the incoming ipv6 to the list of ips that belong to this mac
-            cached_ips.append(incoming_ip)
-            cached_ips = json.dumps(cached_ips)
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -490,7 +505,7 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        
+
         profile = self.r.hgetall(profileid)
         if profile != set():
             return profile
@@ -506,7 +521,7 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        
+
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
 
@@ -2372,7 +2387,7 @@ class Database(object):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
         :param portproto: portnumber.lower() + / + protocol
-        :param ip: can be a single org ip, or a range
+        :param ip: can be a single org ip, or a range or ''
         """
         org_info = {'org_name': organization, 'ip': ip}
         org_info = json.dumps(org_info)
