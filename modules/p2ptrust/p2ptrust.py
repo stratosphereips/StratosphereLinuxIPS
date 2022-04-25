@@ -74,7 +74,7 @@ class Trust(Module, multiprocessing.Process):
                  pygo_channel="p2p_pygo",
                  start_pigeon=True,
                  pigeon_binary="p2p4slips",  # make sure the binary is in $PATH or put there full path
-                 pigeon_logfile="pigeon_logs",
+                 pigeon_logfile="output/p2p.log",
                  pigeon_key_file="pigeon.keys",
                  rename_redis_ip_info=False,
                  rename_sql_db_file=False,
@@ -109,7 +109,8 @@ class Trust(Module, multiprocessing.Process):
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-        self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
+        # self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
+        self.pigeon_logfile = self.pigeon_logfile_raw + str_port
         self.pigeon_key_file = pigeon_key_file
         self.pigeon_binary = pigeon_binary
 
@@ -199,7 +200,7 @@ class Trust(Module, multiprocessing.Process):
             executable.extend(host_param)
             executable.extend(keyfile_param)
             # executable.extend(rename_with_port_param)
-            executable.extend(pygo_channel_param)
+            executable.extend(pygo_channel_param)p2ptrust_runtime
             executable.extend(gopy_channel_param)
             outfile = open(self.pigeon_logfile, "+w")
             self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
@@ -462,7 +463,7 @@ class Trust(Module, multiprocessing.Process):
         # no data in db - this happens when testing, if there is not enough data on peers
         if combined_score is None:
             self.print(f"No data received from network about {ip_address}\n", 0 , 2)
-            print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
+            # print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
         else:
             self.print(f"The Network shared some data about {ip_address}, "
                        f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n", 0, 2)
