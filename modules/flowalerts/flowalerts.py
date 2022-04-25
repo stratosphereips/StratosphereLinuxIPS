@@ -46,6 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
+        self.c9 = __database__.subscribe('new_software')
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
@@ -614,6 +615,30 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
 
+    def check_multiple_ssh_clients(self, starttime, saddr, used_software, unparsed_version, major_v, minor_v, twid, uid):
+        """
+        function to check if this srcip was detected using a different ssh client versions before
+        """
+        profileid = f'profile_{saddr}'
+        # returns a dict with software, 'version-major', 'version-minor'
+        cached_ssh_versions: dict = __database__.get_software_from_profile(profileid)
+        if not cached_ssh_versions:
+            # we have no previous software info about this saddr in out db
+            return False
+        cached_software = cached_ssh_versions['software']
+        if cached_software != used_software:
+            # we need them both to be "SSH::CLIENT"
+            return False
+        cached_major_v = cached_ssh_versions['version-major']
+        cached_minor_v = cached_ssh_versions['version-minor']
+        cached_versions = f'{cached_major_v}_{cached_minor_v}'
+        current_versions = f'{major_v}_{minor_v}'
+        if cached_versions == current_versions:
+            # they're using the same ssh client version
+            return False
+        self.helper.set_evidence_multiple_ssh_versions(saddr, cached_versions, current_versions, starttime, twid, uid)
+        return True
+
 
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
@@ -1100,6 +1125,25 @@ class Module(Module, multiprocessing.Process):
                             else:
                                 # remove the first element so we can check the next 3 logins
                                 self.smtp_bruteforce_cache[profileid].pop(0)
+
+                # --- Detect multiple used SSH versions ---
+                message = self.c9.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_software'):
+                    flow = json.loads(message['data'])
+                    starttime = flow.get('starttime', '')
+                    saddr = flow.get('saddr', '')
+                    uid = flow.get('uid', '')
+                    twid = flow.get('twid', '')
+                    software_type = flow.get('software_type' , '')
+                    if 'ssh' not in software_type.lower():
+                        continue
+                    unparsed_version = flow.get('saddr', '')
+                    major_v = flow.get('version.major', '')
+                    minor_v = flow.get('version.minor', '')
+                    self.check_multiple_ssh_clients(starttime, saddr, software_type, unparsed_version, major_v, minor_v, twid, uid)
 
 
             except KeyboardInterrupt:

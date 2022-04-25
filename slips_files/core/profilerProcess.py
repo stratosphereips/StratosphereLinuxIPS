@@ -1237,13 +1237,26 @@ class ProfilerProcess(multiprocessing.Process):
                                 'src_hw' : line.get('orig_hw',''),
                                 'operation' : line.get('operation','') })
         elif 'known_services' in file_type:
-            self.column_values.update({'type' : 'known_services',
+            self.column_values.update({'type': 'known_services',
                                 'saddr' : line.get('host', ''),
                                 # this file doesn't have a daddr field, but we need it in add_flow_to_profile
                                 'daddr' : '0.0.0.0',
                                 'port_num' : line.get('port_num', ''),
                                 'port_proto' : line.get('port_proto', ''),
                                 'service' : line.get('service', '')})
+        elif 'software' in file_type:
+            software_type = line.get('software_type', '')
+            # store info about everything except http:broswer
+            # we're already reading browser UA from http.log
+            if software_type == "HTTP::BROWSER":
+                return True
+            self.column_values.update({'type' : 'software',
+                                       'saddr': line.get('host', ''),
+                                       'software_type': software_type,
+                                       'unparsed_version': line.get('unparsed_version', ''),
+                                       'version.major':  line.get('version.major', ''),
+                                       'version.minor':   line.get('version.minor', '')
+                                       })
         else:
             return False
         return True
@@ -1686,19 +1699,19 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp'):
+                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-
             try:
                 # seconds.
                 # make sure starttime is a datetime obj (not a str) so we can get the timestamp
-                if type(self.column_values['starttime']) == str:
-                    datetime_obj = datetime.strptime( self.column_values['starttime'] , self.timeformat)
+                ts = self.column_values['starttime']
+                if type(ts) == str:
+                    datetime_obj = datetime.strptime(ts, self.timeformat)
                     starttime = datetime_obj.timestamp()
                 else:
                     starttime = self.column_values['starttime'].timestamp()
@@ -1803,7 +1816,17 @@ class ProfilerProcess(multiprocessing.Process):
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
-
+            elif 'software' in flow_type:
+                __database__.add_user_agent_to_profile(profileid, self.column_values['unparsed_version'])
+                __database__.add_software_to_profile(profileid,
+                                                     self.column_values['software_type'],
+                                                     self.column_values['version.major'],
+                                                     self.column_values['version.minor'])
+                # change the datetime to epoch to be able to use json
+                epoch_time = self.column_values['starttime'].timestamp()
+                self.column_values.update({'starttime': epoch_time,
+                                           'twid': self.get_timewindow(epoch_time, profileid)})
+                __database__.publish('new_software', json.dumps(self.column_values))
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)

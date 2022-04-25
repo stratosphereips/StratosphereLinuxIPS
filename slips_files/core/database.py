@@ -34,7 +34,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame'}
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software'}
 
     """ Database object management """
     def __init__(self):
@@ -245,6 +245,28 @@ class Database(object):
         Used to associate this profile with it's used user_agent
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
+
+    def add_software_to_profile(self, profileid, software, version_major, version_minor):
+        """
+        Used to associate this profile with it's used software and version
+        """
+        sw_dict = {'software': software,
+                    'version-major': version_major,
+                    'version-minor': version_minor}
+        self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
+
+    def get_software_from_profile(self, profileid):
+        """
+        returns a dict with software, major_version, minor_version
+        """
+        if not profileid:
+            return False
+
+        used_software = self.r.hmget(profileid, 'used_software')[0]
+        if used_software:
+            used_software = json.loads(used_software)
+            return used_software
+
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
