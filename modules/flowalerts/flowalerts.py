@@ -332,9 +332,12 @@ class Module(Module, multiprocessing.Process):
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
+                # SNI is a list of dicts, each dict contains the 'server_name' and 'port'
                 SNI = SNI[0]
                 if SNI in (None, ''):
                     SNI = False
+                elif type(SNI) == dict:
+                    SNI = SNI.get('server_name', False)
         except (KeyError, TypeError):
             # No SNI data for this ip
             SNI = False
@@ -353,6 +356,7 @@ class Module(Module, multiprocessing.Process):
                     return True
             # remove the asn from ram
             org_asn = ''
+
             if flow_domain:
                 # we have the rdns or sni of this flow , now check
                 if org in flow_domain:
@@ -362,6 +366,7 @@ class Module(Module, multiprocessing.Process):
                 org_domains = json.loads(__database__.get_org_info(org, 'domains'))
 
                 flow_TLD = flow_domain.split(".")[-1]
+
                 for org_domain in org_domains:
                     org_domain_TLD = org_domain.split(".")[-1]
                     # make sure the 2 domains have the same same top level domain
@@ -622,16 +627,19 @@ class Module(Module, multiprocessing.Process):
 
         # found NXDOMAIN by this profile
         try:
-            self.nxdomains[profileid_twid] +=1
+            # make sure all domains are unique
+            if query not in self.nxdomains[profileid_twid]:
+                self.nxdomains[profileid_twid].append(query)
         except KeyError:
             # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: 1})
+            self.nxdomains.update({profileid_twid: [query]})
             return False
 
         # every 10,15,20 .. etc. nxdomains, generate an alert.
-        if (self.nxdomains[profileid_twid] % 5 == 0 and
-            self.nxdomains[profileid_twid] >= self.nxdomains_threshold):
-            self.helper.set_evidence_DGA(self.nxdomains[profileid_twid], stime, profileid, twid, uid)
+        number_of_nxdomains = len(self.nxdomains[profileid_twid])
+        if (number_of_nxdomains % 5 == 0 and
+            number_of_nxdomains >= self.nxdomains_threshold):
+            self.helper.set_evidence_DGA(number_of_nxdomains, stime, profileid, twid, uid)
             return True
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
@@ -670,6 +678,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
+
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -699,6 +708,7 @@ class Module(Module, multiprocessing.Process):
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
+
                     # stime = flow_dict['ts']
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']

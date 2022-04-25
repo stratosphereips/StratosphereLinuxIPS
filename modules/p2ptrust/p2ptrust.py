@@ -454,7 +454,7 @@ class Trust(Module, multiprocessing.Process):
         # timeout there is set to). The reply will be
         # processed by an independent process in this module and
         # database will be updated accordingly
-        time.sleep(1)
+        time.sleep(2)
 
         # get data from db, processed by the trust model
         combined_score, combined_confidence = self.reputation_model.get_opinion_on_ip(ip_address)
