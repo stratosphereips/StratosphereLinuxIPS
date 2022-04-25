@@ -2321,7 +2321,12 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # First check if we are not in the last TW. Since this will be the majority of cases
+
             try:
+                if not profileid:
+                    # profileid is None if we're dealing with a profile
+                    # outside of home_network when this param is given
+                    return False
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
