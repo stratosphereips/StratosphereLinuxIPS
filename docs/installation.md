@@ -2,18 +2,18 @@
 
 There are two ways to install and run Slips: inside a Docker or in your own computer. We suggest to install and to run Slips inside a Docker since all dependencies are already installed in there. However, current version of docker with Slips does not allow to capture the traffic from the computer's interface. We will describe both ways of installation anyway. 
 
-## Installing and running Slips inside a Docker.
+## Slips in Docker.
 
-Slips can be run inside a Docker. There is a prepared docker image with Slips available in DockerHub and it is also possible to build a docker with Slips locally from the Dockerfile. But in both cases, you have to have the Docker platform installed in your computer. Instructions how to install Docker is https://docs.docker.com/get-docker/. 
+Slips can be run inside a Docker. There is a prepared docker image with Slips available in DockerHub and it is also possible to build a docker with Slips locally from the Dockerfile. But in both cases, you have to have the Docker platform installed in your computer. Instructions how to install Docker is https://docs.docker.com/get-docker/.
 
-### Running Slips inside a Docker from the DockerHub
+### Running Slips from DockerHub
 
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
 	./slips.py -c slips.conf -r dataset/myfile.pcap
 
-### Building the docker with Slips from the Dockerfile
+### Building Slips from the Dockerfile
 
 Before building the docker locally from the Dockerfile, first you should clone Slips repo or download the code directly: 
 
@@ -21,7 +21,7 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Docker image with:
 
-	cd ~/code/StratosphereLinuxIPS/docker
+	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/test3.binetflow
@@ -114,6 +114,20 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 	./slips.py -c slips.conf -r datasets/hide-and-seek-short.pcap
 
 Run slips with sudo to enable blocking (Optional) 
+
+## Installing slips in Docker with P2P
+
+git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
+
+If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with P2P installed using:
+
+	cd ~/StratosphereLinuxIPS/docker/P2P-image
+	docker build --network=host --no-cache -t slips -f Dockerfile .
+	docker run -it --rm --net=host slips
+
+Now you can edit slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
+
+	./slips.py -i wlp3s0
 
 
 ## Installing Slips on a Raspberry PI

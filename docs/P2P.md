@@ -62,6 +62,8 @@ The P2P module is disabled by default.
 
 To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```slips.conf```  
 
+P2P is only available when running slips in you local network using an interface. (with -i <interface>)
+
 ## Project sections
 
 The project is built into Slips as a module and uses Redis for communication. Integration with Slips
