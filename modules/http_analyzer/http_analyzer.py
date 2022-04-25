@@ -122,7 +122,7 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'high'
         category = 'Anomaly.Behaviour'
         confidence = 1
-        description = f'using incompatible user-agent: "{user_agent}" ' \
+        description = f'using incompatible user-agent: {user_agent} ' \
                       f'while connecting to {host}{uri}. ' \
                       f'IP has MAC vendor: {vendor.capitalize()}'
         if not twid:

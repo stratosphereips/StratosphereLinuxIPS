@@ -587,52 +587,61 @@ if __name__ == '__main__':
         elif args.filepath:
             input_information = args.filepath
             # check invalid file path
-            if not os.path.exists(input_information):
+            if not os.path.exists(input_information) and input_information != 'stdin':
                 print(f'[Main] Invalid file path {input_information}. Stopping.')
                 os._exit(-1)
 
-            # default value
-            input_type = 'file'
-            # Get the type of file
-            cmd_result = subprocess.run(['file', input_information], stdout=subprocess.PIPE)
-            # Get command output
-            cmd_result = cmd_result.stdout.decode('utf-8')
+            if input_information != 'stdin':
+                line_type = False
+                # default value
+                input_type = 'file'
+                # Get the type of file
+                cmd_result = subprocess.run(['file', input_information], stdout=subprocess.PIPE)
+                # Get command output
+                cmd_result = cmd_result.stdout.decode('utf-8')
 
-            if 'pcap' in cmd_result:
-                input_type = 'pcap'
-            elif 'dBase' in cmd_result:
-                input_type = 'nfdump'
-            elif 'CSV' in cmd_result:
-                input_type = 'binetflow'
-            elif 'directory' in cmd_result:
-                input_type = 'zeek_folder'
-            else:
-                # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
-                # use first line to determine
-                with open(input_information, 'r') as f:
-                    while True:
-                        # get the first line that isn't a comment
-                        first_line = f.readline().replace('\n', '')
-                        if not first_line.startswith('#'):
-                            break
-                if 'flow_id' in first_line:
-                    input_type = 'suricata'
+                if 'pcap' in cmd_result:
+                    input_type = 'pcap'
+                elif 'dBase' in cmd_result:
+                    input_type = 'nfdump'
+                elif 'CSV' in cmd_result:
+                    input_type = 'binetflow'
+                elif 'directory' in cmd_result:
+                    input_type = 'zeek_folder'
                 else:
-                    # this is a text file , it can be binetflow or zeek_log_file
-                    try:
-                        # is it a json log file
-                        json.loads(first_line)
-                        input_type = 'zeek_log_file'
-                    except json.decoder.JSONDecodeError:
-                        # this is a tab separated file
-                        # is it zeek log file or binetflow file?
-                        # line = re.split(r'\s{2,}', first_line)[0]
-                        tabs_found = re.search('\s{1,}-\s{1,}', first_line)
-                        if '->' in first_line or 'StartTime' in first_line:
-                            # tab separated files are usually binetflow tab files
-                            input_type = 'binetflow-tabs'
-                        elif tabs_found:
+                    # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
+                    # use first line to determine
+                    with open(input_information, 'r') as f:
+                        while True:
+                            # get the first line that isn't a comment
+                            first_line = f.readline().replace('\n', '')
+                            if not first_line.startswith('#'):
+                                break
+                    if 'flow_id' in first_line:
+                        input_type = 'suricata'
+                    else:
+                        # this is a text file , it can be binetflow or zeek_log_file
+                        try:
+                            # is it a json log file
+                            json.loads(first_line)
                             input_type = 'zeek_log_file'
+                        except json.decoder.JSONDecodeError:
+                            # this is a tab separated file
+                            # is it zeek log file or binetflow file?
+                            # line = re.split(r'\s{2,}', first_line)[0]
+                            tabs_found = re.search('\s{1,}-\s{1,}', first_line)
+                            if '->' in first_line or 'StartTime' in first_line:
+                                # tab separated files are usually binetflow tab files
+                                input_type = 'binetflow-tabs'
+                            elif tabs_found:
+                                input_type = 'zeek_log_file'
+            else:
+                input_type = 'stdin'
+                line_type = input("Enter the flow type, available options are:\nargus, argus-tabs, suricata, zeek, zeek-tabs or nfdump\n")
+                if line_type.lower() not in ('argus', 'argus-tabs', 'suricata', 'zeek', 'zeek-tabs', 'nfdump'):
+                    print(f"[Main] invalid line type {line_type}")
+                    sys.exit(-1)
+
         elif args.db:
             input_type = 'database'
             input_information = 'database'
@@ -643,7 +652,7 @@ if __name__ == '__main__':
         # If we need zeek (bro), test if we can run it.
         # Need to be assign to something because we pass it to inputProcess later
         zeek_bro = None
-        if input_type in ('pcap' , 'interface'):
+        if input_type in ('pcap', 'interface'):
             zeek_bro = check_zeek_or_bro()
             if zeek_bro is False:
                 # If we do not have bro or zeek, terminate Slips.
@@ -857,7 +866,8 @@ if __name__ == '__main__':
         # Input process
         # Create the input process and start it
         inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue,
-                                    input_type, input_information, config, args.pcapfilter, zeek_bro)
+                                    input_type, input_information, config,
+                                    args.pcapfilter, zeek_bro, line_type)
         inputProcess.start()
         outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
         time.sleep(0.5)
@@ -943,12 +953,11 @@ if __name__ == '__main__':
                 # If there were no modified TW in the last timewindow time,
                 # then start counting down
                 else:
-                    # don't shutdown slips if it's being debugged
-                    if amount_of_modified == 0 and not is_debugger_active():
+                    # don't shutdown slips if it's being debugged or reading flows from stdin
+                    if amount_of_modified == 0 and not is_debugger_active() and input_type != 'stdin':
                         # print('Counter to stop Slips. Amount of modified
                         # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                         if minimum_intervals_to_wait == 0:
-                            # If the user specified -s, save the database before stopping
                             shutdown_gracefully(input_information)
                             break
                         minimum_intervals_to_wait -= 1
