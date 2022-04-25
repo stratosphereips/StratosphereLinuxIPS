@@ -56,6 +56,11 @@ echo "export PATH=$PATH:/path/to/StratosphereLinuxIPS/p2p4slips/" >> ~/.bashrc
 source ~/.bashrc
 ```
 
+## Usage
+
+The P2P module is disabled by default.
+
+To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```slips.conf```  
 
 ## Project sections
 

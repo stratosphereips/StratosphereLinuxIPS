@@ -757,6 +757,8 @@ if __name__ == '__main__':
         # Start each module in the folder modules
         outputProcessQueue.put('01|main|Starting modules')
         to_ignore = read_configuration(config, 'modules', 'disable')
+        use_p2p = read_configuration(config, 'P2P', 'use_p2p')
+
 
         # This plugins import will automatically load the modules and put them in the __modules__ variable
         # if slips is given a .rdb file, don't load the modules as we don't need them
@@ -767,6 +769,9 @@ if __name__ == '__main__':
             export_to = config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ", "").lower()
             if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
                 to_ignore.append('exporting_alerts')
+            if not use_p2p or use_p2p == 'no':
+                to_ignore.append('p2ptrust')
+
             # ignore CESNET sharing module if send and receive are are disabled in slips.conf
             send_to_warden = config.get('CESNET', 'send_alerts').lower()
             receive_from_warden = config.get('CESNET', 'receive_alerts').lower()
