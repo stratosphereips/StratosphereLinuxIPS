@@ -200,7 +200,7 @@ class Trust(Module, multiprocessing.Process):
             executable.extend(host_param)
             executable.extend(keyfile_param)
             # executable.extend(rename_with_port_param)
-            executable.extend(pygo_channel_param)p2ptrust_runtime
+            executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
             outfile = open(self.pigeon_logfile, "+w")
             self.pigeon = subprocess.Popen(executable, cwd=self.data_dir, stdout=outfile)
