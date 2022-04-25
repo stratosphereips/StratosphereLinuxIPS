@@ -817,7 +817,7 @@ class Database(object):
             sbytes = columns['sbytes']
             pkts = columns['pkts']
             spkts = columns['spkts']
-            dpkts = columns['dpkts']
+            dpkts = columns.get('dpkts', 0)
             state = columns['state']
             proto = columns['proto'].upper()
             daddr = columns['daddr']
@@ -880,16 +880,17 @@ class Database(object):
                 self.publish("p2p_data_request", json.dumps(data_to_send))
 
 
-            if role == 'Client':
-                # The profile corresponds to the src ip that received this flow
-                # The dstip is here the one receiving data from your profile
-                # So check the dst ip
-                pass
-            elif role == 'Server':
-                # The profile corresponds to the dst ip that received this flow
-                # The srcip is here the one sending data to your profile
-                # So check the src ip
-                pass
+            # if role == 'Client':
+            #     # The profile corresponds to the src ip that received this flow
+            #     # The dstip is here the one receiving data from your profile
+            #     # So check the dst ip
+            #     pass
+            # elif role == 'Server':
+            #     # The profile corresponds to the dst ip that received this flow
+            #     # The srcip is here the one sending data to your profile
+            #     # So check the src ip
+            #     pass
+
             #############
             # 1- Count the dstips, and store the dstip in the db of this profile+tw
             self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 3, 0)

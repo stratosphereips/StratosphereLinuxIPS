@@ -8,7 +8,7 @@ import ipwhois
 import json
 import requests
 import maxminddb
-import dns
+# from dns.resolver import NoResolverConfiguration
 
 class ASN:
     def __init__(self):
@@ -92,6 +92,10 @@ class ASN:
         except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
             # private ip or RDAP lookup failed. don't cache
             return False
+        # except NoResolverConfiguration:
+        #     # Resolver configuration could not be read or specified no nameservers
+        #     # self.print('Error: Resolver configuration could not be read or specified no nameservers.')
+        #     return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass

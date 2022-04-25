@@ -57,24 +57,24 @@ def test_add_ips(database):
 
 
 def test_add_port(database):
-    columns = {'dport':80,
-              'sport':88,
-              'totbytes':80,
-              'pkts':20,
-              'sbytes':30,
-              'bytes':30,
-              'spkts':70,
-              'state':'notestablished',
-              'proto':'TCP',
+    columns = {'dport': 80,
+              'sport': 88,
+              'totbytes': 80,
+              'pkts': 20,
+              'sbytes': 30,
+              'bytes': 30,
+              'spkts': 70,
+              'state': 'notestablished',
+              'proto': 'TCP',
               'saddr': '8.8.8.8',
               'daddr': test_ip,
-              'uid' : '1234',
+              'uid': '1234',
               'starttime': '20.0'}
-    database.add_port(profileid, twid, test_ip, columns, 'Server','Dst')
+    database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
     hash_key = profileid + '_' + twid
     added_ports = database.r.hgetall(hash_key)
-    assert 'SrcIPsServerTCPEstablished' in added_ports.keys()
-    assert test_ip in added_ports['SrcIPsServerTCPEstablished']
+    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
+    assert test_ip in added_ports['DstPortsServerTCPEstablished']
 
 def test_setEvidence(database):
     type_detection = 'ip'
