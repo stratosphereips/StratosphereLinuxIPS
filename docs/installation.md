@@ -36,7 +36,6 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/some-pcap-file.pcap
 
-
 ## Installing Slips in your own computer.
 
 Slips is dependent on three major elements: 
@@ -128,7 +127,6 @@ If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker i
 Now you can edit slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
 
 	./slips.py -i wlp3s0
-
 
 ## Installing Slips on a Raspberry PI
 
