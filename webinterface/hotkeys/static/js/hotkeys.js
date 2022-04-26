@@ -97,10 +97,7 @@ let operate_hotkeys = function () {
             { data: 'timestamp' },
             { data: 'dport_name' },
             { data: 'preposition' },
-            //              {data: 'dns_resolution'},
-            //              {data: 'dport/proto'},
             { data: 'daddr' }
-            //              {data: 'info'}
         ]
     });
 
@@ -140,6 +137,7 @@ let operate_hotkeys = function () {
     }
 
     return {
+
         set_profile_timewindow: function (pr, tw) {
             profile = pr;
             timewindow = tw;
