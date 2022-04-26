@@ -75,9 +75,11 @@ let operate_hotkeys = function () {
         columns: [
             { data: 'ts' },
             { data: 'dur' },
-            { data: 'saddr' },
+            { data: 'saddr' ,
+              "className": 'saddr'},
             { data: 'sport' },
-            { data: 'daddr' },
+            { data: 'daddr' ,
+            "className": 'daddr'},
             { data: 'dport' },
             { data: 'proto' },
             { data: 'origstate' },
@@ -185,6 +187,20 @@ let operate_hotkeys = function () {
                     hide_hotkey();
                 }
             });
+        },
+        onclick_timeline_flows_saddr: function () {
+        $('#table_timeline_flows ').on('click', 'tbody td.saddr', function () {
+                let data = timeline_flows.row($(this).parents('tr')).data();
+                let url = '/info/' + data.saddr
+                ipinfo.ajax.url(url).load();
+            })
+        },
+        onclick_timeline_flows_daddr: function () {
+        $('#table_timeline_flows ').on('click', 'tbody td.daddr', function () {
+                let data = timeline_flows.row($(this).parents('tr')).data();
+                let url = '/info/' + data.daddr
+                ipinfo.ajax.url(url).load();
+            })
         }
     }
 }
@@ -205,6 +221,8 @@ let ipinfo = $('#ipinfo').DataTable({
 
 let hotkeys = operate_hotkeys();
 hotkeys.onclick_buttons();
+hotkeys.onclick_timeline_flows_saddr();
+hotkeys.onclick_timeline_flows_daddr();
 
 let hotkey_hook = {
     'initialize_profile_timewindow': function (profile, timewindow) {
