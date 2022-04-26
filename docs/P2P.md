@@ -40,7 +40,7 @@ then you should only build the pigeon using:
 - If you installed Slips without the submodules then you should download and build the pigeon using:
 
 ```
-git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && go build
+git submodule init && git submodule update && cd p2p4slips && go build
 ```
 
 3. Add pigeon to path:

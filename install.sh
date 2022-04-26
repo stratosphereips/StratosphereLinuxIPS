@@ -49,15 +49,11 @@ python3 -m pip install yara-python && cd ..
 
 echo "[+] Installing go'"
 # download and install go:
-curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz\
-    && rm -rf /usr/local/go \
-    && sudo tar -C /usr/local -xzf go.tar.gz \
-    && echo "export PATH=$PATH:/usr/local/go/bin" >> ~/.bashrc \
-    && source ~/.bashrc
+sudo apt install go
 
 echo "[+] Installing p2p4slips'"
 # build the pigeon and Add pigeon to path
-git clone https://github.com/stratosphereips/p2p4slips && cd p2p4slips && /usr/local/go/bin/go build && export PATH=$PATH:$(pwd)
+git submodule init && git submodule update && cd p2p4slips && go build && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..
 
 
 # running slips for the first time
