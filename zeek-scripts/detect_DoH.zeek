@@ -33,7 +33,9 @@ event connection_established(c: connection)
 
 hook SSL::log_policy(rec: SSL::Info, id: Log::ID, filter: Log::Filter)
 {
-    if ( rec$server_name != "") {
+    # The ?$ operator can be used to check if a record field has a value or not
+    #(it returns  T if the field has a value, and F if not).
+    if (rec?$server_name && rec$server_name != "") {
         local hostname: string = rec$server_name;
 
         if (hostname in doh_hostnames){
