@@ -49,9 +49,12 @@ class Module(Module, multiprocessing.Process):
         if not os.path.exists(self.path_to_local_threat_intelligence_data):
             os.mkdir(self.path_to_local_threat_intelligence_data)
 
-
-
-    def set_evidence_malicious_ip(self, ip, uid, timestamp, ip_info: dict, profileid='', twid='', ip_state=''):
+    def set_evidence_malicious_ip(self, ip, uid,
+                                  timestamp,
+                                  ip_info: dict,
+                                  profileid='',
+                                  twid='',
+                                  ip_state=''):
         '''
         Set an evidence for a malicious IP met in the timewindow
         :param ip: the ip source file
@@ -107,7 +110,12 @@ class Module(Module, multiprocessing.Process):
         # add this ip to our MaliciousIPs hash in the database
         __database__.set_malicious_ip(ip, profileid, twid)
 
-    def set_evidence_domain(self, domain, uid, timestamp, domain_info: dict, is_subdomain, profileid='', twid=''):
+    def set_evidence_domain(self, domain, uid,
+                            timestamp,
+                            domain_info: dict,
+                            is_subdomain,
+                            profileid='',
+                            twid=''):
         '''
         Set an evidence for malicious domain met in the timewindow
         :param source_file: is the domain source file
@@ -239,7 +247,6 @@ class Module(Module, multiprocessing.Process):
         # Add all loaded malicious domains to the database
         __database__.add_domains_to_IoC(malicious_domains_dict)
         return True
-
 
     def __delete_old_source_IPs(self, file):
         """
@@ -374,10 +381,8 @@ class Module(Module, multiprocessing.Process):
                 __database__.set_TI_file_info(localfile, malicious_file_info)
                 return True
 
-
-
-
-    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
+    def set_maliciousIP_to_IPInfo(self, ip,
+                                  ip_description):
         '''
         Set malicious IP in IPsInfo.
         '''
@@ -396,7 +401,6 @@ class Module(Module, multiprocessing.Process):
         if protocol == 'ICMP' and ip_state == 'dstip':
             return True
         return False
-
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing

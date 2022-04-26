@@ -24,16 +24,22 @@ def create_ASN_Info_instance():
     return ASN_Info
 
 #ASN unit tests
-def test_get_asn_info_from_geolite(outputQueue, database):
+def test_get_asn_info_from_geolite(database):
     ASN_info = create_ASN_Info_instance()
     # check an ip that we know is in the db
     assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == {'asn': {'asnorg': 'ATT-INTERNET4'}}
     # test  asn info not found in geolite
     assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {'asn': {'asnorg': 'Unknown'}}
 
-def test_cache_ip_range(outputQueue, database):
+def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
     assert ASN_info.cache_ip_range('8.8.8.8') == True
+
+def test_get_cached_asn(database):
+    ASN_info = create_ASN_Info_instance()
+    database.set_asn_cache('AS123', '192.168.1.0/24')
+    assert ASN_info.get_cached_asn('192.168.1.1') == 'AS123'
+
 
 #RDNS unit tests
 

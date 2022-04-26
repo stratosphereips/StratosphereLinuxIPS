@@ -34,7 +34,8 @@ import shutil
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
     def __init__(self, outputqueue, profilerqueue, input_type,
-                 input_information, config, packet_filter, zeek_or_bro):
+                 input_information, config, packet_filter,
+                 zeek_or_bro, line_type):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
@@ -42,6 +43,8 @@ class InputProcess(multiprocessing.Process):
         # Start the DB
         __database__.start(self.config)
         self.input_type = input_type
+        # in case of reading from stdin, the user mst tell slips what type of lines is the input
+        self.line_type = line_type
         self.given_path = input_information
         self.zeek_folder = './zeek_files'
         self.name = 'InputProcess'
@@ -320,13 +323,21 @@ class InputProcess(multiprocessing.Process):
 
     def read_from_stdin(self):
         try:
-            self.print('Receiving flows from the stdin.', 3, 0)
+            self.print('Receiving flows from the stdin.')
             # By default read the stdin
             sys.stdin.close()
             sys.stdin = os.fdopen(0, 'r')
             file_stream = sys.stdin
             line = {'type': 'stdin'}
             for t_line in file_stream:
+                if t_line == '\n':
+                    continue
+                # tell profilerprocess the type of line the user gave slips
+                line['line_type'] = self.line_type
+                # profilerprocess expects a dict if the type of line is zeek
+                if self.line_type == 'zeek':
+                    t_line = json.loads(t_line)
+
                 line['data'] = t_line
                 self.print(f'	> Sent Line: {t_line}', 0, 3)
                 self.profilerqueue.put(line)
@@ -500,7 +511,7 @@ class InputProcess(multiprocessing.Process):
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
-            if not self.given_path or self.given_path is '-':
+            if self.input_type == 'stdin':
                 self.read_from_stdin()
             elif self.input_type is 'zeek_folder':
                 # is a zeek folder

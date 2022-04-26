@@ -122,7 +122,7 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'high'
         category = 'Anomaly.Behaviour'
         confidence = 1
-        description = f'using incompatible user-agent: "{user_agent}" ' \
+        description = f'using incompatible user-agent: {user_agent} ' \
                       f'while connecting to {host}{uri}. ' \
                       f'IP has MAC vendor: {vendor.capitalize()}'
         if not twid:
@@ -141,7 +141,7 @@ class Module(Module, multiprocessing.Process):
             return False
         vendor = vendor.lower()
 
-        user_agent:str = __database__.get_user_agent_from_profile(profileid)
+        user_agent: dict = __database__.get_user_agent_from_profile(profileid)
         if not user_agent:
             return False
         os_type = user_agent.get('os_type', '').lower()
@@ -235,10 +235,9 @@ class Module(Module, multiprocessing.Process):
         __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
-
     def extract_info_from_UA(self, user_agent, profileid):
         """
-        Zeek sometimes collects infpo about a specific UA, in this case the UA starts with
+        Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
         if __database__.get_user_agent_from_profile(profileid) != None:
@@ -257,6 +256,7 @@ class Module(Module, multiprocessing.Process):
         })
         UA_info = json.dumps(UA_info)
         __database__.add_user_agent_to_profile(profileid, UA_info)
+        return UA_info
 
     def check_multiple_UAs(self, cached_ua: dict, user_agent: dict, timestamp, profileid, twid, uid):
         """
@@ -267,14 +267,16 @@ class Module(Module, multiprocessing.Process):
         if not cached_ua or not user_agent:
             return False
 
-        cached_ua = cached_ua['user_agent']
+        os_type = cached_ua['os_type']
+        os_name = cached_ua['os_name']
         # todo now the first UA seen is considered the only valid one and slips
         #  will setevidence everytime another one is used, is that correct?
-        for keyword in cached_ua:
+        for keyword in (os_type, os_name):
             # loop through each word in UA
             if keyword in user_agent:
-                # for example if the cached UA is Microsoft NCSI and the current is Microsoft BITS/7.5
-                # we will find the keyword 'microsoft' in both keywords, so we shouldn't alert
+                # for example if the os of the cached UA is Linux and the current UA
+                # is Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0)
+                # we will find the keyword 'Linux' in both UAs, so we shouldn't alert
                 return False
 
         type_detection = 'srcip'
@@ -288,7 +290,7 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                  description, timestamp, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
-
+        return True
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 

@@ -15,8 +15,11 @@ def create_inputProcess_instance(outputQueue, profilerQueue, input_information, 
                                 profilerQueue,
                                 input_type,
                                 input_information,
-                                config, None, 'zeek')
-    inputProcess.bro_timeout=1
+                                config,
+                                None,
+                                'zeek',
+                                False)
+    inputProcess.bro_timeout = 1
     # override the self.print function to avoid broken pipes
     inputProcess.print = do_nothing
     inputProcess.stop_queues = do_nothing

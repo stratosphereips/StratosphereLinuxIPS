@@ -205,6 +205,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                         pkts_sent += dstports[dport]
                     if pkts_sent > 10:
                         confidence = 1
+                    elif pkts_sent == 0:
+                        # if the sum of all pkts sent TO these IPs on these dports
+                        # are 0, then this is not a portscan
+                        return
                     else:
                         # Between threshold and 10 pkts compute a kind of linear grow
                         confidence = pkts_sent / 10.0

@@ -15,6 +15,7 @@ import platform
 import re
 import ast
 from uuid import uuid4
+from slips_files.common.slips_utils import utils
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -33,7 +34,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame'}
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software'}
 
     """ Database object management """
     def __init__(self):
@@ -44,9 +45,9 @@ class Database(object):
         self.malicious_label = 'malicious'
         self.sudo = 'sudo '
         self.running_in_docker = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+        self.sudo = 'sudo '
         if self.running_in_docker:
-            self.sudo =''
-
+            self.sudo = ''
 
 
     def read_configuration(self):
@@ -87,6 +88,13 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # if we failed to read a value, it will be enabled by default.
             self.disabled_detections  = []
+
+        # get home network from slips.conf
+        try:
+            self.home_network = self.config.get('parameters', 'home_network')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.home_network = utils.home_network_ranges
 
     def start(self, config):
         """ Start the DB. Allow it to read the conf """
@@ -179,14 +187,38 @@ class Database(object):
         """ Set the output queue"""
         self.outputqueue = outputqueue
 
+    def should_add(self, profileid: str) -> bool:
+        """
+        determine whether we should add the given profile to the db or not based on the home_network param
+        is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
+        """
+        # make sure the user specified a home network
+        if self.home_network == utils.home_network_ranges:
+            # no home_network is specified
+            return True
+
+        ip = profileid.split(self.separator)[1]
+        try:
+            ip_obj = ipaddress.IPv4Address(ip)
+        except ipaddress.AddressValueError:
+            ip_obj = ipaddress.IPv6Address(ip)
+
+        if ip_obj in ipaddress.ip_network(self.home_network):
+            return True
+
+        return False
+
+
+
     def addProfile(self, profileid, starttime, duration):
         """
-        Add a new profile to the DB. Both the list of profiles and the hasmap of profile data
+        Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
         Profiles are stored in two structures. A list of profiles (index) and individual hashmaps for each profile (like a table)
         Duration is only needed for registration purposes in the profile. Nothing operational
         """
         try:
-            if not self.r.sismember('profiles', str(profileid)):
+            # make sure we don't add public ips if the user specified a home_network
+            if not self.r.sismember('profiles', str(profileid)) and self.should_add(profileid):
                 # Add the profile to the index. The index is called 'profiles'
                 self.r.sadd('profiles', str(profileid))
                 # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -208,17 +240,45 @@ class Database(object):
             self.outputqueue.put('00|database|{}'.format(type(inst)))
             self.outputqueue.put('00|database|{}'.format(inst))
 
-    def add_user_agent_to_profile(self, profileid, user_agent: str):
+    def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
+        :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
         self.r.hmset(profileid, {'User-agent': user_agent})
+
+    def add_software_to_profile(self, profileid, software, version_major, version_minor):
+        """
+        Used to associate this profile with it's used software and version
+        """
+        sw_dict = {'software': software,
+                    'version-major': version_major,
+                    'version-minor': version_minor}
+        self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
+
+    def get_software_from_profile(self, profileid):
+        """
+        returns a dict with software, major_version, minor_version
+        """
+        if not profileid:
+            return False
+
+        used_software = self.r.hmget(profileid, 'used_software')[0]
+        if used_software:
+            used_software = json.loads(used_software)
+            return used_software
+
+
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
         Returns a dict of {'os_name',  'os_type', 'browser': , 'user_agent': }
         used by a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         user_agent = self.r.hmget(profileid, 'User-agent')[0]
         if user_agent:
             user_agent = json.loads(user_agent)
@@ -229,8 +289,17 @@ class Database(object):
         """
         Used to mark this profile as dhcp server
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
+
+        # returns a list of dhcp if the profile is in the db
+        profile_in_db = self.r.hmget(profileid, 'dhcp')
+        if not profile_in_db:
+            return False
+        is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
-        is_dhcp_set = self.r.hmget(profileid , 'dhcp')[0]
         if not is_dhcp_set:
             self.r.hmset(profileid, {'dhcp': 'true'})
 
@@ -240,11 +309,21 @@ class Database(object):
         """
         return self.r.hget('MAC', MAC)
 
+    def set_ipv6_of_profile(self, profileid, ip):
+        self.r.hmset(profileid, {'IPv6': json.dumps([ip])})
+
+    def set_ipv4_of_profile(self, profileid, ip):
+        self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
+
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
         :param MAC_info: dict containing mac address, hostname and vendor info
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         if '0.0.0.0' in profileid:
             return False
 
@@ -263,6 +342,7 @@ class Database(object):
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
             self.r.hmset(profileid, MAC_info)
+            return True
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -279,23 +359,33 @@ class Database(object):
             if (validators.ipv6(incoming_ip)
                     and validators.ipv4(found_ip)):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
-                self.r.hmset(profileid, {'IPv4': found_ip})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': json.dumps([incoming_ip])})
+                self.set_ipv4_of_profile(profileid, found_ip)
+                self.set_ipv6_of_profile(f'profile_{found_ip}', incoming_ip)
+                # add the incoming ipv6 to the list of ips that belong to this mac
+                cached_ips.append(incoming_ip)
+                cached_ips = json.dumps(cached_ips)
+                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
             elif (validators.ipv6(found_ip)
                   and validators.ipv4(incoming_ip)):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
-                self.r.hmset(profileid, {'IPv6': json.dumps([found_ip])})
-                self.r.hmset(f'profileid_{found_ip}', {'IPv4': incoming_ip})
+                self.set_ipv6_of_profile(profileid, found_ip)
+                self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
 
             elif (validators.ipv6(found_ip) and validators.ipv6(incoming_ip)):
                 # a computer is allowed to have many ipv6
                 # add this ipv6 to the list of ipv6 of the incoming ip
 
+                ipv6 = self.r.hmget(profileid, 'IPv6')
+                if not ipv6 or ipv6 == [None] :
+                    ipv6 = json.loads(ipv6)
+                    ipv6.append(incoming_ip)
+                    ipv6 = json.dumps(ipv6)
+                self.set_ipv6_of_profile(profileid, ipv6)
+
                 # add this ipv6 to the list of ipv6 of the found ip
-                ipv6 = self.r.hmget(f'profileid_{found_ip}', 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    # first time finding an ipv6 for this profile
+                ipv6 = self.r.hmget(f'profile_{found_ip}', 'IPv6')
+                if not ipv6 or ipv6 == [None] :
                     ipv6 = json.dumps([incoming_ip])
                 else:
                     # found a list of ipv6 in the db
@@ -303,22 +393,22 @@ class Database(object):
                     ipv6.append(incoming_ip)
                     ipv6 = json.dumps(ipv6)
 
-                self.r.hmset(f'profileid_{found_ip}', {'IPv6': ipv6})
+                self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
+
             else:
                 # both are ipv4 and are claiming to have the same mac address
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
 
-            # add the incoming ipv6 to the list of ips that belong to this mac
-            cached_ips.append(incoming_ip)
-            cached_ips = json.dumps(cached_ips)
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
-
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
         Returns MAC info about a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         MAC_info = self.r.hmget(profileid, 'MAC')[0]
         return MAC_info
 
@@ -326,6 +416,10 @@ class Database(object):
         """
         Returns MAC vendor about a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
         return MAC_vendor
 
@@ -333,6 +427,10 @@ class Database(object):
         """
         Returns hostname about a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         hostname = self.r.hmget(profileid, 'host_name')[0]
         return hostname
 
@@ -340,6 +438,10 @@ class Database(object):
         """
         Returns ipv4 about a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         ipv4 = self.r.hmget(profileid, 'IPv4')[0]
         return ipv4
 
@@ -347,6 +449,10 @@ class Database(object):
         """
         Returns ipv6 about a certain profile or None
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         ipv6 = self.r.hmget(profileid, 'IPv6')[0]
         return ipv6
 
@@ -355,6 +461,10 @@ class Database(object):
         Given an ipv4, returns the ipv6 of the same computer
         Given an ipv6, returns the ipv4 of the same computer
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         srcip = profileid.split('_')[1]
         ip = False
         if validators.ipv4(srcip):
@@ -391,6 +501,11 @@ class Database(object):
         Returns:
         A json formated representation of the hashmap with all the data of the profile
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
+
         profile = self.r.hgetall(profileid)
         if profile != set():
             return profile
@@ -402,6 +517,11 @@ class Database(object):
         Receives a profile id and returns the list of all the TW in that profile
         Returns a list of tuples (twid, ts) or an empty list
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
+
         data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
         return data
 
@@ -409,6 +529,10 @@ class Database(object):
         """
         Receives a profile id and returns the number of all the TWs in that profile
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
@@ -449,6 +573,10 @@ class Database(object):
 
     def hasProfile(self, profileid):
         """ Check if we have the given profile """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         return self.r.sismember('profiles', profileid)
 
     def getProfilesLen(self):
@@ -457,11 +585,19 @@ class Database(object):
 
     def getLastTWforProfile(self, profileid):
         """ Return the last TW id and the time for the given profile id """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
         return data
 
     def getFirstTWforProfile(self, profileid):
         """ Return the first TW id and the time for the given profile id """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
         return data
 
@@ -550,6 +686,10 @@ class Database(object):
 
     def getAmountTW(self, profileid):
         """ Return the amount of tw for this profile id """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         return self.r.zcard('tws' + profileid)
 
     def getModifiedTWSinceTime(self, time):
@@ -677,6 +817,7 @@ class Database(object):
             sbytes = columns['sbytes']
             pkts = columns['pkts']
             spkts = columns['spkts']
+            dpkts = columns.get('dpkts', 0)
             state = columns['state']
             proto = columns['proto'].upper()
             daddr = columns['daddr']
@@ -739,16 +880,17 @@ class Database(object):
                 self.publish("p2p_data_request", json.dumps(data_to_send))
 
 
-            if role == 'Client':
-                # The profile corresponds to the src ip that received this flow
-                # The dstip is here the one receiving data from your profile
-                # So check the dst ip
-                pass
-            elif role == 'Server':
-                # The profile corresponds to the dst ip that received this flow
-                # The srcip is here the one sending data to your profile
-                # So check the src ip
-                pass
+            # if role == 'Client':
+            #     # The profile corresponds to the src ip that received this flow
+            #     # The dstip is here the one receiving data from your profile
+            #     # So check the dst ip
+            #     pass
+            # elif role == 'Server':
+            #     # The profile corresponds to the dst ip that received this flow
+            #     # The srcip is here the one sending data to your profile
+            #     # So check the src ip
+            #     pass
+
             #############
             # 1- Count the dstips, and store the dstip in the db of this profile+tw
             self.print('add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(role, type_host_key, str(ip_as_obj), profileid, twid), 3, 0)
@@ -784,10 +926,12 @@ class Database(object):
             # Get the state. Established, NotEstablished
             summaryState = self.getFinalStateFromFlags(state, pkts)
             # Get the previous data about this key
-            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key, summaryState, proto, role, 'IPs')
+            prev_data = self.getDataFromProfileTW(profileid, twid, type_host_key,
+                                                  summaryState, proto, role, 'IPs')
             try:
                 innerdata = prev_data[str(ip_as_obj)]
-                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport, innerdata), 3, 0)
+                self.print('add_ips(): Adding for dst port {}. PRE Data: {}'.format(dport,
+                                                                                    innerdata), 3, 0)
                 # We had this port
                 # We need to add all the data
                 innerdata['totalflows'] += 1
@@ -796,10 +940,10 @@ class Database(object):
                 # Store for each dstip, the dstports
                 temp_dstports= innerdata['dstports']
                 try:
-                    temp_dstports[str(dport)] += int(pkts)
+                    temp_dstports[str(dport)] += int(dpkts)
                 except KeyError:
                     # First time for this ip in the inner dictionary
-                    temp_dstports[str(dport)] = int(pkts)
+                    temp_dstports[str(dport)] = int(dpkts)
                 innerdata['dstports'] = temp_dstports
                 prev_data[str(ip_as_obj)] = innerdata
                 self.print('add_ips() Adding for dst port {}. POST Data: {}'.format(dport, innerdata),3,0)
@@ -812,7 +956,7 @@ class Database(object):
                 innerdata['stime'] = starttime
                 innerdata['uid'] = uid
                 temp_dstports = {}
-                temp_dstports[str(dport)] = int(pkts)
+                temp_dstports[str(dport)] = int(dpkts)
                 innerdata['dstports'] = temp_dstports
                 self.print('add_ips() First time for dst port {}. Data: {}'.format(dport, innerdata),3,0)
                 prev_data[str(ip_as_obj)] = innerdata
@@ -1781,6 +1925,10 @@ class Database(object):
         Return a list of all the flows in this profileid
         [{'uid':flow},...]
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return []
         profileid_flows= []
         # get all tws in this profile
         for twid, time in self.getTWsfromProfile(profileid):
@@ -1809,6 +1957,10 @@ class Database(object):
         """
         Get all the contacted IPs in a given profile and TW
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return {}
         all_flows = self.get_all_flows_in_profileid_twid(profileid,twid)
         if not all_flows:
             return {}
@@ -1826,6 +1978,10 @@ class Database(object):
         Returns the flow in the specific time
         The format is a dictionary
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return {}
         data = {}
         temp = self.r.hget(profileid + self.separator + twid + self.separator + 'flows', uid)
         data[uid] = temp
@@ -2148,10 +2304,18 @@ class Database(object):
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
         """ Add a line to the time line of this profileid and twid """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return
         self.print('Adding timeline for {}, {}: {}'.format(profileid, twid, data), 3, 0)
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = json.dumps(data)
@@ -2163,12 +2327,20 @@ class Database(object):
 
     def get_timeline_last_line(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return []
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = self.r.zrange(key, -1, -1)
         return data
 
     def get_timeline_last_lines(self, profileid, twid, first_index: int) -> Tuple[str, int]:
         """ Get only the new items in the timeline."""
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return [],[]
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         # The the amount of lines in this list
         last_index = self.r.zcard(key)
@@ -2178,6 +2350,10 @@ class Database(object):
 
     def get_timeline_all_lines(self, profileid, twid):
         """ Add a line to the time line of this profileid and twid """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return []
         key = str(profileid + self.separator + twid + self.separator + 'timeline')
         data = self.r.zrange(key, 0, -1)
         return data
@@ -2212,7 +2388,7 @@ class Database(object):
         """
         Save in the DB a port with its organization and the ip/ range used by this organization
         :param portproto: portnumber.lower() + / + protocol
-        :param ip: can be a single org ip, or a range
+        :param ip: can be a single org ip, or a range or ''
         """
         org_info = {'org_name': organization, 'ip': ip}
         org_info = json.dumps(org_info)
@@ -2269,6 +2445,10 @@ class Database(object):
         A module label is a label set by a module, and not
         a groundtruth label
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
         data = json.dumps(data)
@@ -2278,6 +2458,10 @@ class Database(object):
         """
         Get labels set by modules in the profile.
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return {}
         data = self.r.hget(profileid, 'modules_labels')
         if data:
             data = json.loads(data)
@@ -2376,6 +2560,10 @@ class Database(object):
         Save in DB malicious IP found in the traffic
         with its profileid and twid
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         # Retrieve all profiles and twis, where this malicios IP was met.
         ip_profileid_twid = self.get_malicious_ip(ip)
         try:
@@ -2394,6 +2582,10 @@ class Database(object):
         Save in DB a malicious domain found in the traffic
         with its profileid and twid
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         # get all profiles and twis where this IP was met
         domain_profiled_twid = __database__.get_malicious_domain(domain)
         try:
@@ -2593,6 +2785,10 @@ class Database(object):
 
     def getReconnectionsForTW(self, profileid, twid):
         """ Get the reconnections for this TW for this Profile """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         data = self.r.hget(profileid + self.separator + twid, 'Reconnections')
         if data:
             data = json.loads(data)
@@ -2609,6 +2805,10 @@ class Database(object):
         """
         Return the timestamp of the flow
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         timestamp = ''
         if uid:
             try:
@@ -2640,15 +2840,26 @@ class Database(object):
         else:
             return domain_description, False
 
-    def getDataFromProfileTW(self, profileid: str, twid: str, direction: str, state : str, protocol: str, role: str, type_data: str) -> dict:
+    def getDataFromProfileTW(self, profileid: str, twid: str,
+                             direction: str, state : str,
+                             protocol: str, role: str,
+                             type_data: str) -> dict:
         """
-        Get the info about a certain role (Client or Server), for a particular protocol (TCP, UDP, ICMP, etc.) for a particular State (Established, etc.)
-        direction: 'Dst' or 'Src'. This is used to know if you want the data of the src ip or ports, or the data from the dst ips or ports
+        Get the info about a certain role (Client or Server),
+        for a particular protocol (TCP, UDP, ICMP, etc.) for a
+        particular State (Established, etc.)
+        direction: 'Dst' or 'Src'. This is used to know if you
+        want the data of the src ip or ports, or the data from
+        the dst ips or ports
         state: can be 'Established' or 'NotEstablished'
         protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
         role: can be 'Client' or 'Server'
         type_data: can be 'Ports' or 'IPs'
         """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         try:
             self.print('Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(profileid, twid, direction, state, protocol, role, type_data), 3, 0)
             key = direction + type_data + role + protocol + state
@@ -2696,10 +2907,18 @@ class Database(object):
         return ip_description
 
     def set_profile_as_malicious(self, profileid: str, description: str) -> None:
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         # Add description to this malicious ip profile.
         self.r.hset(profileid, 'labeled_as_malicious', description)
 
     def is_profile_malicious(self, profileid: str) -> str:
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
         data = self.r.hget(profileid, 'labeled_as_malicious')
         return data
 

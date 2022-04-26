@@ -46,6 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
+        self.c9 = __database__.subscribe('new_software')
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
@@ -79,14 +80,13 @@ class Module(Module, multiprocessing.Process):
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
 
-
     def is_ignored_ip(self, ip) -> bool:
         """
-        This function checks if an IP is an special list of IPs that
+        This function checks if an IP is a special list of IPs that
         should not be alerted for different reasons
         """
         try:
-            ip_obj =  ipaddress.ip_address(ip)
+            ip_obj = ipaddress.ip_address(ip)
             # Is the IP multicast, private? (including localhost)
             # local_link or reserved?
             # The broadcast address 255.255.255.255 is reserved.
@@ -149,23 +149,18 @@ class Module(Module, multiprocessing.Process):
         """
         if type(dur) == str:
             dur = float(dur)
+        module_name = "flowalerts-long-connection"
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
             # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
-            module_name = "flowalerts-long-connection"
-            module_label = self.malicious_label
 
-            __database__.set_module_label_to_flow(profileid,
-                                                  twid,
-                                                  uid,
-                                                  module_name,
-                                                  module_label)
+            module_label = self.malicious_label
             self.helper.set_evidence_long_connection(daddr, dur, profileid, twid, uid, timestamp, ip_state='ip')
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
-            module_name = "flowalerts-long-connection"
             module_label = self.normal_label
-            __database__.set_module_label_to_flow(profileid,
+
+        __database__.set_module_label_to_flow(profileid,
                                                   twid,
                                                   uid,
                                                   module_name,
@@ -176,7 +171,7 @@ class Module(Module, multiprocessing.Process):
         P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
         OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
         """
-        if proto.lower() == 'udp' and int(dport)>30000:
+        if proto.lower() == 'udp' and int(dport) > 30000:
             try:
                 # trying to connct to 1 ip on more than 5 unknown ports
                 if self.p2p_daddrs[daddr] >= 6:
@@ -193,7 +188,6 @@ class Module(Module, multiprocessing.Process):
                 return True
 
         return False
-
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
@@ -237,14 +231,17 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_unknown_port(self, dport, proto, daddr, profileid, twid, uid, timestamp):
-        """ Checks dports that are not in our slips_files/ports_info/ files"""
+        """
+        Checks dports that are not in our
+        slips_files/ports_info/services.csv"""
         portproto = f'{dport}/{proto}'
         port_info = __database__.get_port_info(portproto)
         if port_info:
             # it's a known port
             return False
         # we don't have port info in our database
-        # is it a port that is known to be used by a specific organization
+        # is it a port that is known to be used by
+        # a specific organization
         if self.port_belongs_to_an_org(daddr, portproto, profileid):
             return False
 
@@ -254,6 +251,7 @@ class Module(Module, multiprocessing.Process):
             and not __database__.is_ftp_port(dport)):
             # we don't have info about this port
             self.helper.set_evidence_unknown_port(daddr, dport, proto, timestamp, profileid, twid, uid)
+            return True
 
     def check_if_resolution_was_made_by_different_version(self, profileid, daddr):
         """
@@ -281,7 +279,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # get the ips contacted by the other_ip
-        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profileid_{other_ip}', twid)
+        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profile_{other_ip}', twid)
         if not contacted_ips:
             return False
 
@@ -385,7 +383,6 @@ class Module(Module, multiprocessing.Process):
             org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
             if ip in org_ips:
                 return True
-
 
     def check_connection_without_dns_resolution(self, daddr, twid, profileid, timestamp, uid):
         """ Checks if there's a flow to a dstip that has no cached DNS answer """
@@ -533,6 +530,7 @@ class Module(Module, multiprocessing.Process):
                 self.connections_checked_in_dns_conn_timer_thread.remove(uid)
             except ValueError:
                 pass
+
     def check_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully
@@ -613,6 +611,30 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+
+    def check_multiple_ssh_clients(self, starttime, saddr, used_software, unparsed_version, major_v, minor_v, twid, uid):
+        """
+        function to check if this srcip was detected using a different ssh client versions before
+        """
+        profileid = f'profile_{saddr}'
+        # returns a dict with software, 'version-major', 'version-minor'
+        cached_ssh_versions: dict = __database__.get_software_from_profile(profileid)
+        if not cached_ssh_versions:
+            # we have no previous software info about this saddr in out db
+            return False
+        cached_software = cached_ssh_versions['software']
+        if cached_software != used_software:
+            # we need them both to be "SSH::CLIENT"
+            return False
+        cached_major_v = cached_ssh_versions['version-major']
+        cached_minor_v = cached_ssh_versions['version-minor']
+        cached_versions = f'{cached_major_v}_{cached_minor_v}'
+        current_versions = f'{major_v}_{minor_v}'
+        if cached_versions == current_versions:
+            # they're using the same ssh client version
+            return False
+        self.helper.set_evidence_multiple_ssh_versions(saddr, cached_versions, current_versions, starttime, twid, uid)
+        return True
 
 
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
@@ -1100,6 +1122,25 @@ class Module(Module, multiprocessing.Process):
                             else:
                                 # remove the first element so we can check the next 3 logins
                                 self.smtp_bruteforce_cache[profileid].pop(0)
+
+                # --- Detect multiple used SSH versions ---
+                message = self.c9.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_software'):
+                    flow = json.loads(message['data'])
+                    starttime = flow.get('starttime', '')
+                    saddr = flow.get('saddr', '')
+                    uid = flow.get('uid', '')
+                    twid = flow.get('twid', '')
+                    software_type = flow.get('software_type' , '')
+                    if 'ssh' not in software_type.lower():
+                        continue
+                    unparsed_version = flow.get('saddr', '')
+                    major_v = flow.get('version.major', '')
+                    minor_v = flow.get('version.minor', '')
+                    self.check_multiple_ssh_clients(starttime, saddr, software_type, unparsed_version, major_v, minor_v, twid, uid)
 
 
             except KeyboardInterrupt:

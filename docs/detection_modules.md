@@ -215,7 +215,7 @@ PortScanType2, Password_Guessing, MaliciousFlow,
 SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
  Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
-MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, 
+MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, MultipleSSHVersions
 DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin, 
 IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskScan
 

@@ -57,24 +57,24 @@ def test_add_ips(database):
 
 
 def test_add_port(database):
-    columns = {'dport':80,
-              'sport':88,
-              'totbytes':80,
-              'pkts':20,
-              'sbytes':30,
-              'bytes':30,
-              'spkts':70,
-              'state':'notestablished',
-              'proto':'TCP',
+    columns = {'dport': 80,
+              'sport': 88,
+              'totbytes': 80,
+              'pkts': 20,
+              'sbytes': 30,
+              'bytes': 30,
+              'spkts': 70,
+              'state': 'notestablished',
+              'proto': 'TCP',
               'saddr': '8.8.8.8',
               'daddr': test_ip,
-              'uid' : '1234',
+              'uid': '1234',
               'starttime': '20.0'}
-    database.add_port(profileid, twid, test_ip, columns, 'Server','Dst')
+    database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
     hash_key = profileid + '_' + twid
     added_ports = database.r.hgetall(hash_key)
-    assert 'SrcIPsServerTCPEstablished' in added_ports.keys()
-    assert test_ip in added_ports['SrcIPsServerTCPEstablished']
+    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
+    assert test_ip in added_ports['DstPortsServerTCPEstablished']
 
 def test_setEvidence(database):
     type_detection = 'ip'
@@ -169,3 +169,41 @@ def test_profile_moddule_labels(database):
     assert 'test' in labels
     assert labels['test'] == 'malicious'
 
+def test_add_mac_addr_to_profile(database):
+    ipv4 = '192.168.1.5'
+    profileid_ipv4 = f'profile_{ipv4}'
+    MAC_info = {'MAC': '00:00:5e:00:53:af'}
+    # first associate this ip with some mac
+    assert database.add_mac_addr_to_profile(profileid_ipv4,
+                                            MAC_info) == True
+    assert ipv4 in str(database.r.hget('MAC', MAC_info['MAC']))
+
+    # now claim that we found another profile
+    # that has the same mac as this one
+    # both ipv4
+    profileid = 'profile_192.168.1.6'
+    assert database.add_mac_addr_to_profile(profileid, MAC_info) == False
+    # this ip shouldnt be added to the profile as they're both ipv4
+    assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
+
+    # now claim that another ipv6 has this mac
+    ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    profileid_ipv6 = f'profile_{ipv6}'
+    database.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
+    # make sure the mac is associated with his ipv6
+    assert ipv6 in database.r.hget('MAC', MAC_info['MAC'])
+    # make sure the ipv4 is associated with this
+    # ipv6 profile
+    assert ipv4 in str(database.r.hmget(profileid_ipv6, 'IPv4'))
+
+    # make sure the ipv6 is associated with the
+    # profile that has the same ipv4 as the mac
+    assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
+
+def test_get_the_other_ip_version(database):
+    # profileid is ipv4
+    ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    database.set_ipv6_of_profile(profileid, ipv6)
+    # the other ip version is ipv6
+    other_ip = json.loads(database.get_the_other_ip_version(profileid))
+    assert  other_ip[0] == ipv6

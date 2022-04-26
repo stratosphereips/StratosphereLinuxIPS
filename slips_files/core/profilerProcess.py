@@ -385,9 +385,17 @@ class ProfilerProcess(multiprocessing.Process):
                 # No
                 data = line
                 file_type = ''
-                self.print('\tData did not arrived in json format from the input', 0, 1)
+                self.print('\tData did is not in json format ', 0, 1)
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
+
+            if file_type == 'stdin':
+                # don't determine the type of line given sing define_type(),
+                # the type of line is taken directly from the user
+                # because define_type expects zeek lines in a certain format and the user won't reformat the zeek line
+                # before giving it to slips
+                self.input_type = line['line_type']
+                return self.input_type
             # In the case of Zeek from an interface or pcap,
             # the structure is a JSON
             # So try to convert into a dict
@@ -398,7 +406,6 @@ class ProfilerProcess(multiprocessing.Process):
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
-                return self.input_type
 
             else:
                 # data is a str
@@ -409,7 +416,8 @@ class ProfilerProcess(multiprocessing.Process):
                     if data['event_type']:
                         # found the key, is suricata
                         self.input_type = 'suricata'
-                except ValueError:
+                except (ValueError, KeyError):
+                    data = str(data)
                     # not suricata, data is a tab or comma separated str
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
@@ -431,8 +439,7 @@ class ProfilerProcess(multiprocessing.Process):
                         else:
                             self.separator = '	'
                             self.input_type = 'zeek-tabs'
-
-                return self.input_type
+            return self.input_type
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'\tProblem in define_type() line {exception_line}', 0, 1)
@@ -1007,15 +1014,21 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         file_type = new_line['type']
-        # if the zeek dir given to slips has 'conn' in it's name,
-        # slips thinks it's reading a conn file
-        # because we use the file path as the file 'type'
-        # to fix this, only use the file name as file 'type'
-        file_type = file_type.split('/')[-1]
+        # all zeek lines recieved from stdin should be of type conn
+        if file_type == 'stdin' and new_line.get('line_type', False) == 'zeek':
+            file_type = 'conn'
+        else:
+            # if the zeek dir given to slips has 'conn' in it's name,
+            # slips thinks it's reading a conn file
+            # because we use the file path as the file 'type'
+            # to fix this, only use the file name as file 'type'
+            file_type = file_type.split('/')[-1]
+
         # Generic fields in Zeek
         self.column_values = {}
         # We need to set it to empty at the beggining so any new flow has the key 'type'
         self.column_values['type'] = ''
+
 
         # to set the default value to '' if ts isn't found
         ts = line.get('ts',False)
@@ -1071,7 +1084,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # so convert to a list
                 self.column_values.update({'answers' : [self.column_values['answers']] })
 
-        elif 'http' in  file_type:
+        elif 'http' in file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
             self.column_values.update({'type' : 'http',
                  'method' : line.get('method',''),
@@ -1224,13 +1237,26 @@ class ProfilerProcess(multiprocessing.Process):
                                 'src_hw' : line.get('orig_hw',''),
                                 'operation' : line.get('operation','') })
         elif 'known_services' in file_type:
-            self.column_values.update({'type' : 'known_services',
+            self.column_values.update({'type': 'known_services',
                                 'saddr' : line.get('host', ''),
                                 # this file doesn't have a daddr field, but we need it in add_flow_to_profile
                                 'daddr' : '0.0.0.0',
                                 'port_num' : line.get('port_num', ''),
                                 'port_proto' : line.get('port_proto', ''),
                                 'service' : line.get('service', '')})
+        elif 'software' in file_type:
+            software_type = line.get('software_type', '')
+            # store info about everything except http:broswer
+            # we're already reading browser UA from http.log
+            if software_type == "HTTP::BROWSER":
+                return True
+            self.column_values.update({'type' : 'software',
+                                       'saddr': line.get('host', ''),
+                                       'software_type': software_type,
+                                       'unparsed_version': line.get('unparsed_version', ''),
+                                       'version.major':  line.get('version.major', ''),
+                                       'version.minor':   line.get('version.minor', '')
+                                       })
         else:
             return False
         return True
@@ -1335,6 +1361,7 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Process the line and extract columns for nfdump
         """
+        self.separator = ','
         self.column_values = {
             'starttime' : False,
             'endtime' : False,
@@ -1670,21 +1697,21 @@ class ProfilerProcess(multiprocessing.Process):
             # Define which type of flows we are going to process
 
             if not self.column_values:
-                    return True
+                return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp'):
+                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
                 # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
                 return True
 
-
             try:
                 # seconds.
                 # make sure starttime is a datetime obj (not a str) so we can get the timestamp
-                if type(self.column_values['starttime']) == str:
-                    datetime_obj = datetime.strptime( self.column_values['starttime'] , self.timeformat)
+                ts = self.column_values['starttime']
+                if type(ts) == str:
+                    datetime_obj = datetime.strptime(ts, self.timeformat)
                     starttime = datetime_obj.timestamp()
                 else:
                     starttime = self.column_values['starttime'].timestamp()
@@ -1789,7 +1816,17 @@ class ProfilerProcess(multiprocessing.Process):
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
-
+            elif 'software' in flow_type:
+                __database__.add_user_agent_to_profile(profileid, self.column_values['unparsed_version'])
+                __database__.add_software_to_profile(profileid,
+                                                     self.column_values['software_type'],
+                                                     self.column_values['version.major'],
+                                                     self.column_values['version.minor'])
+                # change the datetime to epoch to be able to use json
+                epoch_time = self.column_values['starttime'].timestamp()
+                self.column_values.update({'starttime': epoch_time,
+                                           'twid': self.get_timewindow(epoch_time, profileid)})
+                __database__.publish('new_software', json.dumps(self.column_values))
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -2321,7 +2358,12 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # First check if we are not in the last TW. Since this will be the majority of cases
+
             try:
+                if not profileid:
+                    # profileid is None if we're dealing with a profile
+                    # outside of home_network when this param is given
+                    return False
                 [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
@@ -2401,24 +2443,29 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 line = self.inputqueue.get()
                 if 'stop' in line:
-                    # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                    # if timewindows are not updated for a long time (see at logsProcess.py),
+                    # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     self.shutdown_gracefully()
-                    self.print("Stopping Profiler Process. Received {} lines ({})".format(rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 2,0)
+                    self.print("Stopping Profiler Process. Received {} lines ({})".format(
+                        rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 2,0)
                     return True
 
                 # Received new input data
                 # Extract the columns smartly
                 self.print("< Received Line: {}".format(line),2,0)
                 rec_lines += 1
+
                 if not self.input_type:
                     # Find the type of input received
                     # This line will be discarded because
                     self.define_type(line)
                     # We should do this before checking the type of input so we don't lose the first line of input
+
                 # What type of input do we have?
                 if not self.input_type:
-                    # can't definee the type of input
+                    # the above define_type can't define the type of input
                     self.print("Can't determine input type.",5,6)
+
                 elif self.input_type == 'zeek':
                     # self.print('Zeek line')
                     self.process_zeek_input(line)
