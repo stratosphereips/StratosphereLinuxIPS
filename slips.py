@@ -580,6 +580,7 @@ if __name__ == '__main__':
                 print("Can't use -s and -b together")
                 terminate_slips()
 
+        line_type = False
         # Check the type of input
         if args.interface:
             input_information = args.interface
@@ -592,7 +593,6 @@ if __name__ == '__main__':
                 os._exit(-1)
 
             if input_information != 'stdin':
-                line_type = False
                 # default value
                 input_type = 'file'
                 # Get the type of file
