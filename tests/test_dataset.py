@@ -50,10 +50,10 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
 
 @pytest.mark.skipif( 'nfdump' not in shutil.which('nfdump'), reason="nfdump is not installed")
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
-     ('dataset/test2.binetflow',1,'C&C channel','test2/'),
-    ('dataset/test3.binetflow',20,'horizontal port scan to port  3389','test3/'),
-      ('dataset/test4.binetflow',2,'horizontal port scan to port  81','test4/'),
-     ('dataset/test5.binetflow', 4 , 'Long Connection','test5/')])
+     ('dataset/test2.binetflow', 1,'C&C channel','test2/'),
+    ('dataset/test3.binetflow', 20,'horizontal port scan to port  3389','test3/'),
+      ('dataset/test4.binetflow', 2,'horizontal port scan to port  81','test4/'),
+     ('dataset/test5.binetflow', 4, 'Long Connection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:
         os.mkdir(output_dir)

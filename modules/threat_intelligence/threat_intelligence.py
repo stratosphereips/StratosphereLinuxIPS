@@ -189,7 +189,7 @@ class Module(Module, multiprocessing.Process):
 
             # skip comments
             while True:
-                line_number+=1
+                line_number += 1
                 line = local_ti_file.readline()
                 if not line.startswith('#'):
                     break
@@ -218,7 +218,8 @@ class Module(Module, multiprocessing.Process):
                         # Store the ip in our local dict
                         malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
                                                                           'source': data_file_name,
-                                                                          'threat_level': threat_level})
+                                                                          'threat_level': threat_level,
+                                                                          'tags': ''})
                 except ipaddress.AddressValueError:
                     # Is it ipv6?
                     try:
@@ -228,7 +229,8 @@ class Module(Module, multiprocessing.Process):
                             self.print(f'The data in line {line_number} is valid and is ipv6: {ioc}', 2,0)
                             malicious_ips_dict[str(ip_address)] = json.dumps({'description': description,
                                                                               'source': data_file_name,
-                                                                              'threat_level': threat_level})
+                                                                              'threat_level': threat_level,
+                                                                              'tags': ''})
                     except ipaddress.AddressValueError:
                         # It does not look as IP address.
                         # So it should be a domain
