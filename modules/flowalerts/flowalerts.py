@@ -517,7 +517,7 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
 
-    def check_ssh(self, message):
+    def check_successful_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully
         """
@@ -557,7 +557,7 @@ class Module(Module, multiprocessing.Process):
                         #self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
                         self.connections_checked_in_ssh_timer_thread.append(uid)
                         params = [message]
-                        timer = TimerThread(15, self.check_ssh, params)
+                        timer = TimerThread(15, self.check_successful_ssh, params)
                         timer.start()
             else:
                 # Try Slips method to detect if SSH was successful.
@@ -578,6 +578,7 @@ class Module(Module, multiprocessing.Process):
                         except ValueError:
                             pass
                         return True
+
                     else:
                         # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
                         pass
@@ -589,7 +590,7 @@ class Module(Module, multiprocessing.Process):
                         #self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
                         self.connections_checked_in_ssh_timer_thread.append(uid)
                         params = [message]
-                        timer = TimerThread(15, self.check_ssh, params)
+                        timer = TimerThread(15, self.check_successful_ssh, params)
                         timer.start()
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -597,6 +598,7 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            return False
 
     def check_multiple_ssh_clients(self, starttime, saddr, used_software, unparsed_version, major_v, minor_v, twid, uid):
         """
@@ -626,9 +628,12 @@ class Module(Module, multiprocessing.Process):
     def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
+        alerts when 10 15 20 etc. nxdomains are found
         """
 
-        if not 'NXDOMAIN' in rcode_name or 'in-addr.arpa' in query or query.endswith('.local'):
+        if not 'NXDOMAIN' in rcode_name \
+                or 'in-addr.arpa' in query \
+                or query.endswith('.local'):
             return False
 
         profileid_twid = f'{profileid}_{twid}'
@@ -884,7 +889,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_ssh'):
-                    self.check_ssh(message)
+                    self.check_successful_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = self.c3.get_message(timeout=self.timeout)

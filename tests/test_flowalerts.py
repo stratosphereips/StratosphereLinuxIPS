@@ -129,3 +129,17 @@ def test_check_dns_arpa_scan(outputQueue, database):
 	assert is_arpa_scan == True
 
 
+# check_multiple_ssh_clients is tested in test_dataset
+def test_detect_DGA(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	rcode_name = 'NXDOMAIN'
+	for i in range(10):
+		dga_detected = flowalerts.detect_DGA(rcode_name,
+							 f'example{i}.com',
+							 timestamp,
+							 profileid,
+							 twid,
+							 uid)
+	assert dga_detected == True
+
+
