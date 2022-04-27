@@ -483,7 +483,8 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             lines = self.read_zeek_files()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(lines))
+            self.print("We read everything. No more input. "
+                       "Stopping input process. Sent {} lines".format(lines))
 
             # Stop the observer
             try:
