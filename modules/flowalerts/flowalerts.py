@@ -271,6 +271,24 @@ class Module(Module, multiprocessing.Process):
             # It can be that the dns_resolution sometimes gives back a list and gets this error
             return False
 
+    def check_if_connection_was_made_by_different_version(self, profileid, twid, daddr):
+        """
+        :param daddr: the ip this connection is made to (destination ip)
+        """
+        # get the other ip version of this computer
+        other_ip = __database__.get_the_other_ip_version(profileid)
+        if not other_ip:
+            return False
+
+        # get the ips contacted by the other_ip
+        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profile_{other_ip}', twid)
+        if not contacted_ips:
+            return False
+
+        if daddr in contacted_ips:
+            # now we're sure that the connection was made
+            # by this computer but using a different ip version
+            return True
 
     def check_dns_arpa_scan(self, domain, stime, profileid, twid, uid):
         """
