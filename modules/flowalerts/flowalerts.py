@@ -271,24 +271,6 @@ class Module(Module, multiprocessing.Process):
             # It can be that the dns_resolution sometimes gives back a list and gets this error
             return False
 
-    def check_if_connection_was_made_by_different_version(self, profileid, twid, daddr):
-        """
-        :param daddr: the ip this connection is made to (destination ip)
-        """
-        # get the other ip version of this computer
-        other_ip = __database__.get_the_other_ip_version(profileid)
-        if not other_ip:
-            return False
-
-        # get the ips contacted by the other_ip
-        contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(f'profile_{other_ip}', twid)
-        if not contacted_ips:
-            return False
-
-        if daddr in contacted_ips:
-            # now we're sure that the connection was made
-            # by this computer but using a different ip version
-            return True
 
     def check_dns_arpa_scan(self, domain, stime, profileid, twid, uid):
         """
@@ -298,17 +280,18 @@ class Module(Module, multiprocessing.Process):
             return False
 
         try:
-            # format of this dict is {profileid: [stime of first arpa query, stim eof second, etc..]}
+            # format of this dict is {profileid: [stime of first arpa query, stime eof second, etc..]}
             self.dns_arpa_queries[profileid].append(stime)
         except KeyError:
             # first time for this profileid to perform an arpa query
             self.dns_arpa_queries[profileid] = [stime]
+            return False
 
         if not len(self.dns_arpa_queries[profileid]) >= self.arpa_scan_threshold:
             # didn't reach the threshold yet
             return False
 
-        # reached the threshold, did the 10 quries happen within 2 seconds?
+        # reached the threshold, did the 10 queries happen within 2 seconds?
         diff = self.dns_arpa_queries[profileid][-1] - self.dns_arpa_queries[profileid][0]
         if not diff <= 2:
             # happened within more than 2 seconds
@@ -317,6 +300,7 @@ class Module(Module, multiprocessing.Process):
         self.helper.set_evidence_dns_arpa_scan(self.arpa_scan_threshold, stime, profileid, twid, uid)
         # empty the list of arpa queries timestamps, we don't need thm anymore
         self.dns_arpa_queries[profileid] = []
+        return True
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
