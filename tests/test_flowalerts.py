@@ -1,7 +1,7 @@
 """ Unit test for modules/flowalerts/flowalerts.py """
 from ..modules.flowalerts.flowalerts import Module
 import configparser
-
+import json
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
@@ -98,3 +98,18 @@ def test_check_unknown_port(outputQueue, database):
 										 twid,
 										 uid,
 										 timestamp) == False
+
+def test_check_if_resolution_was_made_by_different_version(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+	database.set_ipv6_of_profile(profileid, ipv6)
+	other_ip = database.get_the_other_ip_version(profileid)
+	assert json.loads(other_ip)[0] == ipv6
+	database.set_dns_resolution('example.com',
+								[daddr],
+								timestamp,
+								uid,
+								'AAAA',
+								ipv6)
+	res = flowalerts.check_if_resolution_was_made_by_different_version(profileid, daddr)
+	assert res == True
