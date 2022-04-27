@@ -142,4 +142,15 @@ def test_detect_DGA(outputQueue, database):
 							 uid)
 	assert dga_detected == True
 
+def test_detect_young_domains(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	domain = 'example.com'
+	# age in days
+	age = 50
+	database.setInfoForDomains(domain, {'Age': age})
+	assert flowalerts.detect_young_domains(domain,
+									timestamp,
+									profileid,
+									twid,
+									uid) == True
 

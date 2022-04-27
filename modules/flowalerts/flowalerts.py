@@ -676,6 +676,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         self.helper.set_evidence_young_domain(domain, age, stime, profileid, twid, uid)
+        return True
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
