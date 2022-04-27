@@ -69,12 +69,15 @@ class Module(Module, multiprocessing.Process):
         source_target_tag = 'Botnet'
         type_evidence = 'Command-and-Control-channels-detection'
         threat_level = 'high'
-        categroy =  'Intrusion.Botnet'
+        categroy = 'Intrusion.Botnet'
         tupleid = tupleid.split('-')
-        dstip , port, proto =  tupleid[0], tupleid[1], tupleid[2]
+        dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         portproto = f'{port}/{proto}'
         port_info = __database__.get_port_info(portproto)
-        description = f'C&C channel, destination IP: {dstip} port: {port_info.upper() if port_info else ""} {portproto} score: {format(score, ".4f")}'
+        ip_identification = __database__.getIPIdentification(dstip)
+        description = f'C&C channel, destination IP: {dstip}. ' \
+                      f'port: {port_info.upper() if port_info else ""} {portproto} ' \
+                      f'score: {format(score, ".4f")}. {ip_identification}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description, timestamp,
                                  categroy, source_target_tag=source_target_tag,

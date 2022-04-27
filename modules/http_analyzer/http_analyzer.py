@@ -65,7 +65,7 @@ class Module(Module, multiprocessing.Process):
             threat_level = 'high'
             category = 'Anomaly.Behaviour'
             confidence = 1
-            description = f'Suspicious user agent: {user_agent} from host {host}{uri}'
+            description = f'Suspicious user agent: {user_agent} while connecting to {host}{uri}'
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, timestamp, category,source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
@@ -104,8 +104,6 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Connection'
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
-            if not twid:
-                twid = ''
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description, timestamp,
                                      category, profileid=profileid, twid=twid, uid=uid)
@@ -286,7 +284,7 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'low'
         category = 'Anomaly.Behaviour'
         confidence = 1
-        description = f'using multiple user-agents: "{cached_ua}" then "{user_agent}"'
+        description = f'using multiple user-agents: {cached_ua} then {user_agent}'
         __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                  description, timestamp, category, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)

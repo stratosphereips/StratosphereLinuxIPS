@@ -756,7 +756,8 @@ class Module(Module, multiprocessing.Process):
                         __database__.setReconnections(profileid, twid, current_reconnections)
 
                         if current_reconnections[key] >= 5:
-                            description = f"Multiple reconnection attempts to Destination IP: {daddr} " \
+                            ip_identification = __database__.getIPIdentification(daddr)
+                            description = f"Multiple reconnection attempts to Destination IP: {daddr} {ip_identification} " \
                                           f"from IP: {saddr} reconnections: {current_reconnections[key]}"
                             self.helper.set_evidence_for_multiple_reconnection_attempts(profileid, twid,
                                                                                  daddr, description,
@@ -807,7 +808,9 @@ class Module(Module, multiprocessing.Process):
                                 if daddr in dst_IPs_ports:
                                     dstports = list(dst_IPs_ports[daddr]['dstports'])
                                     if len(dstports) > 1:
-                                        description = "Connection to multiple ports {} of Destination IP: {}".format(dstports, daddr)
+                                        ip_identification = __database__.getIPIdentification(daddr)
+                                        description = f"Connection to multiple ports {dstports} of " \
+                                                      f"Destination IP: {daddr}. {ip_identification}"
                                         self.helper.set_evidence_for_connection_to_multiple_ports(profileid, twid, daddr, description, uid, timestamp)
 
                             # Connection to multiple port to the Source IP. Happens in the mode 'all'

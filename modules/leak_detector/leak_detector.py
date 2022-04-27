@@ -163,7 +163,9 @@ class Module(Module, multiprocessing.Process):
                 threat_level = 'high'
                 portproto = f'{dport}/{proto}'
                 port_info = __database__.get_port_info(portproto)
-                description = f"IP: {srcip} detected {rule} to destination address: {dstip} port: {port_info if port_info else ''} {portproto}"
+                ip_identification = __database__.getIPIdentification(dstip)
+                description = f"IP: {srcip} detected {rule} to destination address: {dstip} {ip_identification} " \
+                              f"port: {port_info if port_info else ''} {portproto}"
                 # generate a random uid
                 uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
                 profileid = f'profile_{srcip}'

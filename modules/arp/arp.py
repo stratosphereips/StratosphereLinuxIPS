@@ -51,9 +51,6 @@ class Module(Module, multiprocessing.Process):
             # in seconds
             self.period_before_deleting = 3600
 
-
-
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -155,7 +152,7 @@ class Module(Module, multiprocessing.Process):
                 # category of this evidence according to idea categories
                 category = 'Recon.Scanning'
                 type_detection = 'srcip'
-                source_target_tag = 'Recon' # srcip description
+                source_target_tag = 'Recon'  # srcip description
                 detection_info = profileid.split("_")[1]
                 conn_count = len(profileids_twids)
                 __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
@@ -256,6 +253,7 @@ class Module(Module, multiprocessing.Process):
             __database__.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence,
                                      description, ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid, uid=uid)
             return True
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing

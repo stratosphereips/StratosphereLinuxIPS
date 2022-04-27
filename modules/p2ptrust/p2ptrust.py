@@ -372,15 +372,16 @@ class Trust(Module, multiprocessing.Process):
         type_evidence = 'Malicious-IP-from-P2P-network'
 
         category = 'Anomaly.Traffic'
-        dns_resolution = __database__.get_dns_resolution(ip)
-        dns_resolution = dns_resolution.get('domains', [])
-        dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
+        # dns_resolution = __database__.get_dns_resolution(ip)
+        # dns_resolution = dns_resolution.get('domains', [])
+        # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
         if 'src' in ip_state:
             direction = 'from'
-        elif 'dst' in ip_state:
+        else:
             direction = 'to'
 
-        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}.' \
+        ip_identification = __database__.getIPIdentification(ip)
+        description = f'connection {direction} blacklisted IP {ip} {ip_identification}.' \
                       f' Source: Slips P2P network.'
 
         __database__.setEvidence(type_evidence, type_detection, detection_info,

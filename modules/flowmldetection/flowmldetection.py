@@ -345,16 +345,15 @@ class Module(Module, multiprocessing.Process):
         """
         Set the evidence that a flow was detected as malicious
         """
-        confidence =  0.1
+        confidence = 0.1
         threat_level = 'low'
-        type_detection  = 'flow'
+        type_detection = 'flow'
         category = 'Anomaly.Traffic'
         detection_info = str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         type_evidence = 'MaliciousFlow'
-        description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport}'
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = datetime.datetime.now().strftime("%d/%m/%Y-%H:%M:%S")
-        if not twid:
-            twid = ''
         __database__.setEvidence(type_evidence, type_detection, detection_info,
                                  threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)

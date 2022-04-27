@@ -74,16 +74,16 @@ class Module(Module, multiprocessing.Process):
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        dns_resolution = __database__.get_dns_resolution(ip)
-        dns_resolution = dns_resolution.get('domains', [])
-        dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
+        # dns_resolution = __database__.get_dns_resolution(ip)
+        # dns_resolution = dns_resolution.get('domains', [])
+        # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
 
         if 'src' in ip_state:
             direction = 'from'
         elif 'dst' in ip_state:
             direction = 'to'
-
-        description = f'connection {direction} blacklisted IP {ip}{dns_resolution}.' \
+        ip_identification = __database__.getIPIdentification(ip)
+        description = f'connection {direction} blacklisted IP {ip} {ip_identification}.' \
                       f' Source: {ip_info["source"]}. Description: {ip_info["description"]}'
 
         tags_temp = ip_info.get('tags',False)

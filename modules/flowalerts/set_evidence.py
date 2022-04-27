@@ -13,7 +13,7 @@ class Helper:
         threat_level = 'low'
         category = 'Anomaly.Traffic'
         type_evidence = 'YoungDomain'
-        type_detection  = 'dstdomain'
+        type_detection = 'dstdomain'
         detection_info = domain
         description = f'connection to a young domain: {domain} registered {age} days ago.'
         
@@ -147,7 +147,7 @@ class Helper:
                                  conn_count=conn_count, source_target_tag=source_target_tag,
                                  profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_horizontal_portscan(self, msg, scanned_port, timestamp, profileid, twid, uid ):
+    def set_evidence_horizontal_portscan(self, msg, scanned_port, timestamp, profileid, twid, uid):
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
         threat_level = 'medium'
@@ -255,7 +255,7 @@ class Helper:
         confidence = 0.5
         threat_level = 'medium'
         category = 'Anomaly.Traffic'
-        type_detection  = 'dstip'
+        type_detection = 'dstip'
         type_evidence = 'MultipleReconnectionAttempts'
         detection_info = ip
         
@@ -300,7 +300,7 @@ class Helper:
         confidence = 0.8
         threat_level = 'high'
         category = 'Anomaly.Connection'
-        type_detection  = 'srcip' if direction == 'source' else 'dstip'
+        type_detection = 'srcip' if direction == 'source' else 'dstip'
         source_target_tag = "Recon"
         type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
@@ -355,7 +355,7 @@ class Helper:
     def set_evidence_data_exfiltration(self, most_contacted_daddr, total_bytes, times_contacted, profileid, twid, uid):
         confidence = 0.6
         threat_level = 'high'
-        type_detection  = 'dstip'
+        type_detection = 'dstip'
         source_target_tag = 'OriginMalware'
         type_evidence = 'DataUpload'
         category = 'Malware'
@@ -375,9 +375,10 @@ class Helper:
             threat_level = 'high'
             category = 'Attempt.Login'
             type_evidence = 'BadSMTPLogin'
-            type_detection  = 'srcip'
+            type_detection = 'srcip'
             detection_info = saddr
-            description = f'performing bad SMTP login to {daddr}'
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = f'performing bad SMTP login to {daddr} {ip_identification}'
             
             __database__.setEvidence(type_evidence, type_detection, detection_info,
                                      threat_level, confidence, description,
@@ -388,9 +389,10 @@ class Helper:
             confidence = 1
             threat_level = 'high'
             category = 'Attempt.Login'
-            type_detection  = 'srcip'
+            type_detection = 'srcip'
             type_evidence = 'SMTPLoginBruteforce'
-            description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds.'
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
             detection_info = saddr
             conn_count = smtp_bruteforce_threshold
             
@@ -412,8 +414,7 @@ class Helper:
             tags = ssl_info_from_db['tags']
             cert_description = ssl_info_from_db['description']
             threat_level = ssl_info_from_db['threat_level']
-
-            description = f'Malicious SSL certificate to server {daddr}. '
+            description = f'Malicious SSL certificate to server {daddr}.'
             # append daddr identification to the description
             ip_identification = __database__.getIPIdentification(daddr)
             description += f'{ip_identification} description: {cert_description} {tags}  '
