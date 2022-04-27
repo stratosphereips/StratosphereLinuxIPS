@@ -1,7 +1,8 @@
 """ Unit test for modules/flowalerts/flowalerts.py """
 from ..modules.flowalerts.flowalerts import Module
 import configparser
-
+import json
+from numpy import arange
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
@@ -98,3 +99,58 @@ def test_check_unknown_port(outputQueue, database):
 										 twid,
 										 uid,
 										 timestamp) == False
+
+def test_check_if_resolution_was_made_by_different_version(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+	database.set_ipv6_of_profile(profileid, ipv6)
+	other_ip = database.get_the_other_ip_version(profileid)
+	assert json.loads(other_ip)[0] == ipv6
+	database.set_dns_resolution('example.com',
+								[daddr],
+								timestamp,
+								uid,
+								'AAAA',
+								ipv6)
+	res = flowalerts.check_if_resolution_was_made_by_different_version(profileid, daddr)
+	assert res == True
+
+
+def test_check_dns_arpa_scan(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	# make 10 different arpa scans
+	for ts in arange(0, 1, 1/10):
+		is_arpa_scan = flowalerts.check_dns_arpa_scan('example.in-addr.arpa',
+									   timestamp + ts,
+									   profileid,
+									   twid,
+									   uid)
+
+	assert is_arpa_scan == True
+
+
+# check_multiple_ssh_clients is tested in test_dataset
+def test_detect_DGA(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	rcode_name = 'NXDOMAIN'
+	for i in range(10):
+		dga_detected = flowalerts.detect_DGA(rcode_name,
+							 f'example{i}.com',
+							 timestamp,
+							 profileid,
+							 twid,
+							 uid)
+	assert dga_detected == True
+
+def test_detect_young_domains(outputQueue, database):
+	flowalerts = create_flowalerts_instance(outputQueue)
+	domain = 'example.com'
+	# age in days
+	age = 50
+	database.setInfoForDomains(domain, {'Age': age})
+	assert flowalerts.detect_young_domains(domain,
+									timestamp,
+									profileid,
+									twid,
+									uid) == True
+

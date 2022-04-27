@@ -2651,7 +2651,7 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db =  self.get_dns_resolution(answer)
+                ip_info_from_db = self.get_dns_resolution(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
