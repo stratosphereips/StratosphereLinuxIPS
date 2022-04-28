@@ -55,13 +55,12 @@ RUN git submodule init
 RUN git submodule update
 
 
-
 # build the pigeon and Add pigeon to path
-RUN cd p2p4slips \
-    && go build \
-    && echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc \
-    && source ~/.bashrc
+RUN cd p2p4slips && go build
+RUN echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc
+RUN source ~/.bashrc
 
+WORKDIR ${SLIPS_DIR}
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt
