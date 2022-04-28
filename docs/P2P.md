@@ -1,4 +1,4 @@
-# P2P module for Slips
+# P2P 
 
 This module was developed as a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252)
 on CTU FEL. The goal was to enable Slips instances in a local network to share
