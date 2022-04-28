@@ -3,6 +3,12 @@
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
  - Parse zeek software.log and extract software type, version and user agent from it
  - Detect multiple SSH client versions. slips will now alert if an IP is detected using OpenSSH_8.1 then OpenSSH_7.1 for example
+ - Detect DoH flows in ssl.log
+ - Fix connection rest by peer error by changing the buffer limit in redis
+ - Fix reading flows from stdin
+ - Fix home_network parameter
+ - Fix portscans detections
+ - Fix DGA detections 
 -0.8.5
 * Slips
   - Detect young domains that was registered less than 60 days ago.
