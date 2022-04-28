@@ -34,7 +34,7 @@ class Database(object):
                           'dns_info_change', 'tw_closed', 'core_messages',
                           'new_blocking', 'new_ssh', 'new_notice', 'new_url',
                           'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software'}
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software', 'p2p_data_request'}
 
     """ Database object management """
     def __init__(self):
@@ -2248,11 +2248,11 @@ class Database(object):
         }
         data = json.dumps(data) # this is going to be sent insidethe to_send dict
         to_send = {
-             'profileid' : profileid,
-             'twid' : twid,
-             'flow' : data,
-             'stime' : stime,
-             'uid' : uid}
+             'profileid': profileid,
+             'twid': twid,
+             'flow': data,
+             'stime': stime,
+             'uid': uid}
         to_send = json.dumps(to_send)
         self.r.hset(f'{profileid}{self.separator}{twid}{self.separator}altflows', uid, data)
         self.publish('new_notice', to_send)

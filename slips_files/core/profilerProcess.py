@@ -1698,8 +1698,8 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice',
-                                                    'dhcp','files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
+            elif self.column_values['type'] not in ('ssh', 'ssl', 'http', 'dns', 'conn', 'flow', 'argus', 'nfdump', 'notice',
+                                                    'dhcp', 'files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1730,7 +1730,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("{}".format((type(e))), 0, 1)
 
             # This uid check is for when we read things that are not zeek
-            if 'uid' not in self.column_values or not self.column_values.get('uid',''):
+            if 'uid' not in self.column_values or not self.column_values.get('uid', ''):
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
                 self.column_values['uid'] = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
@@ -2141,11 +2141,11 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
             """
-            return profileid,twid
+            return profileid, twid
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
-            self.print("{}".format((type(inst))), 0, 1)
+            self.print("{}".format(type(inst)), 0, 1)
             self.print("{}".format(inst), 0, 1)
             return False
 
