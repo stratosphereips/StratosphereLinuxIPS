@@ -649,9 +649,9 @@ class Database(object):
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
-            self.outputqueue.put('01|database|error in addNewOlderTW in database.py')
-            self.outputqueue.put('01|database|{}'.format(type(e)))
-            self.outputqueue.put('01|database|{}'.format(e))
+            self.outputqueue.put('01|database|error in addNewOlderTW in database.py', 0 , 1)
+            self.outputqueue.put('01|database|{}'.format(type(e)), 0 , 1)
+            self.outputqueue.put('01|database|{}'.format(e), 0 , 1)
 
     def addNewTW(self, profileid, startoftw):
         try:
