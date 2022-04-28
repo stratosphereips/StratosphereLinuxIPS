@@ -75,7 +75,7 @@ class Module(Module, multiprocessing.Process):
         portproto = f'{port}/{proto}'
         port_info = __database__.get_port_info(portproto)
         ip_identification = __database__.getIPIdentification(dstip)
-        description = f'C&C channel, destination IP: {dstip}. ' \
+        description = f'C&C channel, destination IP: {dstip} ' \
                       f'port: {port_info.upper() if port_info else ""} {portproto} ' \
                       f'score: {format(score, ".4f")}. {ip_identification}'
         __database__.setEvidence(type_evidence, type_detection, detection_info,
