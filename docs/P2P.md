@@ -34,7 +34,7 @@ export PATH=$PATH:/usr/local/go/bin
 2. build the pigeon:
 
 - if you installed slips with the submodules using 
-```git clone --recurse-submodules https://github.com/stratosphereips/StratosphereLinuxIPS ``` 
+```git clone --recurse-submodules --remote-submodules  https://github.com/stratosphereips/StratosphereLinuxIPS ``` 
 then you should only build the pigeon using:
 ```cd p2p4slips && go build```
 - If you installed Slips without the submodules then you should download and build the pigeon using:
