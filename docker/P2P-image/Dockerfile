@@ -44,6 +44,26 @@ RUN apt update && apt install -y --no-install-recommends \
 # Requirements for compiling yara
 RUN apt install -y automake libtool make gcc pkg-config
 
+
+RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
+# Switch to Slips installation dir when login.
+WORKDIR ${SLIPS_DIR}
+RUN chmod 774 slips.py
+RUN git pull
+RUN git checkout origin/develop
+RUN git submodule init
+RUN git submodule update
+
+# Upgrade pip3 and install slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r requirements.txt
+
+
+# For Kalipso:
+RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
+RUN apt install -y --no-install-recommends nodejs
+RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
+
 # Compile and install YARA
 RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && tar -zxf v4.1.3.tar.gz \
@@ -53,35 +73,14 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && make \
   && make install
 
-
-RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
-RUN git pull
-RUN git checkout origin/develop
-RUN git submodule init
-RUN git submodule update
-
-# Upgrade pip3 and install slips requirements
-RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
-
-
-# For Kalipso:
-RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
-RUN apt install -y --no-install-recommends nodejs
-RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
-
-
-# Switch to Slips installation dir when login.
-WORKDIR ${SLIPS_DIR}
+## Switch to Slips installation dir when login.
+#WORKDIR ${SLIPS_DIR}
 
 # build the pigeon and Add pigeon to path
-RUN cd p2p4slips \
-    && /usr/local/go/bin/go build \
+RUN cd ../p2p4slips \
+    && go build \
     && echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc \
     && source ~/.bashrc
 
-# Switch to Slips installation dir when login.
-WORKDIR ${SLIPS_DIR}
 
 CMD redis-server --daemonize yes && /bin/bash
