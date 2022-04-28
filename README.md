@@ -41,7 +41,7 @@ Slips is a modular software. Each module is designed to perform a specific detec
 | blocking | module to block malicious IPs connecting to the device |✅|
 | flowmldetection | module to detect malicious flows using ML pretrained models |✅|
 | leak_detector | module to  detect leaks of data in the traffic using YARA rules |✅|
-
+| P2P | module to share detection data with other Slips instances |✅|
 
 
 Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
