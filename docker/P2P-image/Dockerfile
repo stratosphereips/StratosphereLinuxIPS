@@ -54,6 +54,14 @@ RUN git checkout origin/develop
 RUN git submodule init
 RUN git submodule update
 
+
+
+# build the pigeon and Add pigeon to path
+RUN cd p2p4slips \
+    && go build \
+    && echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc \
+    && source ~/.bashrc
+
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt
@@ -72,15 +80,6 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
   && ./configure \
   && make \
   && make install
-
-## Switch to Slips installation dir when login.
-#WORKDIR ${SLIPS_DIR}
-
-# build the pigeon and Add pigeon to path
-RUN cd ../p2p4slips \
-    && go build \
-    && echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc \
-    && source ~/.bashrc
 
 
 CMD redis-server --daemonize yes && /bin/bash
