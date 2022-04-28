@@ -56,6 +56,7 @@ RUN git submodule update
 
 
 # build the pigeon and Add pigeon to path
+SHELL ["/bin/bash", "-c"]
 RUN cd p2p4slips && go build
 RUN echo "export PATH=$PATH:/p2p4slips/" >> ~/.bashrc
 RUN source ~/.bashrc
