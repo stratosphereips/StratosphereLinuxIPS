@@ -56,7 +56,10 @@ RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
 
 RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
-RUN git checkout origin/develop && git submodule init && git submodule update #temporarily
+RUN git pull
+RUN git checkout origin/develop
+RUN git submodule init
+RUN git submodule update
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
