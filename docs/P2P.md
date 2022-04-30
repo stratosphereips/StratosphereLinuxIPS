@@ -1,29 +1,41 @@
 # P2P 
 
-This module was developed as a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252)
-on CTU FEL. The goal was to enable Slips instances in a local network to share
-detections and collectively improve blocking decisions. While the thesis succeeded in
-creating a framework and a trust model, the project is far from stable.
+The P2P module makes Slips be a peer in a peer to peer network of computers in the local network. The peers are only in the local network and they communicate using multicast packets. The P2P module is a highly complex system of data sharing, reports on malicious computers, asking about IoC to the peers and a complex trust model that is designed to resiste adversarial peers in the network. Adversarial peers are malicious peers that lie about the data being shared (like saying that a computer is maliciuos when is not, or that an attacker is benign).
 
-This readme provides a shallow overview of the code structure, to
-briefly document the code for future developers. The whole architecture was
-thoroughly documented in the thesis itself, which can be downloaded from the
-link above.
+This module was designed and partially implemented in a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252) on CTU FEL by [Dita Hollmmanova](https://www.linkedin.com/in/dita-hollmannova/). The goal was to enable Slips instances in a local network to share detections and collectively improve blocking decisions. While the thesis succeeded in creating a framework and a trust model, the project is far from stable. The final implementation in Slips was finished by Alya Gomaa.
+
+This readme provides a shallow overview of the code structure, to briefly document the code for future developers. The whole architecture was thoroughly documented in the thesis itself, which can be downloaded from the link above.
+
+The basic structure of the P2P system is (i) an Slips P2P module in python (called Dovecot), and (ii) a P2P communication system done in Golang (called Pigeon).
+
 
 ## Pigeon
 
-Pigeon is written in golang and is developed in a repository independent of Slips, and also as a submodules of Slips repository.
-https://github.com/stratosphereips/p2p4slips
+Pigeon is written in golang and is developed in an independent repository from Slips, but is included as a submodules of Slips repository. [https://github.com/stratosphereips/p2p4slips](https://github.com/stratosphereips/p2p4slips)
 
-It handles the P2P communication using the libp2p library, and provides a simple interface to the module. A compiled
+Pigeon handles the P2P communication in the network using the libp2p library, and provides a simple interface to the Slips module. A compiled
 Pigeon binary is included in the module for convenience.
 
 Pigeon uses the JSON format to communicate with the module or with other Pigeons. For details on the communication
 format, see the thesis.
 
+## Docker direct use
+You can use Slips with P2P directly in a special docker image by doing:
+
+```
+docker pull stratosphereips/slips_p2p
+docker run -it --rm --net=host stratosphereips/slips_p2p
+```
 
 ## Installation:
+
 1. download and install go: 
+
+```
+apt install golang
+```
+
+or by hand
 
 ```
 curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
@@ -43,7 +55,7 @@ then you should only build the pigeon using:
 git submodule init && git submodule update && cd p2p4slips && go build
 ```
 
-3. Add pigeon to path:
+3. Add pigeon to PATH so Slips can find it:
 ```
 cd p2p4slips 
 export PATH=$PATH:$(pwd)
@@ -56,13 +68,21 @@ echo "export PATH=$PATH:/path/to/StratosphereLinuxIPS/p2p4slips/" >> ~/.bashrc
 source ~/.bashrc
 ```
 
-## Usage
+## Usage in Slips
 
-The P2P module is disabled by default.
+The P2P module is disabled by default in Slips.
 
 To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```slips.conf```  
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
+
+You don't have to do anything in particular for the P2P module to work, just enable it and Slips will:
+1- Automatically find other peers in the network (and remember them even if they go offline for days)
+2- Ask the group of peers (the network) about what they think of some IoC
+3- Group the answers and give Slips an aggregated, balanced, normalized view of the network opinion on each IoC
+4- Send blame reports to the whole network about attackers
+5- Receive blame reports on attackers from the network, balanced by the trust model
+6- Keep a trust score on each peer, which varies in time based on the interactions and quality of data shared
 
 ## Project sections
 
