@@ -105,6 +105,17 @@ conda activate slips
 
 You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
 
+## P2P Module
+The peer to peer system os Slips is a highly complex automatic system to find other peers in the network and share data on IoC automatically in a balanced, trusted way. You just have to enable the P2P system. Please check the documentation [here](../docs/P2P.md)
+
+You can use Slips with P2P directly in a special docker image by doing:
+
+```
+docker pull stratosphereips/slips_p2p
+docker run -it --rm --net=host stratosphereips/slips_p2p
+```
+
+
 ## Slips in Blackhat 
 
 Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko). 
@@ -114,12 +125,13 @@ Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/fil
 
 **Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 
-**Main authors:** Sebastian Garcia, Kamila Babayeva, Ondrej Lukas, Alya Gomaa
+**Main authors:** Sebastian Garcia, Alya Gomaa, Kamila Babayeva
 
 **Contributors:**
 - Veronica Valeros
 - Frantisek Strasak
 - Dita Hollmannova
+- Ondrej Lukas
 - Elaheh Biglar Beigi
 - Maria Rigaki 
 - kartik88363
