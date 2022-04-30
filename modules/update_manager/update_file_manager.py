@@ -493,7 +493,7 @@ class UpdateFileManager:
             file_info = {'e-tag': self.new_e_tag, 'time': self.new_update_time}
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {link_to_download}')
+            self.print(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
 
             # done parsing the file, delte it from disk
@@ -1111,7 +1111,7 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
-            self.print(f'Updating the remote file {file_to_download}', 1, 0)
+            self.print(f'Downloading the remote file {file_to_download}', 1, 0)
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
             # to download to next file instead of being idle
