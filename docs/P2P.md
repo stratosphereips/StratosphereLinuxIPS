@@ -24,7 +24,7 @@ You can use Slips with P2P directly in a special docker image by doing:
 
 ```
 docker pull stratosphereips/slips_p2p
-docker run -it --rm --net=host stratosphereips/slips_p2p
+docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips_p2p
 ```
 
 ## Installation:
