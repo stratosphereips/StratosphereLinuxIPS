@@ -114,7 +114,15 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 
 Run slips with sudo to enable blocking (Optional) 
 
-## Installing slips in Docker with P2P
+## Running Slips from Docker with P2P support
+You can use Slips with P2P directly in a special docker image by doing:
+
+```
+docker pull stratosphereips/slips_p2p
+docker run -it --rm --net=host stratosphereips/slips_p2p
+```
+
+## Build Slips in Docker with P2P support
 
 git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
