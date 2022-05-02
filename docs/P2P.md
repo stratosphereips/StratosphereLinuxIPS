@@ -78,10 +78,15 @@ P2P is only available when running slips in you local network using an interface
 
 You don't have to do anything in particular for the P2P module to work, just enable it and Slips will:
 1- Automatically find other peers in the network (and remember them even if they go offline for days)
+
 2- Ask the group of peers (the network) about what they think of some IoC
+
 3- Group the answers and give Slips an aggregated, balanced, normalized view of the network opinion on each IoC
+
 4- Send blame reports to the whole network about attackers
+
 5- Receive blame reports on attackers from the network, balanced by the trust model
+    
 6- Keep a trust score on each peer, which varies in time based on the interactions and quality of data shared
 
 ## Project sections

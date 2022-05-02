@@ -126,11 +126,11 @@ docker run -it --rm --net=host stratosphereips/slips_p2p
 
 git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 
-If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with P2P installed using:
+If you cloned Slips in '~/StratosphereLinuxIPS', make sufe you are in slips root directory, then you can build the Docker image with P2P installed using:
 
-	cd ~/StratosphereLinuxIPS/docker/P2P-image
-	docker build --network=host --no-cache -t slips -f Dockerfile .
-	docker run -it --rm --net=host slips
+	cd ~/StratosphereLinuxIPS/
+	docker build --network=host --no-cache -t slips_p2p -f docker/P2P-image/Dockerfile .
+	docker run -it --rm --net=host slips_p2p
 
 Now you can edit slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
 
