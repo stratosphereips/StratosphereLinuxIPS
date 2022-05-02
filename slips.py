@@ -439,10 +439,14 @@ def shutdown_gracefully(input_information):
         if delete_zeek_files:
             shutil.rmtree('zeek_files')
         # add slips end date in the metadata dir
-        if 'yes' in enable_metadata.lower():
-            with open(info_path, 'a') as f:
-                now = datetime.now()
-                f.write(f'Slips end date: {now}\n')
+        try:
+            if 'yes' in enable_metadata.lower():
+                with open(info_path, 'a') as f:
+                    now = datetime.now()
+                    f.write(f'Slips end date: {now}\n')
+        except NameError:
+            # slips is shut down before enable_metadata is read from slips.conf
+            pass
         os._exit(-1)
         return True
     except KeyboardInterrupt:
