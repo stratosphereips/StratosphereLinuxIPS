@@ -45,7 +45,8 @@ RUN apt update && apt install -y --no-install-recommends \
 RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
-RUN chmod 774 slips.py &&  git submodule init && git submodule update
+RUN chmod 774 slips.py &&  git submodule init && git submodule update && rm slips.conf
+# so we can set use_p2p to yes
 COPY slips.conf ${SLIPS_DIR}/
 
 # build the pigeon and Add pigeon to path
