@@ -44,6 +44,7 @@ class Module(Module, multiprocessing.Process):
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
+        utils.drop_root_privs()
         if 'yes' in self.delete_zeek_files and 'no' in self.store_zeek_files_copy:
             self.delete_arp_periodically = True
             # first time arp.log is created

@@ -26,6 +26,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        utils.drop_root_privs()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # Get from the database the separator used to separate the IP and the word profile

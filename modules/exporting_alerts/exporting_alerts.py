@@ -1,9 +1,10 @@
 # Must imports
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 # Your imports
+import multiprocessing
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
@@ -87,6 +88,7 @@ class Module(Module, multiprocessing.Process):
         # flag to open json file only once
         self.is_json_file_opened = False
         self.json_file_handle = False
+        utils.drop_root_privs()
 
     def print(self, text, verbose=1, debug=0):
         """

@@ -18,6 +18,7 @@
 
 import multiprocessing
 import platform
+from slips_files.common.slips_utils import utils
 import os
 
 # Gui Process
@@ -31,6 +32,7 @@ class GuiProcess(multiprocessing.Process):
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
+        utils.drop_root_privs()
         # Read the configuration
         self.read_configuration()
 

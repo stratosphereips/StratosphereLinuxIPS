@@ -29,6 +29,7 @@ class Module(Module, multiprocessing.Process):
         # your own configurations
         self.config = config
         # Start the DB
+        utils.drop_root_privs()
         __database__.start(self.config)
         self.read_configuration()
         self.c1 = __database__.subscribe('new_alert')

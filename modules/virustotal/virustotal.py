@@ -28,10 +28,11 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
+        utils.drop_root_privs()
         # Start the DB
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
-        __database__.start(self.config)  # TODO: What does this line do? It changes nothing.
+        __database__.start(self.config)
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
         self.c3 = __database__.subscribe('new_url')

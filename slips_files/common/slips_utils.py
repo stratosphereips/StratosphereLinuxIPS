@@ -8,6 +8,8 @@ import socket
 import subprocess
 import json
 import time
+import platform
+import os
 
 class Utils(object):
     name = 'utils'
@@ -24,6 +26,25 @@ class Utils(object):
             'high': 0.8,
             'critical': 1
         }
+
+
+    def drop_root_privs(self):
+        """ Drop root privileges if the module doesn't need them. """
+
+        if platform.system() != 'Linux':
+            return
+        try:
+            # Get the uid/gid of the user that launched sudo
+            sudo_uid = int(os.getenv("SUDO_UID"))
+            sudo_gid = int(os.getenv("SUDO_GID"))
+        except TypeError:
+            # env variables are not set, you're not root
+            return
+        # Change the current process’s real and effective uids and gids to that user
+        # -1 means value is not changed.
+        os.setresgid(sudo_gid, sudo_gid, -1)
+        os.setresuid(sudo_uid, sudo_uid, -1)
+        return
 
     def timeit(method):
         def timed(*args, **kw):

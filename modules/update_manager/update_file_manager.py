@@ -12,7 +12,6 @@ import datetime
 import sys
 import asyncio
 
-
 class UpdateFileManager:
 
     def __init__(self, outputqueue, config):
@@ -20,11 +19,12 @@ class UpdateFileManager:
         self.config = config
         # For now, read the malicious IPs from here
         self.name = 'update_manager'
-        self.new_update_time = float('-inf')
         # Start the database
         __database__.start(self.config)
+        utils.drop_root_privs()
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
+        self.new_update_time = float('-inf')
         # Read the conf
         self.read_configuration()
         # this will store the number of loaded ti files

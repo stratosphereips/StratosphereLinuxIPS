@@ -19,6 +19,7 @@
 import os
 from watchdog.events import RegexMatchingEventHandler
 from .database import __database__
+from slips_files.common.slips_utils import utils
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
@@ -28,6 +29,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         self.config = config
         # Start the DB
         __database__.start(self.config)
+        utils.drop_root_privs()
 
     def on_created(self, event):
         self.process(event)

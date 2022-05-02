@@ -29,6 +29,7 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Subscribe to the channel
         __database__.start(self.config)
+        utils.drop_root_privs()
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')

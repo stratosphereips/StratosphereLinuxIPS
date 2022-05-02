@@ -20,6 +20,7 @@ import multiprocessing
 import sys
 from datetime import datetime
 from datetime import timedelta
+from slips_files.common.slips_utils import utils
 import os
 import threading
 import time
@@ -48,6 +49,7 @@ class LogsProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         self.config = config
+        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.separator = '_'

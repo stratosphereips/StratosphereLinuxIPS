@@ -24,7 +24,6 @@ from datetime import datetime, timedelta
 import configparser
 from os import path
 from colorama import Fore, Style
-from slips_files.common.slips_utils import Utils
 import ipaddress
 import sys
 import re

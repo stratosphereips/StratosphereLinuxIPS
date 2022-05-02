@@ -40,6 +40,7 @@ class ProfilerProcess(multiprocessing.Process):
     def __init__(self, inputqueue, outputqueue, verbose, debug, config):
         self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
+        utils.drop_root_privs()
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
