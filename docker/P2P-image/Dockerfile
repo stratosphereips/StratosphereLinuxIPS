@@ -46,7 +46,7 @@ RUN git clone --recurse-submodules --remote-submodules https://github.com/strato
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
 RUN chmod 774 slips.py &&  git submodule init && git submodule update
-
+COPY slips.conf ${SLIPS_DIR}/
 
 # build the pigeon and Add pigeon to path
 SHELL ["/bin/bash", "-c"]
