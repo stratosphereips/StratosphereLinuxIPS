@@ -28,16 +28,17 @@ from datetime import datetime
 import socket
 import warnings
 from modules.UpdateManager.update_file_manager import UpdateFileManager
+import json
 import pkgutil
 import inspect
 import modules
 import importlib
-from slips.common.abstracts import Module
-from slips.common.argparse import ArgumentParser
+from slips_files.common.abstracts import Module
+from slips_files.common.argparse import ArgumentParser
 import errno
 import subprocess
-from slips.common.abstracts import Module
-from slips.core.database import __database__
+from slips_files.common.abstracts import Module
+from slips_files.core.database import __database__
 import sys, os, time
 from signal import SIGTERM
 version = '0.7.3'
@@ -451,13 +452,9 @@ class Main():
         parser.add_argument('-e', '--debug', metavar='<debuglevel>',action='store', required=False, type=int,
                             help='amount of debugging. This shows inner information about the program.')
         parser.add_argument('-f', '--filepath',metavar='<file>', action='store',required=False,
-                            help='read an Argus binetflow or a Zeek folder.')
+                            help='read an Argus binetflow, suricata flow, nfdump, PCAP, or a Zeek folder.')
         parser.add_argument('-i','--interface', metavar='<interface>',action='store', required=False,
                             help='read packets from an interface.')
-        parser.add_argument('-r', '--pcapfile',metavar='<file>', action='store', required=False,
-                            help='read a PCAP - Packet Capture.')
-        parser.add_argument('-b', '--nfdump', metavar='<file>',action='store',required=False,
-                            help='read an NFDUMP - netflow dump.')
         parser.add_argument('-l','--nologfiles',action='store_true',required=False,
                             help='do not create log files with all the traffic info and detections.')
         parser.add_argument('-F','--pcapfilter',action='store',required=False,type=str,
@@ -467,7 +464,7 @@ class Main():
                             help='clear a cache database.')
         parser.add_argument('-p', '--blocking',action='store_true',required=False,
                             help='block IPs that connect to the computer. Supported only on Linux.')
-        parser.add_argument('-o', '--output', action='store', required=False,
+        parser.add_argument('-o', '--output', action='store', required=False, default=self.alerts_default_path,
                             help='store alerts.json and alerts.txt in the provided folder.')
         parser.add_argument('-I', '--interactive',required=False, default=False, action='store_true',
                             help="run slips in interactive mode - don't daemonize")
@@ -524,15 +521,34 @@ class Main():
         if self.args.interface:
             input_information = self.args.interface
             input_type = 'interface'
-        elif self.args.pcapfile:
-            input_information = self.args.pcapfile
-            input_type = 'pcap'
         elif self.args.filepath:
             input_information = self.args.filepath
+            # default value
             input_type = 'file'
-        elif self.args.nfdump:
-            input_information = self.args.nfdump
-            input_type = 'nfdump'
+            # Get the type of file
+            command = 'file ' + input_information
+            # Execute command
+            cmd_result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            # Get command output
+            cmd_result = cmd_result.stdout.decode('utf-8')
+
+            if 'pcap' in cmd_result:
+                input_type = 'pcap'
+            elif 'dBase' in cmd_result:
+                input_type = 'nfdump'
+            elif 'CSV' in cmd_result:
+                input_type = 'binetflow'
+            elif 'directory'in cmd_result:
+                input_type = 'zeek_folder'
+            else:
+                # is a json file, is it a zeek log file or suricata?
+                # use first line to determine
+                with open(input_information,'r') as f:
+                    first_line = f.readline()
+                if 'flow_id' in first_line:
+                    input_type = 'suricata'
+                else:
+                    input_type = 'zeek_log_file'
         else:
             print('You need to define an input source.')
             sys.exit(-1)
@@ -607,7 +623,7 @@ class Main():
         ##########################
         # Creation of the threads
         ##########################
-        from slips.core.database import __database__
+        from slips_files.core.database import __database__
         # Output thread. This thread should be created first because it handles
         # the output of the rest of the threads.
         # Create the queue

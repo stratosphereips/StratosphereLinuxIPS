@@ -134,6 +134,22 @@ In case that the module is started, but does not receive any messages from the c
 
 	-Module is started in time (this should not be an issue in new SLIPS releases)
 
+### Testing
+
+Before pushing, run the unit tests by:
+1- Make sure you're in slips main dir (the one with kalipso.sh)
+2- Run all tests ```python3 tests/run_all_tests.py``` 
+
+### Adding your own unit tests
+
+Slips uses ```pytest``` as the main testing framework, You can add your own unit tests by:
+
+1- create a file called ```test_module_name.py``` in the ```tests``` dir
+
+2- every function should start with ```test_```
+
+3- go to the main slips dir and run ```python3 tests/run_all_tests.py``` and every test file in the ```tests/``` dir will run
+
 ### Conclusion
 Adding a new feature to SLIPS is an easy task. The template is ready for everyone to use and there is not much to learn about Slips to be able to write a module.
 

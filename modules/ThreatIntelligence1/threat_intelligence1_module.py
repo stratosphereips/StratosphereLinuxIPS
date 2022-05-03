@@ -1,7 +1,7 @@
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
 
 # Your imports
@@ -90,14 +90,13 @@ class Module(Module, multiprocessing.Process):
         vd_text = str(int(verbose) * 10 + int(debug))
         self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
 
-    def __get_hash_from_file(self, filename):
+    def get_hash_from_file(self, filename):
         """
-        Compute the hash of a local file
+        Compute the sha256 hash of a local file
         """
         try:
             # The size of each read from the file
             BLOCK_SIZE = 65536
-
             # Create the hash object, can use something other
             # than `.sha256()` if you wish
             file_hash = hashlib.sha256()
@@ -111,26 +110,27 @@ class Module(Module, multiprocessing.Process):
                     file_hash.update(fb)
                     # Read the next block from the file
                     fb = f.read(BLOCK_SIZE)
-
             return file_hash.hexdigest()
         except Exception as inst:
-            self.print('Problem on __get_hash_from_file()', 0, 0)
+            self.print('Problem on get_hash_from_file()', 0, 0)
             self.print(str(type(inst)), 0, 0)
             self.print(str(inst.args), 0, 0)
             self.print(str(inst), 0, 0)
+            return False
 
-    def __load_malicious_datafile(self, malicious_data_path: str, data_file_name) -> None:
+    def load_malicious_datafile(self, malicious_data_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc accross files
         Returns nothing, but the dictionary should be filled
+        :param malicious_data_path: path_to local threat intel files/localfile
         """
         try:
+            data_file_name = malicious_data_path.split('/')[-1]
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             with open(malicious_data_path) as malicious_file:
-
                 self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 4, 0)
 
                 # Remove comments and find the description column if possible
@@ -240,10 +240,11 @@ class Module(Module, multiprocessing.Process):
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
         except KeyboardInterrupt:
             return True
         except Exception as inst:
-            self.print('Problem on the __load_malicious_datafile()', 0, 1)
+            self.print('Problem on the load_malicious_datafile()', 0, 1)
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -300,7 +301,7 @@ class Module(Module, multiprocessing.Process):
                     old_hash = ''
                 # In the case of the local file, we dont store the e-tag but
                 # the hash
-                new_hash = self.__get_hash_from_file(path_to_files + '/' + localfile)
+                new_hash = self.get_hash_from_file(path_to_files + '/' + localfile)
                 if old_hash == new_hash:
                     # The 2 hashes are identical. File is up to date.
                     self.print(f'File {localfile} is up to date.', 3, 0)
@@ -313,7 +314,7 @@ class Module(Module, multiprocessing.Process):
                         # Delete previous data of this file.
                         self.__delete_old_source_data_from_database(localfile)
                     # Load updated data to the database
-                    self.__load_malicious_datafile(path_to_files + '/' + localfile, localfile)
+                    self.load_malicious_datafile(path_to_files + '/' + localfile)
 
                     # Store the new etag and time of file in the database
                     malicious_file_info = {}
@@ -325,7 +326,6 @@ class Module(Module, multiprocessing.Process):
                     # Something failed. Do not download
                     self.print(f'Some error ocurred on calculating file hash. Not loading  the file {localfile}', 0, 1)
                     return False
-
 
         except Exception as inst:
             self.print('Problem on __load_malicious_local_files()', 0, 0)
@@ -449,7 +449,7 @@ class Module(Module, multiprocessing.Process):
                             # set malicious IP in IPInfo
                             self.set_maliciousIP_to_IPInfo(ip, ip_description)
                             # set malicious IP in MaliciousIPs
-                            self.set_maliciousIP_to_MaliousIPs(ip, profileid,twid)
+                            self.set_maliciousIP_to_MaliousIPs(ip, profileid, twid)
 
                     if domain:
                         # Search for this domain in our database of IoC

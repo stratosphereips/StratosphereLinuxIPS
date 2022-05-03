@@ -535,10 +535,12 @@ class Database(object):
             self.r.hset(profileid + self.separator + twid, key_name, str(data))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
+            return True
         except Exception as inst:
             self.outputqueue.put('01|database|[DB] Error in add_ips in database.py')
             self.outputqueue.put('01|database|[DB] Type inst: {}'.format(type(inst)))
             self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            return False
 
     def refresh_data_tuples(self):
         """
@@ -906,7 +908,9 @@ class Database(object):
 
 
     def deleteEvidence(self,profileid, twid, key):
-        """ Delete evidence from the database """
+        """ Delete evidence from the database
+        key is a dict with type_detection, detection_info, type_evidence as keys
+        """
 
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
@@ -1153,6 +1157,9 @@ class Database(object):
             if supported_channel in channel:
                 pubsub.subscribe(channel)
                 break
+        else:
+            # channel isn't in supported_channels
+            return False
         return pubsub
 
     def publish(self, channel, data):
@@ -1249,6 +1256,9 @@ class Database(object):
             to_send['stime'] = stime
             to_send = json.dumps(to_send)
             self.publish('new_flow', to_send)
+            return True
+        # means repeated flow
+        return False
 
     def add_out_ssl(self, profileid, twid, daddr_as_obj, dport, flowtype, uid,
                     version, cipher, resumed, established, cert_chain_fuids,

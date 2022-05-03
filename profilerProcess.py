@@ -21,7 +21,7 @@ from datetime import datetime
 from datetime import timedelta
 import sys
 import configparser
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import time
 import ipaddress
 import traceback
@@ -99,6 +99,10 @@ class ProfilerProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.home_net = False
+        try:
+            self.whitelist_path = self.config.get('parameters', 'whitelist_path')
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.whitelist_path = 'whitelist.conf'
 
         # Get the time window width, if it was not specified as a parameter
         try:
@@ -147,55 +151,62 @@ class ProfilerProcess(multiprocessing.Process):
             self.label = 'unknown'
 
     def read_whitelist(self):
-        """ Reads the content of whitelist.csv and stores information about each ip/org/domain in the database """
+        """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
 
         self.whitelisted_IPs = {}
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
-        with open("whitelist.csv") as whitelist:
-            # Ignore comments
-            while True:
-                line = whitelist.readline()
-                # break while statement if it is not a comment line
-                # i.e. does not startwith #
-                if not line.startswith('#') and not line.startswith('"IoCType"'):
-                    break
-            # Process lines after comments
-            line_number = 0
-            while line:
-                line_number+=1
-                # ignore comments
-                if line.startswith('#'):
+        try:
+            with open(self.whitelist_path) as whitelist:
+                # Ignore comments
+                while True:
                     line = whitelist.readline()
-                    continue
-                # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
-                line = line.replace("\n","").replace(" ","").split(",")
-                try:
-                    type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
-                except IndexError:
-                    # line is missing a column, ignore it.
-                    self.print(f"Line {line_number} in whitelist.csv is missing a column. Skipping.")
+                    # break while statement if it is not a comment line
+                    # i.e. does not startwith #
+                    if not line.startswith('#') and not line.startswith('"IoCType"'):
+                        break
+                # Process lines after comments
+                line_number = 0
+                while line:
+                    line_number+=1
+                    # ignore comments
+                    if line.startswith('#'):
+                        line = whitelist.readline()
+                        continue
+                    # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
+                    line = line.replace("\n","").replace(" ","").split(",")
+                    try:
+                        type_ , data, from_ , what_to_ignore = line[0], line[1], line[2], line[3]
+                    except IndexError:
+                        # line is missing a column, ignore it.
+                        self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
+                        line = whitelist.readline()
+                        continue
+                    # Validate the type before processing
+                    try:
+                        if ('ip' in type_ and
+                            (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
+                            self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'domain' in type_ and validators.domain(data):
+                            self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
+                        elif 'org' in type_:
+                            #organizations dicts look something like this:
+                            #  {'google': {'from':'dst',
+                            #               'what_to_ignore': 'alerts'
+                            #               'IPs': {'34.64.0.0/10': subnet}}
+                            self.whitelisted_orgs[data] = {'from': from_,
+                                                           'what_to_ignore': what_to_ignore}
+                        else:
+                            self.print(f"{data} is not a valid {type_}.",1,0)
+                    except:
+                        self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
                     line = whitelist.readline()
-                    continue
-                # Validate the type before processing
-                try:
-                    if ('ip' in type_ and
-                        (validators.ip_address.ipv6(data) or validators.ip_address.ipv4(data))):
-                        self.whitelisted_IPs[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
-                    elif 'domain' in type_ and validators.domain(data):
-                        self.whitelisted_domains[data] = {'from': from_, 'what_to_ignore': what_to_ignore}
-                    elif 'org' in type_:
-                        #organizations dicts look something like this:
-                        #  {'google': {'from':'dst',
-                        #               'what_to_ignore': 'alerts'
-                        #               'IPs': {'34.64.0.0/10': subnet}}
-                        self.whitelisted_orgs[data] = {'from': from_,
-                                                       'what_to_ignore': what_to_ignore}
-                    else:
-                        self.print(f"{data} is not a valid {type_}.",1,0)
-                except:
-                    self.print(f"Line {line_number} in whitelist.csv is invalid. Skipping.")
-                line = whitelist.readline()
+        except FileNotFoundError:
+            self.print(f"Can't find {self.whitelisted_path}, using slips default whitelist.conf instead")
+            self.whitelisted_path = 'whitelist.conf'
+            self.read_whitelist()
+
+
         # after we're done reading the file, process organizations info
         # If the user specified an org in the whitelist, load the info about it only to the db and to memory
         for org in self.whitelisted_orgs:
@@ -212,6 +223,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.set_whitelist(self.whitelisted_IPs,
                                    self.whitelisted_domains,
                                    self.whitelisted_orgs)
+        return line_number
 
     def load_org_asn(self, org) -> list :
         """
@@ -222,7 +234,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             # Each file is named after the organization's name followed by _asn
             org_asn =[]
-            file = f'slips/organizations_info/{org}_asn'
+            file = f'slips_files/organizations_info/{org}_asn'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
@@ -245,7 +257,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
             org_subnets = []
-            file = f'slips/organizations_info/{org}'
+            file = f'slips_files/organizations_info/{org}'
             with open(file,'r') as f:
                 line = f.readline()
                 while line:
@@ -288,7 +300,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.print('\tData did not arrived in json format from the input', 0, 1)
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
-
             # In the case of Zeek from an interface or pcap,
             # the structure is a JSON
             # So try to convert into a dict
@@ -299,12 +310,18 @@ class ProfilerProcess(multiprocessing.Process):
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
+                return self.input_type
             else:
+                # data is a str
                 try:
+                    # data is a serialized json dict
+                    # suricata lines have 'event_type' key, either flow, dns, etc..
                     data = json.loads(data)
-                    if data['event_type'] == 'flow':
+                    if data['event_type']:
+                        # found the key, is suricata
                         self.input_type = 'suricata'
                 except ValueError:
+                    # not suricata, data is a tab or comma separated str
                     nr_commas = len(data.split(','))
                     nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
@@ -314,12 +331,12 @@ class ProfilerProcess(multiprocessing.Process):
                             self.input_type = 'nfdump'
                         else:
                             self.input_type = 'argus'
-
                     elif nr_tabs >= nr_commas:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         self.separator = '	'
                         self.input_type = 'zeek-tabs'
+                return self.input_type
         except Exception as inst:
             self.print('\tProblem in define_type()', 0, 1)
             self.print(str(type(inst)), 0, 1)
@@ -387,6 +404,7 @@ class ProfilerProcess(multiprocessing.Process):
                     continue
                 temp_dict[i] = self.column_idx[i]
             self.column_idx = temp_dict
+            return self.column_idx
         except Exception as inst:
             self.print('\tProblem in define_columns()', 0, 1)
             self.print(str(type(inst)), 0, 1)
@@ -442,8 +460,8 @@ class ProfilerProcess(multiprocessing.Process):
                 defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
             else:
                 try:
-                    # The format of time is a complete date. 
-                    # Dont modify it, since 
+                    # The format of time is a complete date.
+                    # Dont modify it, since
                     # 1) The time is a string, so we dont know the original timezone
                     # 2) the python call datetime.fromtimestamp uses by default
                     # the local zone when nothing is specified.
@@ -1200,9 +1218,21 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
 
-    def process_suricata_input(self, line: str) -> None:
+    def process_suricata_input(self, line) -> None:
         """ Read suricata json input """
-        line = json.loads(line)
+
+        # convert to dict if it's not a dict already
+        if type(line)== str:
+            # lien is the actual data
+            line = json.loads(line)
+        else:
+            # line is a dict with data and type as keys
+            try:
+                line = json.loads(line['data'])
+            except KeyError:
+                # can't find the line!
+                return True
+
 
         self.column_values: dict = {}
         try:
@@ -1450,7 +1480,7 @@ class ProfilerProcess(multiprocessing.Process):
             for domain in list(self.whitelisted_domains.keys()):
                 what_to_ignore = self.whitelisted_domains[domain]['what_to_ignore']
                 # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then test.slack.com 
+                # subdomains. If slack.com was whitelisted, then test.slack.com
                 # should be ignored too. But not 'slack.com.test'
                 for domain_to_check in domains_to_check:
                     main_domain = domain_to_check[-len(domain):]
@@ -1459,7 +1489,7 @@ class ProfilerProcess(multiprocessing.Process):
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                             #self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
-    
+
                 # Now check the related domains of the src IP
                 from_ = self.whitelisted_domains[domain]['from']
                 if 'src' in from_ or 'both' in from_:
@@ -1520,7 +1550,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if src IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['saddr']) 
+                                ip = ipaddress.ip_address(self.column_values['saddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1543,7 +1573,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Check if dst IP belongs to a whitelisted organization range
                         for network in org_subnets:
                             try:
-                                ip = ipaddress.ip_address(self.column_values['daddr']) 
+                                ip = ipaddress.ip_address(self.column_values['daddr'])
                             except ValueError:
                                 # Some flows don't have IPs, but mac address or just - in some cases
                                 return False
@@ -1574,7 +1604,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
 
             # Define which type of flows we are going to process
-            
+
             if not self.column_values:
                 return True
             elif self.column_values['type'] not in ('ssh','ssl','http','dns','conn','flow','argus','nfdump','notice', 'dhcp'):
@@ -1902,6 +1932,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
             """
+            return profileid,twid
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
@@ -2285,9 +2316,11 @@ class ProfilerProcess(multiprocessing.Process):
                         # This line will be discarded because
                         self.define_type(line)
                         # We should do this before checking the type of input so we don't lose the first line of input
-
                     # What type of input do we have?
-                    if self.input_type == 'zeek':
+                    if not self.input_type:
+                        # can't definee the type of input
+                        self.print("Can't determine input type.",5,6)
+                    elif self.input_type == 'zeek':
                         # self.print('Zeek line')
                         self.process_zeek_input(line)
                         # Add the flow to the profile
@@ -2323,6 +2356,8 @@ class ProfilerProcess(multiprocessing.Process):
                     elif self.input_type == 'nfdump':
                         self.process_nfdump_input(line)
                         self.add_flow_to_profile()
+                    else:
+                        self.print("Can't recognize input file type.")
         except KeyboardInterrupt:
             self.print("Received {} lines.".format(rec_lines), 0, 1)
             return True

@@ -12,8 +12,8 @@ echo "[+] Executing 'pip3 install maxminddb colorama validators urllib3 numpy sk
 pip3 install maxminddb colorama validators urllib3 numpy sklearn pandas certifi keras redis==3.4.1 netaddr slackclient stix2 cabby ipwhois tzlocal
 echo "[+] Executing pip3 install --ignore-installed six"
 pip3 install --ignore-installed six
-echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs'"
-sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs pytest'"
+sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs pytest
 
 # Installing zeek
 echo "[+] Installing zeek ..."

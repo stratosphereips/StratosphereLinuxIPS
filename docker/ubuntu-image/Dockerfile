@@ -40,6 +40,7 @@ RUN pip3 install cabby
 RUN pip3 install ipwhois
 RUN pip3 install --ignore-installed six
 RUN pip3 install tzlocal
+RUN pip3 install pytest
 RUN pip3 install --upgrade tensorflow==2.4.1
 
 # Download and unpack Slips.
