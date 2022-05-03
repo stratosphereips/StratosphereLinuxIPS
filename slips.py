@@ -173,6 +173,7 @@ def load_modules(to_ignore):
             module = importlib.import_module(module_name)
         except ImportError as e:
             print("Something wrong happened while importing the module {0}: {1}".format(module_name, e))
+            failed_to_load_modules += 1
             continue
 
         # Walk through all members of currently imported modules.
@@ -439,10 +440,14 @@ def shutdown_gracefully(input_information):
         if delete_zeek_files:
             shutil.rmtree('zeek_files')
         # add slips end date in the metadata dir
-        if 'yes' in enable_metadata.lower():
-            with open(info_path, 'a') as f:
-                now = datetime.now()
-                f.write(f'Slips end date: {now}\n')
+        try:
+            if 'yes' in enable_metadata.lower():
+                with open(info_path, 'a') as f:
+                    now = datetime.now()
+                    f.write(f'Slips end date: {now}\n')
+        except NameError:
+            # slips is shut down before enable_metadata is read from slips.conf
+            pass
         os._exit(-1)
         return True
     except KeyboardInterrupt:

@@ -1,20 +1,9 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
 
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform,os
 import sys
 
@@ -22,7 +11,6 @@ import sys
 import configparser
 from modules.update_manager.timer_manager import InfiniteTimer
 from modules.update_manager.update_file_manager import UpdateFileManager
-from signal import SIGSTOP
 
 
 class UpdateManager(Module, multiprocessing.Process):
@@ -94,6 +82,7 @@ class UpdateManager(Module, multiprocessing.Process):
         return True
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # Starting timer to update files
             self.timer_manager.start()

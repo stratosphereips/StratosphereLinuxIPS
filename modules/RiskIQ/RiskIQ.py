@@ -99,6 +99,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
             return False
         # Main loop function

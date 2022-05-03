@@ -364,10 +364,9 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
-        # Load the model first
+        utils.drop_root_privs()
         # Load the model
         self.read_model()
-
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)

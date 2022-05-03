@@ -18,6 +18,7 @@
 
 import multiprocessing
 import platform
+from slips_files.common.slips_utils import utils
 import os
 
 # Gui Process
@@ -60,6 +61,7 @@ class GuiProcess(multiprocessing.Process):
         pass
 
     def run(self):
+        utils.drop_root_privs()
         try:
             os.system('cd modules/kalipso;node kalipso.js')
         except KeyboardInterrupt:

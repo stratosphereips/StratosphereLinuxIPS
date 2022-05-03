@@ -224,6 +224,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # if we we don't have compiled rules, compile them
             self.compile_and_save_rules()

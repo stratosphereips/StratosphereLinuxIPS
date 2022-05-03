@@ -169,6 +169,7 @@ class OutputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         while True:
             try:
                 line = self.queue.get()

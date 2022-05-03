@@ -2437,6 +2437,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('finished_modules', 'ProfilerProcess')
 
     def run(self):
+        utils.drop_root_privs()
         rec_lines = 0
         # Main loop function
         while True:

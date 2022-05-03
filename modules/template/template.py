@@ -74,6 +74,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

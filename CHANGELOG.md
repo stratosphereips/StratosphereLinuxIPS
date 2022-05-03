@@ -1,5 +1,8 @@
 -0.9.0
 * Slips
+ - Drop root privileges in modules that don't need them
+-0.9.0
+* Slips
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
  - Parse zeek software.log and extract software type, version and user agent from it
  - Detect multiple SSH client versions. slips will now alert if an IP is detected using OpenSSH_8.1 then OpenSSH_7.1 for example
