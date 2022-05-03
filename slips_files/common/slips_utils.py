@@ -29,7 +29,10 @@ class Utils(object):
 
 
     def drop_root_privs(self):
-        """ Drop root privileges if the module doesn't need them. """
+        """
+        Drop root privileges if the module doesn't need them
+        Shouldn't be called from __init__ because then, it affects the parent process too
+        """
 
         if platform.system() != 'Linux':
             return

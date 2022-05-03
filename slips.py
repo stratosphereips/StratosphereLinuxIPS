@@ -173,6 +173,7 @@ def load_modules(to_ignore):
             module = importlib.import_module(module_name)
         except ImportError as e:
             print("Something wrong happened while importing the module {0}: {1}".format(module_name, e))
+            failed_to_load_modules += 1
             continue
 
         # Walk through all members of currently imported modules.

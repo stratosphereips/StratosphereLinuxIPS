@@ -35,7 +35,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         # Subscribe to the channel
@@ -365,10 +364,9 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
-        # Load the model first
+        utils.drop_root_privs()
         # Load the model
         self.read_model()
-
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)

@@ -21,6 +21,7 @@ from slips_files.common.abstracts import Module
 from slips_files.core.database import __database__
 
 
+
 def validate_slips_data(message_data: str) -> (str, int):
     """
     Check that message received from p2p_data_request channel has correct
@@ -79,7 +80,6 @@ class Trust(Module, multiprocessing.Process):
                  rename_sql_db_file=False,
                  override_p2p=False):
         multiprocessing.Process.__init__(self)
-        utils.drop_root_privs()
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
@@ -502,6 +502,7 @@ class Trust(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            utils.drop_root_privs()
             # configure process
             self._configure()
             # check if it was possible to start up pigeon

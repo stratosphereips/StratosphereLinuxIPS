@@ -32,7 +32,6 @@ class GuiProcess(multiprocessing.Process):
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
-        utils.drop_root_privs()
         # Read the configuration
         self.read_configuration()
 
@@ -62,6 +61,7 @@ class GuiProcess(multiprocessing.Process):
         pass
 
     def run(self):
+        utils.drop_root_privs()
         try:
             os.system('cd modules/kalipso;node kalipso.js')
         except KeyboardInterrupt:

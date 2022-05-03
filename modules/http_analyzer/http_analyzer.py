@@ -21,7 +21,6 @@ class Module(Module, multiprocessing.Process):
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_http')
@@ -294,6 +293,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

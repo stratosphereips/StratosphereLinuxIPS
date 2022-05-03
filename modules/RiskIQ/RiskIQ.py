@@ -23,7 +23,6 @@ class Module(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_ip')
@@ -100,6 +99,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
             return False
         # Main loop function

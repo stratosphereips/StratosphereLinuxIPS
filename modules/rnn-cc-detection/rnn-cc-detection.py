@@ -31,7 +31,6 @@ class Module(Module, multiprocessing.Process):
         # In case you need to read the slips.conf configuration file for your
         # own configurations
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.c1 = __database__.subscribe('new_letters')
@@ -129,6 +128,7 @@ class Module(Module, multiprocessing.Process):
         return True
 
     def run(self, model_file="modules/rnn-cc-detection/rnn_model.h5"):
+        utils.drop_root_privs()
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model

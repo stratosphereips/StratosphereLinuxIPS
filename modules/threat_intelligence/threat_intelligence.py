@@ -29,7 +29,6 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Subscribe to the channel
         __database__.start(self.config)
-        utils.drop_root_privs()
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
@@ -412,6 +411,7 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            utils.drop_root_privs()
             # Load the local Threat Intelligence files that are stored in the local folder
             # The remote files are being loaded by the update_manager
             # check if we should update the files

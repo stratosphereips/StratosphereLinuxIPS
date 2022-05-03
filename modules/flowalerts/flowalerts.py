@@ -35,7 +35,6 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config)
         # Read the configuration
         self.read_configuration()
-        utils.drop_root_privs()
         # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
@@ -701,6 +700,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

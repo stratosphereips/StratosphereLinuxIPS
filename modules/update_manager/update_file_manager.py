@@ -21,7 +21,6 @@ class UpdateFileManager:
         self.name = 'update_manager'
         # Start the database
         __database__.start(self.config)
-        utils.drop_root_privs()
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.new_update_time = float('-inf')

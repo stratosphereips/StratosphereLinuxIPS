@@ -97,6 +97,7 @@ class Module(Module, multiprocessing.Process):
                 dstip_labels_total[flow_data['daddr']][self.malicious_label] = dstip_labels_total[flow_data['daddr']].get(self.malicious_label, 0) + 1
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

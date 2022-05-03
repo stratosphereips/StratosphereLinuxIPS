@@ -26,7 +26,6 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config)
-        utils.drop_root_privs()
         # self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:
@@ -225,6 +224,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # if we we don't have compiled rules, compile them
             self.compile_and_save_rules()

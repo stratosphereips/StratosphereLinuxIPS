@@ -1,4 +1,3 @@
-from slips_files.common.slips_utils import utils
 import os
 import redis
 import time

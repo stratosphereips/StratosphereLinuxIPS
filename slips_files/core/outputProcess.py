@@ -31,7 +31,6 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        utils.drop_root_privs()
         # create the file and clear it
         self.errors_logfile = 'output/errors.log'
         self.create_errors_log()
@@ -170,6 +169,7 @@ class OutputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         while True:
             try:
                 line = self.queue.get()

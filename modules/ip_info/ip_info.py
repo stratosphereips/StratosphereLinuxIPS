@@ -31,7 +31,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
-        utils.drop_root_privs()
         # Start the redis DB
         __database__.start(self.config)
         # open mmdbs
@@ -299,6 +298,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

@@ -49,7 +49,6 @@ class LogsProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.separator = '_'
@@ -97,6 +96,7 @@ class LogsProcess(multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)

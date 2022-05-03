@@ -510,6 +510,7 @@ class InputProcess(multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
