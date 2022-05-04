@@ -2,7 +2,7 @@
 
 The P2P module makes Slips be a peer in a peer to peer network of computers in the local network. The peers are only in the local network and they communicate using multicast packets. The P2P module is a highly complex system of data sharing, reports on malicious computers, asking about IoC to the peers and a complex trust model that is designed to resiste adversarial peers in the network. Adversarial peers are malicious peers that lie about the data being shared (like saying that a computer is maliciuos when is not, or that an attacker is benign).
 
-This module was designed and partially implemented in a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252) on CTU FEL by [Dita Hollmmanova](https://www.linkedin.com/in/dita-hollmannova/). The goal was to enable Slips instances in a local network to share detections and collectively improve blocking decisions. While the thesis succeeded in creating a framework and a trust model, the project is far from stable. The final implementation in Slips was finished by Alya Gomaa.
+This module was designed and partially implemented in a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252) on CTU FEL by [Dita Hollmannova](https://www.linkedin.com/in/dita-hollmannova/). The goal was to enable Slips instances in a local network to share detections and collectively improve blocking decisions. While the thesis succeeded in creating a framework and a trust model, the project is far from stable. The final implementation in Slips was finished by Alya Gomaa.
 
 This readme provides a shallow overview of the code structure, to briefly document the code for future developers. The whole architecture was thoroughly documented in the thesis itself, which can be downloaded from the link above.
 
