@@ -17,32 +17,30 @@ Slips is a modular behavioral Python intrusion prevention system that uses machi
 
 ## Features
 
-Slips is a Python-based intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, to detect of command and control channels and to provide good visualisation for the analyst. Slips is able to analyze real live traffic from the device and the large network captures in the type of a pcap files, Suricata, Zeek/Bro and Argus flows. As a result, Slips highlights suspicious behaviour and connections that needs to be deeper analyzed. 
+Slips is written in Python and is highly modular. Slips can analyze network traffic in real time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and highlights suspicious behaviour that need the analyst attention. 
 
-Slips is a modular software. Each module is designed to perform a specific detection in the network traffic. Current version of Slips contains following modules:
+Each module in Slips is designed to perform a specific detection in the network traffic. The current version of Slips contains following modules:
 
-|   module  |   description | status |
-| ---| --- | :-: |
-| https | training&test of RandomForest to detect malicious https flows |⏳|
-| port scan detector | detects Horizontal and Vertical port scans |✅|
-| threat Intelligence | checks if each IP is in a list of malicious IPs  |✅|
-| timeline |  creates a timeline of what happened in the network based on all the flows and type of data available  |✅|
-| rnn-cc-detection | detects command and control channels using recurrent neural network and the stratosphere behavioral letters |✅|
-| VirusTotal | module to lookup IP address on VirusTotal |✅|
-| flowalerts | module to find malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |✅|
-| IP_Info | module to find Geolocation, ASN, RDNS info about IPs and MAC vendors  |✅|
-| CESNET | Send and receive alerts from warden servers |✅|
-| RiskIQ | Module to get different information from RiskIQ  |✅|
-| ARP | module to check for ARP attacks in ARP traffic  |✅|
-| ExportingAlerts | module to export alerts to slack, STIX or suricata-like JSON format |✅|
-| http_analyzer | module to analyze HTTP traffic |✅|
-| blocking | module to block malicious IPs connecting to the device |✅|
-| flowmldetection | module to detect malicious flows using ML pretrained models |✅|
-| leak_detector | module to  detect leaks of data in the traffic using YARA rules |✅|
-| P2P | module to share detection data with other Slips instances |✅|
-
-
-Slips has its own console graphical user interface called Kalipso. Kalipso summarizes the detections performed by Slips in colorful graphs and tables.
+|   Module            | Status | Description | 
+| --------------------|   :-:  |------------ |  
+| https               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
+| port scan detector  |   ✅   | detects horizontal and vertical port scans |
+| rnn-cc-detection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
+| flowalerts          |   ✅   | detects a malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |
+| flowmldetection     |   ✅   | detects malicious flows using ML pretrained models |
+| leak_detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
+| threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
+| ARP                 |   ✅   | checks for ARP attacks in ARP traffic  |
+| timeline            |   ✅   | creates a timeline of what happened in the network based on all the flows and type of data available  |
+| VirusTotal          |   ✅   | lookups IP addresses on VirusTotal |
+| RiskIQ              |   ✅   | lookups IP addresses on RiskIQ  |
+| IP_Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
+| CESNET              |   ✅   | sends and receives alerts from CESNET Warden servers |
+| ExportingAlerts     |   ✅   | exports alerts to Slack, STIX or Suricata-like JSON format |
+| http_analyzer       |   ✅   | analyzes HTTP traffic |
+| blocking            |   ✅   | blocks malicious IPs connecting to the device |
+| P2P                 |   ✅   | shares network detections with other Slips peers in the local network |
+| Kalipso             |   ✅   | Slips console graphical user interface to show detection with graphs and tables |
 
 Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
