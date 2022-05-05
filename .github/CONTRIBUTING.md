@@ -1,7 +1,7 @@
 # Contributing to Slips Development
 
 All contributions are welcomed, thank you for taking the time to contribute to this project! 
-These are a set of guidelines for contributing to the development of Slips[^1].
+These are a set of guidelines for contributing to the development of Slips [1].
 
 ## How can you contribute?
 
@@ -11,11 +11,10 @@ These are a set of guidelines for contributing to the development of Slips[^1].
 
 ## Persistent Git Branches
 
-The following git branches permanent in the Slips repository:
+The following git branches in the Slips repository are permanent:
 
 - `master`: contains the stable version of Slips, with new versions at least once a month.
-    All new features should be based on this branch.
-- `develop`: contains the latest unstable version of Slips and also its latest features.
+- `develop`: contains the latest unstable version of Slips and also its latest features. All new features should be based on this branch.
 
 ## Naming Git branches for Pull Requests
 
@@ -23,15 +22,15 @@ To keep the Git history clean and facilitate the revision of contributions we
 ask all branches to follow concise namings. These are the branch-naming patterns
 to follow when contributing to Slips:
 
-- name-bugfix-<>:        pull request branch, contains one bugfix,
-- name-docs-<>:          pull request branch, contains documentation work,
-- name-enhance-<>:       pull request branch, contains one enhancement (not a new feature, but improvement nonetheless)
-- name-feature-<>:       pull request branch, contains a new feature,
-- name-refactor-<>:      pull request branch, contains code refactoring,
+- author-bugfix-:        pull request branch, contains one bugfix,
+- author-docs-:          pull request branch, contains documentation work,
+- author-enhance-:       pull request branch, contains one enhancement (not a new feature, but improvement nonetheless)
+- author-feature-:       pull request branch, contains a new feature,
+- author-refactor-:      pull request branch, contains code refactoring,
 
 ## What branch should you base your contribution to Slips?
 
-As a general rule, base your contribution on the `master` branch.
+As a general rule, base your contribution on the `develop` branch.
 
 ## Creating a pull request
 
@@ -44,4 +43,4 @@ Pull Requests:
 - The cleaner you code/change/changeset is, the faster it will be merged.
 
 ***
-[^1] These contributions guidelines are inspired by the project [Snoopy](https://raw.githubusercontent.com/a2o/snoopy/master/.github/CONTRIBUTING.md) 
+[1] These contributions guidelines are inspired by the project [Snoopy](https://raw.githubusercontent.com/a2o/snoopy/master/.github/CONTRIBUTING.md) 
