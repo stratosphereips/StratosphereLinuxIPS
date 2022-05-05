@@ -183,6 +183,7 @@ let profiles = function () {
                 ipinfo.ajax.url(url).load();
             })
         },
+
         onclick_timeline_flows_daddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.daddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
@@ -207,10 +208,15 @@ let ipinfo = $('#ipinfo').DataTable({
     ]
 });
 
+let profile = profiles();
+profile.onclick_tws();
+profile.onclick_ips();
+
 let hotkeys = operate_hotkeys();
 hotkeys.onclick_buttons();
 hotkeys.onclick_timeline_flows_saddr();
 hotkeys.onclick_timeline_flows_daddr();
+
 
 let hotkey_hook = {
     'initialize_profile_timewindow': function (profile, timewindow) {
