@@ -11,10 +11,10 @@ Slips is a behavioral intrusion prevention system that uses machine learning to 
 
 <h3 align="center"> 
     
-[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Running Slips in a Docker](#installation) — [Authors](#people-involved) — [How to contribute](#how-to-contribute)
+[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
 </h3>
 
-## Features
+# Features
 
 Slips is written in Python and is highly modular. Each module is designed to perform a specific detection in the network traffic. The complete documentation of Slips internal architecture and instructions how to implement a new module are available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
@@ -41,24 +41,7 @@ The following table summarizes all active modules in Slips, its status and purpo
 | P2P                 |   ✅   | shares network detections with other Slips peers in the local network |
 | Kalipso             |   ✅   | Slips console graphical user interface to show detection with graphs and tables |
 
-
-## Training of machine learning models from your data
-
-Slips can also be used in _training_ mode with traffic from the user, so that the machine learning model can be **extended** with the users' traffic to improve detection.
-To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
-
-    mode = train
-
-And also you need to specify the label of the traffic you are adding with:
-
-    label = normal
-
-After this, just run slips normally in your data (interface or any input file) and the machine learning model will be updated automatically.
-To use the new model, just reconfigure slips in test mode
-
-    mode = train
-
-## Installation
+# Installation
 
 The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic from inside the docker. If you need to analyze the traffic from your computer, use the native version.
 
@@ -110,14 +93,29 @@ docker run --name slipsp2p -d -it --rm --net=host --cap-add=NET_ADMIN stratosphe
 ```
 
 
-## Slips in Blackhat 
+# Train the machine learning models with your data
+
+Slips can also be used in _training_ mode with traffic from the user, so that the machine learning model can be **extended** with the users' traffic to improve detection.
+To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
+
+    mode = train
+
+And also you need to specify the label of the traffic you are adding with:
+
+    label = normal
+
+After this, just run slips normally in your data (interface or any input file) and the machine learning model will be updated automatically.
+To use the new model, just reconfigure slips in test mode
+
+    mode = train
+
+# Slips in the Media
 
 Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko). 
 
+# People Involved
 
-## People Involved
-
-**Founder:** Sebastian Garcia. sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
+**Founder:** Sebastian Garcia, sebastian.garcia@agents.fel.cvut.cz, eldraco@gmail.com. 
 
 **Main authors:** Sebastian Garcia, Alya Gomaa, Kamila Babayeva
 
@@ -131,22 +129,23 @@ Check out Slips presentation in Blackhat Arsenal 2021 [here](https://mega.nz/fil
 - kartik88363
 - arkamar
 
-## How to contribute
+# Contribute to Slips
 All contributors are welcomed! How you can help?
 
 - Run Slips and report bugs and needed features, and suggest ideas
 - Pull requests with a solved GitHub issue and new feature
 - Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
-### Getting in touch
+## Get in touch
 
 Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
 
 
-## Acknowledgments
+# Acknowledgments
+
 Slips was funded by the following organizations.
 
-- NlNet Foundation. https://nlnet.nl/
-- AIC Group, Czech Technical University in Prague. https://www.aic.fel.cvut.cz/
-- Avast Software. https://www.avast.com/
-- CESNET. https://www.cesnet.cz/
+- NlNet Foundation, https://nlnet.nl/
+- AIC Group, Czech Technical University in Prague, https://www.aic.fel.cvut.cz/
+- Avast Software, https://www.avast.com/
+- CESNET, https://www.cesnet.cz/
