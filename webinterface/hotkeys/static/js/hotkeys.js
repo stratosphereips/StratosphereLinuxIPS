@@ -106,7 +106,10 @@ let profiles = function () {
         "bDestroy": true,
         columns: [
             { data: 'tuple' },
-            { data: 'string'}
+            { data: 'string' },
+            { data: 'geocountry' },
+            { data: 'reverse_dns' },
+            { data: 'asnorg' }
         ]
     });
 
