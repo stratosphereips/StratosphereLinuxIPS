@@ -72,17 +72,17 @@ Slips will first update the Threat Intelligence (TI) feeds, this process may tak
 The following instructions will guide you on how to run a Slips docker container with file sharing between the host and the container.
 
 ```bash
-        # create a directory to load pcaps in your host computer
-        mkdir ~/dataset
-        
-        # copy the pcap to analyze to the newly created folder
-        cp <some-place>/myfile.pcap ~/dataset
-        
-        # create a new Slips container mapping the folder in the host to a folder in the container
-        docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-        
-        # run slips on the pcap file mapped to the container
-        ./slips.py -c slips.conf -f dataset/myfile.pcap
+    # create a directory to load pcaps in your host computer
+    mkdir ~/dataset
+    
+    # copy the pcap to analyze to the newly created folder
+    cp <some-place>/myfile.pcap ~/dataset
+    
+    # create a new Slips container mapping the folder in the host to a folder in the container
+    docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+    
+    # run slips on the pcap file mapped to the container
+    ./slips.py -c slips.conf -f dataset/myfile.pcap
 ```
 
 ### Run Slips with access to block traffic on the host network
@@ -90,79 +90,116 @@ The following instructions will guide you on how to run a Slips docker container
 To allow the Slips docker container to analyze and block the traffic in your Linux host network interface, it is necessary to run the docker container with the option `--cap-add=NET_ADMIN`. This option allows the container to interact with the network stack of the host computer. To allow blocking malicious behavior, run Slips with the parameter `-p`.
 
 ```bash
-        # run a new Slips container with the option to interact with the network stack of the host
-        docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
-        
-        # run slips on the host interface `eno1` with active blocking `-p`
-        ./slips.py -c slips.conf -i eno1 -p
+    # run a new Slips container with the option to interact with the network stack of the host
+    docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+    
+    # run slips on the host interface `eno1` with active blocking `-p`
+    ./slips.py -c slips.conf -i eno1 -p
 ```
 ### Build Slips from the Dockerfile
 
 To build a local docker image of Slips follow the next steps:
 
 ```bash
-        # clone the Slips repository in your host computer
-        git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-        
-        # access the Slips repository directory
-        cd StratosphereLinuxIPS/
-        
-        # build the docker image from the recommended Dockerfile
-        docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
-        
-        # run a new Slips container from the freshly built local image
-        docker run -it --rm --net=host --name slips slips
-        
-        # run Slips using the default configuration in one of the provided test datasets
-        ./slips.py -c slips.conf -f dataset/test3.binetflow
+    # clone the Slips repository in your host computer
+    git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
+    
+    # access the Slips repository directory
+    cd StratosphereLinuxIPS/
+    
+    # build the docker image from the recommended Dockerfile
+    docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
+    
+    # run a new Slips container from the freshly built local image
+    docker run -it --rm --net=host --name slips slips
+    
+    # run Slips using the default configuration in one of the provided test datasets
+    ./slips.py -c slips.conf -f dataset/test3.binetflow
 ```
 
-## If you want to run Slips locally on bare metal
+## Slips Bare Metal Installation
 
-The easiest way is to use [conda](https://docs.conda.io/en/latest/) for Python environment management. 
-Note that if you want to analyze PCAPs, you need to have either `zeek` or `bro` installed. Check [slips.py](slips.py) and usage of `check_zeek_or_bro` function.
-Slips also needs Redis for interprocess communication, you can either install Redis on bare metal and run `redis-server --daemonize yes` or you can use docker version
-and execute `docker run --rm -d --name slips_redis -p 6379:6379 redis:alpine`.
+To install Slips in your host computer there are three core things needed: i. installing Python dependencies, ii. installing Redis, and iii. installing `zeek` (formerly `bro`) for pcap analysis. 
+
+### Clone Slips repository
+
+The first step is to clone the Slips repository to your host computer:
+
 ```bash
-# clone repository
-git@github.com:stratosphereips/StratosphereLinuxIPS.git && cd StratosphereLinuxIPS
-# create conda environment and download all python dependencies
-conda env create -f conda-environment.yaml
-# activate conda environment
-conda activate slips 
-# and finally run slips
-./slips.py -c slips.conf -f dataset/myfile.pcap
+    # clone repository
+    git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
+    
+    # access the Slips directory
+    cd StratosphereLinuxIPS
 ```
 
-You can now put pcap files or other flow files in the ./dataset/ folder and analyze them
+### Installing Redis
+
+Slips needs Redis for interprocess communication. Redis can be installed directly in the host computer or can be run using Docker.
+
+To run Redis directly on the host run:
+
+        redis-server --daemonize yes
+    
+To run a Redis docker container run:
+
+        docker run --rm -d --name slips_redis -p 6379:6379 redis:alpine
+
+### Installing Python dependencies
+
+We recommend using [Conda](https://docs.conda.io/en/latest/) for the Python environment management:
+
+```bash
+    # create conda environment and download all Python dependencies
+    conda env create -f conda-environment.yaml
+    
+    # activate the conda environment
+    conda activate slips 
+```
+
+### Installing Zeek for pcap analysis
+
+Additionally, you may need to install either `zeek` or `bro` in order to have the capability to analyze pcap files. Follow the official installation guide from [Zeek Website](https://zeek.org/get-zeek/). Check [slips.py](slips.py) and its usage on the `check_zeek_or_bro` function.
+
+### Run Slips
+
+After all dependencies are installed and Redis is running, you are ready to run Slips. Copy pcap files or other flow files in the ./dataset/ folder and analyze them:
+
+```bash
+    # run Slips with the default configuration
+    # use a sample pcap of your own
+    ./slips.py -c slips.conf -f dataset/myfile.pcap
+```
 
 ## P2P Module
 The peer to peer system os Slips is a highly complex automatic system to find other peers in the network and share data on IoC automatically in a balanced, trusted way. You just have to enable the P2P system. Please check the documentation [here](../docs/P2P.md)
 
 You can use Slips with P2P directly in a special docker image by doing:
 
+```bash
+    # download the Slips P2P docker image
+    docker pull stratosphereips/slips_p2p
+    
+    # run Slips on the local network
+    docker run --name slipsp2p -d -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips_p2p
 ```
-docker pull stratosphereips/slips_p2p
-docker run --name slipsp2p -d -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips_p2p
-```
-
 
 # Train the machine learning models with your data
 
 Slips can also be used in _training_ mode with traffic from the user, so that the machine learning model can be **extended** with the users' traffic to improve detection.
 To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
 
-    mode = train
+        mode = train
 
 And also you need to specify the label of the traffic you are adding with:
 
-    label = normal
+        label = normal
 
 After this, just run slips normally in your data (interface or any input file) and the machine learning model will be updated automatically.
 To use the new model, just reconfigure slips in test mode
 
-    mode = train
-
+        mode = train
+    
 # Slips in the Media
 
 - 2021 BlackHat Europe Arsenal, Slips: A Machine-Learning Based, Free-Software, Network Intrusion Prevention System [[slides](https://mega.nz/file/EAIjWA5D#DoYhJknH1hpbqfS2ayVLwA7ewNT50jFQb7S3dVAKPko)] [[web](https://www.blackhat.com/eu-21/arsenal/schedule/#slips-a-machine-learning-based-free-software-network-intrusion-prevention-system-25116)]
