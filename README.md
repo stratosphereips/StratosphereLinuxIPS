@@ -5,8 +5,7 @@ Slips v0.9.0
 Behavioral Machine Learning Based Intrusion Prevention System
 </h1>
 
-Slips is a modular behavioral Python intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips was designed to focus on targeted attacks, detection of command and control channels, and to provide a good visualisation for the analyst.
-
+Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to provide a good visualisation for the analyst. It can analyze network traffic in real time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and highlights suspicious behaviour that need the analyst attention. 
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
 
@@ -17,9 +16,9 @@ Slips is a modular behavioral Python intrusion prevention system that uses machi
 
 ## Features
 
-Slips is written in Python and is highly modular. Slips can analyze network traffic in real time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and highlights suspicious behaviour that need the analyst attention. 
+Slips is written in Python and is highly modular. Each module is designed to perform a specific detection in the network traffic. The complete documentation of Slips internal architecture and instructions how to implement a new module are available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
-Each module in Slips is designed to perform a specific detection in the network traffic. The current version of Slips contains following modules:
+The following table summarizes all active modules in Slips, its status and purpose:
 
 |   Module            | Status | Description | 
 | --------------------|   :-:  |------------ |  
@@ -42,7 +41,6 @@ Each module in Slips is designed to perform a specific detection in the network 
 | P2P                 |   ✅   | shares network detections with other Slips peers in the local network |
 | Kalipso             |   ✅   | Slips console graphical user interface to show detection with graphs and tables |
 
-Complete documentation of Slips internal architecture and instructions how to implement a new module is available here: https://stratospherelinuxips.readthedocs.io/en/develop/
 
 ## Training of machine learning models from your data
 
