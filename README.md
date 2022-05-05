@@ -43,28 +43,82 @@ The following table summarizes all active modules in Slips, its status and purpo
 
 # Installation
 
-The easiest way to run Slips is inside a docker. Current version of Slips docker can analyze network captures (pcap, Zeek flows, Argus flows, etc.), but it is not able to analyze real live traffic from inside the docker. If you need to analyze the traffic from your computer, use the native version.
+There are two ways to run Slips: i. bare metal installation on Linux, or ii. using Docker which is our preferred option. In this section we guide you through how to get started with Slips.
 
-## How to use Slips docker from DockerHub and share files between the host and the docker:
+## Running Slips Using Docker
 
+The easiest way to run Slips is using Docker. The latest Slips docker image can analyze multiple type of network data, including pcaps, Zeek flows, Argus flows, and others. In Linux systems, it is possible to use the docker image to analyze traffic in real time from the host interface.
+
+### Getting started with Slips docker
+
+Get started with Slips in three simple steps: i. create a new container from the latest Slips docker image, ii. access the container, and iii. run Slips on a sample pcap to test things work as expected. Below you can find the step by step guide on how to proceed.
+
+First, download the latest docker image and spawn a Slips container in daemon mode:
+
+        docker run -it -d --rm --name slips stratosphereips/slips:latest
+        
+Second, get a terminal on the newly created container so we can run Slips:
+
+        docker exec -it slips /bin/bash
+
+Third, run Slips inside the container. The parameter `-c` specifies the Slips configuration to use, and the parameter `-f` specifies the input file to analyze:
+
+        ./slips.py -c slips.conf -f dataset/hide-and-seek-short.pcap
+        
+Slips will first update the Threat Intelligence (TI) feeds, this process may take some minutes. Once the TI feeds are updated, Slips will proceed with analyzing the given file. When the analysis finishes, the results will be stored in the `output/alerts.log` file.
+
+### Run Slips sharing files between the host and the container
+
+The following instructions will guide you on how to run a Slips docker container with file sharing between the host and the container.
+
+```bash
+        # create a directory to load pcaps in your host computer
         mkdir ~/dataset
+        
+        # copy the pcap to analyze to the newly created folder
         cp <some-place>/myfile.pcap ~/dataset
-        docker run -it --rm --net=host -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        
+        # create a new Slips container mapping the folder in the host to a folder in the container
+        docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
+        
+        # run slips on the pcap file mapped to the container
         ./slips.py -c slips.conf -f dataset/myfile.pcap
+```
 
-## How to build Slips docker from Dockerfile:
+### Run Slips with access to block traffic on the host network
 
-        docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
-        docker run -it --rm --net=host slips
-        ./slips.py -c slips.conf -f dataset/test3.binetflow
+To allow the Slips docker container to analyze and block the traffic in your Linux host network interface, it is necessary to run the docker container with the option `--cap-add=NET_ADMIN`. This option allows the container to interact with the network stack of the host computer. To allow blocking malicious behavior, run Slips with the parameter `-p`.
 
-## If you want to allow Slips inside the docker to analyze and block the traffic in your Linux host, run docker with --cap-add=NET_ADMIN. And run with -p
-
-        docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips:latest
+```bash
+        # run a new Slips container with the option to interact with the network stack of the host
+        docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+        
+        # run slips on the host interface `eno1` with active blocking `-p`
         ./slips.py -c slips.conf -i eno1 -p
+```
+### Build Slips from the Dockerfile
 
+To build a local docker image of Slips follow the next steps:
+
+```bash
+        # clone the Slips repository in your host computer
+        git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
+        
+        # access the Slips repository directory
+        cd StratosphereLinuxIPS/
+        
+        # build the docker image from the recommended Dockerfile
+        docker build --no-cache -t slips -f docker/ubuntu-image/Dockerfile .
+        
+        # run a new Slips container from the freshly built local image
+        docker run -it --rm --net=host --name slips slips
+        
+        # run Slips using the default configuration in one of the provided test datasets
+        ./slips.py -c slips.conf -f dataset/test3.binetflow
+```
 
 ## If you want to run Slips locally on bare metal
+
 The easiest way is to use [conda](https://docs.conda.io/en/latest/) for Python environment management. 
 Note that if you want to analyze PCAPs, you need to have either `zeek` or `bro` installed. Check [slips.py](slips.py) and usage of `check_zeek_or_bro` function.
 Slips also needs Redis for interprocess communication, you can either install Redis on bare metal and run `redis-server --daemonize yes` or you can use docker version
