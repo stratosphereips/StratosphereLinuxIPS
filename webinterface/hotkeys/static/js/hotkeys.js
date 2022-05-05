@@ -1,5 +1,5 @@
 let profiles = function () {
-    let table = $('#profiles').DataTable({
+    let profiles_table = $('#profiles').DataTable({
         ajax: '/profiles_tws',
         serverSide: true,
         "scrollY": "700px",
@@ -38,7 +38,7 @@ let profiles = function () {
 
             $('#profiles').on('click', 'tbody td.dt-control', function () {
                 let tr = $(this).closest('tr');
-                let row = table.row(tr);
+                let row = profiles_table.row(tr);
                 if (row.child.isShown()) {
                     row.child.hide();
                 }
@@ -50,7 +50,7 @@ let profiles = function () {
 
         onclick_ips: function () {
             $('#profiles ').on('click', 'tbody td.r', function () {
-                let data = table.row($(this).parents('tr')).data();
+                let data = profiles_table.row($(this).parents('tr')).data();
                 let url = '/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
