@@ -58,7 +58,6 @@ let profiles = function () {
     }
 }
 
-let profile = profiles();
 profile.onclick_tws();
 profile.onclick_ips();
 
@@ -131,9 +130,6 @@ let operate_hotkeys = function () {
 //\\\"type_evidence\\\": \\\"DNSWithoutConnection\\\", \\\"description\\\": \\\"domain 0.debian.pool.ntp.org resolved with no connection\\\",
 //\\\"stime\\\": 1520628615.698819, \\\"uid\\\": \\\"CXSJnM1kDZ5tjRt2Sk\\\", \\\"confidence\\\": 0.8, \\\"threat_level\\\": \\\"low\\\", \\\"category\\\": \\\"Anomaly.Traffic\\\"}\",
     function hide_hotkey() {
-        x = document.getElementById(last_active_hotkey);
-        x.style.display = "none"
-        last_active_hotkey = active_hotkey;
     }
 
     return {
