@@ -1,3 +1,9 @@
+/*
+Set profile and timewindow table.
+Functions:
+    onclick_tws:
+    onclick_ips: display a list of timewindows onclick, and the IP info
+*/
 let profiles = function () {
     let profiles_table = $('#profiles').DataTable({
         ajax: '/profiles_tws',
@@ -58,16 +64,12 @@ let profiles = function () {
     }
 }
 
-profile.onclick_tws();
-profile.onclick_ips();
-
-
-let operate_hotkeys = function () {
-
+ let operate_hotkeys = function () {
     let profile = '';
     let timewindow = '';
-    let active_hotkey = 'timeline';
-    let last_active_hotkey = 'timeline';
+    let active_hotkey_name = 'timeline';
+    let last_active_hotkey_name = 'timeline';
+    let active_hotkey_table = null
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         "bDestroy": true,
@@ -125,11 +127,29 @@ let operate_hotkeys = function () {
         ]
     });
 
-//"{\"domain 0.debian.pool.ntp.org resolved with no connection\": \"{\\\"profileid\\\": \\\"profile_192.168.2.16\\\",
-//\\\"twid\\\": \\\"timewindow1\\\", \\\"type_detection\\\": \\\"dstdomain\\\", \\\"detection_info\\\": \\\"0.debian.pool.ntp.org\\\",
-//\\\"type_evidence\\\": \\\"DNSWithoutConnection\\\", \\\"description\\\": \\\"domain 0.debian.pool.ntp.org resolved with no connection\\\",
-//\\\"stime\\\": 1520628615.698819, \\\"uid\\\": \\\"CXSJnM1kDZ5tjRt2Sk\\\", \\\"confidence\\\": 0.8, \\\"threat_level\\\": \\\"low\\\", \\\"category\\\": \\\"Anomaly.Traffic\\\"}\",
     function hide_hotkey() {
+        document.getElementById(last_active_hotkey_name).style.display = "none"
+        last_active_hotkey_name = active_hotkey_name;
+    }
+
+    function update_table(){
+        switch (active_hotkey_name) {
+            case 'timeline':
+                active_hotkey_table = timeline
+                break;
+            case 'timeline_flows':
+                active_hotkey_table = timeline_flows
+                break;
+            case 'outtuples':
+                active_hotkey_table = outtuples
+                break;
+            case 'alerts':
+                active_hotkey_table = alerts
+                break;
+        }
+        let link = "/" + active_hotkey_name + "/" + profile + "/" + timewindow
+        active_hotkey_table.ajax.url(link).load();
+        document.getElementById(active_hotkey_name).style.display = "block"
     }
 
     return {
@@ -139,36 +159,8 @@ let operate_hotkeys = function () {
             timewindow = tw;
         },
 
-        get_active_hotkey: function () {
-            return active_hotkey;
-        },
-
-        update_timeline_flows: function () {
-            let link = '/timeline_flows/' + profile + '/' + timewindow;
-            timeline_flows.ajax.url(link).load();
-            x = document.getElementById("timeline_flows");
-            x.style.display = "block"
-        },
-
-        update_timeline: function () {
-            let link = '/timeline/' + profile + '/' + timewindow;
-            timeline.ajax.url(link).load();
-            x = document.getElementById("timeline");
-            x.style.display = "block"
-        },
-
-        update_outtuples: function () {
-            let link = '/outtuples/' + profile + '/' + timewindow;
-            outtuples.ajax.url(link).load();
-            x = document.getElementById("outtuples");
-            x.style.display = "block"
-        },
-
-        update_alerts: function () {
-            let link = '/alerts/' + profile + '/' + timewindow;
-            alerts.ajax.url(link).load();
-            x = document.getElementById("alerts");
-            x.style.display = "block"
+        update_table_hook: function(){
+            update_table()
         },
 
         onclick_buttons: function () {
@@ -176,12 +168,14 @@ let operate_hotkeys = function () {
                 $("#buttons .btn").removeClass('active');
                 $(this).toggleClass('active');
                 let [first, ...rest] = (this.id).split('_');
-                active_hotkey = rest.join('_');
-                if (active_hotkey != last_active_hotkey) {
+                active_hotkey_name = rest.join('_');
+                if (active_hotkey_name != last_active_hotkey_name) {
                     hide_hotkey();
                 }
+               update_table()
             });
         },
+
         onclick_timeline_flows_saddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.saddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
@@ -221,36 +215,7 @@ hotkeys.onclick_timeline_flows_daddr();
 let hotkey_hook = {
     'initialize_profile_timewindow': function (profile, timewindow) {
         hotkeys.set_profile_timewindow(profile, timewindow);
-        hotkey_hook.initialize_hotkey();
-    },
-    'initialize_hotkey': function () {
-        let active_hotkey = hotkeys.get_active_hotkey();
-        if (active_hotkey == 'timeline') {
-            hotkey_hook.set_timeline();
-        }
-        else if (active_hotkey == 'timeline_flows') {
-            hotkey_hook.set_timeline_flows();
-        }
-        else if (active_hotkey == 'outtuples') {
-            hotkey_hook.set_timewindow_outtuples();
-        }
-        else if (active_hotkey == 'alerts') {
-            hotkey_hook.set_alerts();
-        }
-    },
-    'set_timeline_flows': function () {
-        hotkeys.update_timeline_flows();
-    },
-    'set_timeline': function () {
-        hotkeys.update_timeline();
-    },
-    'set_alerts': function(){
-        hotkeys.update_alerts();
-    },
-    'set_timewindow_outtuples': function () {
-        hotkeys.update_outtuples();
+        hotkeys.update_table_hook();
     }
 }
-
-
 
