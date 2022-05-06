@@ -230,13 +230,11 @@ To use the new model, reconfigure Slips to run in `test` mode by updating the ``
 # Contribute to Slips
 All contributors are welcomed! How you can help?
 
-- Run Slips and report bugs and needed features, and suggest ideas
-- Pull requests with a solved GitHub issue and new feature
-- Pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
-
-## Get in touch
-
-Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
+- Read our [contributing](.github/CONTRIBUTING.md) guidelines.
+- Run Slips and report bugs, make feature requests, and suggest ideas.
+- Open a pull request with a solved GitHub issue and new feature.
+- Open a pull request with a new detection module. The instructions and a template for new detection module [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
+- Join our community at [Discord](https://discord.gg/zu5HwMFy5C), ask questions, suggest new features or give us feedback.
 
 
 # Acknowledgments
