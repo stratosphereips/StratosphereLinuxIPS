@@ -184,19 +184,21 @@ You can use Slips with P2P directly in a special docker image by doing:
     docker run --name slipsp2p -d -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips_p2p
 ```
 
-# Train the machine learning models with your data
+# Train The Machine Learning Models With Your Data
 
-Slips can also be used in _training_ mode with traffic from the user, so that the machine learning model can be **extended** with the users' traffic to improve detection.
+Slips' machine learning models can be extended by running Slips in _training_ mode with the user network traffic, leading to a improvement in the detection.
+
 To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
 
         mode = train
 
-And also you need to specify the label of the traffic you are adding with:
+The machine learning model needs a label for this new traffic to know what type of traffic will it learn from. Add the following label:
 
         label = normal
 
-After this, just run slips normally in your data (interface or any input file) and the machine learning model will be updated automatically.
-To use the new model, just reconfigure slips in test mode
+Run Slips normally in your data, interface or any input file, and the machine learning model will be updated automatically.
+
+To use the new model, reconfigure Slips to run in `test` mode by updating the ```slips.conf``` file with:
 
         mode = train
     
