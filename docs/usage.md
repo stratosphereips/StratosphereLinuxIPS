@@ -85,6 +85,13 @@ Slips has 2 modes, interactive and daemonized.
 **Daemonized** : means , output, logs and alerts are written in files.
 
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in ```slips.conf``` 
+
+by default, these are the paths used
+
+stdout = /var/log/slips/running.log
+stderr = /var/log/slips/error.log
+logsfile = /var/log/slips/running.log
+
  
 This is the default mode, it doesn't require any special flags
 
