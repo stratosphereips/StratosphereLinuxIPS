@@ -27,12 +27,12 @@ import os
 # Output Process
 class OutputProcess(multiprocessing.Process):
     """ A class process to output everything we need. Manages all the output """
-    def __init__(self, inputqueue, verbose, debug, config, stdout=''):
+    def __init__(self, inputqueue, verbose, debug, config, stdout='', stderr='output/errors.log'):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
         # create the file and clear it
-        self.errors_logfile = 'output/errors.log'
+        self.errors_logfile = stderr
         self.create_errors_log()
         self.name = 'OutputProcess'
         self.queue = inputqueue

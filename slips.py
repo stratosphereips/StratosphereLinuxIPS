@@ -118,7 +118,7 @@ class Daemon():
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
-            self.stderr  = self.output_dir + self.stderr
+            self.stderr = self.output_dir + self.stderr
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = '/var/log/slips/errors.log'
@@ -203,7 +203,7 @@ class Daemon():
         # redirect standard file descriptors
         with open(self.stdin, 'r') as stdin,\
             open(self.stdout, 'a+') as stdout,\
-            open(self.stderr,'a+') as stderr:
+            open(self.stderr, 'a+') as stderr:
             os.dup2(stdin.fileno(), sys.stdin.fileno())
             os.dup2(stdout.fileno(), sys.stdout.fileno())
             os.dup2(stderr.fileno(), sys.stderr.fileno())
@@ -735,11 +735,9 @@ class Main():
         try:
             with open(self.args.config) as source:
                 self.config.read_file(source)
-        except IOError:
+        except (IOError, TypeError):
             pass
-        except TypeError:
-            # No conf file provided
-            pass
+
         return self.config
 
     def set_mode(self, mode, daemon=''):
@@ -754,10 +752,9 @@ class Main():
     def start(self):
         """ Main Slips Function """
         try:
-            slips_version =  f'Slips. Version {version}'
+            slips_version = f'Slips. Version {version}'
             from slips_files.common.slips_utils import utils
             branch_info = utils.get_branch_info()
-            commit, branch = None, None
             if branch_info != False:
                 # it's false when we're in docker because there's no .git/ there
                 commit = branch_info[0]
@@ -965,9 +962,6 @@ class Main():
                 # Limit any debuggisity to > 0
                 if self.args.debug < 0:
                     self.args.debug = 0
-
-
-
                 ##########################
                 # Creation of the threads
                 ##########################
@@ -992,13 +986,18 @@ class Main():
                 else:
                     # stdout is not redirected
                     current_stdout = ''
+                # stderr is redirected when daemonized, tell outputprocess
+                stderr = 'output/errors.log'
+                if self.mode == 'daemonized':
+                    stderr = self.daemon.stderr
 
                 # Create the output thread and start it
                 outputProcessThread = OutputProcess(outputProcessQueue,
                                                     self.args.verbose,
                                                     self.args.debug,
                                                     self.config,
-                                                    stdout=current_stdout)
+                                                    stdout=current_stdout,
+                                                    stderr=stderr)
                 # this process starts the db
                 outputProcessThread.start()
 
