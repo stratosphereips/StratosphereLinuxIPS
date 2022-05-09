@@ -383,8 +383,8 @@ class Main():
         # Try to import the module, otherwise skip.
         try:
             # "level specifies whether to use absolute or relative imports. The default is -1 which
-            # indicates both absolute and relative imports will be attempted. 0 means only perform 
-            # absolute imports. Positive values for level indicate the number of parent 
+            # indicates both absolute and relative imports will be attempted. 0 means only perform
+            # absolute imports. Positive values for level indicate the number of parent
             # directories to search relative to the directory of the module calling __import__()."
             module = importlib.import_module(module_name)
         except ImportError as e:

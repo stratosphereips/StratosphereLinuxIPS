@@ -115,6 +115,24 @@ Run slips with ```-I```to start slips in interactive mode.
 
 Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
 
+Slips has 2 modes, interactive and daemonized.
+
+**Daemonized** : means , output, logs and alerts are written in files.
+
+In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in slips.conf 
+ 
+This is the default mode, it doesn't require any special flags
+
+To stop the daemon run slips with ```-S```, for example ```./slips.py -c slips.conf -S```
+
+To restart the daemon run slips with ```-R```, for example ```./slips.py -c slips.conf -R```
+ 
+**Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
+ 
+Run slips with ```-I```to start slips in interactive mode.
+
+Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
+
 ## Reading the output
 
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following in both modes:
