@@ -83,19 +83,20 @@ class Daemon():
                 continue
             # create the file if it doesn't exist or clear it if it exists
             try:
-                open(file,'w').close()
+                open(file, 'w').close()
             except (FileNotFoundError,NotADirectoryError):
                 os.mkdir(os.path.dirname(file))
-                open(file,'w').close()
+                open(file, 'w').close()
 
     def read_configuration(self):
-        """ Read the configuration file to get stdout,stderr, logsfile path."""
+        """ Read the configuration file to get stdout, stderr, logsfile path."""
         self.config = self.slips.read_conf_file()
 
         try:
             # output dir to store running.log and error.log
             self.output_dir = self.config.get('modes', 'output_dir')
-            if not self.output_dir.endswith('/'): self.output_dir = self.output_dir+'/'
+            if not self.output_dir.endswith('/'):
+                self.output_dir = self.output_dir + '/'
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.output_dir = '/var/log/slips/'
@@ -993,7 +994,11 @@ class Main():
                     current_stdout = ''
 
                 # Create the output thread and start it
-                outputProcessThread = OutputProcess(outputProcessQueue, self.args.verbose, self.args.debug, self.config, stdout=current_stdout)
+                outputProcessThread = OutputProcess(outputProcessQueue,
+                                                    self.args.verbose,
+                                                    self.args.debug,
+                                                    self.config,
+                                                    stdout=current_stdout)
                 # this process starts the db
                 outputProcessThread.start()
 
@@ -1146,26 +1151,26 @@ class Main():
                     while True:
                         # Sleep some time to do rutine checks
                         time.sleep(check_time_sleep)
+                        slips_internal_time = float(__database__.getSlipsInternalTime())+1
+                        # Get the amount of modified profiles since we last checked
+                        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(slips_internal_time)
+                        amount_of_modified = len(modified_profiles)
+                        # Get the time of last modified timewindow and set it as a new
+                        if last_modified_tw_time != 0:
+                            __database__.setSlipsInternalTime(last_modified_tw_time)
+                        # How many profiles we have?
+                        profilesLen = str(__database__.getProfilesLen())
                         if self.mode != 'daemonized':
-                            slips_internal_time = float(__database__.getSlipsInternalTime())+1
-                            # Get the amount of modified profiles since we last checked
-                            modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(slips_internal_time)
-                            amount_of_modified = len(modified_profiles)
-                            # Get the time of last modified timewindow and set it as a new
-                            if last_modified_tw_time != 0:
-                                __database__.setSlipsInternalTime(last_modified_tw_time)
-                            # How many profiles we have?
-                            profilesLen = str(__database__.getProfilesLen())
                             print(f'Total Number of Profiles in DB so far: {profilesLen}. '
-                                  f'Modified Profiles in the last TW: {amount_of_modified}. '
-                                  f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
+                                      f'Modified Profiles in the last TW: {amount_of_modified}. '
+                                      f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})', end='\r')
 
                         # Check if we need to close some TW
                         __database__.check_TW_to_close()
 
                         # In interface we keep track of the host IP. If there was no
                         # modified TWs in the host NotIP, we check if the network was changed.
-                        # Dont try to stop slips if its catpurting from an interface
+                        # Dont try to stop slips if its capturing from an interface
                         if self.args.interface:
                             # To check of there was a modified TW in the host IP. If not,
                             # count down.
