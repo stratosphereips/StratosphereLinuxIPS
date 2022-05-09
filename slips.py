@@ -886,6 +886,11 @@ class Main():
                 print('[Main] You need to define an input source.')
                 sys.exit(-1)
 
+            if input_type == 'nfdump' and shutil.which('nfdump') == None:
+                # If we do not have nfdump, terminate Slips.
+                print("nfdump is not installed. terminating slips.")
+                self.terminate_slips()
+
             # If we need zeek (bro), test if we can run it.
             # Need to be assign to something because we pass it to inputProcess later
             zeek_bro = None
@@ -897,12 +902,6 @@ class Main():
                     self.terminate_slips()
                 else:
                     self.prepare_zeek_scripts()
-
-            # See if we have the nfdump, if we need it according to the input type
-            if self.args.nfdump and shutil.which('nfdump') is None:
-                # If we do not have nfdump, terminate Slips.
-                self.terminate_slips()
-
 
             # Remove default alerts files, if exists, don't remove if we're stopping the daemon
             # set alerts.log and alerts.json default paths,
