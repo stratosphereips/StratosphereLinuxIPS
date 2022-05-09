@@ -13,11 +13,13 @@ import socket
 
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
-import modules.p2ptrust.utils.utils as utils
+import modules.p2ptrust.utils.utils as p2p_utils
+from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
 from slips_files.core.database import __database__
+
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -44,9 +46,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get('ip')
         time_since_cached = int(message_data.get('cache_age',0))
-
-
-        if not utils.validate_ip_address(ip_address):
+        if not p2p_utils.validate_ip_address(ip_address):
             return None
 
         return message_data
@@ -80,7 +80,6 @@ class Trust(Module, multiprocessing.Process):
                  rename_sql_db_file=False,
                  override_p2p=False):
         multiprocessing.Process.__init__(self)
-
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
@@ -259,7 +258,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: in the future, be smarter and share only when needed. For now, we will always share
         if not data_already_reported:
             # Take data and send it to a peer as report.
-            utils.send_evaluation_to_go(detection_info, score, confidence, "*", self.pygo_channel)
+            p2p_utils.send_evaluation_to_go(detection_info, score, confidence, "*", self.pygo_channel)
 
     def gopy_callback(self, msg: Dict):
         """
@@ -449,7 +448,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: in some cases, it is not necessary to wait, specify that and implement it
         #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
-        utils.send_request_to_go(ip_address, self.pygo_channel)
+        p2p_utils.send_request_to_go(ip_address, self.pygo_channel)
         self.print(f"[Slips -> The Network] request about {ip_address}")
 
         # go will send a reply in no longer than 10s (or whatever the
@@ -470,8 +469,8 @@ class Trust(Module, multiprocessing.Process):
                        f"Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n", 0, 2)
 
             # save it to IPsInfo hash in p2p4slips key in the db
-            utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
-                                       self.storage_name)
+            p2p_utils.save_ip_report_to_db(ip_address, combined_score, combined_confidence, network_score,
+                                           self.storage_name)
             if int(combined_score) * int(confidence) > 0:
                 self.set_evidence_malicious_ip(ip_info, combined_score, confidence )
 
@@ -503,6 +502,7 @@ class Trust(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            utils.drop_root_privs()
             # configure process
             self._configure()
             # check if it was possible to start up pigeon

@@ -288,6 +288,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
 
     def run(self):
+        utils.drop_root_privs()
         while True:
             try:
                 # Wait for a message from the channel that a TW was modified

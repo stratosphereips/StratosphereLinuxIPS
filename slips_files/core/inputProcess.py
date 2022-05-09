@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-
+from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
 import os
@@ -40,6 +40,7 @@ class InputProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
+        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config)
         self.input_type = input_type
@@ -509,6 +510,7 @@ class InputProcess(multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin

@@ -262,7 +262,24 @@ Slips Support displaying popup notifications whenever there's an alert.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
 
-This feature is supported in Linux and mac and not supported in docker.
+This feature is supported in Linux and mac and is not supported in docker and it requires root privileges.
+
+## Slips permissions
+
+Slips doesn't need root permissions unless you
+
+1. use the blocking module ( with -p )
+2. use slips notifications
+3. are saving the database ( with -d )
+
+If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
+
+```
+setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+```
+
+Even when Slips is run using sudo, it drops root privileges  in modules that don't need them.
+
 
 ## Modifying the configuration file
 

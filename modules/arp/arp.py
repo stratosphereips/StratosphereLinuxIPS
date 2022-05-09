@@ -261,6 +261,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:

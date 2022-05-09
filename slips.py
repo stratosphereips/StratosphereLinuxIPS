@@ -380,16 +380,17 @@ class Main():
             if dir_name != file_name:
                 continue
 
-            # Try to import the module, otherwise skip.
-            try:
-                # "level specifies whether to use absolute or relative imports. The default is -1 which
-                # indicates both absolute and relative imports will be attempted. 0 means only perform
-                # absolute imports. Positive values for level indicate the number of parent
-                # directories to search relative to the directory of the module calling __import__()."
-                module = importlib.import_module(module_name)
-            except ImportError as e:
-                print("Something wrong happened while importing the module {0}: {1}".format(module_name, e))
-                continue
+        # Try to import the module, otherwise skip.
+        try:
+            # "level specifies whether to use absolute or relative imports. The default is -1 which
+            # indicates both absolute and relative imports will be attempted. 0 means only perform 
+            # absolute imports. Positive values for level indicate the number of parent 
+            # directories to search relative to the directory of the module calling __import__()."
+            module = importlib.import_module(module_name)
+        except ImportError as e:
+            print("Something wrong happened while importing the module {0}: {1}".format(module_name, e))
+            failed_to_load_modules += 1
+            continue
 
             # Walk through all members of currently imported modules.
             for member_name, member_object in inspect.getmembers(module):
@@ -652,21 +653,25 @@ class Main():
                 # There is a conf, but there is no option, or no section or no configuration file specified
                 delete_zeek_files = True
 
-            if delete_zeek_files:
-                shutil.rmtree('zeek_files')
-            # add slips end date in the metadata dir
+        if delete_zeek_files:
+            shutil.rmtree('zeek_files')
+        # add slips end date in the metadata dir
+        try:
             if 'yes' in enable_metadata.lower():
                 with open(info_path, 'a') as f:
                     now = datetime.now()
                     f.write(f'Slips end date: {now}\n')
-            if self.mode == 'daemonized':
-                profilesLen = str(__database__.getProfilesLen())
-                print(f"Total Number of Profiles in DB: {profilesLen}.")
-                self.daemon.stop()
-            os._exit(-1)
-            return True
-        except KeyboardInterrupt:
-            return False
+        except NameError:
+            # slips is shut down before enable_metadata is read from slips.conf
+            pass
+        if self.mode == 'daemonized':
+            profilesLen = str(__database__.getProfilesLen())
+            print(f"Total Number of Profiles in DB: {profilesLen}.")
+            self.daemon.stop()
+        os._exit(-1)
+        return True
+    except KeyboardInterrupt:
+        return False
 
 
     def is_debugger_active(self) -> bool:

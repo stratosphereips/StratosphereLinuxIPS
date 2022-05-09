@@ -283,6 +283,7 @@ class Module(Module, multiprocessing.Process):
         __database__.add_ips_to_IoC(src_ips)
 
     def run(self):
+        utils.drop_root_privs()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return False

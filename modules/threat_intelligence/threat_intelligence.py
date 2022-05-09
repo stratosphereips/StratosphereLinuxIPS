@@ -411,6 +411,7 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         try:
+            utils.drop_root_privs()
             # Load the local Threat Intelligence files that are stored in the local folder
             # The remote files are being loaded by the update_manager
             # check if we should update the files

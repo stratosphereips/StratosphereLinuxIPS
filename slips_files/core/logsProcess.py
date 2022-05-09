@@ -20,6 +20,7 @@ import multiprocessing
 import sys
 from datetime import datetime
 from datetime import timedelta
+from slips_files.common.slips_utils import utils
 import os
 import threading
 import time
@@ -95,6 +96,7 @@ class LogsProcess(multiprocessing.Process):
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def run(self):
+        utils.drop_root_privs()
         try:
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)
