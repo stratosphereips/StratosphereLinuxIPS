@@ -61,30 +61,6 @@ RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 RUN pip3 install --upgrade pip
 RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
 
-# Install redis using PIP3
-RUN pip3 install wheel
-RUN pip3 install redis
-RUN pip3 install setuptools
-RUN pip3 install validators
-RUN pip3 install colorama
-RUN pip3 install maxminddb
-RUN pip3 install pandas
-RUN pip3 install sklearn
-RUN pip3 install urllib3
-RUN pip3 install scipy
-RUN pip3 install watchdog
-RUN pip3 install slackclient
-RUN pip3 install stix2
-RUN pip3 install cabby
-RUN pip3 install ipwhois
-RUN pip3 install --ignore-installed six
-RUN pip3 install tzlocal
-RUN pip3 install --upgrade tensorflow==2.1.0
-RUN pip3 install pytest
-
-# Download and unpack Slips.
-RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
-RUN cd StratosphereLinuxIPS && git checkout develop && chmod 774 slips.py
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
