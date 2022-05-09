@@ -63,7 +63,7 @@ class Daemon():
         self.read_configuration()
         # Get the pid from pidfile
         try:
-            with open(self.pidfile,'r') as pidfile:
+            with open(self.pidfile, 'r') as pidfile:
                 self.pid = int(pidfile.read().strip())
         except IOError:
             self.pid = None
@@ -123,9 +123,11 @@ class Daemon():
             self.stderr = '/var/log/slips/errors.log'
 
         # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
-        self.pidfile = '/etc/slips/pidfile'
+        self.pidfile_dir = '/etc/slips/'
+        self.pidfile = os.path.join(self.pidfile_dir, 'pidfile')
+
         # we don't use it anyway
-        self.stdin='/dev/null'
+        self.stdin = '/dev/null'
 
         # this is where alerts.log and alerts.json are stored, in interactive mode
         # they're stored in output/ dir in slips main dir
@@ -136,7 +138,7 @@ class Daemon():
         # when stoppng the daemon don't log this info again
         if '-S' not in sys.argv:
             self.print(f"Logsfile: {self.logsfile}\n"
-                       f"pidfile:{self.pidfile}\n"
+                       f"pidfile: {self.pidfile}\n"
                        f"stdin : {self.stdin}\n"
                        f"stdout: {self.stdout}\n"
                        f"stderr: {self.stderr}\n")
@@ -206,8 +208,11 @@ class Daemon():
             os.dup2(stderr.fileno(), sys.stderr.fileno())
 
         # write the pid of the daemon to a file so we can check if it's already opened before re-opening
+        if not os.path.exists(self.pidfile_dir):
+            os.mkdir(self.pidfile_dir)
+
         self.pid = str(os.getpid())
-        with open(self.pidfile,'w+') as pidfile:
+        with open(self.pidfile, 'w+') as pidfile:
             pidfile.write(self.pid)
 
         # Register a function to be executed if sys.exit() is called or the main module’s execution completes
