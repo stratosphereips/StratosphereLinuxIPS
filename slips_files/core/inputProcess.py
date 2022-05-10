@@ -27,6 +27,7 @@ import configparser
 import time
 import json
 import traceback
+import threading
 import subprocess
 import shutil
 
@@ -165,16 +166,28 @@ class InputProcess(multiprocessing.Process):
                         # First time opening this file.
                         # Ignore the files that do not contain data. These are the zeek log files that we don't use
                         should_be_ignored = False
-                        ignored_files = ['capture_loss','loaded_scripts','packet_filter', 'stats', 'weird', 'reporter']
+                        ignored_files = ['capture_loss', 'loaded_scripts', 'packet_filter', 'stats', 'weird', 'reporter']
                         for ignored_file in ignored_files:
                             if ignored_file in filename:
                                 should_be_ignored = True
                                 break
                         if should_be_ignored:
                             continue
-                        file_handler = open(filename, 'r')
-                        open_file_handlers[filename] = file_handler
+
+                    try:
+                        file_handler = open(filename + '.log', 'r')
+                        self.open_file_handlers[filename] = file_handler
                         # self.print(f'New File found {filename}', 0, 6)
+                        # now that we replaced the old handle with the newely created file handle
+                        # delete the old .log file, they have a timestamp in their name.
+                    except FileNotFoundError:
+                        # for example dns.log
+                        # zeek changes the dns.log file name every 1h, it adds a timestamp to it
+                        # it doesn't create the new dns.log until a new dns request occurs
+                        # if slips tries to read from the old dns.log now it won't find it
+                        # because it's been renamed and the new one isn't created yet
+                        # simply continue until the new log file is created and added to the list zeek_files
+                        continue
 
                     # Only read the next line if the previous line was sent
                     try:
@@ -182,7 +195,15 @@ class InputProcess(multiprocessing.Process):
                         # We have still something to send, do not read the next line from this file
                     except KeyError:
                         # We don't have any waiting line for this file, so proceed
-                        zeek_line = file_handler.readline()
+                        try:
+                            zeek_line = file_handler.readline()
+                        except ValueError:
+                            # remover thread just finished closing all old handles.
+                            # comes here if I/O operation failed due to a closed file.
+                            #  to get the new dict of open handles.
+                            continue
+
+
                         # self.print(f'Reading from file {filename}, the line {zeek_line}', 0, 6)
                         # Did the file end?
                         if not zeek_line:
@@ -380,7 +401,6 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
-
     def handle_suricata(self):
         try:
             with open(self.given_path) as file_stream:
@@ -497,6 +517,34 @@ class InputProcess(multiprocessing.Process):
             return True
         except KeyboardInterrupt:
             return True
+
+    def remove_old_zeek_files(self):
+        """
+        This thread waits for filemonitor.py to tell it that zeek changed the files,
+        it deletes old zeek.log files and clears slips' open handles and sleeps again
+        """
+        while True:
+            message_c1 = self.c1.get_message(timeout=self.timeout)
+            if message_c1['data'] == 'stop_process':
+                return True
+            if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
+                # this channel receives renamed zeek log files, we can safely delete them and close their handle
+                renamed_file = message_c1['data'][:-4]
+                # renamed_file_without_ext = message_c1['data'][:-4]
+                # don't allow inputprocess to access the following variables(open_file_handlers dict) until this thread sleeps again
+                lock = threading.Lock()
+                lock.acquire()
+                try:
+                    # close slips' open handles
+                    self.open_file_handlers[renamed_file].close()
+                    # delete cached filename
+                    del self.open_file_handlers[renamed_file]
+                    os.system(f'rm {renamed_file}.*.log')
+                    lock.release()
+                except KeyError:
+                    # we don't have a handle for that file, we probably don't need it in slips, ex: loaded_scripts.log, stats.log etc..
+                    pass
+            continue
 
     def shutdown_gracefully(self):
         # Stop the observer
