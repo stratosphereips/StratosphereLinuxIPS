@@ -62,6 +62,12 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
+        # create the remover thread
+        self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
+        self.open_file_handlers = {}
+        self.c1 = __database__.subscribe('remove_old_files')
+        self.is_first_run = True
+        self.timeout = None
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -529,6 +535,8 @@ class InputProcess(multiprocessing.Process):
             if message_c1['data'] == 'stop_process':
                 return True
             if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
+                #TODO see why nothing is ever sent in this channel from filemonitor!!
+
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
                 renamed_file = message_c1['data'][:-4]
                 # renamed_file_without_ext = message_c1['data'][:-4]
@@ -546,7 +554,6 @@ class InputProcess(multiprocessing.Process):
                     # for item in test:
                     #     if item.endswith(".zip"):
                     #         os.remove(os.path.join(dir_name, item))
-                    #TODO don't use os.system
                     os.system(f'rm {renamed_file}.*.log')
                     lock.release()
                 except KeyError:
