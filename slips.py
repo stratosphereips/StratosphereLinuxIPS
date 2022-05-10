@@ -510,6 +510,8 @@ class Main():
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
+            # we don't want to kill this process
+            PIDs.pop('slips.py')
             slips_processes = len(list(PIDs.keys()))
 
             # Send manual stops to the processes not using channels
@@ -600,9 +602,6 @@ class Main():
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
             for unstopped_proc, pid in PIDs.items():
-                if 'slips.py' in unstopped_proc:
-                    # don't kill this process
-                    continue
                 unstopped_proc = unstopped_proc+' '*(20-len(unstopped_proc))
                 try:
                     os.kill(int(pid), 9)
@@ -1097,6 +1096,7 @@ class Main():
                 evidenceProcessQueue = Queue()
                 # Create the thread and start it
                 evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue,
+                                                        self.config, self.args.output, logs_folder)
                 evidenceProcessThread.start()
                 outputProcessQueue.put('10|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
                 __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
