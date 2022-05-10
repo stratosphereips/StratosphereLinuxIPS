@@ -870,12 +870,15 @@ class Main():
                                     input_type = 'binetflow-tabs'
                                 elif tabs_found:
                                     input_type = 'zeek_log_file'
-                else:
+                elif self.mode == 'interactive':
                     input_type = 'stdin'
                     line_type = input("Enter the flow type, available options are:\nargus, argus-tabs, suricata, zeek, zeek-tabs or nfdump\n")
                     if line_type.lower() not in ('argus', 'argus-tabs', 'suricata', 'zeek', 'zeek-tabs', 'nfdump'):
                         print(f"[Main] invalid line type {line_type}")
                         sys.exit(-1)
+                else:
+                    print("Slips can't take input from stdin while in daemonized mode. Start slips again with -I")
+                    sys.exit(-1)
 
             elif self.args.db:
                 input_type = 'database'
