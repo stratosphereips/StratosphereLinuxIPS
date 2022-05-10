@@ -135,11 +135,10 @@ class Utils(object):
         result = subprocess.run(command.split(), capture_output=True)
         text_output = result.stdout.decode("utf-8").replace('\n','')
         if not text_output or 'Connection timed out' in text_output:
+            return IPs
 
-            return False
-        else:
-            public_ip = json.loads(text_output)['ip']
-            IPs.append(public_ip)
+        public_ip = json.loads(text_output)['ip']
+        IPs.append(public_ip)
         return IPs
 
     def get_hash_from_file(self, filename):

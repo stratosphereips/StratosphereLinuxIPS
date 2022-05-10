@@ -1207,7 +1207,7 @@ class Main():
                                 # print('Counter to stop Slips. Amount of modified
                                 # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                                 if minimum_intervals_to_wait == 0:
-                                    self.shutdown_gracefully()
+                                    self.shutdown_gracefully(input_information)
                                     break
                                 minimum_intervals_to_wait -= 1
                             else:
