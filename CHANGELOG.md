@@ -1,6 +1,7 @@
--0.9.0
+-0.9.1
 * Slips
  - Drop root privileges in modules that don't need them
+ - Added support for running slips in the background as a daemon
 -0.9.0
 * Slips
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
