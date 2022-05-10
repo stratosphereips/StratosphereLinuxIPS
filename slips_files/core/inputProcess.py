@@ -143,7 +143,7 @@ class InputProcess(multiprocessing.Process):
         try:
             # Get the zeek files in the folder now
             zeek_files = __database__.get_all_zeek_file()
-            open_file_handlers = {}
+            self.open_file_handlers = {}
             file_time = {}
             cache_lines = {}
             # Try to keep track of when was the last update so we stop this reading
@@ -159,14 +159,16 @@ class InputProcess(multiprocessing.Process):
 
                     # Update which files we know about
                     try:
-                        file_handler = open_file_handlers[filename]
+                        file_handler = self.open_file_handlers[filename]
                         # We already opened this file
                         # self.print(f'Old File found {filename}', 0, 6)
                     except KeyError:
                         # First time opening this file.
                         # Ignore the files that do not contain data. These are the zeek log files that we don't use
                         should_be_ignored = False
-                        ignored_files = ['capture_loss', 'loaded_scripts', 'packet_filter', 'stats', 'weird', 'reporter']
+                        ignored_files = ['capture_loss', 'loaded_scripts',
+                                         'packet_filter', 'stats',
+                                         'weird', 'reporter']
                         for ignored_file in ignored_files:
                             if ignored_file in filename:
                                 should_be_ignored = True
@@ -175,10 +177,9 @@ class InputProcess(multiprocessing.Process):
                             continue
 
                     try:
-                        file_handler = open(filename + '.log', 'r')
+                        file_handler = open(filename, 'r')
                         self.open_file_handlers[filename] = file_handler
-                        # self.print(f'New File found {filename}', 0, 6)
-                        # now that we replaced the old handle with the newely created file handle
+                        # now that we replaced the old handle with the newly created file handle
                         # delete the old .log file, they have a timestamp in their name.
                     except FileNotFoundError:
                         # for example dns.log
@@ -186,7 +187,7 @@ class InputProcess(multiprocessing.Process):
                         # it doesn't create the new dns.log until a new dns request occurs
                         # if slips tries to read from the old dns.log now it won't find it
                         # because it's been renamed and the new one isn't created yet
-                        # simply continue until the new log file is created and added to the list zeek_files
+                        # simply continue until the new log file is created and added to the zeek_files list
                         continue
 
                     # Only read the next line if the previous line was sent
@@ -316,7 +317,7 @@ class InputProcess(multiprocessing.Process):
 
             # We reach here after the break produced if no zeek files are being updated.
             # No more files to read. Close the files
-            for file, handle in open_file_handlers.items():
+            for file, handle in self.open_file_handlers.items():
                 self.print('Closing file {}'.format(file), 2, 0)
                 handle.close()
             return lines
@@ -496,7 +497,7 @@ class InputProcess(multiprocessing.Process):
             # we have our own copy pf local.zeek in __load__.zeek
             command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} ' \
                       f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins ' \
-                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
+                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir}  &'
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
@@ -539,10 +540,19 @@ class InputProcess(multiprocessing.Process):
                     self.open_file_handlers[renamed_file].close()
                     # delete cached filename
                     del self.open_file_handlers[renamed_file]
+                    # dir_name = "/Users/ben/downloads/"
+                    # test = os.listdir(dir_name)
+                    #
+                    # for item in test:
+                    #     if item.endswith(".zip"):
+                    #         os.remove(os.path.join(dir_name, item))
+                    #TODO don't use os.system
                     os.system(f'rm {renamed_file}.*.log')
                     lock.release()
                 except KeyError:
-                    # we don't have a handle for that file, we probably don't need it in slips, ex: loaded_scripts.log, stats.log etc..
+                    # we don't have a handle for that file,
+                    # we probably don't need it in slips
+                    # ex: loaded_scripts.log, stats.log etc..
                     pass
             continue
 

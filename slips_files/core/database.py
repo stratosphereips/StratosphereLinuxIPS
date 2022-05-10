@@ -28,12 +28,16 @@ def timing(f):
 
 class Database(object):
     supported_channels = {'tw_modified', 'evidence_added', 'new_ip', 'new_flow',
-                          'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
-                          'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
-                          'dns_info_change', 'tw_closed', 'core_messages',
-                          'new_blocking', 'new_ssh', 'new_notice', 'new_url',
-                          'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software', 'p2p_data_request'}
+                          'new_dns', 'new_dns_flow', 'new_http', 'new_ssl',
+                          'new_profile', 'give_threat_intelligence',
+                          'new_letters', 'ip_info_change',
+                          'dns_info_change', 'dns_info_change', 'tw_closed',
+                          'core_messages', 'new_blocking', 'new_ssh',
+                          'new_notice', 'new_url', 'finished_modules',
+                          'new_downloaded_file', 'reload_whitelist',
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp',
+                          'new_blame', 'new_software', 'p2p_data_request',
+                          'remove_old_files'}
 
     """ Database object management """
     def __init__(self):
