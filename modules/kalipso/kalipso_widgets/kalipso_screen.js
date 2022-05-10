@@ -31,13 +31,10 @@ class screen {
         this.gauge2 = undefined
         this.combine_listtable_gauge = undefined
         this.helpbar = undefined
-
     }
 
+    /*Initialize all the widgets*/
     init(){
-      /*
-      Initialize all the widgets
-      */
         this.initScreen()
         this.initGrid()
         this.initBoxEvidence()
@@ -54,18 +51,14 @@ class screen {
         this.initHotkeys()
         this.render()
     }
-    
+
+    /*Initialize the screen*/
     initScreen(){
-      /*
-      Initialize screen
-      */
         this.screen =this.blessed.screen()
     }
 
+    /*Initialize grid*/
     initGrid(){
-      /*
-      Initialize grid
-      */
     	this.grid =  new this.contrib.grid({
 		  rows: 6,
 		  cols: 6,
@@ -73,64 +66,48 @@ class screen {
 		});
     }
 
+    /*Initialize help bar on the screen*/
     initHelpTable(){
-        /*
-        Initialize help bar on screen
-        */
         this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
         this.helptable.setHelp()
         this.helptable.hide()
     }
 
+    /*initialize Listbar with hotkeys on the screen*/
     initListBar(){
-      /*
-      Initialise help bar on screen and fill in data
-      */
       this.helpbar = new this.listbar_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen)
       this.helpbar.show()
     }
 
+    /*Initialize Tuple on the screen*/
     initTuple(){
-      /*
-      Initialize Tuple on screen and fill in data
-      */
       this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6], this.limit_letter_outtuple)
       this.tuple_widget.hide()
     }
 
+    /*Initializ evidence box on the screen*/
     initBoxEvidence(){
-      /*
-      Initialize evidence box on screen and fill in data
-      */
       this.evidence_box_widget = new this.box_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
     }
 
+    /*Initialize timeline on screen and fill in data*/
     initTimeline(){
-      /*
-      Initialize timeline on screen and fill in data
-      */
       this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
     }
 
+    /*Initialize profile evidences on the screen.*/
     initEvidencesInProfile(){
-    /*
-    Initialize profile evidences on screen and fill in data.
-    */
       this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
       this.profile_evidences_widget.hide()
     }
 
+    /*Initialize ipinfo widget on the screen*/
     initIPInfo(){
-      /*
-      Initialize ipinfo widget on screen and fill in data
-      */
       this.ipinfo_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
     }
 
+    /*Initialize listtable1, listtable2, gauge1, gauge2 on the screen*/
     initListtableGauge(){
-      /*
-      Initialize listtable1, listtable2, gauge1, gauge2 on screen and fill in data
-      */
       this.listtable1 = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,2.8,2])
       this.listtable1.hide()
       this.listtable2 = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [2.8,0,2.8,2])
@@ -141,17 +118,13 @@ class screen {
       this.gauge2.hide()
     }
 
+    /*Initialize the combination of listtable1, listtable2, gauge1, gauge2 on screen*/
     initCombine(){
-      /*
-      Initialize the combination of listtable1, listtable2, gauge1, gauge2 on screen and fill in data
-      */
       this.combine_listtable_gauge = new this.combine_listtable_gauge_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, this.listtable1, this.listtable2, this.gauge1, this.gauge2)
     }
 
+    /*Initialize tree on the screen*/
     initTree(){
-        /*
-        Initialize tree on screen and fill in data
-        */
         this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
         this.tree_widget.getTreeDataFromDatabase()
         this.tree_widget.focus()
@@ -161,24 +134,18 @@ class screen {
 
     }
 
+    /* Separate all main page widgets*/
     initMain(){
-      /*
-      Keep track of all main page widgets
-      */
       this.mainPage = [this.tree_widget.widget, this.ipinfo_widget.widget, this.evidence_box_widget.widget, this.timeline_widget.widget]
     }
 
+    /*Separate all the hotkeys*/
     initHotkeys(){
-      /*
-      Keep track of all hotkeys widgets
-      */
       this.hotkeys = [this.listtable1, this.listtable2, this.gauge1, this.gauge2, this.tuple_widget, this.profile_evidences_widget,this.helptable]
     }
 
+    /*Display data for SrcPortsClient established and not established*/
     e_hotkey_routine(){
-      /*
-      Display data for SrcPortsClient established and not established
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -198,10 +165,8 @@ class screen {
       return;
     }
 
+    /*Display data for dstIPsClient established and not established*/
     d_hotkey_routine(){
-      /*
-      Display data for dstIPsClient established and not established
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -220,10 +185,8 @@ class screen {
       )
     }
 
+    /*Display data for dstPortsClient established and not established*/
     t_hotkey_routine(){
-      /*
-      Display data for dstPortsClient established and not established
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -241,10 +204,8 @@ class screen {
       )
     }
 
+    /*Display data for dstPortsServer established and not established*/
     r_hotkey_routine(){
-      /*
-      Display data for dstPortsServer established and not established
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -262,10 +223,8 @@ class screen {
 
     }
 
+    /*Display data for DstPortsClient established and not established*/
     p_hotkey_routine(){
-      /*
-      Display data for DstPortsClient established and not established
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -283,10 +242,8 @@ class screen {
       )
     }
 
+    /*Function to fill and prepare the widget with out tuples*/
     z_hotkey_routine(){
-      /*
-      Function to fill and prepare the widget with out tuples
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -303,10 +260,8 @@ class screen {
       this.render()
     }
 
+    /*Function to fill and prepare the widget with out tuples*/
     i_hotkey_routine(){
-      /*
-      Function to fill and prepare the widget with out tuples  
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -322,10 +277,9 @@ class screen {
       this.tuple_widget.focus()
       this.render()
     }
+
+    /*Function to fill and prepare the widget with in tuples*/
     y_hotkey_routine(){
-      /*
-      Function to fill and prepare the widget with in tuples  
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -342,22 +296,14 @@ class screen {
       this.render()
     }
 
+
+    /*Function to update tree widget, i.e profiles and timewindows*/
     o_hotkey_routine(){
-      /*
-      function to update tree widget and return to main page
-      */
-//      for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
-//        this.hotkeys[widget_idx].hide()
-//      }
-//      for(var widget_idx = 0; widget_idx < this.mainPage.length; widget_idx++){
-//        this.mainPage[widget_idx].show()
-//      }
       this.tree_widget.getTreeDataFromDatabase()
-//      this.focus_widget.focus()
-//      this.focus_widget.on()
       this.render()
     }
 
+    /*Function to display help hotkey*/
     h_hotkey_routine(){
 
         for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
@@ -370,10 +316,8 @@ class screen {
         this.render()
     }
 
+    /*Function to go back from the hotkeys to main page of the interface*/
     main_page_routine(){
-      /*
-      Function to go back from the hptkeys to main page of the interface
-      */
       for(var widget_idx = 0; widget_idx < this.hotkeys.length; widget_idx++){
         this.hotkeys[widget_idx].hide()
       }
@@ -384,16 +328,13 @@ class screen {
       this.render()
     }
 
+    /*Function to update interface every two minutes*/
     update_interface(){
-        /*
-        Function to update interface every two minutes
-        */
         setInterval(this.o_hotkey_routine.bind(this), 120000)
     }
+
+    /*Function to monitor all keypresses happening on the screen*/
     registerEvents(){
-      /*
-      Function to monitor all keypresses happening on the screen
-      */
       this.screen.on('keypress', (ch, key)=>{
         if(key.name == 'down' || key.name == 'j'){
           if(this.focus_hotkey){
@@ -490,6 +431,7 @@ class screen {
       })
     }
 
+    /*Render the screen*/
     render(){
     	this.screen.render()
     }

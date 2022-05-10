@@ -2,17 +2,21 @@
 
 Slips can read the packets directly from the **network interface** of the host machine, and packets and flows from different types of files, including
 
-- Packet capture (pcap)
-- Argus binetflow
-- Zeek/Bro folder with logs, or logs separately 
-- Nfdump flows
+- Pcap files (internally using Zeek) 
+- Packets directly from an interface (internally using Zeek)
+- Suricata flows (from JSON files created by Suricata, such as eve.json)
+- Argus flows (CSV file separated by commas or TABs) 
+- Zeek/Bro flows from a Zeek folder with log files
+- Nfdump flows from a binary nfdump file
 
 It's recommended to use PCAPs.
+
+All the input flows are converted to an internal format. So once read, Slips works the same with all of them. 
 
 After Slips was run on the traffic, the Slips output can be analyzed with Kalipso GUI interface. In this section, we will explain how to execute each type of file in Slips, and the output can be analyzed with Kalipso.
 
 Either you are [running Slips in docker](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-and-running-slips-inside-a-docker) or [locally](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#installing-slips-in-your-own-computer), you can run Slips using the same below commands and configurations.
-
+	
 
 ## Reading the input
 
@@ -74,7 +78,34 @@ tr:nth-child(even) {
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
 
-There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-a-configuration-file).
+There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
+
+Slips has 2 modes, interactive and daemonized.
+
+**Daemonized** : means , output, logs and alerts are written in files.
+
+In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in ```slips.conf``` 
+
+by default, these are the paths used
+
+stdout = /var/log/slips/running.log
+stderr = /var/log/slips/error.log
+logsfile = /var/log/slips/running.log
+
+ 
+This is the default mode, it doesn't require any special flags
+
+To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
+
+To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
+ 
+
+**Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
+ 
+Run slips with ```-I```to start slips in interactive mode.
+
+Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
+
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following:
@@ -87,11 +118,9 @@ There are two options how to run Kalipso Locally:
 1. You can run Kalipso as a shell script in another terminal using the command:
 
 	```./kalipso.sh```
-2. Use the argument ```-G```  when execting Slips. Example:
 
-	``` ./slips.py -c slips.conf -i wlp3s0 -G ```
 
-In docker, you can use ```-G``` or open a new terminal inside the slips container and execute ```./kalipso.sh```
+In docker, you can open a new terminal inside the slips container and execute ```./kalipso.sh```
 
 To open a new terminal inside Slips container first [run](https://stratospherelinuxips.readthedocs.io/en/develop/installation.html#running-slips-inside-a-docker-from-the-dockerhub) Slips in one terminal
 
@@ -107,7 +136,143 @@ Now you can run
 
 ```./kalipso.sh```
 
-## Modifying a configuration file
+## Saving the database
+
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, for example
+
+```./slips.py -f dataset/hide-and-seek-short.pcap -s```
+
+Your .rdb saved database will be stored in ```redis_backups/```.
+
+You can load it again using ```-d```, For example:
+
+```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+
+And then use ```./kalipso``` to view the loaded database.
+
+This feature isn't supported in docker due to problems with redis in docker.
+
+_DISCLAIMER_: When saving the database you will see the following
+warning 
+
+    stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file
+
+This configuration is set by slips so that redis will continue working even if redis
+can't write to dump.rdb. 
+
+Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you 
+don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and 
+the saved database will contain all analysed flows.
+
+
+## Whitelisting
+Slips allows you to whitelist some pieces of data in order to avoid its processing. 
+In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. 
+You can choose to whitelist what is going __to__ them and what is coming __from__ them. 
+You can also choose to whitelist the flows, so they are not processed, or the alerts, so
+you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
+processing any communication to or from these pieces of data, not to avoid any packet that
+contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS 
+request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
+
+### Flows Whitelist
+If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
+
+If you whitelist a domain, Slips will check:
+- Domains in HTTP Host header
+- Domains in the SNI field of TLS flows
+- All the Domains in the DNS resolution of IPs (there can be many) (be careful that the resolution takes time, which means that some flows may not be whitelisted because Slips doesn't know they belong to a domain).
+- Domains in the CN of the certificates in TLS
+
+If you whitelist an organization, then:
+- Every IP is checked against all the known IP ranges of that organization
+- Every domain (SNI/HTTP Host/IP Resolution/TLS CN certs) is checked against all the known domains of that organization
+- ASNs of every IP are verified against the known ASN of that organization
+
+If you whitelist a MAC address, then:
+- The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
+
+
+### Alerts Whitelist
+
+If you whitelist some piece of data not to generate alerts, the process is the following:
+
+- If you whitelisted an IP
+    - We check if the source or destination IP of the flow that generated that alert is whitelisted.
+    - We check if the content of the alert is related to the IP that is whitelisted.
+  
+- If you whitelisted a domain
+    - We check if any domain in alerts related to DNS/HTTP Host/SNI is whitelisted. 
+    - We check also if any domain in the traffic is a subdomain of your whitelisted domain. So if you whitelist 'test.com', we also match 'one.test.com'
+  
+- If you whitelisted an organization
+    - We check that the ASN of the IP in the alert belongs to that organization.
+    - We check that the range of the IP in the alert belongs to that organization.
+  
+- If you whitelist a MAC address, then:
+  - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
+
+### Whitelisting Example
+You can modify the file ```whitelist.csv``` file with this content:
+
+
+    "IoCType","IoCValue","Direction","IgnoreType"
+    ip,1.2.3.4,both,alerts
+    domain,google.com,src,flows
+    domain,apple.com,both,both
+    ip,94.23.253.72,both,alerts
+    ip,91.121.83.118,both,alerts
+    mac,b1:b1:b1:c1:c2:c3,both,alerts
+    organization,microsoft,both,both
+    organization,facebook,both,both
+    organization,google,both,both
+    organization,apple,both,both
+    organization,twitter,both,both
+
+The values for each column are the following:
+
+    Column IoCType
+        - Supported IoCTypes: ip, domain, organization, mac
+    Column IoCValue
+        - Supported organizations: google, microsoft, apple, facebook, twitter.
+    Column Direction
+        - Direction: src, dst or both
+            - Src: Check if the IoCValue is the source
+            - Dst: Check if the IoCValue is the destination
+            - Both: Check if the IoCValue is the source or destination
+    Column IgnoreType
+        - IgnoreType: alerts or flows or both
+            - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
+            - Ignore flows: the flow will be completely discarded.
+
+
+
+## Popup notifications
+
+Slips Support displaying popup notifications whenever there's an alert. 
+
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
+
+This feature is supported in Linux and mac and is not supported in docker and it requires root privileges.
+
+## Slips permissions
+
+Slips doesn't need root permissions unless you
+
+1. use the blocking module ( with -p )
+2. use slips notifications
+3. are saving the database ( with -d )
+
+If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
+
+```
+setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+```
+
+Even when Slips is run using sudo, it drops root privileges  in modules that don't need them.
+
+
+## Modifying the configuration file
 
 Slips has a ```slips.conf``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
 
@@ -119,14 +284,27 @@ Each IP address that appears in the network traffic of the input is represented 
 
 ```time_window_width```
 
-**Log files.**
-To disable the creation of log files, there are two options:
-1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```no```.
+**Home Network**
 
-You can also change how often Slips creates log files using the ```log_report_time``` variable.
+Slips needs to know your home network to be able to use specific zeek scripts. 
 
-### Disabling module
+If ```home_network``` is not defined, Slips uses all ranges ```'192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+
+
+When the ```home_network``` parameter is set, slips creates profiles only for ips inside the home network, check the analysis direction below.
+
+**Analysis Direction**
+
+
+```analysis_direction``` can either be ```out``` or ```all```
+
+<div class="zoom">
+<img style="max-width:500px;max-height:500px;" src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/directions.png" title="Figure 1. Out and all directions">
+</div>
+
+
+### Disabling a module
+
 You can disable modules easily by appending the module name to the ```disable``` list.
 
 ### ML Detection
@@ -136,6 +314,24 @@ The ```mode=train``` should be used to tell the MLdetection1 module that the flo
 The ```mode=test``` should be used after training the models, to test unknown data. 
 
 You should have trained at least once with 'Normal' data and once with 'Malicious' data in order for the test to work.
+
+### Blocking
+
+This module is enabled only using the ```-p``` parameter and needs an interface to run. 
+
+Usage example:
+
+```sudo ./slips.py -i wlp3s0 -p```
+
+Slips needs to be run as root so it can execute iptables commands. 
+
+In Docker, since there's no root, the environment variable ```IS_IN_A_DOCKER_CONTAINER``` should be set to ```True``` to use 'sudo' properly.
+
+If you use the latest Dockerfile, it will be set by default. If not, you can set it manually by running this command in the docker container
+
+```export IS_IN_A_DOCKER_CONTAINER=True```
+
+
 
 ### VirusTotal
 
@@ -148,69 +344,116 @@ The file should contain the key at the start of the first line, and nothing more
 
 If no key is found, virustotal module will not start.
 
-### Threat Intelligence
-The threat intelligence module reads IoCs from local and remote files. 
-
-**Remote files**
-
-We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can insert your own remote threat intelligence files in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
- 
-The remote files are installed to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
-
-**Local files**
-
-You can insert your files into the folder specified in the variable ```download_path_for_remote_threat_intelligence```. You can also hardcode your own malicious IPs in the file```modules/ThreatIntelligence1/local_data_files/own_malicious_ips.csv```
-
-### Flowalerts
-
-Slips needs a threshold to determine a connection of a long duration. By default, it is 1500 seconds, and it can be changed in the variable ```long_connection_threshold```
 
 ### Exporting Alerts
 
-Slips can export alerts to Slack and STIX.
+Slips can export alerts to different systems.
 
-To specify where to export, you can append the ```export_to``` list. 
+Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) for detailed instructions on how to export.
 
-**To export to Slack**
 
-You need to add your Slack bot token to the file ```modules/ExportingAlerts/slack_bot_token_secret```. The file should contain the token at the start of the first line, and nothing more.
+### Logging
 
-If you do not have a Slack bot, follow steps 1 to 3 [here](https://api.slack.com/bot-users#creating-bot-user) to get one.
+To enable the creation of log files, there are two options:
+1. Running Slips with ```-l``` flag. 
+2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
+3. Running Slips with ```verbose``` and ```debug``` flags
+4. Using errors.log
 
-You can specify the channel name to send alerts to in the ```slack_channel_name``` variable, and the sensor name to be sent together with the alert in the ```sensor_name``` variable.
+When logging is enabled, Slips will create a directory with the current date and 
+create 3 summary files for each IP/profile it encounters.
 
-**To export to STIX**
+Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
 
-If you want to export alerts using Stix, change ```export_to``` variable to export to STIX, and Slips will automatically generate a 
-```STIX_data.json``` containing all alerts it detects.
+You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
 
-You can add your TAXII server details in the following variables:
+You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-```TAXII_server```: link to your TAXII server
+You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
 
-```port```: port to be used
+Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/```
 
-```use_https```: use https or not.
 
-```discovery_path``` and ```inbox_path``` should contain URIs not full urls. For example:
+DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slips is done by enabling
+ ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
+it deletes large log files periodically (like arp.log).
 
-```python
-discovery_path = /services/discovery-a
-inbox_path = /services/inbox-a
+
+We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
+
+Default value for both of them is 0
+
+To change them, We use ```-v``` for verbosity and ```-e``` for debugging
+
+For example:
+
+```./slips.py -c slips.conf -v 2 -e 1 -f zeek_dir ```
+
+Verbosity is about less or more information on the normal work of slips. 
+
+For example: "Done writing logs to file x."
+
+Debug is only about errors.
+
+For example: "Error reading threat intelligence file, line 4, column 2"
+
+To more verbosity level, the more detailed info is printed.
+
+The more debug level, the more errors are logged.
+
+Below is a table showing each level of both.
+
+<table>
+<tbody>
+<tr style="height: 22px;">
+<td style="height: 22px;">&nbsp;</td>
+<td style="height: 22px;">&nbsp;Verbosity</td>
+<td style="height: 22px;">&nbsp;Debugging</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">&nbsp;0</td>
+<td style="height: 22px;">&nbsp;Don't&nbsp;print</td>
+<td style="height: 22px;">&nbsp;Don't print</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">1&nbsp;</td>
+<td style="height: 22px;">&nbsp;Show basic operation, proof of work&nbsp;</td>
+<td style="height: 22px;">&nbsp;Print exceptions</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">2&nbsp;</td>
+<td style="height: 22px;">&nbsp;Log I/O operations and filenames</td>
+<td style="height: 22px;">&nbsp;Unsupported and unhandled types (cases that may cause errors)</td>
+</tr>
+<tr style="height: 22px;">
+<td style="height: 22px;">3&nbsp;</td>
+<td style="height: 22px;">&nbsp;Log database/profile/timewindow changes</td>
+<td style="height: 22px;">&nbsp;Red warnings that need examination - developer warnings</td>
+</tr>
+</tbody>
+</table>
+
+Slips also logs all errors to output/errors.log, whether you're using -e or not.
+errors.log is cleared on every startup on Slips.
+
+## Plug in a zeek script
+
+Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file name in ```zeek-scripts/__load__.zeek```.
+
+For example, if you want to add a zeek script called ```arp.zeek``` you should add it to ```__load__.zeek``` like this:
+
+	@load ./arp.zeek
+
+Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
+
+
+## Running Slips from python
+
+You can run Slips from python using the following script
+
+```py
+import subprocess
+command = './slips.py -f dataset/test3.binetflow -o /data/test'
+args = command.split()
+process = subprocess.run(args, stdout=subprocess.PIPE)
 ```
-
-```collection_name```: the collection on the server you want to push your STIX data to.
-
-```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
-
-```taxii_username```: TAXII server user credentials
-
-```taxii_password```: TAXII server user password
-
-```jwt_auth_url```: auth url if JWT based authentication is used.
-
-If running on a file not an interface, Slips will export to server after analysis is done. 
-
-### Plug in a zeek script
-
-Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir.

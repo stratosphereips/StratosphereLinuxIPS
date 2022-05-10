@@ -10,13 +10,19 @@ def do_nothing(*args):
 
 def get_vt_key():
     # get the user's api key
-    with open('../modules/virustotal/api_key_secret','r') as f:
-        api_key = f.read()
+    try:
+        with open('modules/virustotal/api_key_secret','r') as f:
+            api_key = f.read()
+    except FileNotFoundError:
+        api_key = ''
     return api_key
 
+# only run the following tests if an API key was found
+API_KEY = get_vt_key()
+pytestmark = pytest.mark.skipif(len(API_KEY)!=64, reason='API KEY not found in modules/virustotal/api_key_secret/')
+
 @pytest.fixture
-def read_configuration():
-    return
+def read_configuration(): return
 
 def create_virustotal_instance(outputQueue):
     """ Create an instance of virustotal.py
@@ -29,7 +35,6 @@ def create_virustotal_instance(outputQueue):
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration
     virustotal.key_file = '/media/alya/W/SLIPPS/modules/virustotal/api_key_secret'
-    # virustotal.key = get_vt_key()
     return virustotal
 
 
@@ -54,3 +59,21 @@ def test_interpret_rsponse(outputQueue, ip):
     response = virustotal.api_query_(ip)
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
+
+def test_get_domain_vt_data(outputQueue):
+    virustotal = create_virustotal_instance(outputQueue)
+    assert virustotal.get_domain_vt_data('google.com') != False
+
+def test_scan_file(outputQueue, database):
+    virustotal = create_virustotal_instance(outputQueue)
+    # test this function with a hash we know is malicious
+    file_info = {'uid' : 123,
+    'daddr': '8.8.8.8',
+    'saddr': '8.8.8.8',
+    'size' : 123,
+    'profileid' : 'profile_192.168.1.1',
+    'twid' : 'timewindow0',
+    'md5' : '7c401bde8cafc5b745b9f65effbd588f',
+    'ts' :  ''
+    }
+    assert virustotal.scan_file(file_info) == 'malicious'

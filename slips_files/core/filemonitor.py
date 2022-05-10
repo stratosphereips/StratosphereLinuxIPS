@@ -1,0 +1,77 @@
+# Stratosphere Linux IPS. A machine-learning Intrusion Detection System
+# Copyright (C) 2021 Sebastian Garcia
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+# Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
+
+import os
+import signal
+import redis
+import time
+from watchdog.events import RegexMatchingEventHandler
+from .database import __database__
+from slips_files.common.slips_utils import utils
+
+class FileEventHandler(RegexMatchingEventHandler):
+    REGEX = [r".*\.log$", r".*\.conf$"]
+
+    def __init__(self, config):
+        super().__init__(self.REGEX)
+        self.config = config
+        # Start the DB
+        __database__.start(self.config)
+        utils.drop_root_privs()
+
+    def on_created(self, event):
+        self.process(event)
+
+    def on_moved(self, event):
+        """ this will be triggered everytime zeek renames all log files"""
+        # tell inputProcess to delete old files
+        if event.src_path != 'True':
+            __database__.publish("remove_old_files",event.src_path)
+            # give inputProc.py time to close the handle and delete the file
+            time.sleep(3)
+
+    def process(self, event):
+        filename, ext = os.path.splitext(event.src_path)
+        if 'log' in ext:
+            __database__.add_zeek_file(filename + ext)
+
+    def on_modified(self, event):
+        filename, ext = os.path.splitext(event.src_path)
+        if 'whitelist' in filename:
+            __database__.publish("reload_whitelist","reload")
+
+    def on_modified(self, event):
+        """ this will be triggered everytime zeek modifies a log file"""
+        # we only need to know modifications to reporter.log, so if zeek recieves a termination signal, slips would know about it
+        filename, ext = os.path.splitext(event.src_path)
+        if 'reporter' in filename:
+            # check if it's a temrination signal
+            # get the exact file name (a ts is appended to it)
+            for file in os.listdir('zeek_files/'):
+                if 'reporter' in file:
+                    with open(f'zeek_files/{file}','r') as f:
+                        line = f.readline()
+                        while line:
+                            if 'termination' in line:
+                                # to use shutdown gracefully we need to get slips.py PID and send it a sigint
+                                PIDs = __database__.get_PIDs()
+                                pid = PIDs['slips.py']
+                                os.kill(int(pid), signal.SIGINT)
+                                break
+                            line = f.readline()
+
