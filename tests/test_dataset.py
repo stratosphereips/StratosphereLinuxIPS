@@ -38,7 +38,7 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -f {pcap_path} -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -I -f {pcap_path} -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -60,7 +60,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
+    command = f'./slips.py -I -o {output_dir} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -91,7 +91,7 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -f {zeek_dir_path}  -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -I -f {zeek_dir_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -119,7 +119,7 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -f {conn_log_path}  -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -I -f {conn_log_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -136,7 +136,7 @@ def test_suricata(database, suricata_path,  output_dir):
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -f {suricata_path} -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -I -f {suricata_path} -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = int(database.getProfilesLen())
@@ -154,7 +154,7 @@ def test_nfdump(database, nfdump_path,  output_dir):
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -c slips.conf -f {nfdump_path}  -o {output_dir} > {output_file} 2>&1'
+    command = f'./slips.py -I -f {nfdump_path}  -o {output_dir} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     profiles = int(database.getProfilesLen())
