@@ -1,12 +1,12 @@
 import ipaddress
 import redis
 import os
-import configparser
+import json
+
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
-
 
 def do_nothing(*arg):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -22,45 +22,30 @@ def create_db_instace(outputQueue):
     __database__.print = do_nothing
     return __database__
 
-
 def test_getProfileIdFromIP(outputQueue):
-    database = create_db_instace(outputQueue)
     """ unit test for addProfile and getProfileIdFromIP """
+
+    database = create_db_instace(outputQueue)
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
+
     # add a profile
     database.addProfile('profile_192.168.1.1','00:00','1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) != False
 
 def test_timewindows(outputQueue):
-    database = create_db_instace(outputQueue)
-    """ unit tests for addNewTW and getFirstTWforProfile """
-    # clear the database before running this test
-    os.system('./slips.py -c slips.conf -cc')
-    profileid = 'profile_8.8.8.8'
     """ unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile """
+    database = create_db_instace(outputQueue)
     profileid = 'profile_192.168.1.1'
     # add a profile
     database.addProfile(profileid,'00:00','1')
     # add a tw to that profile (first tw)
     database.addNewTW(profileid, 0.0)
     # add  a new tw (last tw)
+    database.addNewTW(profileid, 5.0)
     assert database.getFirstTWforProfile(profileid) == [('timewindow1', 0.0)]
-
-# deleted test to be able to parallelize the rest of the unit tests
-# def test_TW_modification(outputQueue):
-#     """ tests markProfileTWAsModified,getModifiedTWSinceTime,check_TW_to_close   """
-#     # clear the database before running this test
-#     os.system('./slips.py -c slips.conf -cc')
-#     # add a profile
-#     database.addProfile(profileid,'00:00','1')
-#     # add a tw to that profile (first tw)
-#     database.addNewTW(profileid, 0.0)
-#     # add  a new tw (last tw)
-#     database.addNewTW(profileid, 5.0)
-#     database.markProfileTWAsModified(profileid,twid,20.0)
-#     assert database.getModifiedTWSinceTime(0.0)[0][0] == 'profile_192.168.1.1_timewindow1'
+    assert database.getLastTWforProfile(profileid) == [('timewindow2', 5.0)]
 
 def getSlipsInternalTime():
     """ return a random time for testing"""
@@ -89,34 +74,65 @@ def test_add_ips(outputQueue):
     assert database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server' ) == True
     hash_id = profileid + '_'+ twid
     stored_dstips = database.r.hget(hash_id,'SrcIPs')
-    assert "192.168.1.1" in stored_dstips
+    assert stored_dstips == '{"192.168.1.1": 1}'
 
+
+def test_add_port(outputQueue):
+    database = create_db_instace(outputQueue)
+    # first add the flow to the db
+    add_flow_to_the_db(database)
+    columns = {'dport': 80,
+              'sport': 88,
+              'totbytes': 80,
+              'pkts': 20,
+              'sbytes': 30,
+              'bytes': 30,
+              'spkts': 70,
+              'state': 'notestablished',
+              'proto': 'TCP',
+              'saddr': '8.8.8.8',
+              'daddr': test_ip,
+              'uid': '1234',
+              'starttime': '20.0'}
+    database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
+    hash_key = profileid + '_' + twid
+    added_ports = database.r.hgetall(hash_key)
+    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
+    assert test_ip in added_ports['DstPortsServerTCPEstablished']
+
+def test_setEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
+    type_detection = 'ip'
+    detection_info = test_ip
+    type_evidence = f'SSHSuccessful-by-{detection_info}'
+    threat_level = 0.01
+    confidence = 0.6
+    description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
+    timestamp = ''
+    category = 'Infomation'
+    uid = '123'
+    database.setEvidence(type_evidence, type_detection, detection_info, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+
+    added_evidence = database.r.hget('evidence'+profileid, twid)
+    added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
+    assert added_evidence2 == added_evidence
+
+    added_evidence = json.loads(added_evidence)
+    current_evidence_key = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
+    #  note that added_evidence may have evidence from other unit tests
+    assert current_evidence_key in added_evidence.keys()
+
+def test_deleteEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
+    description =  "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"
+    database.deleteEvidence(profileid, twid, description)
+    added_evidence = json.loads(database.r.hget('evidence'+profileid, twid))
+    added_evidence2 = json.loads(database.r.hget(profileid + '_' + twid, 'Evidence'))
+    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
+    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
 def test_add_flow(outputQueue):
-    database = create_db_instace(outputQueue)
-    profileid = 'profile_123.123.123.121'
-    twid = 'timewindow1'
-    starttime = '5'
-    dur = '5'
-    sport = 80
-    dport = 88
-    saddr_as_obj = ipaddress.ip_address('123.123.123.121')
-    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
-    proto = 'TCP'
-    state = 'established'
-    pkts = 20
-    allbytes = 20
-    spkts = 20
-    sbytes = 20
-    appproto = 'dhcp'
-    uid = '4321'
-    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid) == True
-    assert '{"ts": "5", "dur": "5", "saddr": "123.123.123.121", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "module_labels": {}}' in database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
-
-def add_flow_to_the_db(outputQueue):
     database = create_db_instace(outputQueue)
     starttime = '5'
     dur = '5'
@@ -132,64 +148,16 @@ def add_flow_to_the_db(outputQueue):
     sbytes = 20
     appproto = 'dhcp'
     uid = '1234'
-    database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid)
-
-def test_add_port(outputQueue):
-    database = create_db_instace(outputQueue)
-    # first add the flow to the db
-    add_flow_to_the_db(database)
-    # add a port to this flow
-    columns = {'dport':80,
-              'sport':88,
-              'totbytes':80,
-              'pkts':20,
-              'sbytes':30,
-              'bytes':30,
-              'spkts':70,
-              'state':'notestablished',
-              'proto':'TCP',
-              'saddr': '8.8.8.8',
-              'daddr': test_ip,
-              'uid' : '1234',
-              'starttime': '20.0'}
-    database.add_port(profileid, twid, test_ip, columns, 'Server','Dst')
-    hash_key = profileid + '_' + twid
-    added_ports = database.r.hgetall(hash_key)
-    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
-    assert test_ip in added_ports['DstPortsServerTCPEstablished']
-
-def test_setEvidence(outputQueue):
-    database = create_db_instace(outputQueue)
-    type_detection = 'ip'
-    detection_info = test_ip
-    by = detection_info
-    type_evidence = 'SSHSuccessful-by-' + by
-    threat_level = 0.01
-    confidence = 0.5
-    description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
-    timestamp = ''
-    database.setEvidence(type_detection, detection_info, type_evidence,
-                             threat_level, confidence, description, timestamp, profileid=profileid, twid=twid)
-
-    added_evidence = database.r.hget('evidence'+profileid, twid)
-    added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
-    assert added_evidence2 == added_evidence
-    assert added_evidence ==  '{"{\\"type_detection\\": \\"ip\\", \\"detection_info\\": \\"192.168.1.1\\", \\"type_evidence\\": \\"SSHSuccessful-by-192.168.1.1\\"}": {"confidence": 0.5, "threat_level": 0.01, "description": "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"}}'
-
-def test_deleteEvidence(outputQueue):
-    database = create_db_instace(outputQueue)
-    key = {'type_detection': 'ip',
-           'detection_info': test_ip,
-           'type_evidence': 'SSHSuccessful-by-192.168.1.1'
-           }
-    database.deleteEvidence(profileid, twid, key)
-    added_evidence = database.r.hget('evidence'+profileid, twid)
-    added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
-    assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
+    flow_type =  ""
+    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
+                                          saddr=str(saddr_as_obj), sport=sport,
+                                          daddr=str(daddr_as_obj),
+                                          dport=dport, proto=proto,
+                                          state=state, pkts=pkts, allbytes=allbytes,
+                                          spkts=spkts, sbytes=sbytes,
+                                          appproto=appproto, uid=uid,
+                                          flow_type=flow_type) == True
+    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "flow_type": "", "module_labels": {}}'
 
 
 def test_module_labels(outputQueue):
@@ -199,12 +167,14 @@ def test_module_labels(outputQueue):
     os.system('./slips.py -c slips.conf -cc')
     # first add the flow to the db
     add_flow_to_the_db(database)
+    """ tests set and get_module_labels_from_flow """
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
     database.set_module_label_to_flow(profileid,twid, uid, module_name, module_label )
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert labels ==  {'test': 'malicious'}
+    assert 'test' in labels
+    assert labels['test'] == 'malicious'
 
 def test_setInfoForDomains(outputQueue):
     database = create_db_instace(outputQueue)
@@ -214,7 +184,8 @@ def test_setInfoForDomains(outputQueue):
     database.setInfoForDomains(domain,domain_data)
 
     stored_data = database.getDomainData(domain)
-    assert  stored_data == {'threatintelligence': 'sample data'}
+    assert 'threatintelligence' in stored_data
+    assert stored_data['threatintelligence'] == 'sample data'
 
 def test_subscribe(outputQueue):
     database = create_db_instace(outputQueue)
@@ -231,5 +202,44 @@ def test_profile_moddule_labels(outputQueue):
     module_name = 'test'
     database.set_profile_module_label(profileid, module_name, module_label )
     labels = database.get_profile_modules_labels(profileid)
-    assert labels ==  {'test': 'malicious'}
+    assert 'test' in labels
+    assert labels['test'] == 'malicious'
 
+def test_add_mac_addr_to_profile(database):
+    ipv4 = '192.168.1.5'
+    profileid_ipv4 = f'profile_{ipv4}'
+    MAC_info = {'MAC': '00:00:5e:00:53:af'}
+    # first associate this ip with some mac
+    assert database.add_mac_addr_to_profile(profileid_ipv4,
+                                            MAC_info) == True
+    assert ipv4 in str(database.r.hget('MAC', MAC_info['MAC']))
+
+    # now claim that we found another profile
+    # that has the same mac as this one
+    # both ipv4
+    profileid = 'profile_192.168.1.6'
+    assert database.add_mac_addr_to_profile(profileid, MAC_info) == False
+    # this ip shouldnt be added to the profile as they're both ipv4
+    assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
+
+    # now claim that another ipv6 has this mac
+    ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    profileid_ipv6 = f'profile_{ipv6}'
+    database.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
+    # make sure the mac is associated with his ipv6
+    assert ipv6 in database.r.hget('MAC', MAC_info['MAC'])
+    # make sure the ipv4 is associated with this
+    # ipv6 profile
+    assert ipv4 in str(database.r.hmget(profileid_ipv6, 'IPv4'))
+
+    # make sure the ipv6 is associated with the
+    # profile that has the same ipv4 as the mac
+    assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
+
+def test_get_the_other_ip_version(database):
+    # profileid is ipv4
+    ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+    database.set_ipv6_of_profile(profileid, ipv6)
+    # the other ip version is ipv6
+    other_ip = json.loads(database.get_the_other_ip_version(profileid))
+    assert  other_ip[0] == ipv6

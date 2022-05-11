@@ -1,6 +1,6 @@
-  var async = require('async')
-  var color = require('chalk')
-  var stripAnsi = require('strip-ansi')
+var async = require('async')
+var color = require('chalk')
+var stripAnsi = require('strip-ansi')
 
 class Table{
 
@@ -122,14 +122,18 @@ class Table{
     /*Set timeline data in the widget "Table".*/
     setTimeline(ip, timewindow){
         try{
+            // get the timeline of thi ip and tw from the db for example "profile_ip_timewindow_timeline"
             this.redis_database.getTimeline(ip, timewindow).then(redis_timeline_data=>{
             var timeline_data = [];
+            // handle no timeline data found
             if(redis_timeline_data.length < 1){this.setData([ip+" "+timewindow], timeline_data);}
             else{
+                // found timeline data, parse it
                 async.each(redis_timeline_data, (timeline, callback)=>{
                     var row = [];
                     var timeline_json = JSON.parse(timeline)
                     var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version', 'Login', 'Auth attempts','Server','Client']
+                    // this one is coming from database.py: get_dns_resolution
                     var pink_keywords_parameter = ['dns_resolution']
                     var red_keywords = ['critical warning' ]
                     var orange_keywords = ['Sent','Recv','Tot','Size','Type','Duration']
@@ -137,6 +141,8 @@ class Table{
                     var cyan_keywords = ['daddr', 'saddr']
 
                     if(timeline_json['timestamp']){
+                      //  we will be appending each row value to thiss final_timeline
+                        // each value has it's own color
                       var final_timeline = ''
                       var http_data = ''
 
@@ -180,6 +186,7 @@ class Table{
                         if(value && !http_data){
                           final_timeline += value +' ';}
                         }
+
                         row.push(final_timeline);
                         timeline_data.push(row);
                         if(http_data){

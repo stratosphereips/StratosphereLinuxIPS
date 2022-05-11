@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
-import platform
+from slips_files.common.slips_utils import utils
 import traceback
 import sys
 
@@ -15,7 +15,7 @@ from datetime import datetime
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'timeline'
-    description = 'Creates a timeline of what happened in the network based on all the flows and type of data available'
+    description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
     def __init__(self, outputqueue, config, redis_port):
@@ -31,15 +31,13 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         # To store the timelines of each profileid_twid
         self.profiles_tw = {}
-        # Load the list of common known ports
-        self.load_ports()
         # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         self.is_human_timestamp = bool(self.read_configuration('modules', 'timeline_human_timestamp'))
         self.analysis_direction = self.config.get('parameters', 'analysis_direction')
         # Wait a little so we give time to have something to print
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def read_configuration(self, section: str, name: str) -> str:
         """ Read the configuration file for what we need """
@@ -51,42 +49,25 @@ class Module(Module, multiprocessing.Process):
             conf_variable = None
         return conf_variable
 
-    def load_ports(self):
-        """
-        Funciton to read our special file called 'services.csv' and load the known ports from it into the database
-        """
-        try:
-            f = open('modules/timeline/services.csv')
-            for line in f:
-                name = line.split(',')[0]
-                port = line.split(',')[1]
-                proto = line.split(',')[2]
-                # descr = line.split(',')[3]
-                __database__.set_port_info(str(port)+'/'+proto, name)
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on load_ports() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return False
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to be printed
-         debug: is the minimum debugging level required for this text to be printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
     def process_timestamp(self, timestamp: float) -> str:
         if self.is_human_timestamp is True:
@@ -154,8 +135,9 @@ class Module(Module, multiprocessing.Process):
                 if 'TCP' in proto or 'UDP' in proto:
                     warning_empty = ''
                     critical_warning_dport_name = ''
-                    dns_resolution = ''
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]
@@ -226,6 +208,8 @@ class Module(Module, multiprocessing.Process):
                         dport_name = '????'
                         critical_warning_dport_name = 'Protocol not recognized by Slips nor Zeek.'
                     dns_resolution = __database__.get_dns_resolution(daddr)
+                    dns_resolution = dns_resolution.get('domains', [])
+
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
                     if len(dns_resolution) > 3:
                         dns_resolution = dns_resolution[-1]
@@ -271,6 +255,9 @@ class Module(Module, multiprocessing.Process):
                 elif 'IGMP' in proto:
                     dport_name = 'IGMP'
                     activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
+                elif 'arp' in proto:
+                    activity = {'timestamp': timestamp_human, 'dport_name': 'arp' ,'preposition': 'to', 'daddr': daddr}
+
 
             #################################
             # Now process the alternative flows
@@ -283,7 +270,7 @@ class Module(Module, multiprocessing.Process):
             http_data = {}
             if alt_flow_json:
                 alt_flow = json.loads(alt_flow_json)
-                self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 5,0)
+                self.print('Received an altflow of type {}: {}'.format(alt_flow['type'], alt_flow), 3,0)
                 if 'dns' in alt_flow['type']:
                     answer = alt_flow["answers"]
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
@@ -327,10 +314,8 @@ class Module(Module, multiprocessing.Process):
             activity.update(alt_activity)
             if activity:
                 __database__.add_timeline_line(profileid, twid, activity, timestamp)
-            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 4, 0)
+            self.print('Activity of Profileid: {}, TWid {}: {}'.format(profileid, twid, activity), 3, 0)
 
-        except KeyboardInterrupt:
-            return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on process_flow() line {exception_line}', 0, 1)
@@ -340,19 +325,24 @@ class Module(Module, multiprocessing.Process):
             self.print(traceback.format_exc())
             return True
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
-        #time.sleep(10)
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                # if timewindows are not updated for a long time (see at logsProcess.py), we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                    self.shutdown_gracefully()
                     return True
-                elif message['channel'] == 'new_flow' and type(message['data']) != int :
+
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)
@@ -366,8 +356,8 @@ class Module(Module, multiprocessing.Process):
                     # Process the flow
                     return_value = self.process_flow(profileid, twid, flow, timestamp)
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)

@@ -12,8 +12,11 @@ __pycache__/
 # Ignore the secret api key of virustotal
 api_key_secret
 
-# Ignore the secret slack bot token of ExportingAlerts module
+# Ignore the secret slack bot token of exporting_alerts module
 slack_bot_token_secret
+
+# Ignore daemon output files
+daemon/
 
 # Ignore the results folders
 2019-
@@ -124,6 +127,7 @@ ENV/
 
 # slips logs
 logs/
+*.swp
 *.pyc
 *.xml
 .idea/StratosphereLinuxIPS.iml
@@ -131,5 +135,27 @@ dump.rdb
 package-lock.json
 modules/blessed/node_modules/
 alerts.*
+errors.log
 nohup.out
+modules/threat_intelligence/remote_data_files/*
+node_modules/
+
+# compiled yara rules
+modules/leak_detector/yara_rules/compiled
+
+# Ignore all data from Jetbrains IDE
+.idea
+
+# ignore warden configuration file
+modules/CESNET/warden.conf
+
+# For RisqIQ credentinals
+credentials
+
+
+# ignore logs from pigeon
+pigeon_logs
+
+# ignore trustdb
+trustdb.db
 used_redis_servers.txt

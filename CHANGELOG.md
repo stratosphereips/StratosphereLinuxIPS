@@ -1,3 +1,193 @@
+-0.9.1
+* Slips
+ - Drop root privileges in modules that don't need them
+ - Added support for running slips in the background as a daemon
+-0.9.0
+* Slips
+ - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
+ - Parse zeek software.log and extract software type, version and user agent from it
+ - Detect multiple SSH client versions. slips will now alert if an IP is detected using OpenSSH_8.1 then OpenSSH_7.1 for example
+ - Detect DoH flows in ssl.log
+ - Fix connection rest by peer error by changing the buffer limit in redis
+ - Fix reading flows from stdin
+ - Fix home_network parameter
+ - Fix portscans detections
+ - Fix DGA detections 
+-0.8.5
+* Slips
+  - Detect young domains that was registered less than 60 days ago.
+  - Detect bad SMTP logins
+  - Detect SMTP bruteforce
+  - Detect DNS ARPA scans
+  - Update our list of ports used by specific organizations to minimize false positive 'unknown destination port' alerts
+  - Add support for Russia-Ukraine IoCs
+  - Detect incompatible user agents by comparing mac vendors with user agents found in http traffic.
+  - Detect the use of multiple user agents, for example Linux UA, then Apple UA, then MAC UA.
+  - The default time to wait to alert on DNS without resolution now is 30 mins
+  - The time to wait for DNS without resolution now works in interface capture mode and in reading any file
+  - detect ICMP timestamp scan, Address scan and address mask scan
+  - Support deleting of large log files (arp.log) in case the user doesn't want a copy of the log files after slips is done
+  - Update our offline MAC vendor database and add support for getting unknown vendors from an online database
+  - Fix FP Multiple reconnection attempts
+  - Added a zeek script to recognize DoH flows for more real-time experience while using slips
+  - Change the structure of slips files by splitting large modules into smaller files.
+  - Reduce false positives by disabling 'connections without DNS' to a well known org
+  - Fix 'multiple reconnection attemps' alerts
+  - Update the list of our special organization ports
+  - Document all the internet connections made by slips
+  - Fix install.sh
+  - Add errors.log to output/ dir to log errors encountered by slips.
+-0.8.4
+* Slips
+  - Add support for local JA3 feeds
+  - Improve CESNET Module
+  - Update and improve whitelists
+  - Improve alerts by adding hostname to alerts printed in the CLI and in alerts.log
+  - Faster startup of Slips, now TI files are updated concurrently. 
+  - Add a logstash configuration file to allow exporting slips alerts.
+  - Add support for malicious SSL feeds.
+  - Support blacklisting IP ranges taken from TI feeds.
+  - profilerProcess optimizations.
+  - Get device type, browser and OS info from user agents found in HTTP traffic.
+  - Add "Blocked by Slips" comment to all iptables rules added by slips
+  - Improve whitelisting by updating organizations' domains.
+  - Update documentation
+  - Fix invalid JSON alerts in alerts.json 
+  - Fix problem stopping slips. 
+  - Fix problem with redis stopping on error writing to disk.
+  - Fix false positive 'not valid yet' SSL alerts
+  - Descrease the amount of false positive C&C alerts
+
+* Kalipso
+  - Fix Kalipso in docker issue
+  - Associate IPs with their hostname
+
+-0.8.3
+* Slips
+  - More accurate threat levels, now they're strings instead of values
+  - Add CESNET sharing moddule, which supports exporting and importing event to and from warden servers
+  - Improve Unknown ports alerts, now we don't have false positive alerts when apple devices are talking to each other using unknown ports
+  - Added support for continuous integrations using Github Actions
+  - Improvements in printing alerts, we now print each alert with it's timestamp and the evidence caused it
+  - Local TI files now support threat levels. each entry now has it'sown threat level.
+  - Improve empty HTTP connections. now supports (Yandix, bing and yahoo)
+  - Detect JNDI string as suspicious user agent. used in Log4shell CVE-2021-44228.
+  - Improve whitelists.
+  - Improve code security.
+
+-0.8.2
+*	Slips
+		- Detect gratoitous ARP
+		- Detect unsolicited ARP
+		- Detect MITM ARP attack
+		- Detect DGA
+		- Support popup notifications in Linux and mac. disabled by default. enable it by changing popup_alerts to yes in slips.conf 
+		- Add 5 new TI feeds (AmnestyTech domains)
+		- The Threat Intelligence feeds are now assigned a threat level instead of confidence value by default (user can change), so you can establish how each list impact your detection.
+		- Improve unknown ports detections. Now we don't alert for ports that appear in an FTP connection.
+		- Improve threat levels and confidence of all alerts.
+		- Add support for storing a copy of zeek files in the output directory.
+		- Add support for enabling and disabling detections in slips.conf
+		- Read RiskIQ email and API key from modules/RiskIQ/credentials instead of the configuration file.
+		- Now log files are disabled by default, use -l or set create_log_files to yes in slips.conf for enabling them. 
+		- Support commenting TI files in slips.conf: when TI files are commented using ; in slips.conf, they are completely removed from our database.
+		- Now slips generates alerts in IDEA format by default in alerts.json
+		- Support importing and exporting alerts to warden servers. (CESNET sharing module)
+		- Fix redis closing connection errors
+		- Optimize our docker image
+
+-0.8.1
+*	Slips
+		- The Threat Intelligence feeds are now assigned a tag value by default (user can change), so you can categorize feeds e.g. phshing, adtrackers, etc..
+		- Add module to detect leaks of data in the traffic using YARA rules (works on PCAPs only)
+		- Move RiskIQ api key to a separate file in modules/UpdateManager/api_key_secret
+		- Add support for whitelisting MAC addresses
+		- Add a new module for getting RiskIQ info like passive DNS etc.
+		- Merge geoip, asn and RDNS modules into a single new module called IP_Info
+		- Add detection for multiple connections to google.com on port 80
+		- Add the known list of TOR exit nodes to the TI list
+		- Improve DNS without connection and connection without DNS detections
+		- Update our lists of organizations IPs, used for whitelisting
+		- Improve the printing of evidence and alerts
+		- Add SNI/DNS/RDNS to the IP to 'unknown ports' alerts description
+		- Improve ICMP Sweep detections
+- 0.8
+    - Slips
+		- Detect PING sweep scan.
+		- The Threat Intelligence feeds are now assigned a confidence value by default (user can change), so you can establish how each list impact your detection.
+        - Slips now allows you to re-train the machine learning model for flows with your own traffic. You can extend the current model, or start from scratch.
+        - Compute the JA3 hash for all TLS connections using a Zeek script.
+        - Use JA3 whitelists as detection in the Threat Intelligence module.
+		- Detect malicious downloaded files by searching for their MD5 hash on virustotal.
+		- Detect SSH password guessing by using the Zeek log for this.
+		- Detect connection to and from port 0/TCP and 0/UDP.
+		- Detect Connection without DNS resolution and DNS resolutions without a following TCP or UDP connection.
+		- Use whitelists of IPs, domains, and complete Organizations (using lists of ASN and domains and IPs) to ignore flows or to ignore alerts (organizations preconfigured for Google, Apple, Facebook, and Twitter).
+		- New module to detect data exfiltration by checking large transfers (commit ef88fc6).
+		- Detect connections to unkown TCP and UDP ports (ignore P2P traffic).
+		- New export alerts in suricata-style format.
+		- Check suspicious user agents in HTTP (for now only 'httpsend', 'chm_msdn', 'pb').
+		- New ARP-scan detector module.
+		- Be able to run multiple independent instances of slips in the same machine.
+		- Save and load redis databases to disk as backup for later analysis.
+		- Add unit tests in tests/ folder.
+        - Use our own Zeek configuration file, so Slips does not collide with the local installation.
+        - Use our own Zeek scripts folder, so Slips does not collide with the local installation.
+        - Add port 57621/UDP as known spotify-p2p-communication.
+        - Add support for the format of many TI feeds.
+        - Add the following Threat Intelligence lists by default to be downloaded and used:
+            - https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv
+            - https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv
+            - https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/strangereallintel-cyberthreatintel.csv
+            - https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv
+            - https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/adserversandtrackers.csv
+            - https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/civilsphereindicators.csv
+            - https://raw.githubusercontent.com/botherder/targetedthreats/master/targetedthreats.cs
+            - https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt
+            - https://osint.digitalside.it/Threat-Intel/lists/latestips.txt
+            - https://osint.digitalside.it/Threat-Intel/lists/latestips.txt
+            - https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt
+            - https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt
+            - https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset
+            - https://nerd.cesnet.cz/nerd/data/ip_rep.csv
+            - https://lists.blocklist.de/lists/all.txt
+            - https://lists.blocklist.de/lists/ssh.txt
+            - https://lists.blocklist.de/lists/mail.txt
+            - https://lists.blocklist.de/lists/bruteforcelogin.txt
+            - https://feodotracker.abuse.ch/downloads/ipblocklist.csv
+            - https://reputation.alienvault.com/reputation.generic
+            - https://rstcloud.net/free/ioc/ioc_ip_latest.csv
+            - https://www.binarydefense.com/banlist.txt
+            - https://rstcloud.net/free/ioc/ioc_domain_latest.csv
+            - https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/Cyber_Threat_Coalition_Domain_Blacklist.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/abuse-ch-ipblocklist.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/alienvault.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/binarydefense.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cobaltstrike_ips.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/compromised-ips.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cps-collected-iocs.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/dom-bl.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/illuminate.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/openphish.intel
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/filetransferportals.intel,
+            - https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/predict_intel.intel
+            - https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/network.csv 
+            - https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/quad9_blocklist.txt
+            - https://raw.githubusercontent.com/kwouffe/cryptonote-hunt/master/nsec/full-results-2019-05-15.json
+            - https://raw.githubusercontent.com/craiu/mobiletrackers/master/list.txt
+        - Add support for URLs checking in the VirusTotal module. The URLs are also cached for performance improving.
+        - Use the RiskIQ site API to download the IoC lists of Phishing domains (https://api.riskiq.net/pt/v2/articles/indicators)
+        - Use the RiskIQ phishing domains for threat intelligence detection
+        - Implement read the docs stratospherelinuxips.readthedocs.io
+        - Improve how we read binetflow files
+        - Add some new test datasets to ./datasets folder
+        - Add requirements.txt
+    - Kalipso
+        - Add Reverse DNS to the 'i' hotkey
+        - Timewindows have correct time and date in the interface
+        - Large refactoring of code of whole Kalipso
+        - Improve the documentation
 - 0.7.3
 	- Slips 
 		- Added RDNS module to retrieve reverse DNS of the IP

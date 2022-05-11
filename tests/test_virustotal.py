@@ -10,13 +10,19 @@ def do_nothing(*args):
 
 def get_vt_key():
     # get the user's api key
-    with open('../modules/virustotal/api_key_secret','r') as f:
-        api_key = f.read()
+    try:
+        with open('modules/virustotal/api_key_secret','r') as f:
+            api_key = f.read()
+    except FileNotFoundError:
+        api_key = ''
     return api_key
 
+# only run the following tests if an API key was found
+API_KEY = get_vt_key()
+pytestmark = pytest.mark.skipif(len(API_KEY)!=64, reason='API KEY not found in modules/virustotal/api_key_secret/')
+
 @pytest.fixture
-def read_configuration():
-    return
+def read_configuration(): return
 
 def create_virustotal_instance(outputQueue):
     """ Create an instance of virustotal.py
@@ -29,7 +35,6 @@ def create_virustotal_instance(outputQueue):
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration
     virustotal.key_file = '/media/alya/W/SLIPPS/modules/virustotal/api_key_secret'
-    # virustotal.key = get_vt_key()
     return virustotal
 
 

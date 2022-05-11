@@ -54,6 +54,15 @@ class Redis{
 	  	});})
     }
 
+    /*Get hostname of IP*/
+    getHostnameOfIP(profileid){
+	    return new Promise((resolve,reject)=>{this.client.hmget(profileid, 'host_name',(err,value)=>{
+	      if(err){ console.log(err); reject(err);}
+	      else{
+              resolve(value[0]) ;}
+	  	});})
+    }
+
     /*Get timeline data for specific profile and timewindow*/
     getTimeline(ip, timewindow){
       return new Promise((resolve, reject)=>{ this.timeline_data.zrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{

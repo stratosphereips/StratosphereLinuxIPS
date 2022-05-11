@@ -15,6 +15,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -46,47 +47,52 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = None
+        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to
-         be printed
-         debug: is the minimum debugging level required for this text to be
-         printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the
-        minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
                 # Check that the message is for you. Probably unnecessary...
-                if message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    __database__.publish('finished_modules', self.name)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
                     return True
-                if message['channel'] == 'new_ip':
+
+                if message and message['channel'] == 'new_ip':
                     # Example of printing the number of profiles in the
                     # Database every second
                     data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data))
+                    self.print('Amount of profiles: {}'.format(data),3,0)
 
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
