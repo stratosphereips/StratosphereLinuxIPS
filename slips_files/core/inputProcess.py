@@ -66,8 +66,9 @@ class InputProcess(multiprocessing.Process):
         self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
-        self.is_first_run = True
         self.timeout = None
+        self.remover_thread.start()
+
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
@@ -188,6 +189,7 @@ class InputProcess(multiprocessing.Process):
                         # now that we replaced the old handle with the newly created file handle
                         # delete the old .log file, they have a timestamp in their name.
                     except FileNotFoundError:
+                        time.sleep(5)
                         # for example dns.log
                         # zeek changes the dns.log file name every 1h, it adds a timestamp to it
                         # it doesn't create the new dns.log until a new dns request occurs
@@ -528,26 +530,29 @@ class InputProcess(multiprocessing.Process):
     def remove_old_zeek_files(self):
         """
         This thread waits for filemonitor.py to tell it that zeek changed the files,
-        it deletes old zeek.log files and clears slips' open handles and sleeps again
+        it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while True:
-            message_c1 = self.c1.get_message(timeout=self.timeout)
-            if message_c1['data'] == 'stop_process':
+            msg = self.c1.get_message(timeout=self.timeout)
+            if msg and msg['data'] == 'stop_process':
                 return True
-            if message_c1['channel'] == 'remove_old_files' and type(message_c1['data']) == str:
-                #TODO see why nothing is ever sent in this channel from filemonitor!!
-
+            if utils.is_msg_intended_for(msg, 'remove_old_files'):
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
-                renamed_file = message_c1['data'][:-4]
-                # renamed_file_without_ext = message_c1['data'][:-4]
-                # don't allow inputprocess to access the following variables(open_file_handlers dict) until this thread sleeps again
+                changed_files = json.loads(msg['data'])
+
+                # for example the old log file should be  ./zeek_files/dns.2022-05-11-14-43-20.log
+                # new log file should be dns.log without the ts
+                old_log_file = changed_files['old_file']
+                new_log_file = changed_files['new_file']
+                # don't allow inputprocess to access the
+                # open_file_handlers dict until this thread sleeps again
                 lock = threading.Lock()
                 lock.acquire()
                 try:
                     # close slips' open handles
-                    self.open_file_handlers[renamed_file].close()
+                    self.open_file_handlers[new_log_file].close()
                     # delete cached filename
-                    del self.open_file_handlers[renamed_file]
+                    del self.open_file_handlers[new_log_file]
                     # dir_name = "/Users/ben/downloads/"
                     # test = os.listdir(dir_name)
                     #

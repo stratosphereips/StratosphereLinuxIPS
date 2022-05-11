@@ -18,7 +18,7 @@
 
 import os
 import signal
-import redis
+import json
 import time
 from watchdog.events import RegexMatchingEventHandler
 from .database import __database__
@@ -40,8 +40,11 @@ class FileEventHandler(RegexMatchingEventHandler):
     def on_moved(self, event):
         """ this will be triggered everytime zeek renames all log files"""
         # tell inputProcess to delete old files
-        if event.src_path != 'True':
-            __database__.publish("remove_old_files",event.src_path)
+        if event.dest_path != 'True':
+            to_send = {'old_file': event.dest_path,
+                       'new_file': event.src_path}
+            to_send = json.dumps(to_send)
+            __database__.publish("remove_old_files", to_send)
             # give inputProc.py time to close the handle and delete the file
             time.sleep(3)
 
