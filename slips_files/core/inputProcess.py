@@ -62,6 +62,10 @@ class InputProcess(multiprocessing.Process):
         self.event_observer = None
         # number of lines read
         self.lines = 0
+        # these are the files that slips doesn't read
+        self.ignored_files = {'capture_loss', 'loaded_scripts',
+                                         'packet_filter', 'stats',
+                                         'weird', 'reporter'}
         # create the remover thread
         self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
         self.open_file_handlers = {}
@@ -173,10 +177,7 @@ class InputProcess(multiprocessing.Process):
                         # First time opening this file.
                         # Ignore the files that do not contain data. These are the zeek log files that we don't use
                         should_be_ignored = False
-                        ignored_files = ['capture_loss', 'loaded_scripts',
-                                         'packet_filter', 'stats',
-                                         'weird', 'reporter']
-                        for ignored_file in ignored_files:
+                        for ignored_file in self.ignored_files:
                             if ignored_file in filename:
                                 should_be_ignored = True
                                 break
@@ -544,6 +545,10 @@ class InputProcess(multiprocessing.Process):
                 # new log file should be dns.log without the ts
                 old_log_file = changed_files['old_file']
                 new_log_file = changed_files['new_file']
+                new_logfile_without_path = new_log_file.split('/')[-1].split('.')[0]
+                # skip ignored files
+                if new_logfile_without_path in self.ignored_files:
+                    continue
                 # don't allow inputprocess to access the
                 # open_file_handlers dict until this thread sleeps again
                 lock = threading.Lock()
