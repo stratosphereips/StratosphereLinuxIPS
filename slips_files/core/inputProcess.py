@@ -71,7 +71,6 @@ class InputProcess(multiprocessing.Process):
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
-        self.remover_thread.start()
 
 
     def read_configuration(self):
@@ -176,21 +175,19 @@ class InputProcess(multiprocessing.Process):
                     except KeyError:
                         # First time opening this file.
                         # Ignore the files that do not contain data. These are the zeek log files that we don't use
-                        should_be_ignored = False
-                        for ignored_file in self.ignored_files:
-                            if ignored_file in filename:
-                                should_be_ignored = True
-                                break
-                        if should_be_ignored:
+                        filename_without_ext = filename.split('/')[-1].split('.')[0]
+                        if filename_without_ext in self.ignored_files:
                             continue
 
                     try:
                         file_handler = open(filename, 'r')
+                        lock = threading.Lock()
+                        lock.acquire()
                         self.open_file_handlers[filename] = file_handler
+                        lock.release()
                         # now that we replaced the old handle with the newly created file handle
                         # delete the old .log file, they have a timestamp in their name.
                     except FileNotFoundError:
-                        time.sleep(5)
                         # for example dns.log
                         # zeek changes the dns.log file name every 1h, it adds a timestamp to it
                         # it doesn't create the new dns.log until a new dns request occurs
@@ -210,7 +207,7 @@ class InputProcess(multiprocessing.Process):
                         except ValueError:
                             # remover thread just finished closing all old handles.
                             # comes here if I/O operation failed due to a closed file.
-                            #  to get the new dict of open handles.
+                            # to get the new dict of open handles.
                             continue
 
 
@@ -265,7 +262,6 @@ class InputProcess(multiprocessing.Process):
 
                 ################
                 # Out of the for that check each Zeek file one by one
-                # self.print('Out of the for.')
                 # self.print('Cached lines: {}'.format(str(cache_lines)))
 
                 # If we don't have any cached lines to send, it may mean that new lines are not arriving. Check
@@ -564,13 +560,14 @@ class InputProcess(multiprocessing.Process):
                     # for item in test:
                     #     if item.endswith(".zip"):
                     #         os.remove(os.path.join(dir_name, item))
-                    os.system(f'rm {renamed_file}.*.log')
-                    lock.release()
+                    # os.system(f'rm {renamed_file}.*.log')
                 except KeyError:
                     # we don't have a handle for that file,
                     # we probably don't need it in slips
                     # ex: loaded_scripts.log, stats.log etc..
                     pass
+                lock.release()
+
             continue
 
     def shutdown_gracefully(self):
@@ -586,6 +583,10 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        # this thread should be started from run() to get the PID of inputprocess and have shared variables
+        # if it started from __init__() it will have the PID of slips.py therefore,
+        # any changes made to the shared variables in inputprocess will not appear in the thread
+        self.remover_thread.start()
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
