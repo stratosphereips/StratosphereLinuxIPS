@@ -64,8 +64,8 @@ class InputProcess(multiprocessing.Process):
         self.lines = 0
         # these are the files that slips doesn't read
         self.ignored_files = {'capture_loss', 'loaded_scripts',
-                                         'packet_filter', 'stats',
-                                         'weird', 'reporter'}
+                             'packet_filter', 'stats', 'ocsp',
+                             'weird', 'reporter', 'x509'}
         # create the remover thread
         self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
         self.open_file_handlers = {}
@@ -542,8 +542,9 @@ class InputProcess(multiprocessing.Process):
                 old_log_file = changed_files['old_file']
                 new_log_file = changed_files['new_file']
                 new_logfile_without_path = new_log_file.split('/')[-1].split('.')[0]
-                # skip ignored files
                 if new_logfile_without_path in self.ignored_files:
+                    # just delete the old file
+                    os.remove(old_log_file)
                     continue
                 # don't allow inputprocess to access the
                 # open_file_handlers dict until this thread sleeps again
@@ -554,21 +555,15 @@ class InputProcess(multiprocessing.Process):
                     self.open_file_handlers[new_log_file].close()
                     # delete cached filename
                     del self.open_file_handlers[new_log_file]
-                    # dir_name = "/Users/ben/downloads/"
-                    # test = os.listdir(dir_name)
-                    #
-                    # for item in test:
-                    #     if item.endswith(".zip"):
-                    #         os.remove(os.path.join(dir_name, item))
-                    # os.system(f'rm {renamed_file}.*.log')
                 except KeyError:
                     # we don't have a handle for that file,
                     # we probably don't need it in slips
                     # ex: loaded_scripts.log, stats.log etc..
                     pass
+                # delete the old log file (the one with the ts)
+                os.remove(old_log_file)
                 lock.release()
 
-            continue
 
     def shutdown_gracefully(self):
         # Stop the observer
