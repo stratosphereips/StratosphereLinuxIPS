@@ -23,7 +23,7 @@ class Module(Module, multiprocessing.Process):
                   'password guessing, self-signed certificate, data exfiltration, etc.'
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Read the configuration
         self.read_configuration()
         # Retrieve the labels

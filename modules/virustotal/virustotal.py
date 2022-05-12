@@ -22,7 +22,10 @@ class Module(Module, multiprocessing.Process):
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = ['Dita Hollmannova, Kamila Babayeva', 'Alya Gomaa', 'Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port, testing=False):
+    def __init__(self,
+                 outputqueue,
+                 config,
+                 redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue

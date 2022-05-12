@@ -14,13 +14,13 @@ import asyncio
 
 class UpdateFileManager:
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         self.outputqueue = outputqueue
         self.config = config
         # For now, read the malicious IPs from here
         self.name = 'update_manager'
         # Start the database
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.new_update_time = float('-inf')

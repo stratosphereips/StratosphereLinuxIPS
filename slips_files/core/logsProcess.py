@@ -43,7 +43,14 @@ def timing(f):
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config, mainfoldername, redis_port):
+    def __init__(self,
+                 inputqueue,
+                 outputqueue,
+                 verbose,
+                 debug,
+                 config,
+                 mainfoldername,
+                 redis_port):
         self.name = 'Logs'
         multiprocessing.Process.__init__(self)
         self.verbose = verbose

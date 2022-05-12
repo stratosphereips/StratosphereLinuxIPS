@@ -34,16 +34,24 @@ import shutil
 # Input Process
 class InputProcess(multiprocessing.Process):
     """ A class process to run the process of the flows """
-    def __init__(self, outputqueue, profilerqueue, input_type,
-                 input_information, config, packet_filter,
-                 zeek_or_bro, line_type):
+    def __init__(self,
+                 outputqueue,
+                 profilerqueue,
+                 input_type,
+                 input_information,
+                 config,
+                 packet_filter,
+                 zeek_or_bro,
+                 line_type,
+                 redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
         utils.drop_root_privs()
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
+        self.redis_port = redis_port
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
         self.line_type = line_type
@@ -451,7 +459,7 @@ class InputProcess(multiprocessing.Process):
             # some process to tell us which files to read in real time when they appear
             # Get the file eventhandler
             # We have to set event_handler and event_observer before running zeek.
-            self.event_handler = FileEventHandler(self.config)
+            self.event_handler = FileEventHandler(self.config, self.redis_port)
             # Create an observer
             self.event_observer = Observer()
             # Schedule the observer with the callback on the file handler

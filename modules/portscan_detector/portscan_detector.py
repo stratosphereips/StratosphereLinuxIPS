@@ -20,12 +20,12 @@ class PortScanProcess(Module, multiprocessing.Process):
     description = 'Detect Horizonal, Vertical and ICMP scans'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # Get from the database the separator used to separate the IP and the word profile

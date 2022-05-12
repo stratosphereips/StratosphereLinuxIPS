@@ -30,13 +30,13 @@ class Module(Module, multiprocessing.Process):
     description = 'Train or test a Machine Learning model to detect malicious flows'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
         self.fieldseparator = __database__.getFieldSeparator()
