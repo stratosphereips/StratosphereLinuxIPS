@@ -4,9 +4,10 @@ import os
 import argparse
 import subprocess
 import time
-
+import pytest
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+
 
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -75,6 +76,7 @@ def test_check_zeek_or_bro():
     assert main.check_zeek_or_bro() != False
 
 # Daemon tests
+@pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def create_Daemon_instance():
     """ returns an instance of Daemon() class in slips.py"""
     slips = create_Main_instance()
@@ -82,6 +84,7 @@ def create_Daemon_instance():
     slips.args = argparse.Namespace(blocking=False, clearcache=False, config='slips.conf', debug=None, filepath='dataset/hide-and-seek-short.pcap', gui=False, interactive=False, interface=None, nologfiles=True, output='output/', pcapfilter=None, restartdaemon=False, stopdaemon=False, verbose=None)
     return Daemon(slips)
 
+@pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def test_setup_std_streams():
     daemon = create_Daemon_instance()
     os.system("./slips.py -c slips.conf -f dataset/hide-and-seek-short.pcap")
@@ -100,6 +103,7 @@ def test_setup_std_streams():
     # stop the daemon
     os.system("sudo ./slips.py -S")
 
+@pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def test_pidfile():
     """ tests creating, writing to and deleting pidfile"""
     # run slips in a parallel process
@@ -118,12 +122,14 @@ def test_pidfile():
     # make sure the pidfile is deleted after slips is finished
     assert not os.path.exists(daemon.pidfile)
 
+@pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def test_print():
     daemon = create_Daemon_instance()
     daemon.print("Test")
     with open(daemon.logsfile, 'r') as f:
         assert "Test" in f.read()
 
+@pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def test_stop():
     """ tests if the daemon is successfully killed after running the daemon stop function"""
     # run slips in a parallel process
