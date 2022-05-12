@@ -17,9 +17,13 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
+from modules.update_manager.update_file_manager import UpdateFileManager
+from slips_files.common.abstracts import Module
+from slips_files.common.argparse import ArgumentParser
+from slips_files.common.slips_utils import utils
+from slips_files.core.database import __database__
 import configparser
 import signal
-import json
 import sys
 import redis
 import os
@@ -28,21 +32,17 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
-from modules.update_manager.update_file_manager import UpdateFileManager
 import json
 import pkgutil
 import inspect
 import modules
 import importlib
-from slips_files.common.abstracts import Module
-from slips_files.common.argparse import ArgumentParser
-from slips_files.common.slips_utils import utils
 import errno
 import subprocess
 import re
+import random
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
-from slips_files.core.database import __database__
 import asyncio
 from signal import SIGTERM
 
@@ -351,7 +351,7 @@ class Main():
                         return port
         except redis.exceptions.ConnectionError:
             # Connection refused to this port
-            return generate_random_redis_port()
+            return self.generate_random_redis_port()
 
 
     def clear_redis_cache_database(self, redis_host='localhost', redis_port=6379) -> bool:
@@ -859,7 +859,7 @@ class Main():
                 from slips_files.core.database import __database__
                 __database__.start(self.config)
                 if not __database__.load(self.args.db):
-                    print(f"[Main] Failed to {self.args.db}")
+                    print(f"[Main] Failed to load {self.args.db}")
                 else:
                     print(f"{self.args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
                 self.terminate_slips()
@@ -1029,7 +1029,7 @@ class Main():
                 ##########################
                 from slips_files.core.database import __database__
                 # get the port that is going to be used for this instance of slips
-                redis_port = generate_random_redis_port()
+                redis_port = self.generate_random_redis_port()
                 print(f'[Main] Using redis server on port: {redis_port}')
                 # log the pid of the redis server using this port
                 redis_pid = 'Not found'
@@ -1083,6 +1083,7 @@ class Main():
                                                     self.args.verbose,
                                                     self.args.debug,
                                                     self.config,
+                                                    redis_port,
                                                     stdout=current_stdout,
                                                     stderr=stderr)
                 # this process starts the db

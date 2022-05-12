@@ -27,7 +27,7 @@ import os
 # Output Process
 class OutputProcess(multiprocessing.Process):
     """ A class process to output everything we need. Manages all the output """
-    def __init__(self, inputqueue, verbose, debug, config, stdout='', stderr='output/errors.log'):
+    def __init__(self, inputqueue, verbose, debug, config, redis_port, stdout='', stderr='output/errors.log'):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
@@ -44,7 +44,7 @@ class OutputProcess(multiprocessing.Process):
         if self.verbose > 2:
             print(f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}')
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
 
     def create_errors_log(self):
         if '-o' in sys.argv:
