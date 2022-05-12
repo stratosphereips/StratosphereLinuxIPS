@@ -1131,23 +1131,21 @@ class Main():
                     # leak detector only works on pcap files
                     if input_type != 'pcap':
                         to_ignore.append('leak_detector')
-                    try:
-                        # This 'imports' all the modules somehow, but then we ignore some
-                        modules_to_call = self.load_modules(to_ignore)[0]
-                        for module_name in modules_to_call:
-                            if module_name not in to_ignore:
-                                module_class = modules_to_call[module_name]['obj']
-                                ModuleProcess = module_class(outputProcessQueue, self.config)
-                                ModuleProcess.start()
-                                __database__.store_process_PID(module_name, int(ModuleProcess.pid))
-                                description = modules_to_call[module_name]['description']
-                                outputProcessQueue.put(
-                                    f'10|main|\t\tStarting the module {module_name} '
-                                    f'({description}) '
-                                    f'[PID {ModuleProcess.pid}]')
-                    except TypeError:
-                        # There are not modules in the configuration to ignore?
-                        print('No modules are ignored')
+
+                    # Import all the modules
+                    modules_to_call = self.load_modules(to_ignore)[0]
+                    for module_name in modules_to_call:
+                        if module_name not in to_ignore:
+                            module_class = modules_to_call[module_name]['obj']
+                            ModuleProcess = module_class(outputProcessQueue, self.config, redis_port)
+                            ModuleProcess.start()
+                            __database__.store_process_PID(module_name, int(ModuleProcess.pid))
+                            description = modules_to_call[module_name]['description']
+                            outputProcessQueue.put(
+                                f'10|main|\t\tStarting the module {module_name} '
+                                f'({description}) '
+                                f'[PID {ModuleProcess.pid}]')
+
 
                 # Get the type of output from the parameters
                 # Several combinations of outputs should be able to be used
@@ -1178,8 +1176,12 @@ class Main():
                 # Create the queue for the evidence thread
                 evidenceProcessQueue = Queue()
                 # Create the thread and start it
-                evidenceProcessThread = EvidenceProcess(evidenceProcessQueue, outputProcessQueue,
-                                                        self.config, self.args.output, logs_folder, redis_port)
+                evidenceProcessThread = EvidenceProcess(evidenceProcessQueue,
+                                                        outputProcessQueue,
+                                                        self.config,
+                                                        self.args.output,
+                                                        logs_folder,
+                                                        redis_port)
                 evidenceProcessThread.start()
                 outputProcessQueue.put('10|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
                 __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
@@ -1199,9 +1201,15 @@ class Main():
 
                 # Input process
                 # Create the input process and start it
-                inputProcess = InputProcess(outputProcessQueue, profilerProcessQueue,
-                                            input_type, input_information, self.config,
-                                            self.args.pcapfilter, zeek_bro, redis_port, line_type)
+                inputProcess = InputProcess(outputProcessQueue,
+                                            profilerProcessQueue,
+                                            input_type,
+                                            input_information,
+                                            self.config,
+                                            self.args.pcapfilter,
+                                            zeek_bro,
+                                            line_type,
+                                            redis_port)
                 inputProcess.start()
                 outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
                 time.sleep(0.5)

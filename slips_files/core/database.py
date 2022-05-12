@@ -141,23 +141,24 @@ class Database(object):
         self.read_configuration()
         # Read values from the configuration file
         try:
-            self.connect_to_redis_server(redis_port)
-            # Set the memory limits of the output buffer,  For normal clients: no limits
-            # for pub-sub 4GB maximum buffer size
-            # and 2GB for soft limit
-            # The original values were 50MB for maxmem and 8MB for soft limit.
-            self.r.config_set("client-output-buffer-limit",
-                              "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
-            self.rcache.config_set("client-output-buffer-limit",
-                                   "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
+            if not hasattr(self, 'r'):
+                self.connect_to_redis_server(redis_port)
+                # Set the memory limits of the output buffer,  For normal clients: no limits
+                # for pub-sub 4GB maximum buffer size
+                # and 2GB for soft limit
+                # The original values were 50MB for maxmem and 8MB for soft limit.
+                self.r.config_set("client-output-buffer-limit",
+                                  "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
+                self.rcache.config_set("client-output-buffer-limit",
+                                       "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
 
-            if self.deletePrevdb:
-                self.r.flushdb()
+                if self.deletePrevdb:
+                    self.r.flushdb()
 
-            # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
-            # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
-            self.r.config_set('stop-writes-on-bgsave-error','no')
-            self.rcache.config_set('stop-writes-on-bgsave-error','no')
+                # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
+                # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
+                self.r.config_set('stop-writes-on-bgsave-error','no')
+                self.rcache.config_set('stop-writes-on-bgsave-error','no')
             # Even if the DB is not deleted. We need to delete some temp data
             # Zeek_files
             self.r.delete('zeekfiles')
