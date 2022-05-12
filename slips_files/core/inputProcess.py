@@ -461,11 +461,14 @@ class InputProcess(multiprocessing.Process):
 
             # This double if is horrible but we just need to change a string
             if self.input_type is 'interface':
+                rotation_interval = "-e 'redef Log::default_rotation_interval = 1day;'"
                 # Change the bro command
                 bro_parameter = '-i ' + self.given_path
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
             elif self.input_type is 'pcap':
+                # don't rotate zeek log files
+                rotation_interval = "-e 'redef Log::default_rotation_interval = 0sec;'"
                 # Find if the pcap file name was absolute or relative
                 if self.given_path[0] == '/':
                     # If absolute, do nothing
@@ -489,7 +492,7 @@ class InputProcess(multiprocessing.Process):
             # we have our own copy pf local.zeek in __load__.zeek
             command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} ' \
                       f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins ' \
-                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} 2>&1 > /dev/null &'
+                      f'tcp_attempt_delay=1min -f {self.packet_filter} {zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
@@ -603,7 +606,7 @@ class InputProcess(multiprocessing.Process):
             return True
         except KeyboardInterrupt:
             self.shutdown_gracefully()
-            return True
+            return False
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f"Problem with Input Process. line {exception_line}", 0, 1)
@@ -613,4 +616,4 @@ class InputProcess(multiprocessing.Process):
             self.print(inst, 0, 1)
             self.print(traceback.format_exc(), 0 , 1)
             self.shutdown_gracefully()
-            return True
+            return False

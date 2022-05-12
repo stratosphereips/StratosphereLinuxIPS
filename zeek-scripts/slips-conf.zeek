@@ -1,5 +1,4 @@
 redef LogAscii::use_json=T;
-redef Log::default_rotation_interval=1day;
 
 event reporter_error(t: time , msg: string , location: string )
 {
