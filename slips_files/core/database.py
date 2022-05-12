@@ -2324,7 +2324,7 @@ class Database(object):
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
-        """ Add a line to the time line of this profileid and twid """
+        """ Add a line to the timeline of this profileid and twid """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
