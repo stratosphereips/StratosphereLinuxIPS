@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 # clear the database
-os.system('./slips.py -c slips.conf -cc')
+os.system('./slips.py -cc -I')
 # run all unit tests
 os.system('python3 -m pytest tests/ --ignore="tests/test_dataset.py" -p no:warnings -vv ')
 # test everything in our dataset

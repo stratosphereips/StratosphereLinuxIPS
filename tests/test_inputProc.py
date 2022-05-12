@@ -7,7 +7,10 @@ def do_nothing(*arg):
     """ Used to override the print function because using the self.print causes broken pipes """
     pass
 
-def create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type):
+def create_inputProcess_instance(outputQueue,
+                                 profilerQueue,
+                                 input_information,
+                                 input_type):
     """ Create an instance of inputProcess.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
@@ -31,35 +34,50 @@ def test_handle_pcap_and_interface(outputQueue,
                                    input_type,
                                    input_information):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.handle_pcap_and_interface() == True
 
 
-@pytest.mark.parametrize("input_type,input_information", [('zeek_folder','dataset/sample_zeek_files-2/'),
-                                                          ('zeek_folder','dataset/sample_zeek_files/')])
+@pytest.mark.parametrize("input_type,input_information",
+                         [('zeek_folder','dataset/sample_zeek_files-2/'),
+                          ('zeek_folder','dataset/sample_zeek_files/')])
 def test_read_zeek_folder(outputQueue,
                           profilerQueue,
                           input_type,
                           input_information):
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.read_zeek_folder() == True
 
 
-@pytest.mark.parametrize("input_type,input_information", [('zeek_log_file','dataset/sample_zeek_files-2/conn.log'),
-                                                          ('zeek_log_file','dataset/sample_zeek_files/conn.log')])
+@pytest.mark.parametrize("input_type,input_information",
+                         [('zeek_log_file','dataset/sample_zeek_files-2/conn.log'),
+                          ('zeek_log_file','dataset/sample_zeek_files/conn.log')])
 def test_handle_zeek_log_file(outputQueue,
                               profilerQueue,
                               input_type,
                               input_information):
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.handle_zeek_log_file() == True
 
-@pytest.mark.parametrize("input_type,input_information", [('nfdump','dataset/test.nfdump')])
+@pytest.mark.parametrize("input_type,input_information",
+                         [('nfdump','dataset/test.nfdump')])
 def test_handle_nfdump(outputQueue,
                        profilerQueue,
                        input_type,
                        input_information):
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.handle_nfdump() == True
 
 
@@ -73,15 +91,22 @@ def test_handle_binetflow(outputQueue,
                           profilerQueue,
                           input_type,
                           input_information):
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.handle_binetflow() == True
 
 
-@pytest.mark.parametrize("input_type,input_information", [('suricata','dataset/suricata-flows.json')])
+@pytest.mark.parametrize("input_type,input_information",
+                         [('suricata','dataset/suricata-flows.json')])
 def test_handle_suricata(outputQueue,
                          profilerQueue,
                          input_type,
                          input_information):
-    inputProcess = create_inputProcess_instance(outputQueue, profilerQueue, input_information, input_type)
+    inputProcess = create_inputProcess_instance(outputQueue,
+                                                profilerQueue,
+                                                input_information,
+                                                input_type)
     assert inputProcess.handle_suricata() == True
 

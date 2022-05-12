@@ -216,22 +216,55 @@ class Module(Module, multiprocessing.Process):
 
                     if not dns_resolution:
                         dns_resolution = '????'
-                    activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to','dns_resolution':dns_resolution, 'daddr': daddr, 'dport/proto': str(dport)+'/'+proto, 'state': state.lower(), 'warning': warning_empty, 'Sent': sbytes, 'Recv': allbytes - sbytes, 'Tot': allbytes_human,'Duration': dur, 'critical warning': critical_warning_dport_name}
+                    activity = {'timestamp': timestamp_human,
+                                'dport_name': dport_name,
+                                'preposition': 'to',
+                                'dns_resolution':dns_resolution,
+                                'daddr': daddr,
+                                'dport/proto': str(dport)+'/'+proto,
+                                'state': state.lower(),
+                                'warning': warning_empty,
+                                'Sent': sbytes,
+                                'Recv': allbytes - sbytes,
+                                'Tot': allbytes_human,
+                                'Duration': dur,
+                                'critical warning': critical_warning_dport_name}
                 elif 'ICMP' in proto:
                     if type(sport) == int:
                         # zeek puts the number
                         if sport == 8:
                             dport_name = 'PING echo'
-                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
+                            activity = {'timestamp': timestamp_human,
+                                        'dport_name': dport_name,
+                                        'preposition': 'to',
+                                        'daddr': daddr,
+                                        'Size': allbytes_human,
+                                        'Duration': dur}
                         elif sport == 11:
                             dport_name = 'ICMP Time Excedded in Transit'
-                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
+                            activity = {'timestamp': timestamp_human,
+                                        'dport_name': dport_name,
+                                        'preposition': 'to',
+                                        'daddr': daddr,
+                                        'Size': allbytes_human,
+                                        'Duration': dur}
                         elif sport == 3:
                             dport_name = 'ICMP Destination Net Unreachable'
-                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Size': allbytes_human, 'Duration': dur}
+                            activity = {'timestamp': timestamp_human,
+                                        'dport_name': dport_name,
+                                        'preposition': 'to',
+                                        'daddr': daddr,
+                                        'Size': allbytes_human,
+                                        'Duration': dur}
                         else:
                             dport_name = 'ICMP Unknown type'
-                            activity = {'timestamp': timestamp_human,'dport_name': dport_name, 'preposition': 'to', 'daddr': daddr, 'Type': '0x' + str(sport), 'Size': allbytes_human, 'Duration': dur}
+                            activity = {'timestamp': timestamp_human,
+                                        'dport_name': dport_name,
+                                        'preposition': 'to',
+                                        'daddr': daddr,
+                                        'Type': '0x' + str(sport),
+                                        'Size': allbytes_human,
+                                        'Duration': dur}
 
                     elif type(sport) == str:
                         # Argus puts in hex the values of the ICMP
@@ -277,7 +310,10 @@ class Module(Module, multiprocessing.Process):
                         answer = 'NXDOMAIN'
                     alt_activity = {'Query': alt_flow["query"], 'Answers': answer}
                 elif alt_flow['type'] == 'http':
-                    http_data_all = {'Request': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"], 'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],'MIME':str(alt_flow["resp_mime_types"] ),'UA':alt_flow["user_agent"]}
+                    http_data_all = {'Request': alt_flow["method"] + ' http://'+alt_flow["host"]+alt_flow["uri"],
+                                     'Status Code': str(alt_flow["status_code"])+ '/' + alt_flow["status_msg"],
+                                     'MIME': str(alt_flow["resp_mime_types"] ),
+                                     'UA': alt_flow["user_agent"]}
                     # if any of fields are empty, do not include them
                     http_data = {k: v for k, v in http_data_all.items() if v is not '' and v is not '/'}
                     alt_activity = {'http_data': http_data}
@@ -286,7 +322,9 @@ class Module(Module, multiprocessing.Process):
                         validation = 'Yes'
                         resumed = 'False'
                     elif not alt_flow['validation_status'] and alt_flow['resumed'] == True:
-                        # If there is no validation and it is a resumed ssl. It means that there was a previous connection with the validation data. We can not say Say it
+                        # If there is no validation and it is a resumed ssl.
+                        # It means that there was a previous connection with
+                        # the validation data. We can not say Say it
                         validation = '??'
                         resumed = 'True'
                     else:
@@ -299,13 +337,20 @@ class Module(Module, multiprocessing.Process):
                     else:
                         subject = '????'
                     # We put server_name instead of dns resolution
-                    alt_activity = {'SN': subject, 'Trusted': validation, 'Resumed': resumed, 'Version': alt_flow["version"], 'dns_resolution': alt_flow['server_name']}
+                    alt_activity = {'SN': subject,
+                                    'Trusted': validation,
+                                    'Resumed': resumed,
+                                    'Version': alt_flow["version"],
+                                    'dns_resolution': alt_flow['server_name']}
                 elif alt_flow['type'] == 'ssh':
                     if alt_flow['auth_success']:
                         success = 'Successful'
                     else:
                         success = 'Not Successful'
-                    alt_activity = {'Login': success, 'Auth attempts': alt_flow['auth_attempts'], 'Client': alt_flow['client'], 'Server': alt_flow['client']}
+                    alt_activity = {'Login': success,
+                                    'Auth attempts': alt_flow['auth_attempts'],
+                                    'Client': alt_flow['client'],
+                                    'Server': alt_flow['client']}
 
             elif activity:
                 alt_activity = {'info': 'No extra data.'}

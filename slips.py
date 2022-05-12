@@ -531,6 +531,8 @@ class Main():
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
+            # we don't want to kill this process
+            PIDs.pop('slips.py')
             slips_processes = len(list(PIDs.keys()))
 
             # Send manual stops to the processes not using channels
@@ -1180,6 +1182,7 @@ class Main():
                 evidenceProcessThread.start()
                 outputProcessQueue.put('10|main|Started Evidence thread [PID {}]'.format(evidenceProcessThread.pid))
                 __database__.store_process_PID('EvidenceProcess', int(evidenceProcessThread.pid))
+                __database__.store_process_PID('slips.py', int(os.getpid()))
 
                 # Profile thread
                 # Create the queue for the profile thread
@@ -1254,7 +1257,7 @@ class Main():
 
                         # In interface we keep track of the host IP. If there was no
                         # modified TWs in the host NotIP, we check if the network was changed.
-                        # Dont try to stop slips if its capturing from an interface
+                        # Don't try to stop slips if it's capturing from an interface
                         if self.args.interface:
                             # To check of there was a modified TW in the host IP. If not,
                             # count down.
@@ -1278,14 +1281,14 @@ class Main():
                             else:
                                 minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
-                        # ---------------------------------------- Stopping slips
-
-                        # When running Slips in the file.
+                        # Running Slips in the file.
                         # If there were no modified TW in the last timewindow time,
                         # then start counting down
                         else:
                             # don't shutdown slips if it's being debugged or reading flows from stdin
-                            if amount_of_modified == 0 and not self.is_debugger_active() and input_type != 'stdin':
+                            if (amount_of_modified == 0
+                                    and not self.is_debugger_active()
+                                    and input_type != 'stdin'):
                                 # print('Counter to stop Slips. Amount of modified
                                 # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                                 if minimum_intervals_to_wait == 0:
@@ -1301,6 +1304,8 @@ class Main():
                     self.shutdown_gracefully(input_information)
 
         except KeyboardInterrupt:
+            # the EINTR error code happens if a signal occurred while the system call was in progress
+            # comes here if zeek terminates while slips is still working
             self.shutdown_gracefully(input_information)
 
 ####################

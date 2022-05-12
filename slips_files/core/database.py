@@ -30,12 +30,16 @@ def timing(f):
 
 class Database(object):
     supported_channels = {'tw_modified', 'evidence_added', 'new_ip', 'new_flow',
-                          'new_dns', 'new_dns_flow', 'new_http', 'new_ssl', 'new_profile',
-                          'give_threat_intelligence', 'new_letters', 'ip_info_change', 'dns_info_change',
-                          'dns_info_change', 'tw_closed', 'core_messages',
-                          'new_blocking', 'new_ssh', 'new_notice', 'new_url',
-                          'finished_modules', 'new_downloaded_file', 'reload_whitelist',
-                          'new_service', 'new_arp', 'new_MAC', 'new_smtp', 'new_blame', 'new_software', 'p2p_data_request'}
+                          'new_dns', 'new_dns_flow', 'new_http', 'new_ssl',
+                          'new_profile', 'give_threat_intelligence',
+                          'new_letters', 'ip_info_change',
+                          'dns_info_change', 'dns_info_change', 'tw_closed',
+                          'core_messages', 'new_blocking', 'new_ssh',
+                          'new_notice', 'new_url', 'finished_modules',
+                          'new_downloaded_file', 'reload_whitelist',
+                          'new_service', 'new_arp', 'new_MAC', 'new_smtp',
+                          'new_blame', 'new_software', 'p2p_data_request',
+                          'remove_old_files'}
 
     """ Database object management """
     def __init__(self):
@@ -234,7 +238,6 @@ class Database(object):
 
         if ip_obj in ipaddress.ip_network(self.home_network):
             return True
-
         return False
 
 
@@ -247,7 +250,8 @@ class Database(object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if not self.r.sismember('profiles', str(profileid)) and self.should_add(profileid):
+            if (not self.r.sismember('profiles', str(profileid))
+                    and self.should_add(profileid)):
                 # Add the profile to the index. The index is called 'profiles'
                 self.r.sadd('profiles', str(profileid))
                 # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -2018,7 +2022,7 @@ class Database(object):
         return data
 
     def get_labels(self):
-        """ 
+        """
         Return the amount of each label so far in the DB
         Used to know how many labels are available during training
         """
@@ -2327,7 +2331,7 @@ class Database(object):
             }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
-        
+
         # Store this DNS resolution into the Info of the IPs resolved
         #self.setInfoForIPs(ip, domain)
 
@@ -2340,7 +2344,7 @@ class Database(object):
         return self.r.hget(profileid + self.separator + twid + self.separator + 'altflows', uid)
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
-        """ Add a line to the time line of this profileid and twid """
+        """ Add a line to the timeline of this profileid and twid """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
@@ -2435,6 +2439,10 @@ class Database(object):
     def add_zeek_file(self, filename):
         """ Add an entry to the list of zeek files """
         self.r.sadd('zeekfiles', filename)
+
+    def del_zeek_file(self, filename):
+        """ Delete an entry from the list of zeek files """
+        self.r.srem('zeekfiles', filename)
 
     def get_all_zeek_file(self):
         """ Return all entries from the list of zeek files """

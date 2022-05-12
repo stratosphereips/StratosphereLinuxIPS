@@ -30,8 +30,8 @@ def has_errors(output_file):
 
 
 @pytest.mark.parametrize("pcap_path,expected_profiles, output_dir, expected_evidence",
-                         [('dataset/hide-and-seek-short.pcap',15,'pcap/', 'horizontal port scan to port  23'),
-                          ('dataset/arp-only.pcap',3,'pcap2/','performing an arp scan')])
+                         [('dataset/hide-and-seek-short.pcap', 15, 'pcap/', 'horizontal port scan to port  23'),
+                          ('dataset/arp-only.pcap', 3, 'pcap2/', 'performing an arp scan')])
 def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evidence):
     try:
         os.mkdir(output_dir)
@@ -51,8 +51,8 @@ def test_pcap(pcap_path, expected_profiles, database, output_dir, expected_evide
 @pytest.mark.skipif( 'nfdump' not in shutil.which('nfdump'), reason="nfdump is not installed")
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir", [
      ('dataset/test2.binetflow', 1, 'Connection to unknown destination port 7275/TCP destination IP 64.233.167.192','test2/'),
-    ('dataset/test3.binetflow', 20, 'horizontal port scan to port  3389','test3/'),
-      ('dataset/test4.binetflow', 2, 'horizontal port scan to port  81','test4/'),
+    ('dataset/test3.binetflow', 20, 'horizontal port scan to port  3389', 'test3/'),
+      ('dataset/test4.binetflow', 2, 'horizontal port scan to port  81', 'test4/'),
      ('dataset/test5.binetflow', 4, 'Long Connection','test5/')])
 def test_binetflow(database, binetflow_path, expected_profiles, expected_evidence,  output_dir ):
     try:

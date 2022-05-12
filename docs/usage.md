@@ -80,6 +80,8 @@ tr:nth-child(even) {
 
 There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
 
+## Daemonized vs interactive mode
+
 Slips has 2 modes, interactive and daemonized.
 
 **Daemonized** : means , output, logs and alerts are written in files.
@@ -365,7 +367,9 @@ To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
 2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
 3. Running Slips with ```verbose``` and ```debug``` flags
-4. Using errors.log
+4. Using errors.log and running.log
+
+#### Running Slips with -l flag.
 
 When logging is enabled, Slips will create a directory with the current date and 
 create 3 summary files for each IP/profile it encounters.
@@ -376,15 +380,17 @@ You can also change how often Slips creates log files using the ```log_report_ti
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space, Slips deletes all zeek log files after 1 day by default. for now, there's no option to disable that.
+
+But you can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes. this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops. so this doesn't include deleted zeek logs.
 
 Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/```
-
 
 DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slips is done by enabling
  ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
 it deletes large log files periodically (like arp.log).
 
+####  Running Slips with verbose and debug flags
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
@@ -440,8 +446,11 @@ Below is a table showing each level of both.
 </tbody>
 </table>
 
-Slips also logs all errors to output/errors.log, whether you're using -e or not.
-errors.log is cleared on every startup on Slips.
+#### Using errors.log and running.log
+
+Slips also logs all errors to output/errors.log (interactive mode), and  /var/log/slips/error.log (daemonized mode) whether you're using -e or not. See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode) for more information about the 2 modes
+
+General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of interactive mode 
 
 ## Plug in a zeek script
 
