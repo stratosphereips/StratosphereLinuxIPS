@@ -1175,7 +1175,7 @@ class Main():
 
                         # In interface we keep track of the host IP. If there was no
                         # modified TWs in the host NotIP, we check if the network was changed.
-                        # Dont try to stop slips if its capturing from an interface
+                        # Don't try to stop slips if it's capturing from an interface
                         if self.args.interface:
                             # To check of there was a modified TW in the host IP. If not,
                             # count down.
@@ -1199,14 +1199,14 @@ class Main():
                             else:
                                 minimum_intervals_to_wait = limit_minimum_intervals_to_wait
 
-                        # ---------------------------------------- Stopping slips
-
-                        # When running Slips in the file.
+                        # Running Slips in the file.
                         # If there were no modified TW in the last timewindow time,
                         # then start counting down
                         else:
                             # don't shutdown slips if it's being debugged or reading flows from stdin
-                            if amount_of_modified == 0 and not self.is_debugger_active() and input_type != 'stdin':
+                            if (amount_of_modified == 0
+                                    and not self.is_debugger_active()
+                                    and input_type != 'stdin'):
                                 # print('Counter to stop Slips. Amount of modified
                                 # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
                                 if minimum_intervals_to_wait == 0:

@@ -218,7 +218,6 @@ class Database(object):
 
         if ip_obj in ipaddress.ip_network(self.home_network):
             return True
-
         return False
 
 
@@ -231,7 +230,8 @@ class Database(object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if not self.r.sismember('profiles', str(profileid)) and self.should_add(profileid):
+            if (not self.r.sismember('profiles', str(profileid))
+                    and self.should_add(profileid)):
                 # Add the profile to the index. The index is called 'profiles'
                 self.r.sadd('profiles', str(profileid))
                 # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
