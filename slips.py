@@ -32,6 +32,7 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
+import pty
 import json
 import pkgutil
 import inspect
@@ -71,7 +72,7 @@ class Daemon():
 
     def print(self, text):
         """ Prints output to logsfile specified in slips.conf"""
-        with open(self.logsfile,'a') as f:
+        with open(self.logsfile, 'a') as f:
             f.write(f'{text}\n')
 
     def setup_std_streams(self):
@@ -137,7 +138,7 @@ class Daemon():
         self.slips.alerts_default_path = self.output_dir
 
         self.setup_std_streams()
-        # when stoppng the daemon don't log this info again
+        # when stopping the daemon don't log this info again
         if '-S' not in sys.argv:
             self.print(f"Logsfile: {self.logsfile}\n"
                        f"pidfile: {self.pidfile}\n"
@@ -232,7 +233,7 @@ class Daemon():
         self.daemonize()
 
         # any code run after daemonizing will be run inside the daemon
-        self.print(f"Slips Daemon is running. [PID {self.pid}]")
+        self.print(f"Slips Daemon is running. [PID {self.pid}]\n")
         # tell Main class that we're running in daemonized mode
         self.slips.set_mode('daemonized', daemon=self)
         # start slips normally
@@ -1044,11 +1045,16 @@ class Main():
                 # log the pid of the redis server using this port
                 redis_pid = 'Not found'
                 #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
-                command = f'sudo netstat -peanut'
-                result = subprocess.run(command.split(), capture_output=True)
-                # Get command output
-                output = result.stdout.decode('utf-8')
-                for line in output.splitlines():
+                command = f'netstat -peanut'
+                # A pty is a pseudo-terminal - it's a software implementation that appears to
+                # the attached program like a terminal, but instead of communicating
+                # directly with a "real" terminal, it transfers the input and output to another program.
+                master, slave = pty.openpty()
+                # connect the slave to the pty, and transfer from slave to master
+                subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=slave, stderr=slave, close_fds=True)
+                # connect the master to slips
+                cmd_output = os.fdopen(master)
+                for line in cmd_output:
                     if f":{redis_port}" in line:
                         line = re.split(r'\s{2,}', line)
                         # get the substring that has the pid
@@ -1061,7 +1067,7 @@ class Main():
                         break
                 # log redis-server pid
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open('used_redis_servers.txt','a') as f:
+                with open('used_redis_servers.txt', 'a') as f:
                     f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid: <6}\n')
 
                 # Output thread. This thread should be created first because it handles
