@@ -1,6 +1,6 @@
 #!/bin/bash
 cd modules/kalipso
-
+echo "To close all unused redis servers, run slips with --killall"
 file="../../used_redis_servers.txt"
 # Declare a string array
 declare -a open_redis_servers=()
@@ -42,7 +42,6 @@ elif [[ ${#open_redis_servers[@]} -gt 0 ]]; then
     let index=index-1
     # get the pid in this index
     port_to_use=${ports[index]}
-    echo "To close all unused redis servers, run slips with --killall"
 fi
 # run kalipso
 node kalipso -l 2000 -p ${port_to_use}

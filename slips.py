@@ -717,18 +717,21 @@ class Main():
                 # signal 0 is to check if the process is still running or not
                 # it returns 1 if the process exitted
                 try:
+                    # check if the process is still running
                     while os.kill(int(pid), 0) != 1:
                         # sigterm is 9
-                        os.kill(int(pid),9)
+                        os.kill(int(pid), 9)
                 except ProcessLookupError:
                     # process already exited, sometimes this exception is raised
                     # but the process is still running, keep trying to kill it
-                    break
+                    continue
 
             # delete the closed redis servers from used_redis_servers.txt
-            with open('used_redis_servers.txt','w') as f:
-                f.write("# This file contains a list of used redis ports.\n# Once a server is killed, it will be removed from this file.\nDate                   File or interface                   Used port       Server PID\n")
-            print(f"{len(open_servers_PIDs)} Redis Servers Killed.")
+            with open('used_redis_servers.txt', 'w') as f:
+                f.write("# This file contains a list of used redis ports.\n"
+                        "# Once a server is killed, it will be removed from this file.\n"
+                        "Date                   File or interface                   Used port       Server PID\n")
+            print(f"Killed {len(open_servers_PIDs)} Redis Servers.")
             sys.exit(-1)
 
         else:
@@ -741,48 +744,49 @@ class Main():
         return gettrace() is not None
 
 
-
     def parse_arguments(self):
         # Parse the parameters
         slips_conf_path = self.get_cwd() + 'slips.conf'
-        parser = ArgumentParser(usage="./slips.py -c <configfile> [options] [file ...]",
+        parser = ArgumentParser(usage="./slips.py -c <configfile> [options] [file]",
                                 add_help=False)
         parser.add_argument('-c', '--config', metavar='<configfile>',
                             action='store', required=False, default=slips_conf_path,
-                            help='path to the Slips config file.')
+                            help='Path to the Slips config file.')
         parser.add_argument('-v', '--verbose', metavar='<verbositylevel>', action='store', required=False, type=int,
-                            help='amount of verbosity. This shows more info about the results.')
+                            help='Verbosity level. This logs more info about slips.')
         parser.add_argument('-e', '--debug', metavar='<debuglevel>', action='store', required=False, type=int,
-                            help='amount of debugging. This shows inner information about the program.')
+                            help='Debugging level. This shows more detailed errors.')
         parser.add_argument('-f', '--filepath', metavar='<file>', action='store', required=False,
                             help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.')
         parser.add_argument('-i', '--interface', metavar='<interface>', action='store', required=False,
-                            help='read packets from an interface.')
+                            help='Read packets from an interface.')
         parser.add_argument('-l', '--createlogfiles', action='store_true', required=False,
-                            help='create log files with all the traffic info and detections.')
+                            help='Create log files with all the traffic info and detections.')
         parser.add_argument('-F', '--pcapfilter', action='store', required=False, type=str,
                             help='packet filter for Zeek. BPF style.')
-        parser.add_argument('-G',  '--gui', help='Use the nodejs GUI interface.',
+        parser.add_argument('-G',  '--gui', help='Use the GUI interface.',
                             required=False, default=False, action='store_true')
         parser.add_argument('-cc', '--clearcache', action='store_true',
-                            required=False, help='clear a cache database.')
+                            required=False, help='Clear the cache database.')
         parser.add_argument('-p', '--blocking',
                             help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
                             required=False, default=False, action='store_true')
         parser.add_argument('-cb', '--clearblocking', help='Flush and delete slipsBlocking iptables chain',
                             required=False, default=False, action='store_true')
         parser.add_argument('-o', '--output', action='store', required=False, default=self.alerts_default_path,
-                            help='store alerts.json and alerts.txt in the provided folder.')
+                            help='Store alerts.json and alerts.txt in the provided folder.')
         parser.add_argument('-s', '--save', action='store_true', required=False,
                             help='To Save redis db to disk. Requires root access.')
         parser.add_argument('-d', '--db', action='store', required=False,
                             help='To read a redis (rdb) saved file. Requires root access.')
         parser.add_argument('-I', '--interactive',required=False, default=False, action='store_true',
-                            help="run slips in interactive mode - don't daemonize")
+                            help="Run slips in interactive mode - don't daemonize")
         parser.add_argument('-S', '--stopdaemon',required=False, default=False, action='store_true',
-                            help="stop slips daemon")
+                            help="Stop slips daemon")
         parser.add_argument('-R', '--restartdaemon',required=False, default=False, action='store_true',
-                            help="restart slips daemon")
+                            help="Restart slips daemon")
+        parser.add_argument('-k', '--killall', action='store_true', required=False,
+                            help='Kill all unused redis servers')
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
         self.args = parser.parse_args()
@@ -839,6 +843,12 @@ class Main():
                 print('Deleting Cache DB in Redis.')
                 self.clear_redis_cache_database()
                 self.terminate_slips()
+
+            # kill all open unused redis servers if the parameter was included
+            if self.args.killall:
+                self.close_open_redis_servers()
+                self.terminate_slips()
+
 
             if self.args.clearblocking:
                 if os.geteuid() != 0:
@@ -1323,8 +1333,9 @@ class Main():
 if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
-
-    if slips.args.interactive:
+    # if any one of the following args are given, don't start the daemon
+    start_interactive = [slips.args.interactive, slips.args.clearcache, slips.args.killall, slips.args.clearblocking]
+    if any(start_interactive):
         # -I is provided
         slips.start()
         sys.exit()
