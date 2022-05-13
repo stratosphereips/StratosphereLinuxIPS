@@ -65,6 +65,7 @@ class Trust(Module, multiprocessing.Process):
     def __init__(self,
                  output_queue: multiprocessing.Queue,
                  config: configparser.ConfigParser,
+                 redis_port: int,
                  data_dir: str = "./output/p2ptrust_runtime/",
                  pigeon_port=6668,
                  rename_with_port=False,
@@ -128,7 +129,7 @@ class Trust(Module, multiprocessing.Process):
             'critical': 1
         }
         # Start the db
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
 
         self.sql_db_name = self.data_dir + "trustdb.db"
         if rename_sql_db_file:
