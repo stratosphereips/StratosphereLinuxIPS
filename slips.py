@@ -271,6 +271,7 @@ class Main():
         # Set up the default path for alerts.log and alerts.json. In our case, it is output folder.
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
+        self.used_redis_servers = 'used_redis_servers.txt'
 
     def read_configuration(self, config, section, name):
         """ Read the configuration file for what slips.py needs. Other processes also access the configuration """
@@ -705,12 +706,14 @@ class Main():
         """ Function to warn about unused open redis-servers """
         # get a list of open servers
         open_servers_PIDs = []
-        with open('used_redis_servers.txt','r') as f:
+        with open(self.used_redis_servers, 'r') as f:
             for line in f.read().splitlines():
                 # skip comments
-                if line.startswith('#') or 'Date' in line or len(line) < 3:
+                if (line.startswith('#')
+                        or line.startswith('Date')
+                        or len(line) < 3):
                     continue
-                pid =  re.split(r'\s{2,}', line)[-1]
+                pid = re.split(r'\s{2,}', line)[-1]
                 open_servers_PIDs.append(pid)
 
         if len(open_servers_PIDs) > 0:
@@ -728,7 +731,7 @@ class Main():
                     continue
 
             # delete the closed redis servers from used_redis_servers.txt
-            with open('used_redis_servers.txt', 'w') as f:
+            with open(self.used_redis_servers, 'w') as f:
                 f.write("# This file contains a list of used redis ports.\n"
                         "# Once a server is killed, it will be removed from this file.\n"
                         "Date                   File or interface                   Used port       Server PID\n")
@@ -1067,7 +1070,7 @@ class Main():
                         break
                 # log redis-server pid
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open('used_redis_servers.txt', 'a') as f:
+                with open(self.used_redis_servers, 'a') as f:
                     f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid: <6}\n')
 
                 # Output thread. This thread should be created first because it handles

@@ -112,8 +112,6 @@ Output files are stored in ```Slips/daemon/``` dir, By default you don't need ro
 
 You can run several instances of slips at the same time, and the output of each instance will be stored in ```output/```  directory. 
 
-You can't run multiple instances of slips on the same interface
-
 Each instance of Slips will connect to redis server on a randomly generated port.
 
 When running ./kalipso.sh, you will be prompted with the following
