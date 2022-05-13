@@ -720,8 +720,8 @@ class Main():
                             help='To Save redis db to disk. Requires root access.')
         parser.add_argument('-d', '--db', action='store', required=False,
                             help='To read a redis (rdb) saved file. Requires root access.')
-        parser.add_argument('-I', '--interactive',required=False, default=False, action='store_true',
-                            help="run slips in interactive mode - don't daemonize")
+        parser.add_argument('-D', '--daemon',required=False, default=False, action='store_true',
+                            help="run slips in daemon mode, not interactive")
         parser.add_argument('-S', '--stopdaemon',required=False, default=False, action='store_true',
                             help="stop slips daemon")
         parser.add_argument('-R', '--restartdaemon',required=False, default=False, action='store_true',
@@ -1233,7 +1233,7 @@ if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
 
-    if slips.args.interactive:
+    if not slips.args.daemon:
         # -I is provided
         slips.start()
         sys.exit()
