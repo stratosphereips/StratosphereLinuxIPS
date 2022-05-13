@@ -60,7 +60,9 @@ class FileEventHandler(RegexMatchingEventHandler):
 
     def on_modified(self, event):
         """ this will be triggered everytime zeek modifies a log file"""
-        # we only need to know modifications to reporter.log, so if zeek recieves a termination signal, slips would know about it
+        # we only need to know modifications to reporter.log,
+        # so if zeek recieves a termination signal,
+        # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
         if 'reporter' in filename:
             # check if it's a temrination signal

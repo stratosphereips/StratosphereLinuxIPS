@@ -45,6 +45,7 @@ class InputProcess(multiprocessing.Process):
                  line_type,
                  redis_port):
         multiprocessing.Process.__init__(self)
+        self.name = 'InputProcess'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
@@ -55,9 +56,11 @@ class InputProcess(multiprocessing.Process):
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
         self.line_type = line_type
+        # entire path
         self.given_path = input_information
-        self.zeek_folder = './zeek_files'
-        self.name = 'InputProcess'
+        # filename only
+        self.given_file = self.given_path.split('/')[-1]
+        self.zeek_folder = f'./zeek_files_{self.given_file}'
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
         # Read the configuration
@@ -454,6 +457,7 @@ class InputProcess(multiprocessing.Process):
             # Create zeek_folder if does not exist.
             if not os.path.exists(self.zeek_folder):
                 os.makedirs(self.zeek_folder)
+            self.print(f"Storing zeek log files in {self.zeek_folder}/")
             # Now start the observer of new files. We need the observer because Zeek does not create all the files
             # at once, but when the traffic appears. That means that we need
             # some process to tell us which files to read in real time when they appear
@@ -463,7 +467,7 @@ class InputProcess(multiprocessing.Process):
             # Create an observer
             self.event_observer = Observer()
             # Schedule the observer with the callback on the file handler
-            self.event_observer.schedule(self.event_handler, '.', recursive=True)
+            self.event_observer.schedule(self.event_handler,  self.zeek_folder, recursive=True)
             # Start the observer
             self.event_observer.start()
 

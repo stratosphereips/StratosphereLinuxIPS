@@ -1071,7 +1071,7 @@ class Main():
                 # log redis-server pid
                 now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 with open(self.used_redis_servers, 'a') as f:
-                    f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid: <6}\n')
+                    f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid}\n')
 
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
