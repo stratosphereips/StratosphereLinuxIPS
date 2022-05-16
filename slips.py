@@ -747,6 +747,31 @@ class Main():
         gettrace = getattr(sys, 'gettrace', lambda: None)
         return gettrace() is not None
 
+    def prepare_output_dir(self, input_information):
+        """
+        :param input_information: either an interface or a filename (wlp3s0, sample.pcap, etc.)
+        """
+        try:
+            os.remove(self.alerts_default_path + 'alerts.log')
+            os.remove(self.alerts_default_path + 'alerts.json')
+        except OSError:
+            # they weren't created in the first place
+            pass
+
+        if self.args.output == self.alerts_default_path:
+            # now that slips can run several instances,
+            # each created dir will be named after the instance
+            # that created it
+            self.args.output += f'{input_information.split("/")[-1]}'
+
+        # Create output folder for alerts.log and
+        # alerts.json if it doesn't  exist
+        if not self.args.output.endswith('/'):
+            self.args.output = self.args.output + '/'
+
+        if not os.path.exists(self.args.output):
+            os.makedirs(self.args.output)
+
 
     def parse_arguments(self):
         # Parse the parameters
@@ -912,6 +937,10 @@ class Main():
                         input_type = 'pcap'
                     elif 'dBase' in cmd_result:
                         input_type = 'nfdump'
+                        if shutil.which('nfdump') == None:
+                            # If we do not have nfdump, terminate Slips.
+                            print("nfdump is not installed. terminating slips.")
+                            self.terminate_slips()
                     elif 'CSV' in cmd_result:
                         input_type = 'binetflow'
                     elif 'directory' in cmd_result:
@@ -960,17 +989,13 @@ class Main():
                 print('[Main] You need to define an input source.')
                 sys.exit(-1)
 
-            if input_type == 'nfdump' and shutil.which('nfdump') == None:
-                # If we do not have nfdump, terminate Slips.
-                print("nfdump is not installed. terminating slips.")
-                self.terminate_slips()
 
             # If we need zeek (bro), test if we can run it.
             # Need to be assign to something because we pass it to inputProcess later
             zeek_bro = None
             if input_type in ('pcap', 'interface'):
                 zeek_bro = self.check_zeek_or_bro()
-                if zeek_bro is False:
+                if not zeek_bro:
                     # If we do not have bro or zeek, terminate Slips.
                     print('Error. No zeek or bro binary found.')
                     self.terminate_slips()
@@ -981,19 +1006,8 @@ class Main():
             # set alerts.log and alerts.json default paths,
             # using argparse default= will cause files to be stored in output/ dir even in daemonized mode
 
-            if os.path.exists(self.alerts_default_path) and not self.args.stopdaemon:
-                try:
-                    os.remove(self.alerts_default_path + 'alerts.log')
-                    os.remove(self.alerts_default_path + 'alerts.json')
-                except OSError :
-                    # they weren't crreated in the first place, don't delete
-                    pass
-
-                # Create output folder for alerts.txt and alerts.json if they do not exist
-                if not self.args.output.endswith('/'):
-                    self.args.output = self.args.output + '/'
-                if not os.path.exists(self.args.output):
-                    os.makedirs(self.args.output)
+            if not self.args.stopdaemon:
+                self.prepare_output_dir(input_information)
 
                 # Also check if the user blocks on interface, does not make sense to block on files
                 if self.args.interface and self.args.blocking:
@@ -1343,9 +1357,11 @@ if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
     # if any one of the following args are given, don't start the daemon
-    start_interactive = [slips.args.interactive, slips.args.clearcache, slips.args.killall, slips.args.clearblocking]
+    start_interactive = [slips.args.interactive,
+                         slips.args.clearcache,
+                         slips.args.killall,
+                         slips.args.clearblocking]
     if any(start_interactive):
-        # -I is provided
         slips.start()
         sys.exit()
 
