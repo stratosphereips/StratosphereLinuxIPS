@@ -1,10 +1,12 @@
 """ Unit test for ../arp.py """
 from ..modules.arp.arp import Module
 import configparser
+from ..slips import Main
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
+
 
 def do_nothing(*args):
     """ Used to override the print function because using the self.print causes broken pipes """
@@ -14,14 +16,12 @@ def create_ARP_instance(outputQueue):
     """ Create an instance of arp.py
         needed by every other test in this file  """
     config = configparser.ConfigParser(interpolation=None)
-    ARP = Module(outputQueue, config)
+    ARP = Module(outputQueue, config, 65534)
     # override the self.print function to avoid broken pipes
     ARP.print = do_nothing
     return ARP
 
-
 # check_arp_scan is tested in test_dataset.py, check arp-only unit test
-
 def test_check_dstip_outside_localnet(outputQueue, database):
     ARP = create_ARP_instance(outputQueue)
     daddr = '1.1.1.1'

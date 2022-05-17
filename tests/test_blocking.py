@@ -25,7 +25,7 @@ def create_blocking_instance(outputQueue):
     """ Create an instance of blocking.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    blocking = Module(outputQueue, config)
+    blocking = Module(outputQueue, config, 65533)
     # override the print function to avoid broken pipes
     blocking.print = do_nothing
     return blocking

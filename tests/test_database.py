@@ -2,6 +2,7 @@ import ipaddress
 import redis
 import os
 import json
+import configparser
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -21,6 +22,42 @@ def create_db_instace(outputQueue):
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     return __database__
+
+# this should always be the first unit test in this file
+# because we don't want another unit test adding the same flow before this one
+def test_add_flow(outputQueue):
+    database = create_db_instace(outputQueue)
+    starttime = '5'
+    dur = '5'
+    sport = 80
+    dport = 88
+    saddr_as_obj = ipaddress.ip_address(test_ip)
+    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
+    proto = 'TCP'
+    state = 'established'
+    pkts = 20
+    allbytes = 20
+    spkts = 20
+    sbytes = 20
+    appproto = 'dhcp'
+    uid = '1234'
+    flow_type =  ""
+    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
+                                          saddr=str(saddr_as_obj), sport=sport,
+                                          daddr=str(daddr_as_obj),
+                                          dport=dport, proto=proto,
+                                          state=state, pkts=pkts, allbytes=allbytes,
+                                          spkts=spkts, sbytes=sbytes,
+                                          appproto=appproto, uid=uid,
+                                          flow_type=flow_type) == True
+    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) \
+           == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,' \
+              ' "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established",' \
+              ' "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20,' \
+              ' "sbytes": 20, "appproto": "dhcp", "label": "",' \
+              ' "flow_type": "", "module_labels": {}}'
+
+
 
 def test_getProfileIdFromIP(outputQueue):
     """ unit test for addProfile and getProfileIdFromIP """
@@ -79,8 +116,6 @@ def test_add_ips(outputQueue):
 
 def test_add_port(outputQueue):
     database = create_db_instace(outputQueue)
-    # first add the flow to the db
-    add_flow_to_the_db(database)
     columns = {'dport': 80,
               'sport': 88,
               'totbytes': 80,
@@ -132,46 +167,15 @@ def test_deleteEvidence(outputQueue):
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
-def test_add_flow(outputQueue):
-    database = create_db_instace(outputQueue)
-    starttime = '5'
-    dur = '5'
-    sport = 80
-    dport = 88
-    saddr_as_obj = ipaddress.ip_address(test_ip)
-    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
-    proto = 'TCP'
-    state = 'established'
-    pkts = 20
-    allbytes = 20
-    spkts = 20
-    sbytes = 20
-    appproto = 'dhcp'
-    uid = '1234'
-    flow_type =  ""
-    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport,
-                                          daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto,
-                                          state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes,
-                                          appproto=appproto, uid=uid,
-                                          flow_type=flow_type) == True
-    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "flow_type": "", "module_labels": {}}'
-
-
 def test_module_labels(outputQueue):
     database = create_db_instace(outputQueue)
     """ tests set and get_module_labels_from_flow """
     # clear the database before running this test
-    os.system('./slips.py -c slips.conf -cc')
-    # first add the flow to the db
-    add_flow_to_the_db(database)
-    """ tests set and get_module_labels_from_flow """
+    os.system('./slips.py -cc -I')
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
-    database.set_module_label_to_flow(profileid,twid, uid, module_name, module_label )
+    database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label )
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'test' in labels
     assert labels['test'] == 'malicious'

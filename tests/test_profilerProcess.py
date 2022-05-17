@@ -15,7 +15,7 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     """ Create an instance of profilerProcess.py
         needed by every other test in this file  """
     config = configparser.ConfigParser(interpolation=None)
-    profilerProcess = ProfilerProcess(inputQueue , outputQueue,1,0, config, 6380)
+    profilerProcess = ProfilerProcess(inputQueue , outputQueue, 1, 0, config, 6380)
     # override the self.print function to avoid broken pipes
     profilerProcess.print = do_nothing
     profilerProcess.whitelist_path = "tests/test_whitelist.conf"

@@ -81,13 +81,26 @@ def create_Daemon_instance():
     """ returns an instance of Daemon() class in slips.py"""
     slips = create_Main_instance()
     # since we wont becalling __main__ we need to setup the args manually
-    slips.args = argparse.Namespace(blocking=False, clearcache=False, config='slips.conf', debug=None, filepath='dataset/hide-and-seek-short.pcap', gui=False, interactive=False, interface=None, nologfiles=True, output='output/', pcapfilter=None, restartdaemon=False, stopdaemon=False, verbose=None)
+    slips.args = argparse.Namespace(blocking=False,
+                                    clearcache=False,
+                                    config='slips.conf',
+                                    debug=None,
+                                    filepath='dataset/hide-and-seek-short.pcap',
+                                    gui=False,
+                                    interactive=False,
+                                    interface=None,
+                                    nologfiles=True,
+                                    output='output/',
+                                    pcapfilter=None,
+                                    restartdaemon=False,
+                                    stopdaemon=False,
+                                    verbose=None)
     return Daemon(slips)
 
 @pytest.mark.skipif(os.geteuid() != 0, reason='supported only with root priveledges')
 def test_setup_std_streams():
     daemon = create_Daemon_instance()
-    os.system("./slips.py -c slips.conf -f dataset/hide-and-seek-short.pcap")
+    os.system("./slips.py -f dataset/hide-and-seek-short.pcap")
     # __init__ calls read_configuration which calls setup_std_streams
     # we need to make sure that all files are there
     assert os.path.exists(daemon.logsfile)
