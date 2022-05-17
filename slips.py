@@ -751,12 +751,7 @@ class Main():
         """
         :param input_information: either an interface or a filename (wlp3s0, sample.pcap, etc.)
         """
-        try:
-            os.remove(self.alerts_default_path + 'alerts.log')
-            os.remove(self.alerts_default_path + 'alerts.json')
-        except OSError:
-            # they weren't created in the first place
-            pass
+        
 
         if self.args.output == self.alerts_default_path:
             # now that slips can run several instances,
@@ -771,6 +766,17 @@ class Main():
 
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
+            return
+
+        # path exists, this means slips was run on this file/interface before,
+        # and we slips have the old log files
+        print(f"[Main] log files in {self.args.output} will be overwritten.")
+        try:
+            os.remove(self.args.output + 'alerts.log')
+            os.remove(self.args.output + 'alerts.json')
+        except OSError:
+            # they weren't created in the first place
+            pass
 
 
     def parse_arguments(self):
