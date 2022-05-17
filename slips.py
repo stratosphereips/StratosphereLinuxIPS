@@ -1021,9 +1021,10 @@ class Main():
                 self.prepare_output_dir(input_information)
 
                 # Also check if the user blocks on interface, does not make sense to block on files
-                if self.args.interface and self.args.blocking:
-                    print('Allow Slips to block malicious connections. Executing "sudo iptables -N slipsBlocking"')
-                    os.system('sudo iptables -N slipsBlocking')
+                if self.args.interface and self.args.blocking and os.geteuid() != 0:
+                    # If the user wants to blocks,we need permission to modify iptables
+                    print('[Main] Run Slips with sudo to enable the blocking module.')
+                    self.shutdown_gracefully(input_information)
 
                 """
                 Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
