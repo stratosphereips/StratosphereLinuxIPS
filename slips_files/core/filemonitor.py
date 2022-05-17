@@ -35,7 +35,10 @@ class FileEventHandler(RegexMatchingEventHandler):
         utils.drop_root_privs()
 
     def on_created(self, event):
-        self.process(event)
+        filename, ext = os.path.splitext(event.src_path)
+        if 'log' in ext:
+            print(f"@@@@@@@@@@@@@ adding zeek file {filename}")
+            __database__.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
         """ this will be triggered everytime zeek renames all log files"""
@@ -48,15 +51,7 @@ class FileEventHandler(RegexMatchingEventHandler):
             # give inputProc.py time to close the handle and delete the file
             time.sleep(3)
 
-    def process(self, event):
-        filename, ext = os.path.splitext(event.src_path)
-        if 'log' in ext:
-            __database__.add_zeek_file(filename + ext)
 
-    def on_modified(self, event):
-        filename, ext = os.path.splitext(event.src_path)
-        if 'whitelist' in filename:
-            __database__.publish("reload_whitelist","reload")
 
     def on_modified(self, event):
         """ this will be triggered everytime zeek modifies a log file"""
@@ -65,7 +60,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
         if 'reporter' in filename:
-            # check if it's a temrination signal
+            # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
             for file in os.listdir('zeek_files/'):
                 if 'reporter' in file:
@@ -79,4 +74,5 @@ class FileEventHandler(RegexMatchingEventHandler):
                                 os.kill(int(pid), signal.SIGINT)
                                 break
                             line = f.readline()
-
+        if 'whitelist' in filename:
+            __database__.publish("reload_whitelist", "reload")
