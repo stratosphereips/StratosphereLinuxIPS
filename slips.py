@@ -1107,7 +1107,7 @@ class Main():
                     # stdout is not redirected
                     current_stdout = ''
                 # stderr is redirected when daemonized, tell outputprocess
-                stderr = 'output/errors.log'
+                stderr = f'output/{input_information.split("/")[-1]}/errors.log'
                 if self.mode == 'daemonized':
                     stderr = self.daemon.stderr
 
