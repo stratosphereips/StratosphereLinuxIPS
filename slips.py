@@ -1148,7 +1148,7 @@ class Main():
                     export_to = self.config.get('ExportingAlerts', 'export_to').rstrip("][").replace(" ", "").lower()
                     if 'stix' not in export_to and 'slack' not in export_to and 'json' not in export_to:
                         to_ignore.append('exporting_alerts')
-                    if not use_p2p or use_p2p == 'no':
+                    if not use_p2p or use_p2p == 'no' or not self.args.interface:
                         to_ignore.append('p2ptrust')
 
                     # ignore CESNET sharing module if send and receive are are disabled in slips.conf

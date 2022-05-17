@@ -81,6 +81,11 @@ class Trust(Module, multiprocessing.Process):
                  rename_sql_db_file=False,
                  override_p2p=False):
         multiprocessing.Process.__init__(self)
+        # get the used interface
+        used_interface = self.get_used_interface()
+        pigeon_logfile = f"output/{used_interface}/p2p.log"
+        data_dir = f"./output/{used_interface}/p2ptrust_runtime/"
+
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
@@ -142,6 +147,11 @@ class Trust(Module, multiprocessing.Process):
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
+
+    def get_used_interface(self):
+        used_interface = sys.argv[sys.argv.index('-i') + 1]
+        return used_interface
+
 
     def get_local_IP(self ):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
