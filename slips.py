@@ -1245,8 +1245,6 @@ class Main():
                                             redis_port)
                 inputProcess.start()
                 outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
-                time.sleep(0.5)
-                print()
                 __database__.store_process_PID('InputProcess', int(inputProcess.pid))
 
                 self.enable_metadata = self.read_configuration(self.config, 'parameters', 'metadata_dir')

@@ -60,7 +60,7 @@ class InputProcess(multiprocessing.Process):
         self.given_path = input_information
         # filename only
         self.given_file = self.given_path.split('/')[-1]
-        self.zeek_folder = f'./zeek_files_{self.given_file}'
+        self.zeek_folder = f'./zeek_files_{self.given_file}/'
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
         # Read the configuration
@@ -452,12 +452,13 @@ class InputProcess(multiprocessing.Process):
             return True
 
     def handle_pcap_and_interface(self) -> int:
+        """ Returns the number of zeek lines read """
+
         try:
-            """ Returns the number of zeek lines read """
             # Create zeek_folder if does not exist.
             if not os.path.exists(self.zeek_folder):
                 os.makedirs(self.zeek_folder)
-            self.print(f"Storing zeek log files in {self.zeek_folder}/")
+            self.print(f"Storing zeek log files in {self.zeek_folder}")
             # Now start the observer of new files. We need the observer because Zeek does not create all the files
             # at once, but when the traffic appears. That means that we need
             # some process to tell us which files to read in real time when they appear
@@ -472,15 +473,16 @@ class InputProcess(multiprocessing.Process):
             self.event_observer.start()
 
             # This double if is horrible but we just need to change a string
+            rotation_interval = "-e 'redef Log::default_rotation_interval = "
             if self.input_type is 'interface':
-                rotation_interval = "-e 'redef Log::default_rotation_interval = 1day;'"
+                rotation_interval += "1day;'"
                 # Change the bro command
                 bro_parameter = '-i ' + self.given_path
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
             elif self.input_type is 'pcap':
                 # don't rotate zeek log files
-                rotation_interval = "-e 'redef Log::default_rotation_interval = 0sec;'"
+                rotation_interval += "0sec;'"
                 # Find if the pcap file name was absolute or relative
                 if self.given_path[0] == '/':
                     # If absolute, do nothing
@@ -488,14 +490,16 @@ class InputProcess(multiprocessing.Process):
                 else:
                     # If relative, add ../ since we will move into a special folder
                     bro_parameter = '-r "../' + self.given_path + '"'
-                # This is for stoping the input if bro does not receive any new line while reading a pcap
+                # This is for stopping the inputprocess
+                # if bro does not receive any new line while reading a pcap
                 self.bro_timeout = 30
 
-            if len(os.listdir(self.zeek_folder)) > 0:
+            zeek_files = os.listdir(self.zeek_folder)
+            if len(zeek_files) > 0:
                 # First clear the zeek folder of old .log files
-                shutil.rmtree(self.zeek_folder)
-                # create the zeek folder again
-                os.mkdir(self.zeek_folder)
+                for f in zeek_files:
+                    os.remove(os.path.join(self.zeek_folder, f))
+
 
             # Run zeek on the pcap or interface. The redef is to have json files
             zeek_scripts_dir = os.getcwd() + '/zeek-scripts'

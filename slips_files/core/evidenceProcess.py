@@ -71,11 +71,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
         # clear alerts.log
-        self.logfile = self.clean_file(output_folder , 'alerts.log')
+        self.logfile = self.clean_file(output_folder, 'alerts.log')
 
         # clear alerts.json
-        self.jsonfile = self.clean_file(output_folder , 'alerts.json')
-
+        self.jsonfile = self.clean_file(output_folder, 'alerts.json')
+        self.print(f"Alerts will be logged to {output_folder}")
         self.timeout = 0
         # this list will have our local and public ips
         self.our_ips = utils.get_own_IPs()
