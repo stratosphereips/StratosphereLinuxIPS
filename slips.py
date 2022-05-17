@@ -702,9 +702,10 @@ class Main():
         except KeyboardInterrupt:
             return False
 
-    def close_open_redis_servers(self):
-        """ Function to warn about unused open redis-servers """
-        # get a list of open servers
+    def get_open_servers_PIDs(self):
+        """
+        Returns the list of PIDs of the redis unused servers started by slips
+        """
         open_servers_PIDs = []
         with open(self.used_redis_servers, 'r') as f:
             for line in f.read().splitlines():
@@ -715,6 +716,11 @@ class Main():
                     continue
                 pid = re.split(r'\s{2,}', line)[-1]
                 open_servers_PIDs.append(pid)
+        return open_servers_PIDs
+
+    def close_open_redis_servers(self):
+        """ Function to warn about unused open redis-servers """
+        open_servers_PIDs = self.get_open_servers_PIDs()
 
         if len(open_servers_PIDs) > 0:
             for pid in open_servers_PIDs:
@@ -777,7 +783,6 @@ class Main():
         except OSError:
             # they weren't created in the first place
             pass
-
 
     def parse_arguments(self):
         # Parse the parameters
@@ -1252,6 +1257,12 @@ class Main():
                 inputProcess.start()
                 outputProcessQueue.put('10|main|Started input thread [PID {}]'.format(inputProcess.pid))
                 __database__.store_process_PID('InputProcess', int(inputProcess.pid))
+
+                # warn about unused open redis servers
+                open_servers = len(self.get_open_servers_PIDs())
+                if open_servers > 0:
+                    print(f"[Main] Warning: You have {open_servers} redis servers running. "
+                          f"Run Slips with --killall to stop them.")
 
                 self.enable_metadata = self.read_configuration(self.config, 'parameters', 'metadata_dir')
                 if 'yes' in self.enable_metadata.lower():
