@@ -8,7 +8,7 @@
 python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_database.py" -n 5 -p no:warnings -vv -s
 # run db tests serially/using 1 worker
 python3  -m pytest tests/test_database.py -n 1 -p no:warnings -vv -s --dist=loadfile
-  ``
+
 # Close all redis-servers opened by the unit tests
 python3 tests/destrctor.py
 

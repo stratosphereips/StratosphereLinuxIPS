@@ -58,6 +58,9 @@ def test_pcap(pcap_path, expected_profiles, output_dir, expected_evidence, redis
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
+    # remove the generated zeek files
+    shutil.rmtree(f"zeek_files_{pcap_path.split('/')[-1]}")
+
 @pytest.mark.skipif( 'nfdump' not in shutil.which('nfdump'), reason="nfdump is not installed")
 @pytest.mark.parametrize("binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port", [
      ('dataset/test2.binetflow', 1, 'Connection to unknown destination port 7275/TCP destination IP 64.233.167.192','test2/', 6664),
@@ -128,7 +131,7 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
        'a connection without DNS resolution to IP: 185.33.223.203','conn_log/', 6659),
 
       ('dataset/sample_zeek_files-2/conn.log',5,
-       'connection without DNS resolution to IP: 2a04:4e42:41::223','conn_log-2/', 6658)])
+       'Connection to unknown destination port 17500','conn_log-2/', 6658)])
 
 def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port):
     try:
