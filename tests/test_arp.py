@@ -1,7 +1,6 @@
 """ Unit test for ../arp.py """
 from ..modules.arp.arp import Module
 import configparser
-from ..slips import Main
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -16,7 +15,7 @@ def create_ARP_instance(outputQueue):
     """ Create an instance of arp.py
         needed by every other test in this file  """
     config = configparser.ConfigParser(interpolation=None)
-    ARP = Module(outputQueue, config, 65534)
+    ARP = Module(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
     ARP.print = do_nothing
     return ARP

@@ -706,7 +706,7 @@ class Main():
         """
         Returns the list of PIDs of the redis unused servers started by slips
         """
-        open_servers_PIDs = []
+        open_servers_PIDs = set()
         with open(self.used_redis_servers, 'r') as f:
             for line in f.read().splitlines():
                 # skip comments
@@ -715,7 +715,7 @@ class Main():
                         or len(line) < 3):
                     continue
                 pid = re.split(r'\s{2,}', line)[-1]
-                open_servers_PIDs.append(pid)
+                open_servers_PIDs.add(pid)
         return open_servers_PIDs
 
     def close_open_redis_servers(self):
@@ -852,7 +852,8 @@ class Main():
         """
         # log the pid of the redis server using this port
         redis_pid = 'Not found'
-        #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
+        # On modern systems, the netstat utility comes pre-installed,
+        # this can be done using psutil but it needs root on macos
         command = f'netstat -peanut'
         # A pty is a pseudo-terminal - it's a software implementation that appears to
         # the attached program like a terminal, but instead of communicating
