@@ -6,7 +6,7 @@ import subprocess
 import re
 import pty
 
-redis_server_ports = [65531, 6380, 6381]
+redis_server_ports = [65531, 6380, 6381, 1234]
 closed_servers = 0
 for redis_port in redis_server_ports:
     # On modern systems, the netstat utility comes pre-installed,
