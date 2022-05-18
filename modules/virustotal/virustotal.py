@@ -22,7 +22,10 @@ class Module(Module, multiprocessing.Process):
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = ['Dita Hollmannova, Kamila Babayeva', 'Alya Gomaa', 'Sebastian Garcia']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self,
+                 outputqueue,
+                 config,
+                 redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
@@ -31,7 +34,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
         self.c3 = __database__.subscribe('new_url')

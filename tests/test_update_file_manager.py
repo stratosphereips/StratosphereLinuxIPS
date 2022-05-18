@@ -14,7 +14,7 @@ def create_update_manager_instance(outputQueue):
     """ Create an instance of update_manager.py
         needed by every other test in this file  """
     config = configparser.ConfigParser()
-    update_manager = UpdateFileManager(outputQueue, config)
+    update_manager = UpdateFileManager(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
     update_manager.print = do_nothing
     return update_manager

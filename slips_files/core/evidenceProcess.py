@@ -42,8 +42,13 @@ class EvidenceProcess(multiprocessing.Process):
     It only work on evidence for IPs that were profiled
     This should be converted into a module
     """
-    def __init__(self, inputqueue, outputqueue,
-                 config, output_folder, logs_folder):
+    def __init__(self,
+                 inputqueue,
+                 outputqueue,
+                 config,
+                 output_folder,
+                 logs_folder,
+                 redis_port):
         self.name = 'EvidenceProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -51,7 +56,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.config = config
         self.whitelist = Whitelist(outputqueue, config)
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
@@ -66,11 +71,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
         # clear alerts.log
-        self.logfile = self.clean_file(output_folder , 'alerts.log')
+        self.logfile = self.clean_file(output_folder, 'alerts.log')
 
         # clear alerts.json
-        self.jsonfile = self.clean_file(output_folder , 'alerts.json')
-
+        self.jsonfile = self.clean_file(output_folder, 'alerts.json')
+        self.print(f"Storing Slips logs in {output_folder}")
         self.timeout = 0
         # this list will have our local and public ips
         self.our_ips = utils.get_own_IPs()

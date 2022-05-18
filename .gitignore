@@ -158,3 +158,6 @@ pigeon_logs
 
 # ignore trustdb
 trustdb.db
+
+# ignore running redis servers logs
+used_redis_servers.txt

@@ -108,6 +108,31 @@ Run slips with ```-I```to start slips in interactive mode.
 
 Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
 
+## Running Several slips instances
+
+You can run several instances of slips at the same time, and the output of each instance will be stored in ```output/filename/```  directory. 
+
+Each instance of Slips will connect to redis server on a randomly generated port.
+
+However, all instance share 1 cached redis database on redis://localhost:6379 DB 0, to store the IoCs taken from TI files.
+
+When running ./kalipso.sh, you will be prompted with the following
+
+    To close all unused redis servers, run slips with --killall
+    You have 3 open redis servers, Choose which one to use [1,2,3 etc..] 
+    [1] wlp3s0 - port 55879
+    [2] dataset/hide-and-seek-short.pcap - port 59324
+
+You can type 1 or 2 to view the corresponding file or interface in kalipso.
+
+Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
+
+```./slips.py --killall```
+
+NOTICE: if you run more than 1 instance of slips on the same file or the same interface, 
+slips will overwrite the all the logs in the ```output/<filename/inteface>``` dir and all zeek logs 
+in ```zeek_files_<filename>/``` dir
+
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following:

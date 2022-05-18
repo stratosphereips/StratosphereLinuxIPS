@@ -30,7 +30,7 @@ def create_virustotal_instance(outputQueue):
     config = configparser.ConfigParser()
     with open("slips.conf") as conf_file:
         config.read_file(conf_file)
-    virustotal = Module(outputQueue, config)
+    virustotal = Module(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration

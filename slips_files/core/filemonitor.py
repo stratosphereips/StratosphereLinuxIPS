@@ -27,15 +27,17 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r".*\.log$", r".*\.conf$"]
 
-    def __init__(self, config):
+    def __init__(self, config, redis_port):
         super().__init__(self.REGEX)
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         utils.drop_root_privs()
 
     def on_created(self, event):
-        self.process(event)
+        filename, ext = os.path.splitext(event.src_path)
+        if 'log' in ext:
+            __database__.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
         """ this will be triggered everytime zeek renames all log files"""
@@ -48,22 +50,16 @@ class FileEventHandler(RegexMatchingEventHandler):
             # give inputProc.py time to close the handle and delete the file
             time.sleep(3)
 
-    def process(self, event):
-        filename, ext = os.path.splitext(event.src_path)
-        if 'log' in ext:
-            __database__.add_zeek_file(filename + ext)
 
-    def on_modified(self, event):
-        filename, ext = os.path.splitext(event.src_path)
-        if 'whitelist' in filename:
-            __database__.publish("reload_whitelist","reload")
 
     def on_modified(self, event):
         """ this will be triggered everytime zeek modifies a log file"""
-        # we only need to know modifications to reporter.log, so if zeek recieves a termination signal, slips would know about it
+        # we only need to know modifications to reporter.log,
+        # so if zeek recieves a termination signal,
+        # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
         if 'reporter' in filename:
-            # check if it's a temrination signal
+            # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
             for file in os.listdir('zeek_files/'):
                 if 'reporter' in file:
@@ -77,4 +73,5 @@ class FileEventHandler(RegexMatchingEventHandler):
                                 os.kill(int(pid), signal.SIGINT)
                                 break
                             line = f.readline()
-
+        if 'whitelist' in filename:
+            __database__.publish("reload_whitelist", "reload")

@@ -43,14 +43,21 @@ def timing(f):
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """ A class to output data in logs files """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config, mainfoldername):
+    def __init__(self,
+                 inputqueue,
+                 outputqueue,
+                 verbose,
+                 debug,
+                 config,
+                 mainfoldername,
+                 redis_port):
         self.name = 'Logs'
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.separator = '_'
         # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.inputqueue = inputqueue

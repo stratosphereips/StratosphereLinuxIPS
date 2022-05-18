@@ -15,6 +15,8 @@ import re
 import ast
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
+import socket
+import random
 
 def timing(f):
     """ Function to measure the time another function takes."""
@@ -52,6 +54,44 @@ class Database(object):
         if self.running_in_docker:
             self.sudo = ''
 
+    def connect_to_redis_server(self, port: str):
+        """ Connects to the given port and Sets r and rcache """
+        try:
+            # start the redis server
+            os.system(f'redis-server --port {port} --daemonize yes > /dev/null 2>&1')
+
+            # db 0 changes everytime we run slips
+            # set health_check_interval to avoid redis ConnectionReset errors:
+            # if the connection is idle for more than 30 seconds,
+            # a round trip PING/PONG will be attempted before next redis cmd.
+            # If the PING/PONG fails, the connection will reestablished
+
+            # retry_on_timeout=True after the command times out, it will be retried once,
+            # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+
+            self.r = redis.StrictRedis(host='localhost',
+                                       port=port,
+                                       db=0,
+                                       charset="utf-8",
+                                       socket_keepalive=True,
+                                       retry_on_timeout=True,
+                                       decode_responses=True,
+                                       health_check_interval=20)#password='password')
+            # port 6379 db 0 is cache, delete it using -cc flag
+            self.rcache = redis.StrictRedis(host='localhost',
+                                            port=6379,
+                                            db=0,
+                                            charset="utf-8",
+                                            socket_keepalive=True,
+                                            retry_on_timeout=True,
+                                            decode_responses=True,
+                                            health_check_interval=30)#password='password')
+
+
+            return True
+        except redis.exceptions.ConnectionError:
+            # unable to connect to this port, try another one
+            return False
 
     def read_configuration(self):
         """
@@ -59,13 +99,11 @@ class Database(object):
         """
         try:
             deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
-            if deletePrevdbText == 'True':
-                self.deletePrevdb = True
-            elif deletePrevdbText == 'False':
-                self.deletePrevdb = False
+            self.deletePrevdb = False if deletePrevdbText == 'False' else True
         except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.deletePrevdb = True
+
         try:
             data = self.config.get('parameters', 'time_window_width')
             self.width = float(data)
@@ -74,12 +112,10 @@ class Database(object):
             if 'only_one_tw' in data:
                 # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                 self.width = 9999999999
-        except configparser.NoOptionError:
-            # By default we use 3600 seconds, 1hs
-            self.width = 3600
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
+            # 1h
             self.width = 3600
 
         # Read disabled detections from slips.conf
@@ -90,7 +126,7 @@ class Database(object):
         except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError, KeyError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # if we failed to read a value, it will be enabled by default.
-            self.disabled_detections  = []
+            self.disabled_detections = []
 
         # get home network from slips.conf
         try:
@@ -99,39 +135,14 @@ class Database(object):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.home_network = utils.home_network_ranges
 
-    def start(self, config):
+    def start(self, config, redis_port):
         """ Start the DB. Allow it to read the conf """
         self.config = config
         self.read_configuration()
-        # Create the connection to redis
-        if not hasattr(self, 'r'):
-            try:
-                # db 0 changes everytime we run slips
-                # set health_check_interval to avoid redis ConnectionReset errors:
-                # if the connection is idle for more than 30 seconds,
-                # a round trip PING/PONG will be attempted before next redis cmd.
-                # If the PING/PONG fails, the connection will reestablished
-
-                # retry_on_timeout=True after the command times out, it will be retried once,
-                # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-
-                self.r = redis.StrictRedis(host='localhost',
-                                           port=6379,
-                                           db=0,
-                                           charset="utf-8",
-                                           socket_keepalive=True,
-                                           retry_on_timeout=True,
-                                           decode_responses=True,
-                                           health_check_interval=20)#password='password')
-                # db 1 is cache, delete it using -cc flag
-                self.rcache = redis.StrictRedis(host='localhost',
-                                                port=6379,
-                                                db=1,
-                                                charset="utf-8",
-                                                socket_keepalive=True,
-                                                retry_on_timeout=True,
-                                                decode_responses=True,
-                                                health_check_interval=30)#password='password')
+        # Read values from the configuration file
+        try:
+            if not hasattr(self, 'r'):
+                self.connect_to_redis_server(redis_port)
                 # Set the memory limits of the output buffer,  For normal clients: no limits
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
@@ -144,21 +155,26 @@ class Database(object):
                 if self.deletePrevdb:
                     self.r.flushdb()
 
-
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
                 self.r.config_set('stop-writes-on-bgsave-error','no')
                 self.rcache.config_set('stop-writes-on-bgsave-error','no')
-
-            except redis.exceptions.ConnectionError:
-                print('[DB] Error in database.py: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+            # Even if the DB is not deleted. We need to delete some temp data
+            # Zeek_files
+            self.r.delete('zeekfiles')
+            # By default the slips internal time is 0 until we receive something
+            self.setSlipsInternalTime(0)
+            while self.get_slips_start_time() == None:
+                self.set_slips_start_time()
+        except redis.exceptions.ConnectionError:
+            print(f"[DB] Can't connect to redis on port {redis_port}")
         # Even if the DB is not deleted. We need to delete some temp data
-        # Zeek_files
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
         while self.get_slips_start_time() == None:
             self.set_slips_start_time()
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -3201,5 +3217,12 @@ class Database(object):
             self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
 
 
+    def store_zeek_path(self, path):
+        """ used to store the path of zeek log files slips is currently using """
+        self.r.set('zeek_path', path)
+
+    def get_zeek_path(self)-> str:
+        """ return the path of zeek log files slips is currently using """
+        return self.r.get('zeek_path')
 
 __database__ = Database()

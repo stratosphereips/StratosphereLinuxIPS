@@ -21,6 +21,7 @@ def create_inputProcess_instance(outputQueue,
                                 config,
                                 None,
                                 'zeek',
+                                65531,
                                 False)
     inputProcess.bro_timeout = 1
     # override the self.print function to avoid broken pipes

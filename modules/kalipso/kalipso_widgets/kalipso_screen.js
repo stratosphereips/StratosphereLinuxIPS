@@ -23,7 +23,6 @@ class screen {
         this.ipinfo_widget = undefined
         this.focus_widget = undefined
         this.focus_hotkey = false
-        this.current_shown_widgets = undefined
         this.tuple_widget = undefined
         this.listtable1 = undefined
         this.listtable2 = undefined
@@ -369,9 +368,9 @@ class screen {
             this.tree_widget.focus();}
             this.render();
         }
-      	else if(key.name == 'q' || key.name == "C-c"){
-      		return process.exit(0);
-      	}
+        else if(key.name == 'q' || key.name == "C-c"){
+            return process.exit(0)
+        }
         else if(key.name == 'escape'){
           this.helpbar.selectTab(0)
           this.main_page_routine()

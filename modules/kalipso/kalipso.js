@@ -20,12 +20,20 @@ var {argv} = require('yargs').option('l',{
             type:      'number',
             nargs: 1
 
+    }).option('p',{
+
+            alias: 'redis_port',
+            describe:  'port to use for redis database',
+            type:     'number',
+            nargs: 1
+
     });
 
-const {limit_letter_outtuple} = argv
+const {limit_letter_outtuple, redis_port } = argv
+
 
 // Initialize all channels in Redis database.
-const redis_database = new redis_database_class(redis)
+const redis_database = new redis_database_class(redis, redis_port)
 redis_database.createClient()
 
 // Initialize screen with all necessary widgets.

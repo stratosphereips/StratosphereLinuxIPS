@@ -26,7 +26,7 @@ class GuiProcess(multiprocessing.Process):
     """ 
     The Gui process is only meant to start the Kalipso interface
     """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config):
+    def __init__(self, inputqueue, outputqueue, verbose, debug, config, redis_port):
         self.myname = 'Gui'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -34,6 +34,7 @@ class GuiProcess(multiprocessing.Process):
         self.config = config
         # Read the configuration
         self.read_configuration()
+        self.redis_port = redis_port
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -55,15 +56,10 @@ class GuiProcess(multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f"{levels}|{self.name}|{text}")
 
-    def read_configuration(self):
-        """ Read the configuration file for what we need """
-        # Get the format of the time in the flows
-        pass
-
     def run(self):
         utils.drop_root_privs()
         try:
-            os.system('cd modules/kalipso;node kalipso.js')
+            os.system(f'cd modules/kalipso;node kalipso.js -p {self.redis_port}')
         except KeyboardInterrupt:
             self.print('Stoppting the Gui Process')
             return True

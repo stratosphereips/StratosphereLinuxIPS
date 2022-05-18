@@ -2,21 +2,78 @@ import ipaddress
 import redis
 import os
 import json
+import configparser
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
 
-def test_getProfileIdFromIP(database):
+def do_nothing(*arg):
+    """ Used to override the print function because using the self.print causes broken pipes """
+    pass
+
+# create another database instance other than the one in
+# conftest because the port in conftest is used in other test files
+def create_db_instace(outputQueue):
+    from slips_files.core.database import __database__
+    config = configparser.ConfigParser()
+    __database__.start(config, 6381)
+    __database__.outputqueue = outputQueue
+    __database__.print = do_nothing
+    return __database__
+
+# this should always be the first unit test in this file
+# because we don't want another unit test adding the same flow before this one
+def test_add_flow(outputQueue):
+    database = create_db_instace(outputQueue)
+    starttime = '5'
+    dur = '5'
+    sport = 80
+    dport = 88
+    saddr_as_obj = ipaddress.ip_address(test_ip)
+    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
+    proto = 'TCP'
+    state = 'established'
+    pkts = 20
+    allbytes = 20
+    spkts = 20
+    sbytes = 20
+    appproto = 'dhcp'
+    uid = '1234'
+    flow_type =  ""
+    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
+                                          saddr=str(saddr_as_obj), sport=sport,
+                                          daddr=str(daddr_as_obj),
+                                          dport=dport, proto=proto,
+                                          state=state, pkts=pkts, allbytes=allbytes,
+                                          spkts=spkts, sbytes=sbytes,
+                                          appproto=appproto, uid=uid,
+                                          flow_type=flow_type) == True
+    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) \
+           == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,' \
+              ' "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established",' \
+              ' "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20,' \
+              ' "sbytes": 20, "appproto": "dhcp", "label": "",' \
+              ' "flow_type": "", "module_labels": {}}'
+
+
+
+def test_getProfileIdFromIP(outputQueue):
     """ unit test for addProfile and getProfileIdFromIP """
+
+    database = create_db_instace(outputQueue)
+    # clear the database before running this test
+    os.system('./slips.py -c slips.conf -cc')
+
     # add a profile
     database.addProfile('profile_192.168.1.1','00:00','1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) != False
 
-def test_timewindows(database):
+def test_timewindows(outputQueue):
     """ unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile """
+    database = create_db_instace(outputQueue)
     profileid = 'profile_192.168.1.1'
     # add a profile
     database.addProfile(profileid,'00:00','1')
@@ -31,7 +88,8 @@ def getSlipsInternalTime():
     """ return a random time for testing"""
     return 50.0
 
-def test_add_ips(database):
+def test_add_ips(outputQueue):
+    database = create_db_instace(outputQueue)
     # add a profile
     database.addProfile(profileid,'00:00','1')
     # add a tw to that profile
@@ -56,7 +114,8 @@ def test_add_ips(database):
     assert stored_dstips == '{"192.168.1.1": 1}'
 
 
-def test_add_port(database):
+def test_add_port(outputQueue):
+    database = create_db_instace(outputQueue)
     columns = {'dport': 80,
               'sport': 88,
               'totbytes': 80,
@@ -76,7 +135,8 @@ def test_add_port(database):
     assert 'DstPortsServerTCPEstablished' in added_ports.keys()
     assert test_ip in added_ports['DstPortsServerTCPEstablished']
 
-def test_setEvidence(database):
+def test_setEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
     type_detection = 'ip'
     detection_info = test_ip
     type_evidence = f'SSHSuccessful-by-{detection_info}'
@@ -98,7 +158,8 @@ def test_setEvidence(database):
     #  note that added_evidence may have evidence from other unit tests
     assert current_evidence_key in added_evidence.keys()
 
-def test_deleteEvidence(database):
+def test_deleteEvidence(outputQueue):
+    database = create_db_instace(outputQueue)
     description =  "SSH Successful to IP :8.8.8.8. From IP 192.168.1.1"
     database.deleteEvidence(profileid, twid, description)
     added_evidence = json.loads(database.r.hget('evidence'+profileid, twid))
@@ -106,44 +167,21 @@ def test_deleteEvidence(database):
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
-def test_add_flow(database):
-    starttime = '5'
-    dur = '5'
-    sport = 80
-    dport = 88
-    saddr_as_obj = ipaddress.ip_address(test_ip)
-    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
-    proto = 'TCP'
-    state = 'established'
-    pkts = 20
-    allbytes = 20
-    spkts = 20
-    sbytes = 20
-    appproto = 'dhcp'
-    uid = '1234'
-    flow_type =  ""
-    assert database.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport,
-                                          daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto,
-                                          state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes,
-                                          appproto=appproto, uid=uid,
-                                          flow_type=flow_type) == True
-    assert database.r.hget(profileid + '_' + twid + '_' + 'flows', uid) == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20, "sbytes": 20, "appproto": "dhcp", "label": "", "flow_type": "", "module_labels": {}}'
-
-
-def test_module_labels(database):
+def test_module_labels(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests set and get_module_labels_from_flow """
+    # clear the database before running this test
+    os.system('./slips.py -cc -I')
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
-    database.set_module_label_to_flow(profileid,twid, uid, module_name, module_label )
+    database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label )
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'test' in labels
     assert labels['test'] == 'malicious'
 
-def test_setInfoForDomains(database):
+def test_setInfoForDomains(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
@@ -153,14 +191,16 @@ def test_setInfoForDomains(database):
     assert 'threatintelligence' in stored_data
     assert stored_data['threatintelligence'] == 'sample data'
 
-def test_subscribe(database):
+def test_subscribe(outputQueue):
+    database = create_db_instace(outputQueue)
     # invalid channel
     assert database.subscribe('invalid_channel') == False
     # valid channel, shoud return a pubsub object
     assert type(database.subscribe('tw_modified')) == redis.client.PubSub
 
 
-def test_profile_moddule_labels(database):
+def test_profile_moddule_labels(outputQueue):
+    database = create_db_instace(outputQueue)
     """ tests set and get_profile_module_label """
     module_label = 'malicious'
     module_name = 'test'

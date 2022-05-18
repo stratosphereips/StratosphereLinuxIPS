@@ -17,14 +17,14 @@ class Module(Module, multiprocessing.Process):
     description = 'Module to get different information from RiskIQ'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         # In case you need to read the slips.conf configuration file for
         # your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = 0
         self.read_configuration()

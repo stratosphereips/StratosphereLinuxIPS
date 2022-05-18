@@ -65,6 +65,7 @@ class Trust(Module, multiprocessing.Process):
     def __init__(self,
                  output_queue: multiprocessing.Queue,
                  config: configparser.ConfigParser,
+                 redis_port: int,
                  data_dir: str = "./output/p2ptrust_runtime/",
                  pigeon_port=6668,
                  rename_with_port=False,
@@ -80,6 +81,11 @@ class Trust(Module, multiprocessing.Process):
                  rename_sql_db_file=False,
                  override_p2p=False):
         multiprocessing.Process.__init__(self)
+        # get the used interface
+        used_interface = self.get_used_interface()
+        pigeon_logfile = f"output/{used_interface}/p2p.log"
+        data_dir = f"./output/{used_interface}/p2ptrust_runtime/"
+
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
@@ -128,7 +134,7 @@ class Trust(Module, multiprocessing.Process):
             'critical': 1
         }
         # Start the db
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
 
         self.sql_db_name = self.data_dir + "trustdb.db"
         if rename_sql_db_file:
@@ -141,6 +147,11 @@ class Trust(Module, multiprocessing.Process):
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
+
+    def get_used_interface(self):
+        used_interface = sys.argv[sys.argv.index('-i') + 1]
+        return used_interface
+
 
     def get_local_IP(self ):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
