@@ -828,6 +828,8 @@ class Main():
                             help="Restart slips daemon")
         parser.add_argument('-k', '--killall', action='store_true', required=False,
                             help='Kill all unused redis servers')
+        parser.add_argument('-P', '--port', action='store', required=False,
+                            help='The redis-server port to use')
         parser.add_argument("-h", "--help", action="help", help="command line help")
 
         self.args = parser.parse_args()
@@ -854,14 +856,21 @@ class Main():
         # On modern systems, the netstat utility comes pre-installed,
         # this can be done using psutil but it needs root on macos
         command = f'netstat -peanut'
-        # A pty is a pseudo-terminal - it's a software implementation that appears to
-        # the attached program like a terminal, but instead of communicating
-        # directly with a "real" terminal, it transfers the input and output to another program.
-        master, slave = pty.openpty()
-        # connect the slave to the pty, and transfer from slave to master
-        subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=slave, stderr=slave, close_fds=True)
-        # connect the master to slips
-        cmd_output = os.fdopen(master)
+        if self.mode == 'daemonized':
+            # A pty is a pseudo-terminal - it's a software implementation that appears to
+            # the attached program like a terminal, but instead of communicating
+            # directly with a "real" terminal, it transfers the input and output to another program.
+            master, slave = pty.openpty()
+            # connect the slave to the pty, and transfer from slave to master
+            subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=slave, stderr=slave, close_fds=True)
+            # connect the master to slips
+            cmd_output = os.fdopen(master)
+        else:
+            command = f'netstat -peanut'
+            result = subprocess.run(command.split(), capture_output=True)
+            # Get command output
+            cmd_output = result.stdout.decode('utf-8').splitlines()
+
         for line in cmd_output:
             if f":{redis_port}" in line:
                 line = re.split(r'\s{2,}', line)
@@ -1104,7 +1113,10 @@ class Main():
                 ##########################
                 from slips_files.core.database import __database__
                 # get the port that is going to be used for this instance of slips
-                redis_port = self.generate_random_redis_port()
+                if self.args.port:
+                    redis_port = int(self.args.port)
+                else:
+                    redis_port = self.generate_random_redis_port()
                 print(f'[Main] Using redis server on port: {redis_port}')
                 self.log_redis_server_PID(redis_port, input_information)
 
@@ -1272,7 +1284,7 @@ class Main():
 
                 # warn about unused open redis servers
                 open_servers = len(self.get_open_servers_PIDs())
-                if open_servers > 0:
+                if open_servers > 1:
                     print(f"[Main] Warning: You have {open_servers} redis servers running. "
                           f"Run Slips with --killall to stop them.")
 
