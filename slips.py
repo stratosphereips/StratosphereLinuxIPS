@@ -612,9 +612,13 @@ class Main():
                                       f"\n\n{pending_modules}\n\n"
                                       "You can wait for them to finish, or you can press CTRL-C again to force-kill.\n")
                                 warning_printed = True
-                        # delay killing unstopped modules
-                        max_loops += 1
-                        continue
+                        # -P flag is only used in integration tests,
+                        # so we don't care about the modules finishing their job when testing
+                        # instead, kill them
+                        if not self.args.port:
+                            # delay killing unstopped modules
+                            max_loops += 1
+                            continue
             except KeyboardInterrupt:
                 # either the user wants to kill the remaining modules (pressed ctrl +c again)
                 # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
@@ -728,6 +732,9 @@ class Main():
             return
 
         for pid in open_servers_PIDs:
+            if pid == 'Not Found':
+                # The server was killed before logging its PID
+                continue
             # signal 0 is to check if the process is still running or not
             # it returns 1 if the process exitted
             try:
@@ -1117,7 +1124,6 @@ class Main():
                     redis_port = int(self.args.port)
                 else:
                     redis_port = self.generate_random_redis_port()
-                print(f'[Main] Using redis server on port: {redis_port}')
 
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
@@ -1158,6 +1164,7 @@ class Main():
                 # now that we have successfully connected to the db,
                 # log the PID of the started redis-server
                 self.log_redis_server_PID(redis_port, input_information)
+                outputProcessQueue.put(f'10|main|Using redis server on port: {redis_port}')
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
