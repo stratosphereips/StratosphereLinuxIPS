@@ -872,7 +872,7 @@ class Main():
             cmd_output = result.stdout.decode('utf-8').splitlines()
 
         for line in cmd_output:
-            if f":{redis_port}" in line:
+            if f":{redis_port}" in line and "redis-server" in line:
                 line = re.split(r'\s{2,}', line)
                 # get the substring that has the pid
                 try:
@@ -1118,7 +1118,6 @@ class Main():
                 else:
                     redis_port = self.generate_random_redis_port()
                 print(f'[Main] Using redis server on port: {redis_port}')
-                self.log_redis_server_PID(redis_port, input_information)
 
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
@@ -1156,6 +1155,9 @@ class Main():
                                                     stderr=stderr)
                 # this process starts the db
                 outputProcessThread.start()
+                # now that we have successfully connected to the db,
+                # log the PID of the started redis-server
+                self.log_redis_server_PID(redis_port, input_information)
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
