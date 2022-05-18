@@ -722,31 +722,33 @@ class Main():
         """ Function to warn about unused open redis-servers """
         open_servers_PIDs = self.get_open_servers_PIDs()
 
-        if len(open_servers_PIDs) > 0:
-            for pid in open_servers_PIDs:
-                # signal 0 is to check if the process is still running or not
-                # it returns 1 if the process exitted
-                try:
-                    # check if the process is still running
-                    while os.kill(int(pid), 0) != 1:
-                        # sigterm is 9
-                        os.kill(int(pid), 9)
-                except ProcessLookupError:
-                    # process already exited, sometimes this exception is raised
-                    # but the process is still running, keep trying to kill it
-                    continue
-
-            # delete the closed redis servers from used_redis_servers.txt
-            with open(self.used_redis_servers, 'w') as f:
-                f.write("# This file contains a list of used redis ports.\n"
-                        "# Once a server is killed, it will be removed from this file.\n"
-                        "Date                   File or interface                   Used port       Server PID\n")
-            print(f"Killed {len(open_servers_PIDs)} Redis Servers.")
-            sys.exit(-1)
-
-        else:
+        if len(open_servers_PIDs) == 0:
             print("No unused open servers to kill.")
             sys.exit(-1)
+            return
+
+        for pid in open_servers_PIDs:
+            # signal 0 is to check if the process is still running or not
+            # it returns 1 if the process exitted
+            try:
+                # check if the process is still running
+                while os.kill(int(pid), 0) != 1:
+                    # sigterm is 9
+                    os.kill(int(pid), 9)
+            except ProcessLookupError:
+                # process already exited, sometimes this exception is raised
+                # but the process is still running, keep trying to kill it
+                continue
+
+        print(f"Killed {len(open_servers_PIDs)} Redis Servers.")
+        # delete the closed redis servers from used_redis_servers.txt
+        with open(self.used_redis_servers, 'w') as f:
+            f.write("# This file contains a list of used redis ports.\n"
+                    "# Once a server is killed, it will be removed from this file.\n"
+                    "Date                   File or interface                   Used port       Server PID\n")
+        sys.exit(-1)
+
+
 
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
@@ -842,6 +844,39 @@ class Main():
             pass
 
         return self.config
+
+    def log_redis_server_PID(self, redis_port, input_information):
+        """
+        get the PID of the redis server started on the given redis_port
+        and logs it in used_redis_servers.txt
+        """
+        # log the pid of the redis server using this port
+        redis_pid = 'Not found'
+        #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
+        command = f'netstat -peanut'
+        # A pty is a pseudo-terminal - it's a software implementation that appears to
+        # the attached program like a terminal, but instead of communicating
+        # directly with a "real" terminal, it transfers the input and output to another program.
+        master, slave = pty.openpty()
+        # connect the slave to the pty, and transfer from slave to master
+        subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=slave, stderr=slave, close_fds=True)
+        # connect the master to slips
+        cmd_output = os.fdopen(master)
+        for line in cmd_output:
+            if f":{redis_port}" in line:
+                line = re.split(r'\s{2,}', line)
+                # get the substring that has the pid
+                try:
+                    redis_pid = line[-1]
+                    _ = redis_pid.index('/')
+                except ValueError:
+                    redis_pid = line[-2]
+                redis_pid = redis_pid.split('/')[0]
+                break
+        # log redis-server pid
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(self.used_redis_servers, 'a') as f:
+            f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid}\n')
 
     def set_mode(self, mode, daemon=''):
         """
@@ -1071,33 +1106,7 @@ class Main():
                 # get the port that is going to be used for this instance of slips
                 redis_port = self.generate_random_redis_port()
                 print(f'[Main] Using redis server on port: {redis_port}')
-                # log the pid of the redis server using this port
-                redis_pid = 'Not found'
-                #  On modern systems, the netstat utility comes pre-installed, this can be done using psutil but it needs root on macos
-                command = f'netstat -peanut'
-                # A pty is a pseudo-terminal - it's a software implementation that appears to
-                # the attached program like a terminal, but instead of communicating
-                # directly with a "real" terminal, it transfers the input and output to another program.
-                master, slave = pty.openpty()
-                # connect the slave to the pty, and transfer from slave to master
-                subprocess.Popen(command, shell=True, stdin=subprocess.PIPE, stdout=slave, stderr=slave, close_fds=True)
-                # connect the master to slips
-                cmd_output = os.fdopen(master)
-                for line in cmd_output:
-                    if f":{redis_port}" in line:
-                        line = re.split(r'\s{2,}', line)
-                        # get the substring that has the pid
-                        try:
-                            redis_pid = line[-1]
-                            _ = redis_pid.index('/')
-                        except ValueError:
-                            redis_pid = line[-2]
-                        redis_pid = redis_pid.split('/')[0]
-                        break
-                # log redis-server pid
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                with open(self.used_redis_servers, 'a') as f:
-                    f.write(f'{now: <16}    {input_information: <35}    {redis_port: <6}        {redis_pid}\n')
+                self.log_redis_server_PID(redis_port, input_information)
 
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
