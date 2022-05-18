@@ -759,7 +759,6 @@ class Main():
         """
         :param input_information: either an interface or a filename (wlp3s0, sample.pcap, etc.)
         """
-        
 
         if self.args.output == self.alerts_default_path:
             # now that slips can run several instances,
@@ -1130,6 +1129,8 @@ class Main():
                     current_stdout = ''
                 # stderr is redirected when daemonized, tell outputprocess
                 stderr = f'output/{input_information.split("/")[-1]}/errors.log'
+                if self.args.output:
+                    stderr = f'output/errors.log'
                 if self.mode == 'daemonized':
                     stderr = self.daemon.stderr
 
