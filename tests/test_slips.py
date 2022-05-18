@@ -1,5 +1,5 @@
 """ Unit test for ../slips.py"""
-from ..slips  import *
+from ..slips import *
 import os
 import argparse
 import subprocess
