@@ -1405,8 +1405,7 @@ if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
     # if any one of the following args are given, don't start the daemon
-    start_interactive = [slips.args.interactive,
-                         slips.args.clearcache,
+    start_interactive = [slips.args.clearcache,
                          slips.args.killall,
                          slips.args.clearblocking]
     if any(start_interactive) or not slips.args.daemon:

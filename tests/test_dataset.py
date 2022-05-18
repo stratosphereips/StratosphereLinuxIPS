@@ -44,7 +44,7 @@ def test_pcap(pcap_path, expected_profiles, output_dir, expected_evidence, redis
     except FileExistsError:
         pass
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -74,7 +74,7 @@ def test_binetflow(database, binetflow_path, expected_profiles, expected_evidenc
         pass
 
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
+    command = f'./slips.py -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -108,7 +108,7 @@ def test_zeek_dir(database, zeek_dir_path, expected_profiles, expected_evidence,
         pass
 
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -140,7 +140,7 @@ def test_zeek_conn_log(database, conn_log_path, expected_profiles, expected_evid
         pass
 
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_file) == False
@@ -162,7 +162,7 @@ def test_suricata(database, suricata_path,  output_dir, redis_port):
     expected_evidence = 'vertical port scan'
 
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -186,7 +186,7 @@ def test_nfdump(database, nfdump_path,  output_dir, redis_port):
     expected_evidence = 'Connection to unknown destination port 902/TCP'
 
     output_file = f'{output_dir}slips_output.txt'
-    command = f'./slips.py -I -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
