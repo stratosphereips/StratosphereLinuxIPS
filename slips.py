@@ -343,14 +343,15 @@ class Main():
             while True:
                 # generate a random unused port
                 port = random.randint(32768, 65535)
-                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                    # check if 1. we can connect 2.server is not being used by another instance of slips
-                    if (s.connect_ex(('localhost', port)) != 0
-                            and __database__.connect_to_redis_server(port)
-                            and len(list(__database__.r.scan_iter('*'))) < 2):
-                        # if the db managed to connect to this random port, then this is
-                        # the port we'll be using
-                        return port
+                # check if 1. we can connect
+                can_connect = __database__.connect_to_redis_server(port)
+                # 2.server is not being used by another instance of slips
+                # note: using r.keys() blocks the server
+                db_not_used = len(list(__database__.r.keys())) < 2
+                if can_connect and db_not_used:
+                    # if the db managed to connect to this random port, then this is
+                    # the port we'll be using
+                    return port
         except redis.exceptions.ConnectionError:
             # Connection refused to this port
             return self.generate_random_redis_port()
@@ -541,8 +542,10 @@ class Main():
             for process in ('OutputProcess', 'ProfilerProcess', 'EvidenceProcess', 'InputProcess', 'logsProcess'):
                 try:
                     os.kill(int(PIDs[process]), signal.SIGINT)
-                except KeyError:
-                    # process hasn't started (for example logsProcess) so we can't send sigint,
+                except (KeyError, PermissionError):
+                    # process hasn't started (for example logsProcess) so we can't send sigint
+                    # PermissionError happens when the user tries to close redis-servers opened by root while he's not root,
+                    # or when he tries to close redis-servers opened without root while he's root
                     continue
 
             # only print that modules are still running once
