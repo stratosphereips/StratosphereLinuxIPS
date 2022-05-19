@@ -970,15 +970,6 @@ class Main():
                     # Tell the blocking module to clear the slips chain
                     self.shutdown_gracefully('')
 
-            if self.args.db:
-                from slips_files.core.database import __database__
-                __database__.start(self.config)
-                if not __database__.load(self.args.db):
-                    print(f"[Main] Failed to load {self.args.db}")
-                else:
-                    print(f"{self.args.db.split('/')[-1]} loaded successfully. Run ./kalipso.sh")
-                self.terminate_slips()
-
             # Check if user want to save and load a db at the same time
             if self.args.save:
                 # make sure slips is running as root
@@ -1061,9 +1052,6 @@ class Main():
             elif self.args.db:
                 input_type = 'database'
                 input_information = 'database'
-                __database__.start(self.config, redis_port)
-                __database__.load(self.args.db)
-                sys.exit(-1)
             else:
                 print('[Main] You need to define an input source.')
                 sys.exit(-1)
@@ -1142,6 +1130,11 @@ class Main():
                 else:
                     redis_port = self.generate_random_redis_port()
 
+                if self.args.db:
+                    from slips_files.core.database import __database__
+                    __database__.start(self.config, redis_port)
+                    __database__.load(self.args.db)
+                    self.terminate_slips()
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
                 # Create the queue
