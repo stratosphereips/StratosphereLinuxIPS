@@ -3074,7 +3074,7 @@ class Database(object):
     def save(self, backup_file):
         """
         Save the db to disk.
-        backup_file should be the path+name of the file you want to store the db in
+        backup_file should be the path+name of the file you want to save the db in
         If you -s the same file twice the old backup will be overwritten.
         """
 
@@ -3091,11 +3091,12 @@ class Database(object):
             redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
 
         if os.path.exists(redis_db_path):
-            command = self.sudo + f'cp {redis_db_path} {backup_file}.rdb'
+            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
             os.system(command)
             print(f"[Main] Database saved to {backup_file}.rdb" )
             return True
-        print("Error Saving: Cannot find the redis database directory redis/dump.rdb")
+
+        print(f"Error Saving: Cannot find the redis database directory {redis_db_path}")
         return False
 
     def load(self,backup_file: str) -> bool:

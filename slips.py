@@ -658,14 +658,9 @@ class Main():
                     # it's a zeek dir
                     pass
                 # Give the exact path to save(), this is where our saved .rdb backup will be
-                saved = __database__.save(backups_dir + input_information)
-                if saved:
-                    print(f"[Main] Database saved to {backups_dir[:]}{input_information}.rdb" )
-                else:
-                    print("Error Saving: Cannot find the redis database directory /var/lib/redis/dump.rdb")
+                __database__.save(backups_dir + input_information)
                 # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
                 print("[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.")
-                print(f"[Main] Database saved to {backups_dir}{input_information}")
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
             try:
@@ -710,11 +705,12 @@ class Main():
         except KeyboardInterrupt:
             return False
 
-    def get_open_servers_PIDs(self):
+    def get_open_servers_PIDs(self) -> dict:
         """
-        Returns the list of PIDs of the redis unused servers started by slips
+        Returns the dict of PIDs and ports of the redis unused servers started by slips
         """
-        open_servers_PIDs = set()
+        self.open_servers_PIDs = {}
+
         with open(self.used_redis_servers, 'r') as f:
             for line in f.read().splitlines():
                 # skip comments
@@ -722,25 +718,29 @@ class Main():
                         or line.startswith('Date')
                         or len(line) < 3):
                     continue
-                pid = re.split(r'\s{2,}', line)[-1]
-                open_servers_PIDs.add(pid)
-        return open_servers_PIDs
+                line = re.split(r'\s{2,}', line)
+
+                pid, port = line[-1], line[-2]
+                self.open_servers_PIDs[pid] = port
+        return self.open_servers_PIDs
 
     def close_open_redis_servers(self):
         """ Function to warn about unused open redis-servers """
-        open_servers_PIDs = self.get_open_servers_PIDs()
+        if not hasattr(self, 'open_servers_PIDs'):
+            # fill the dict
+            self.get_open_servers_PIDs()
 
-        if len(open_servers_PIDs) == 0:
+        if len(self.open_servers_PIDs) == 0:
             print("No unused open servers to kill.")
             sys.exit(-1)
             return
 
-        for pid in open_servers_PIDs:
+        for pid, port in self.open_servers_PIDs.items():
             if pid == 'Not Found':
                 # The server was killed before logging its PID
                 continue
             # signal 0 is to check if the process is still running or not
-            # it returns 1 if the process exitted
+            # it returns 1 if the process exited
             try:
                 # check if the process is still running
                 while os.kill(int(pid), 0) != 1:
@@ -751,7 +751,7 @@ class Main():
                 # but the process is still running, keep trying to kill it
                 continue
 
-        print(f"Killed {len(open_servers_PIDs)} Redis Servers.")
+        print(f"Killed {len(self.open_servers_PIDs.keys())} Redis Servers.")
         # delete the closed redis servers from used_redis_servers.txt
         with open(self.used_redis_servers, 'w') as f:
             f.write("# This file contains a list of used redis ports.\n"
