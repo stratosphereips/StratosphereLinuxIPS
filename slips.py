@@ -800,20 +800,40 @@ class Main():
         if not self.args.output.endswith('/'):
             self.args.output = self.args.output + '/'
 
+        # this ctr will be appended to the dir name,
+        # so we don't overwrite existing log dirs
+        # ctr = 0
+        while os.path.exists(self.args.output):
+            # delete the / at the end
+            if self.args.output.endswith('/'):
+                self.args.output = self.args.output[:-1]
+
+            try:
+                # if the dir ends with a ctr, delete the ctr so we can replace it
+                dir_ends_with = int(self.args.output[-1])
+                # it ends with _ctr, remove the _ and the ctr
+                self.args.output = self.args.output[:-2]
+                dir_ends_with += 1
+                self.args.output += f'_{dir_ends_with}/'
+                continue
+            except ValueError:
+                # found an existing dir that doesn't end with a ctr
+                self.args.output += '_1/'
+
+        if not self.args.output.endswith('/'):
+            self.args.output = self.args.output + '/'
+
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
-            return
 
-        # path exists, this means slips was run on this file/interface before,
-        # and we slips have the old log files
-        if not self.args.db:
-            print(f"[Main] log files in {self.args.output} will be overwritten.")
         try:
             os.remove(self.args.output + 'alerts.log')
             os.remove(self.args.output + 'alerts.json')
         except OSError:
             # they weren't created in the first place
             pass
+
+        print(f"[Main] storing Slips logs in {self.args.output}")
 
     def parse_arguments(self):
         # Parse the parameters
