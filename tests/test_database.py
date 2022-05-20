@@ -171,7 +171,7 @@ def test_module_labels(outputQueue):
     database = create_db_instace(outputQueue)
     """ tests set and get_module_labels_from_flow """
     # clear the database before running this test
-    os.system('./slips.py -cc -I')
+    os.system('./slips.py -cc')
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'

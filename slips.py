@@ -1146,12 +1146,6 @@ class Main():
                 else:
                     redis_port = self.generate_random_redis_port()
 
-                if self.args.save:
-                    __database__.enable_redis_snapshots()
-                else:
-                    __database__.disable_redis_snapshots()
-
-
 
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
@@ -1189,6 +1183,12 @@ class Main():
                                                     stderr=stderr)
                 # this process starts the db
                 outputProcessThread.start()
+
+                if self.args.save:
+                    __database__.enable_redis_snapshots()
+                else:
+                    __database__.disable_redis_snapshots()
+
                 # now that we have successfully connected to the db,
                 # log the PID of the started redis-server
                 self.log_redis_server_PID(redis_port, input_information)
