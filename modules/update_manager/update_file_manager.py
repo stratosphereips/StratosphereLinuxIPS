@@ -305,7 +305,7 @@ class UpdateFileManager:
                     # use last modified instead
                     last_modified = self.get_last_modified(response)
                     if not last_modified:
-                        self.print(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
+                        #self.print(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
                         return False
                     # use last modified date instead of e-tag
                     new_e_tag = last_modified
@@ -318,7 +318,7 @@ class UpdateFileManager:
 
                 else:
                     # old_e_tag == new_e_tag
-                    self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
+                    # self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
@@ -492,10 +492,10 @@ class UpdateFileManager:
             file_info = {'e-tag': self.new_e_tag, 'time': self.new_update_time}
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated in DB the remote file {link_to_download}')
+            # self.print(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
 
-            # done parsing the file, delte it from disk
+            # done parsing the file, delete it from disk
             os.remove(full_path)
 
             return True
@@ -533,7 +533,7 @@ class UpdateFileManager:
                         malicious_domains_dict[domain] = json.dumps({'description': 'malicious domain detected by RiskIQ', 'source':url})
                         __database__.add_domains_to_IoC(malicious_domains_dict)
             except KeyError:
-                self.print(f'RiskIQ returned: {response["message"]}. Update Cancelled.')
+                self.print(f'RiskIQ returned: {response["message"]}. Update Cancelled.', 0, 1)
                 return False
 
             # update the timestamp in the db
@@ -662,7 +662,7 @@ class UpdateFileManager:
                         else:
                             description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
                     except IndexError:
-                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
+                        self.print(f'IndexError Description column: {description_column}. Line: {line}', 0, 1)
 
                     # self.print('\tRead Data {}: {}'.format(ja3, description))
 
@@ -1088,13 +1088,13 @@ class UpdateFileManager:
             self.print('Not Updating the remote file of malicious IPs and domains because the update period is <= 0.', 0, 1)
             return False
 
-        self.print('Checking if we need to download TI files.')
+        # self.print('Checking if we need to download TI files.')
         # we update different types of files
         # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
 
         ############### Update remote TI files ################
         # Check if the remote file is newer than our own
-        # For each file that we should update
+        # For each file that we should update`
         files_to_download_dics = {}
         files_to_download_dics.update(self.url_feeds)
         files_to_download_dics.update(self.ja3_feeds)
@@ -1110,7 +1110,7 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
-            self.print(f'Downloading the remote file {file_to_download}', 1, 0)
+            # self.print(f'Downloading the remote file {file_to_download}', 1, 0)
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
             # to download to next file instead of being idle
@@ -1129,11 +1129,13 @@ class UpdateFileManager:
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
         # check if we have a username and api key and a week has passed since we last updated
         if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
-            self.print(f'Updating RiskIQ domains', 1, 0)
+            # self.print(f'Updating RiskIQ domains', 1, 0)
             if self.update_riskiq_feed():
-                self.print('Successfully updated RiskIQ domains.', 1, 0)
+                # self.print('Successfully updated RiskIQ domains.', 1, 0)
+                pass
             else:
-                self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+                # self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+                pass
 
         ############### Update slips local files ################
         for file in os.listdir('slips_files/ports_info'):

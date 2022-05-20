@@ -310,25 +310,16 @@ class Main():
                 return False
         return logs_folder
 
-
-    async def update_ti_files(self, outputqueue, config, redis_port):
-        """
-        Update malicious files and store them in database before slips start
-        """
-        update_manager = UpdateFileManager(outputqueue, config, redis_port)
-        # create_task is used to run update() function concurrently instead of serially
-        update_finished = asyncio.create_task(update_manager.update())
-        # wait for UpdateFileManager to finish before starting all the modules
-        await update_finished
-
-
     def check_redis_database(self, redis_host='localhost', redis_port=6379) -> bool:
         """
         Check if we have redis-server running (this is the cache db it should always be running)
         """
         try:
-            r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
-                                       decode_responses=True)
+            r = redis.StrictRedis(host=redis_host,
+                                  port=redis_port,
+                                  db=0,
+                                  charset="utf-8",
+                                  decode_responses=True)
             r.ping()
         except Exception as ex:
             print('[DB] Error: Is redis cache database running? '
@@ -1216,8 +1207,6 @@ class Main():
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
-                asyncio.run(self.update_ti_files(outputProcessQueue, self.config, redis_port))
-
                 # Print the PID of the main slips process. We do it here because we needed the queue to the output process
                 outputProcessQueue.put('10|main|Started main program [PID {}]'.format(os.getpid()))
                 # Output pid
