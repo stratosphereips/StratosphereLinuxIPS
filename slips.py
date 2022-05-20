@@ -547,8 +547,6 @@ class Main():
                     os.kill(int(PIDs[process]), signal.SIGINT)
                 except (KeyError, PermissionError):
                     # process hasn't started (for example logsProcess) so we can't send sigint
-                    # PermissionError happens when the user tries to close redis-servers opened by root while he's not root,
-                    # or when he tries to close redis-servers opened without root while he's root
                     continue
 
             # only print that modules are still running once
@@ -762,9 +760,13 @@ class Main():
                 while os.kill(int(pid), 0) != 1:
                     # sigterm is 9
                     os.kill(int(pid), 9)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 # process already exited, sometimes this exception is raised
                 # but the process is still running, keep trying to kill it
+                # PermissionError happens when the user tries to close redis-servers
+                # opened by root while he's not root,
+                # or when he tries to close redis-servers
+                # opened without root while he's root
                 continue
 
         print(f"Killed {len(self.open_servers_PIDs.keys())} Redis Servers.")
