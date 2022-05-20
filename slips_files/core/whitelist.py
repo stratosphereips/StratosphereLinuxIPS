@@ -103,7 +103,7 @@ class Whitelist():
                     if domain in main_domain:
                         # We can ignore flows or alerts, what is it?
                         if 'flows' in what_to_ignore or 'both' in what_to_ignore:
-                            self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
+                            # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                             return True
 
                 # do we wanna whitelist flows coming from or going to this domain or both?
@@ -202,6 +202,7 @@ class Whitelist():
                         # Method 2 Check if the ASN of this src IP is any of these organizations
                         if self.is_whitelisted_asn(saddr, org):
                             # this ip belongs to a whitelisted org, ignore flow
+                            #self.print(f"The src IP {saddr} belong to {org}. Whitelisted because of ASN.")
                             return True
 
                         # Method 3 Check if the domains of this flow belong to this org
@@ -244,7 +245,7 @@ class Whitelist():
                                 return False
 
                         # Method 2 Check if the ASN of this dst IP is any of these organizations
-                        if self.is_whitelisted_asn(saddr, org):
+                        if self.is_whitelisted_asn(daddr, org):
                             # this ip belongs to a whitelisted org, ignore flow
                             return True
 
