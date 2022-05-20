@@ -236,6 +236,12 @@ class Database(object):
             return True
         return False
 
+    def disable_redis_snapshots(self):
+        """
+        disable redis persistence and snapshotting
+        """
+        self.r.config_set("save", "")
+
     def enable_redis_snapshots(self):
         """
         Set redis to save a snapshot every 60s to 900s
@@ -248,11 +254,7 @@ class Database(object):
         #   number of write operations against the DB occurred.
         #
         #   In the example below the behaviour will be to save:
-        #   after 900 sec (15 min) if at least 1 key changed
-        #   after 300 sec (5 min) if at least 10 keys changed
         #   after 60 sec if at least 10000 keys changed
-        self.r.config_set("save", "900 1")
-        self.r.config_set("save", "300 10")
         self.r.config_set("save", "60 10000")
 
     def addProfile(self, profileid, starttime, duration):
@@ -3086,7 +3088,6 @@ class Database(object):
         DHCP_servers = self.r.lrange('DHCP_servers', 0, -1)
         if server_addr not in DHCP_servers:
             self.r.lpush('DHCP_servers', server_addr)
-
 
     def save(self, backup_file):
         """

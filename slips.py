@@ -665,6 +665,9 @@ class Main():
                 # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
                 print("[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.")
 
+            # make sure that redis isn't saving snapshots whether -s is given or not
+            __database__.disable_redis_snapshots()
+
             # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
             try:
                 store_a_copy_of_zeek_files = self.config.get('parameters', 'store_a_copy_of_zeek_files')
@@ -1129,8 +1132,10 @@ class Main():
                 else:
                     redis_port = self.generate_random_redis_port()
 
-                if self.args.save:
+                if self.args.save or self.args.db:
                     __database__.enable_redis_snapshots()
+                else:
+                    __database__.disable_redis_snapshots()
 
                 if self.args.db:
                     from slips_files.core.database import __database__
