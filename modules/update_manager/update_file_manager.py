@@ -495,7 +495,7 @@ class UpdateFileManager:
             self.print(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
 
-            # done parsing the file, delte it from disk
+            # done parsing the file, delete it from disk
             os.remove(full_path)
 
             return True

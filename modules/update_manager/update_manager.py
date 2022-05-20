@@ -8,6 +8,7 @@ import platform,os
 import sys
 
 # Your imports
+import asyncio
 import configparser
 from modules.update_manager.timer_manager import InfiniteTimer
 from modules.update_manager.update_file_manager import UpdateFileManager
@@ -16,7 +17,7 @@ from modules.update_manager.update_file_manager import UpdateFileManager
 class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'UpdateManager'
-    description = 'Update malicious files from Threat Intelligence'
+    description = 'Update Threat Intelligence files'
     authors = ['Kamila Babayeva']
 
     def __init__(self, outputqueue, config, redis_port):
@@ -30,7 +31,8 @@ class UpdateManager(Module, multiprocessing.Process):
         # Read the conf
         self.read_configuration()
         # Start the DB
-        __database__.start(self.config, redis_port)
+        self.redis_port = redis_port
+        __database__.start(self.config, self.redis_port)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue, config, redis_port)
@@ -81,6 +83,18 @@ class UpdateManager(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
+
+    async def update_ti_files(self, outputqueue, config, redis_port):
+        """
+        Update TI files and store them in database before slips starts
+        """
+        update_manager = UpdateFileManager(outputqueue, config, redis_port)
+        # create_task is used to run update() function concurrently instead of serially
+        update_finished = asyncio.create_task(update_manager.update())
+
+        # wait for UpdateFileManager to finish before starting all the modules
+        # await update_finished
+
     def run(self):
         utils.drop_root_privs()
         try:
@@ -105,6 +119,8 @@ class UpdateManager(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
+
+                asyncio.run(self.update_ti_files(self.outputqueue, self.config, self.redis_port))
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
