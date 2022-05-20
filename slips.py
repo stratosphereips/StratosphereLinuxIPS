@@ -324,15 +324,17 @@ class Main():
 
     def check_redis_database(self, redis_host='localhost', redis_port=6379) -> bool:
         """
-        Check if we have redis-server running
+        Check if we have redis-server running (this is the cache db it should always be running)
         """
         try:
             r = redis.StrictRedis(host=redis_host, port=redis_port, db=0, charset="utf-8",
                                        decode_responses=True)
             r.ping()
         except Exception as ex:
-            print('[DB] Error: Is redis database running? You can run it as: "redis-server --daemonize yes"')
+            print('[DB] Error: Is redis cache database running? '
+                  'You can run it as: "redis-server --daemonize yes"')
             return False
+
         return True
 
     def generate_random_redis_port(self):
@@ -521,7 +523,8 @@ class Main():
 
 
     def shutdown_gracefully(self, input_information):
-        """ Wait for all modules to confirm that they're done processing and then shutdown
+        """
+        Wait for all modules to confirm that they're done processing and then shutdown
         :param input_information: the interface/pcap/nfdump/binetflow used. we need it to save the db
         """
 
@@ -801,7 +804,8 @@ class Main():
 
         # path exists, this means slips was run on this file/interface before,
         # and we slips have the old log files
-        print(f"[Main] log files in {self.args.output} will be overwritten.")
+        if not self.args.db:
+            print(f"[Main] log files in {self.args.output} will be overwritten.")
         try:
             os.remove(self.args.output + 'alerts.log')
             os.remove(self.args.output + 'alerts.json')
@@ -1054,6 +1058,14 @@ class Main():
             elif self.args.db:
                 input_type = 'database'
                 input_information = 'database'
+                from slips_files.core.database import __database__
+                __database__.start(self.config, 6379)
+                if not __database__.load(self.args.db):
+                    print(f'Error loading the database {self.args.db}.')
+                else:
+                    print(f"{self.args.db} loaded successfully. Run ./kalipso.sh")
+                self.terminate_slips()                print(f"@@@@@@@@@@@@@ omg?")
+
             else:
                 print('[Main] You need to define an input source.')
                 sys.exit(-1)
@@ -1132,16 +1144,13 @@ class Main():
                 else:
                     redis_port = self.generate_random_redis_port()
 
-                if self.args.save or self.args.db:
+                if self.args.save:
                     __database__.enable_redis_snapshots()
                 else:
                     __database__.disable_redis_snapshots()
 
-                if self.args.db:
-                    from slips_files.core.database import __database__
-                    __database__.start(self.config, redis_port)
-                    __database__.load(self.args.db)
-                    self.terminate_slips()
+
+
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
                 # Create the queue
