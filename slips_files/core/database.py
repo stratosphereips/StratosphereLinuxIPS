@@ -236,7 +236,24 @@ class Database(object):
             return True
         return False
 
-
+    def enable_redis_snapshots(self):
+        """
+        Set redis to save a snapshot every 60s to 900s
+        This is redis default behaviour, but slips disables it by default,
+        to be able to rn several slips instances
+        """
+        #   save <seconds> <changes>
+        #
+        #   Will save the DB if both the given number of seconds and the given
+        #   number of write operations against the DB occurred.
+        #
+        #   In the example below the behaviour will be to save:
+        #   after 900 sec (15 min) if at least 1 key changed
+        #   after 300 sec (5 min) if at least 10 keys changed
+        #   after 60 sec if at least 10000 keys changed
+        self.r.config_set("save", "900 1")
+        self.r.config_set("save", "300 10")
+        self.r.config_set("save", "60 10000")
 
     def addProfile(self, profileid, starttime, duration):
         """

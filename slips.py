@@ -652,7 +652,7 @@ class Main():
                 # if the input is a zeek dir, remove the / at the end
                 if input_information.endswith('/'):
                     input_information = input_information[:-1]
-                # We need to seperate it from the path
+                # We need to separate it from the path
                 input_information = os.path.basename(input_information)
                 # Remove the extension from the filename
                 try:
@@ -1048,7 +1048,6 @@ class Main():
                 else:
                     print("Slips can't take input from stdin while in daemonized mode. Start slips again with -I")
                     sys.exit(-1)
-
             elif self.args.db:
                 input_type = 'database'
                 input_information = 'database'
@@ -1129,6 +1128,9 @@ class Main():
                     redis_port = int(self.args.port)
                 else:
                     redis_port = self.generate_random_redis_port()
+
+                if self.args.save:
+                    __database__.enable_redis_snapshots()
 
                 if self.args.db:
                     from slips_files.core.database import __database__
