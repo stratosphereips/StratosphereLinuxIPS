@@ -15,6 +15,24 @@ python3 tests/destrctor.py
 # clear cache before running the integration tests
 ./slips.py -cc
 
+# delete olt log dirs if they're still there
+rm -r pcap_* > /dev/null 2>&1
+rm -r pcap/ > /dev/null 2>&1
+rm -r pcap2/ > /dev/null 2>&1
+rm -r pcap2/ > /dev/null 2>&1
+rm -r conn_log_* > /dev/null 2>&1
+rm -r conn_log/ > /dev/null 2>&1
+rm -r conn_log-2/ > /dev/null 2>&1
+rm -r sample_zeek_files_* > /dev/null 2>&1
+rm -r sample_zeek_files/ > /dev/null 2>&1
+rm -r test[0-9]/ > /dev/null 2>&1
+rm -r test_* > /dev/null 2>&1
+rm -r suricata/ > /dev/null 2>&1
+rm -r suricata_* > /dev/null 2>&1
+rm -r nfdump_* > /dev/null 2>&1
+rm -r nufdump/ > /dev/null 2>&1
+
+
 # the command to run dataset tests is separated from the rest because it takes so much time,
 # so it's better to know and fix the failing unit tests from the above
 # command before running the dataset tests
