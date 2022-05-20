@@ -49,7 +49,6 @@ class InputProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         self.config = config
-        utils.drop_root_privs()
         # Start the DB
         __database__.start(self.config, redis_port)
         self.redis_port = redis_port

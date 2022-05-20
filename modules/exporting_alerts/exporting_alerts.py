@@ -88,7 +88,6 @@ class Module(Module, multiprocessing.Process):
         # flag to open json file only once
         self.is_json_file_opened = False
         self.json_file_handle = False
-        utils.drop_root_privs()
 
     def print(self, text, verbose=1, debug=0):
         """
