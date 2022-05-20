@@ -85,23 +85,29 @@ class InputProcess(multiprocessing.Process):
 
     def read_configuration(self):
         """ Read the configuration file for what we need """
-        # Get the pcap filter
+
         try:
             self.packet_filter = self.config.get('parameters', 'pcapfilter')
         except (configparser.NoOptionError, configparser.NoSectionError, NameError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.packet_filter = 'ip or not ip'
-        # Get tcp inactivity timeout
+
         try:
             self.tcp_inactivity_timeout = self.config.get('parameters', 'tcp_inactivity_timeout')
-            try:
-                # make sure the value is a valid int
-                self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
-            except ValueError:
-                raise NameError
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # make sure the value is a valid int
+            self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
+
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.tcp_inactivity_timeout = '5'
+
+        try:
+            self.rotation = self.config.get('parameters', 'rotation')
+            self.rotation = True if 'yes' in self.rotation else False
+        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            # There is a conf, but there is no option, or no section or no configuration file specified
+            self.rotation = True
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -471,17 +477,16 @@ class InputProcess(multiprocessing.Process):
             # Start the observer
             self.event_observer.start()
 
-            # This double if is horrible but we just need to change a string
-            rotation_interval = "-e 'redef Log::default_rotation_interval = "
+            # rotation is disabled unless it's an interface
+            rotation_interval = "-e 'redef Log::default_rotation_interval = 0sec;'"
             if self.input_type is 'interface':
-                rotation_interval += "1day;'"
+                if self.rotation:
+                    rotation_interval = "-e 'redef Log::default_rotation_interval =  1min;'"
                 # Change the bro command
                 bro_parameter = '-i ' + self.given_path
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
             elif self.input_type is 'pcap':
-                # don't rotate zeek log files
-                rotation_interval += "0sec;'"
                 # Find if the pcap file name was absolute or relative
                 if self.given_path[0] == '/':
                     # If absolute, do nothing

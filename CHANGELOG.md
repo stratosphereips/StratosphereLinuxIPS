@@ -2,7 +2,7 @@
 * Slips
  - Drop root privileges in modules that don't need them
  - Added support for running slips in the background as a daemon
- - Fix the issue of growing zeek logs by deleting old zeek logs every 1 day.
+ - Fix the issue of growing zeek logs by deleting old zeek logs every 1 day. (optional but enabled by default)
  - Added support for running several instances of slips at the same time.
 -0.9.0
 * Slips
