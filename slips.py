@@ -785,15 +785,22 @@ class Main():
             # each created dir will be named after the instance
             # that created it
             self.args.output += f'{input_information.split("/")[-1]}'
-
-        # Create output folder for alerts.log and
-        # alerts.json if it doesn't  exist
-        if not self.args.output.endswith('/'):
-            self.args.output = self.args.output + '/'
+        else:
+            # -o is given
+            # Create output folder for alerts.log and
+            # alerts.json if it doesn't  exist
+            if not self.args.output.endswith('/'):
+                self.args.output = self.args.output + '/'
+            try:
+                os.remove(self.args.output + 'alerts.log')
+                os.remove(self.args.output + 'alerts.json')
+            except OSError:
+                # they weren't created in the first place
+                pass
+            return
 
         # this ctr will be appended to the dir name,
         # so we don't overwrite existing log dirs
-        # ctr = 0
         while os.path.exists(self.args.output):
             # delete the / at the end
             if self.args.output.endswith('/'):
@@ -817,12 +824,7 @@ class Main():
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
 
-        try:
-            os.remove(self.args.output + 'alerts.log')
-            os.remove(self.args.output + 'alerts.json')
-        except OSError:
-            # they weren't created in the first place
-            pass
+
 
         print(f"[Main] storing Slips logs in {self.args.output}")
 
