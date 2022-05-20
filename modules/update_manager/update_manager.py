@@ -100,6 +100,7 @@ class UpdateManager(Module, multiprocessing.Process):
         try:
             # Starting timer to update files
             self.timer_manager.start()
+            asyncio.run(self.update_ti_files(self.outputqueue, self.config, self.redis_port))
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -107,9 +108,8 @@ class UpdateManager(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-            return True
+
+
 
         # Main loop function
         while True:
@@ -120,7 +120,6 @@ class UpdateManager(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                asyncio.run(self.update_ti_files(self.outputqueue, self.config, self.redis_port))
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
