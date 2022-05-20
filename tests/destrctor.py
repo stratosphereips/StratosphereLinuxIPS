@@ -63,33 +63,36 @@ for redis_port in redis_server_ports:
             except ValueError:
                 redis_pid = line[-2]
             redis_pid = redis_pid.split('/')[0]
-            print(f"found {redis_pid} for redis_port: {redis_pid}")
-
-            # clear the server before killing
-            db = connect_to_redis_server(redis_port)
-            if db:
-                db.flushall()
-                db.flushdb()
-                db.script_flush()
-            print(f"Flushed redis-server opened on port: {redis_port}")
-
-            # signal 0 is to check if the process is still running or not
-            # it returns 1 if the process exited
+            print(f"redis_port: {redis_port} is found using PID {redis_pid} ")
             try:
-                # check if the process is still running
-                while os.kill(int(redis_pid), 0) != 1:
-                    # sigterm is 9
-                    os.kill(int(redis_pid), 9)
-                closed_servers += 1
-            except (ProcessLookupError, PermissionError):
-                # process already exited, sometimes this exception is raised
-                # but the process is still running, keep trying to kill it
-                # PermissionError happens when the user tries to close redis-servers
-                # opened by root while he's not root,
-                # or when he tries to close redis-servers
-                # opened without root while he's root
+                # clear the server before killing
+                db = connect_to_redis_server(redis_port)
+                if db:
+                    db.flushall()
+                    db.flushdb()
+                    db.script_flush()
+
+                print(f"Flushed redis-server opened on port: {redis_port}")
+
+                # signal 0 is to check if the process is still running or not
+                # it returns 1 if the process exited
+                try:
+                    # check if the process is still running
+                    while os.kill(int(redis_pid), 0) != 1:
+                        # sigterm is 9
+                        os.kill(int(redis_pid), 9)
+                    closed_servers += 1
+                except (ProcessLookupError, PermissionError):
+                    # process already exited, sometimes this exception is raised
+                    # but the process is still running, keep trying to kill it
+                    # PermissionError happens when the user tries to close redis-servers
+                    # opened by root while he's not root,
+                    # or when he tries to close redis-servers
+                    # opened without root while he's root
+                    continue
+                print(f"Killed redis-server on port {redis_port} PID: {redis_pid}")
+            except redis.exceptions.ConnectionError:
                 continue
-            print(f"Killed redis-server on port {redis_port}")
 
 
 print(f"Closed {closed_servers} unused redis-servers")
