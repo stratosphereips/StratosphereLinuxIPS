@@ -1064,7 +1064,7 @@ class Main():
                     print(f'Error loading the database {self.args.db}.')
                 else:
                     print(f"{self.args.db} loaded successfully. Run ./kalipso.sh")
-                self.terminate_slips()                print(f"@@@@@@@@@@@@@ omg?")
+                self.terminate_slips()
 
             else:
                 print('[Main] You need to define an input source.')
