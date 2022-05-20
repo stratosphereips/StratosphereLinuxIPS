@@ -80,7 +80,7 @@ class Database(object):
             # port 6379 db 0 is cache, delete it using -cc flag
             self.rcache = redis.StrictRedis(host='localhost',
                                             port=6379,
-                                            db=0,
+                                            db=1,
                                             charset="utf-8",
                                             socket_keepalive=True,
                                             retry_on_timeout=True,
@@ -3114,10 +3114,10 @@ class Database(object):
             print(f"[Main] Database saved to {backup_file}.rdb" )
             return True
 
-        print(f"Error Saving: Cannot find the redis database directory {redis_db_path}")
+        print(f"[DB] Error Saving: Cannot find the redis database directory {redis_db_path}")
         return False
 
-    def load(self,backup_file: str) -> bool:
+    def load(self, backup_file: str) -> bool:
         """
         Load the db from disk
         backup_file should be the full path of the .rdb
@@ -3132,35 +3132,36 @@ class Database(object):
             # Get the exact path without spaces
             redis_dir = redis_dir[redis_dir.index(' ')+1:]
 
-        if os.path.exists(backup_file):
-            # Check if valid .rdb file
-            command = 'file ' + backup_file
-            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-            # Get command output
-            file_type = result.stdout.decode('utf-8')
-            # Check if valid redis database
-            if 'Redis' in file_type:
-                # All modules throw redis.exceptions.ConnectionError when we stop the redis-server so we need to close all channels first
-                # We won't need them since we're loading a db that's already been analyzed
-                self.publish_stop()
-                # Stop the server first in order for redis to load another db
-                os.system(self.sudo +'service redis-server stop')
-                # todo: find/generate dump.rdb in docker.
-                # Copy out saved db to the dump.rdb (the db redis uses by default)
-                try:
-                    command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
-                    os.system(command)
-                    # Start the server again
-                    os.system(self.sudo + 'service redis-server start')
-                    self.print("{} loaded successfully. Run ./kalipso".format(backup_file))
-                except:
-                    self.print(f'Error loading the database {backup_file} to {redis_dir}.')
-                return True
-            else:
-                self.print("{} is not a valid redis database file.".format(backup_file))
-                return False
-        else:
+        if not os.path.exists(backup_file):
             self.print("{} doesn't exist.".format(backup_file))
+            return False
+
+        # Check if valid .rdb file
+        command = 'file ' + backup_file
+        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+        # Get command output
+        file_type = result.stdout.decode('utf-8')
+        # Check if valid redis database
+        if not 'Redis' in file_type:
+            self.print("{} is not a valid redis database file.".format(backup_file))
+            return False
+
+        # All modules throw redis.exceptions.ConnectionError when we stop
+        # the redis-server so we need to close all channels first
+        # We won't need them since we're loading a db that's already been analyzed
+        self.publish_stop()
+        # Stop the server first in order for redis to load another db
+        os.system(self.sudo +'service redis-server stop')
+        # Copy out saved db to the dump.rdb (the db redis uses by default)
+        try:
+            command = self.sudo +'cp ' + backup_file + ' ' + redis_dir +'/dump.rdb'
+            os.system(command)
+            # Start the server again
+            # os.system(self.sudo + 'service redis-server start')
+            os.system('redis-server --daemonize yes > /dev/null 2>&1')
+            return True
+        except:
+            self.print(f'Error loading the database {backup_file} to {redis_dir}.')
             return False
 
     def delete_feed(self, url: str):
