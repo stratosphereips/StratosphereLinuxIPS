@@ -429,7 +429,7 @@ class Module(Module, multiprocessing.Process):
                 alt_activity = {'info': 'No extra data.'}
 
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
-            activity |= alt_activity
+            activity.update(alt_activity)
             if activity:
                 __database__.add_timeline_line(
                     profileid, twid, activity, timestamp

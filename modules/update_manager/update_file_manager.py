@@ -1426,8 +1426,8 @@ class UpdateFileManager:
         # Check if the remote file is newer than our own
         # For each file that we should update`
         files_to_download_dics = {}
-        files_to_download_dics |= self.url_feeds
-        files_to_download_dics |= self.ja3_feeds
+        files_to_download_dics.update(self.url_feeds)
+        files_to_download_dics.update(self.ja3_feeds)
         files_to_download_dics.update(self.ssl_feeds)
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
