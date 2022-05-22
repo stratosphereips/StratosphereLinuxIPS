@@ -133,7 +133,7 @@ class Database(object):
         """
         try:
             deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
-            self.deletePrevdb = False if deletePrevdbText == 'False' else True
+            self.deletePrevdb = deletePrevdbText != 'False'
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -228,7 +228,7 @@ class Database(object):
             self.r.delete('zeekfiles')
             # By default the slips internal time is 0 until we receive something
             self.setSlipsInternalTime(0)
-            while self.get_slips_start_time() == None:
+            while self.get_slips_start_time() is None:
                 self.set_slips_start_time()
         except redis.exceptions.ConnectionError:
             print(f"[DB] Can't connect to redis on port {redis_port}")
@@ -236,7 +236,7 @@ class Database(object):
         self.r.delete('zeekfiles')
         # By default the slips internal time is 0 until we receive something
         self.setSlipsInternalTime(0)
-        while self.get_slips_start_time() == None:
+        while self.get_slips_start_time() is None:
             self.set_slips_start_time()
 
     def print(self, text, verbose=1, debug=0):
@@ -269,8 +269,7 @@ class Database(object):
 
     def get_slips_start_time(self):
         """get the time slips started (datetime obj)"""
-        start_time = self.r.get('slips_start_time')
-        if start_time:
+        if start_time := self.r.get('slips_start_time'):
             start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
             return start_time
 
@@ -350,8 +349,8 @@ class Database(object):
             self.outputqueue.put(
                 '00|database|Error in addProfile in database.py'
             )
-            self.outputqueue.put('00|database|{}'.format(type(inst)))
-            self.outputqueue.put('00|database|{}'.format(inst))
+            self.outputqueue.put(f'00|database|{type(inst)}')
+            self.outputqueue.put(f'00|database|{inst}')
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -380,8 +379,7 @@ class Database(object):
         if not profileid:
             return False
 
-        used_software = self.r.hmget(profileid, 'used_software')[0]
-        if used_software:
+        if used_software := self.r.hmget(profileid, 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
 
@@ -394,8 +392,7 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        user_agent = self.r.hmget(profileid, 'User-agent')[0]
-        if user_agent:
+        if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
             user_agent = json.loads(user_agent)
             return user_agent
 
@@ -450,7 +447,7 @@ class Database(object):
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
-        if not cached_ip or cached_ip == None:
+        if not cached_ip or cached_ip is None:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
@@ -590,24 +587,20 @@ class Database(object):
         """Receive an IP and we want the profileid"""
         try:
             temp_id = 'profile' + self.separator + str(daddr_as_obj)
-            data = self.r.sismember('profiles', temp_id)
-            if data:
+            if data := self.r.sismember('profiles', temp_id):
                 return temp_id
             return False
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
                 '00|database|error in addprofileidfromip in database.py'
             )
-            self.outputqueue.put('00|database|{}'.format(type(inst)))
-            self.outputqueue.put('00|database|{}'.format(inst))
+            self.outputqueue.put(f'00|database|{type(inst)}')
+            self.outputqueue.put(f'00|database|{inst}')
 
     def getProfiles(self):
         """Get a list of all the profiles"""
         profiles = self.r.smembers('profiles')
-        if profiles != set():
-            return profiles
-        else:
-            return {}
+        return profiles if profiles != set() else {}
 
     def getProfileData(self, profileid):
         """Get all the data for this particular profile.
@@ -620,10 +613,7 @@ class Database(object):
             return False
 
         profile = self.r.hgetall(profileid)
-        if profile != set():
-            return profile
-        else:
-            return False
+        return profile if profile != set() else False
 
     def getTWsfromProfile(self, profileid):
         """
@@ -652,15 +642,13 @@ class Database(object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        data = self.r.hget(profileid + self.separator + twid, 'SrcIPs')
-        return data
+        return self.r.hget(profileid + self.separator + twid, 'SrcIPs')
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        data = self.r.hget(profileid + self.separator + twid, 'DstIPs')
-        return data
+        return self.r.hget(profileid + self.separator + twid, 'DstIPs')
 
     def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
         """
@@ -682,10 +670,11 @@ class Database(object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}'
             )
-            self.outputqueue.put('01|database|[DB] {}'.format(type(e)))
-            self.outputqueue.put('01|database|[DB] {}'.format(e))
+
+            self.outputqueue.put(f'01|database|[DB] {type(e)}')
+            self.outputqueue.put(f'01|database|[DB] {e}')
             self.outputqueue.put(
-                '01|profiler|[Profile] {}'.format(traceback.format_exc())
+                f'01|profiler|[Profile] {traceback.format_exc()}'
             )
 
     def hasProfile(self, profileid):
@@ -728,23 +717,25 @@ class Database(object):
         # [-1] so we bring the last TW that matched this time.
         try:
             data = self.r.zrangebyscore(
-                'tws' + profileid,
+                f'tws{profileid}',
                 float('-inf'),
                 float(time),
                 withscores=True,
                 start=0,
-                num=-1,
+                num=-1
             )[-1]
+
         except IndexError:
             # We dont have any last tw?
             data = self.r.zrangebyscore(
-                'tws' + profileid,
+                f'tws{profileid}',
                 0,
                 float(time),
                 withscores=True,
                 start=0,
-                num=-1,
+                num=-1
             )
+
         return data
 
     def addNewOlderTW(self, profileid, startoftw):
@@ -767,22 +758,20 @@ class Database(object):
                 # Very weird error, since the first TW MUST exist. What are we doing here?
                 pass
             # Add the new TW to the index of TW
-            data = {}
-            data[str(twid)] = float(startoftw)
-            self.r.zadd('tws' + profileid, data)
+            data = {str(twid): float(startoftw)}
+            self.r.zadd(f'tws{profileid}', data)
             self.outputqueue.put(
-                '04|database|[DB]: Created and added to DB the new older TW with id {}. Time: {} '.format(
-                    twid, startoftw
-                )
+                f'04|database|[DB]: Created and added to DB the new older TW with id {twid}. Time: {startoftw} '
             )
+
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put(
                 '01|database|error in addNewOlderTW in database.py', 0, 1
             )
-            self.outputqueue.put('01|database|{}'.format(type(e)), 0, 1)
-            self.outputqueue.put('01|database|{}'.format(e), 0, 1)
+            self.outputqueue.put(f'01|database|{type(e)}', 0, 1)
+            self.outputqueue.put(f'01|database|{e}', 0, 1)
 
     def addNewTW(self, profileid, startoftw):
         try:
@@ -804,14 +793,12 @@ class Database(object):
                 # There is no first TW, create it
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
-            data = {}
-            data[str(twid)] = float(startoftw)
-            self.r.zadd('tws' + profileid, data)
+            data = {twid: float(startoftw)}
+            self.r.zadd(f'tws{profileid}', data)
             self.outputqueue.put(
-                '04|database|[DB]: Created and added to DB for profile {} on TW with id {}. Time: {} '.format(
-                    profileid, twid, startoftw
-                )
+                f'04|database|[DB]: Created and added to DB for profile {profileid} on TW with id {twid}. Time: {startoftw} '
             )
+
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
 
             # When a new TW is created for this profile,
@@ -822,7 +809,7 @@ class Database(object):
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('01|database|Error in addNewTW')
-            self.outputqueue.put('01|database|{}'.format(e))
+            self.outputqueue.put(f'01|database|{e}')
 
     def getTimeTW(self, profileid, twid):
         """Return the time when this TW in this profile was created"""
@@ -858,8 +845,9 @@ class Database(object):
         time_of_last_modified_tw = modified_tws[-1][-1]
         # this list will store modified profiles without tws
         profiles = []
-        for modified_tw in modified_tws:
-            profiles.append(modified_tw[0].split('_')[1])
+        profiles.extend(
+            modified_tw[0].split('_')[1] for modified_tw in modified_tws
+        )
         # return a set of unique profiles
         return set(profiles), time_of_last_modified_tw
 
@@ -883,10 +871,10 @@ class Database(object):
         """
         Get the time when this TW was modified
         """
-        data = self.r.zcore('ModifiedTW', profileid + self.separator + twid)
-        if not data:
-            data = -1
-        return data
+        return self.r.zcore(
+            'ModifiedTW',
+            f'{profileid}{self.separator}{twid}'
+        ) or -1
 
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
@@ -912,13 +900,15 @@ class Database(object):
         3- To update the internal time of slips
         4- To check if we should 'close' some TW
         """
-        # Add this tw to the list of modified TW, so others can
-        # check only these later
-        data = {}
         timestamp = time.time()
-        data[profileid + self.separator + twid] = float(timestamp)
+        data = {
+            f'{profileid}{self.separator}{twid}': float(timestamp)
+        }
         self.r.zadd('ModifiedTW', data)
-        self.publish('tw_modified', profileid + ':' + twid)
+        self.publish(
+            'tw_modified',
+            f'{profileid}:{twid}'
+            )
         # Check if we should close some TW
         self.check_TW_to_close()
 

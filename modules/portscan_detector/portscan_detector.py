@@ -141,6 +141,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     for dip in dstips:
                         # Get the total amount of pkts sent to the same port to all IPs
                         pkts_sent += dstips[dip]['pkts']
+
                     if pkts_sent > 10:
                         confidence = 1
                     else:
@@ -189,6 +190,14 @@ class PortScanProcess(Module, multiprocessing.Process):
         state = 'NotEstablished'
         role = 'Client'
         type_data = 'IPs'
+        # self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
+        # Type of evidence
+        type_detection = 'srcip'
+        type_evidence = 'PortScanType1'
+        source_target_tag = 'Recon'
+        # Threat level
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
         for protocol in ('TCP', 'UDP'):
             data = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
@@ -199,36 +208,25 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # dstports is a dict
                 dstports = data[dstip]['dstports']
                 amount_of_dports = len(dstports)
-                # self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
-                # Type of evidence
-                type_detection = 'srcip'
                 srcip = profileid.split(self.fieldseparator)[1]
                 detection_info = srcip
-                type_evidence = 'PortScanType1'
                 # Key
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
-                source_target_tag = 'Recon'
-                # Threat level
-                threat_level = 'medium'
-                category = 'Recon.Scanning'
                 # We detect a scan every Threshold. So we detect when there is 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
-                cache_key = profileid + ':' + twid + ':' + key
+                cache_key = f'{profileid}:{twid}:{key}'
                 try:
                     prev_amount_dports = self.cache_det_thresholds[cache_key]
                 except KeyError:
                     prev_amount_dports = 0
                 # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
                 if (
-                    amount_of_dports % self.port_scan_minimum_dports_threshold
-                    == 0
-                    and prev_amount_dports < amount_of_dports
+                        amount_of_dports % self.port_scan_minimum_dports_threshold
+                        == 0
+                        and prev_amount_dports < amount_of_dports
                 ):
-                    # Compute the confidence
-                    pkts_sent = 0
-                    for dport in dstports:
-                        # Get the total amount of pkts sent to the same port to all IPs
-                        pkts_sent += dstports[dport]
+                    # Get the total amount of pkts sent to the same port to all IPs
+                    pkts_sent = sum(dstports[dport] for dport in dstports)
                     if pkts_sent > 10:
                         confidence = 1
                     elif pkts_sent == 0:
@@ -356,12 +354,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                     twid = message['data'].split(':')[1]
                     # Start of the port scan detection
                     self.print(
-                        'Running the detection of portscans in profile {} TW {}'.format(
-                            profileid, twid
-                        ),
-                        3,
-                        0,
+                        f'Running the detection of portscans in profile '
+                        f'{profileid} TW {twid}', 3, 0
                     )
+
                     # For port scan detection, we will measure different things:
 
                     # 1. Vertical port scan:

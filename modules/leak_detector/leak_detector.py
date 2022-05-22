@@ -104,8 +104,7 @@ class Module(Module, multiprocessing.Process):
                         stderr=open('/dev/null', 'w'),
                     )
                     json_packet = result.stdout.decode('utf-8')
-                    json_packet = json.loads(json_packet)
-                    if json_packet:
+                    if json_packet := json.loads(json_packet):
                         # sometime tshark can't find the desired packet?
                         json_packet = json_packet[0]['_source']['layers']
 
@@ -113,11 +112,7 @@ class Module(Module, multiprocessing.Process):
                         used_protocols = json_packet['frame'][
                             'frame.protocols'
                         ]
-                        if 'ipv6' in used_protocols:
-                            ip_family = 'ipv6'
-                        else:
-                            ip_family = 'ip'
-
+                        ip_family = 'ipv6' if 'ipv6' in used_protocols else 'ip'
                         if 'tcp' in used_protocols:
                             proto = 'tcp'
                         elif 'udp' in used_protocols:
@@ -157,8 +152,7 @@ class Module(Module, multiprocessing.Process):
         for match in strings:
             offset, string_found = match[0], match[1]
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
-            packet_info = self.get_packet_info(offset)
-            if packet_info:
+            if packet_info := self.get_packet_info(offset):
                 srcip, dstip, proto, sport, dport, ts = (
                     packet_info[0],
                     packet_info[1],
@@ -167,14 +161,7 @@ class Module(Module, multiprocessing.Process):
                     packet_info[4],
                     packet_info[5],
                 )
-                type_detection = 'dstip'
                 detection_info = dstip
-                source_target_tag = 'CC'
-                # TODO: this needs to be changed if add more rules to the rules/dir
-                type_evidence = 'NETWORK_gps_location_leaked'
-                category = 'Malware'
-                confidence = 0.9
-                threat_level = 'high'
                 portproto = f'{dport}/{proto}'
                 port_info = __database__.get_port_info(portproto)
                 ip_identification = __database__.getIPIdentification(dstip)
@@ -197,6 +184,13 @@ class Module(Module, multiprocessing.Process):
 
                     if twid:
                         twid = twid[0]
+                        type_detection = 'dstip'
+                        source_target_tag = 'CC'
+                        # TODO: this needs to be changed if add more rules to the rules/dir
+                        type_evidence = 'NETWORK_gps_location_leaked'
+                        category = 'Malware'
+                        confidence = 0.9
+                        threat_level = 'high'
                         __database__.setEvidence(
                             type_evidence,
                             type_detection,

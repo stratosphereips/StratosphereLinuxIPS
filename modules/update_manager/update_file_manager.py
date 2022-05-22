@@ -912,11 +912,7 @@ class UpdateFileManager:
         malicious_domains_dict = {}
         with open(ti_file_path) as feed:
             self.print(
-                'Reading next lines in the file {} for IoC'.format(
-                    ti_file_path
-                ),
-                3,
-                0,
+                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
             )
             try:
                 file = json.loads(feed.read())
@@ -1417,9 +1413,8 @@ class UpdateFileManager:
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
             self.print(
-                'Not Updating the remote file of malicious IPs and domains because the update period is <= 0.',
-                0,
-                1,
+                'Not Updating the remote file of malicious IPs and domains '
+                'because the update period is <= 0.', 0, 1,
             )
             return False
 
@@ -1431,8 +1426,8 @@ class UpdateFileManager:
         # Check if the remote file is newer than our own
         # For each file that we should update`
         files_to_download_dics = {}
-        files_to_download_dics.update(self.url_feeds)
-        files_to_download_dics.update(self.ja3_feeds)
+        files_to_download_dics |= self.url_feeds
+        files_to_download_dics |= self.ja3_feeds
         files_to_download_dics.update(self.ssl_feeds)
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()

@@ -256,7 +256,7 @@ class Module(Module, multiprocessing.Process):
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
-            description = f'detected sending unsolicited arp'
+            description = 'detected sending unsolicited arp'
             type_evidence = 'UnsolicitedARP'
             # This may be arp spoofing
             category = 'Information'
@@ -367,11 +367,9 @@ class Module(Module, multiprocessing.Process):
                     # The Gratuitous arp is sent as a broadcast, as a way for a node to announce or update
                     # its IP to MAC mapping to the entire network.
                     #  Gratuitous ARP shouldn't be marked as an arp scan
-                    is_gratuitous = saddr == daddr and (
-                        dst_mac == 'ff:ff:ff:ff:ff:ff'
-                        or dst_mac == '00:00:00:00:00:00'
-                        or dst_mac == src_mac
-                    )
+                    is_gratuitous = saddr == daddr and dst_mac in [
+                        'ff:ff:ff:ff:ff:ff', '00:00:00:00:00:00', src_mac]
+
                     if is_gratuitous:
                         # for MITM arp attack, the arp has to be gratuitous
                         # and it has to be a reply operation, not a request.

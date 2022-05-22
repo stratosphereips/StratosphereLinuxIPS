@@ -224,8 +224,9 @@ class Module(Module, multiprocessing.Process):
         """
         Checks weather a port is known to be used by a specific organization or not
         """
-        organization_info = __database__.get_organization_of_port(portproto)
-        if organization_info:
+        if organization_info := __database__.get_organization_of_port(
+                portproto
+        ):
             # there's an organization that's known to use this port,
             # check if the daddr belongs to the range of this org
             organization_info = json.loads(organization_info)
@@ -256,28 +257,26 @@ class Module(Module, multiprocessing.Process):
                 )
                 org_name = organization_info['org_name'].lower()
                 if (
-                    org_name in src_mac_vendor.lower()
-                    or org_name in dst_mac_vendor.lower()
+                        org_name in src_mac_vendor.lower()
+                        or org_name in dst_mac_vendor.lower()
                 ):
                     return True
-                else:
-                    # check if the SNI, hostname, rDNS of this ip belong to org_name
-                    ip_identification = __database__.getIPIdentification(daddr)
-                    if org_name in ip_identification.lower():
-                        return True
+                # check if the SNI, hostname, rDNS of this ip belong to org_name
+                ip_identification = __database__.getIPIdentification(daddr)
+                if org_name in ip_identification.lower():
+                    return True
 
         # consider this port as unknown
         return False
 
     def check_unknown_port(
-        self, dport, proto, daddr, profileid, twid, uid, timestamp
+            self, dport, proto, daddr, profileid, twid, uid, timestamp
     ):
         """
         Checks dports that are not in our
         slips_files/ports_info/services.csv"""
         portproto = f'{dport}/{proto}'
-        port_info = __database__.get_port_info(portproto)
-        if port_info:
+        if port_info := __database__.get_port_info(portproto):
             # it's a known port
             return False
         # we don't have port info in our database
@@ -355,10 +354,7 @@ class Module(Module, multiprocessing.Process):
             self.dns_arpa_queries[profileid] = [stime]
             return False
 
-        if (
-            not len(self.dns_arpa_queries[profileid])
-            >= self.arpa_scan_threshold
-        ):
+        if len(self.dns_arpa_queries[profileid]) < self.arpa_scan_threshold:
             # didn't reach the threshold yet
             return False
 
@@ -367,7 +363,7 @@ class Module(Module, multiprocessing.Process):
             self.dns_arpa_queries[profileid][-1]
             - self.dns_arpa_queries[profileid][0]
         )
-        if not diff <= 2:
+        if diff > 2:
             # happened within more than 2 seconds
             return False
 
@@ -473,7 +469,7 @@ class Module(Module, multiprocessing.Process):
             now = datetime.datetime.now()
             diff = now - start_time
             diff = diff.seconds
-            if not int(diff) >= 120:
+            if int(diff) < 120:
                 # less than 2 minutes have passed
                 return False
 
@@ -499,13 +495,13 @@ class Module(Module, multiprocessing.Process):
                     15, self.check_connection_without_dns_resolution, params
                 )
                 timer.start()
-            elif uid in self.connections_checked_in_conn_dns_timer_thread:
+            else:
                 # It means we already checked this conn with the Timer process
                 # (we waited 15 seconds for the dns to arrive after the connection was made)
                 # but still no dns resolution for it.
                 # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
                 if self.check_if_resolution_was_made_by_different_version(
-                    profileid, daddr
+                        profileid, daddr
                 ):
                     return False
 
@@ -526,7 +522,7 @@ class Module(Module, multiprocessing.Process):
                     pass
 
     def check_dns_resolution_without_connection(
-        self, domain, answers, timestamp, profileid, twid, uid
+            self, domain, answers, timestamp, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -604,13 +600,13 @@ class Module(Module, multiprocessing.Process):
                 15, self.check_dns_resolution_without_connection, params
             )
             timer.start()
-        elif uid in self.connections_checked_in_dns_conn_timer_thread:
+        else:
             # self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
             for ip in answers:
                 if self.check_if_connection_was_made_by_different_version(
-                    profileid, twid, ip
+                        profileid, twid, ip
                 ):
                     return False
             self.helper.set_evidence_DNS_without_conn(
@@ -639,9 +635,7 @@ class Module(Module, multiprocessing.Process):
             flow_dict = json.loads(flow)
             timestamp = flow_dict['stime']
             uid = flow_dict['uid']
-            # Try Zeek method to detect if SSh was successful or not.
-            auth_success = flow_dict['auth_success']
-            if auth_success:
+            if auth_success := flow_dict['auth_success']:
                 original_ssh_flow = __database__.get_flow(profileid, twid, uid)
                 original_flow_uid = next(iter(original_ssh_flow))
                 if original_ssh_flow[original_flow_uid]:
@@ -668,20 +662,19 @@ class Module(Module, multiprocessing.Process):
                     except ValueError:
                         pass
                     return True
-                else:
+                elif uid not in self.connections_checked_in_ssh_timer_thread:
                     # It can happen that the original SSH flow is not in the DB yet
-                    if uid not in self.connections_checked_in_ssh_timer_thread:
-                        # comes here if we haven't started the timer thread for this connection before
-                        # mark this connection as checked
-                        # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
-                        self.connections_checked_in_ssh_timer_thread.append(
-                            uid
-                        )
-                        params = [message]
-                        timer = TimerThread(
-                            15, self.check_successful_ssh, params
-                        )
-                        timer.start()
+                    # comes here if we haven't started the timer thread for this connection before
+                    # mark this connection as checked
+                    # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+                    self.connections_checked_in_ssh_timer_thread.append(
+                        uid
+                    )
+                    params = [message]
+                    timer = TimerThread(
+                        15, self.check_successful_ssh, params
+                    )
+                    timer.start()
             else:
                 # Try Slips method to detect if SSH was successful.
                 original_ssh_flow = __database__.get_flow(profileid, twid, uid)
@@ -723,7 +716,8 @@ class Module(Module, multiprocessing.Process):
                     if uid not in self.connections_checked_in_ssh_timer_thread:
                         # comes here if we haven't started the timer thread for this connection before
                         # mark this connection as checked
-                        # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+                        # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
+                        # time {datetime.datetime.now()}')
                         self.connections_checked_in_ssh_timer_thread.append(
                             uid
                         )

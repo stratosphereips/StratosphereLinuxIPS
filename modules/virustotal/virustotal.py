@@ -133,7 +133,7 @@ class Module(Module, multiprocessing.Process):
         """
         detections = 0
         total = 0
-        if response_key in response.keys():
+        if response_key in response:
             for item in response[response_key]:
                 detections += item[positive_key]
                 total += item[total_key]
@@ -176,7 +176,7 @@ class Module(Module, multiprocessing.Process):
         """
         response = self.api_query_(url)
         # Can't get url report
-        if type(response) == dict and response.get('response_code', '') is -1:
+        if type(response) == dict and response.get('response_code', '') == -1:
             self.print(f"VT API returned an Error - {response['verbose_msg']}")
             return 0
         try:
@@ -298,18 +298,18 @@ class Module(Module, multiprocessing.Process):
                     continue
 
                 ioc_type = self.get_ioc_type(ioc)
-                if ioc_type is 'ip':
+                if ioc_type == 'ip':
                     cached_data = __database__.getIPData(ioc)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
                     # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
                     if (
-                        not cached_data or 'VirusTotal' not in cached_data
+                            not cached_data or 'VirusTotal' not in cached_data
                     ) and not ip_addr.is_multicast:
                         self.set_vt_data_in_IPInfo(ioc, cached_data)
 
-                elif ioc_type is 'domain':
+                elif ioc_type == 'domain':
                     cached_data = __database__.getDomainData(ioc)
                     if not cached_data or 'VirusTotal' not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
@@ -337,7 +337,6 @@ class Module(Module, multiprocessing.Process):
         }
 
         __database__.setInfoForFile(md5, data)
-        pass
 
     def get_as_owner(self, response):
         """
@@ -345,10 +344,7 @@ class Module(Module, multiprocessing.Process):
         :param response: json dictionary with response data
         """
         response_key = 'as_owner'
-        if response_key in response:
-            return response[response_key]
-        else:
-            return ''
+        return response[response_key] if response_key in response else ''
 
     def get_passive_dns(self, response):
         """
@@ -356,11 +352,7 @@ class Module(Module, multiprocessing.Process):
         :param response: json dictionary with response data
         """
         response_key = 'resolutions'
-        if response_key in response:
-            # return the first 10 entries only
-            return response[response_key][:10]
-        else:
-            return ''
+        return response[response_key][:10] if response_key in response else ''
 
     def get_ip_vt_data(self, ip: str):
         """
@@ -373,7 +365,7 @@ class Module(Module, multiprocessing.Process):
         try:
             addr = ipaddress.ip_address(ip)
             if addr.is_private:
-                self.print('[' + ip + '] is private, skipping', 0, 2)
+                self.print(f'[{ip}] is private, skipping', 0, 2)
                 scores = 0, 0, 0, 0
                 return scores, '', ''
 
@@ -457,22 +449,22 @@ class Module(Module, multiprocessing.Process):
 
         params = {'apikey': self.key}
         ioc_type = self.get_ioc_type(ioc)
-        if ioc_type is 'ip':
+        if ioc_type == 'ip':
             # VT api URL for querying IPs
             self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
-            params.update({'ip': ioc})
-        elif ioc_type is 'domain':
+            params['ip'] = ioc
+        elif ioc_type == 'domain':
             # VT api URL for querying domains
             self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
-            params.update({'domain': ioc})
-        elif ioc_type is 'url':
+            params['domain'] = ioc
+        elif ioc_type == 'url':
             # VT api URL for querying URLS
             self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
-            params.update({'resource': ioc})
-        elif ioc_type is 'md5':
+            params['resource'] = ioc
+        elif ioc_type == 'md5':
             # VT api URL for querying files
             self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
-            params.update({'resource': ioc})
+            params['resource'] = ioc
 
         # wait for network
         while True:
@@ -508,10 +500,7 @@ class Module(Module, multiprocessing.Process):
                 else:
                     message = response.reason
                 raise Exception(
-                    'VT API returned unexpected code: '
-                    + str(response.status)
-                    + ' - '
-                    + message
+                    f'VT API returned unexpected code: {response.status} - {message}'
                 )
 
             # report that API limit is reached, wait one minute and try again
@@ -534,9 +523,8 @@ class Module(Module, multiprocessing.Process):
                 # this is an empty list, vt dometimes returns it with status code 200
                 data = {}
             # optionally, save data to file
-            if save_data and ioc_type is 'ip':
-                filename = ioc + '.txt'
-                if filename:
+            if save_data and ioc_type == 'ip':
+                if filename := f'{ioc}.txt':
                     with open(filename, 'w') as f:
                         json.dump(data, f)
 
@@ -602,10 +590,7 @@ class Module(Module, multiprocessing.Process):
 
         # sum the previous results, to get the sum of detections and sum of total tests
         url_detections = undetected_url_score[0] + detected_url_score[0]
-        url_total = undetected_url_score[1] + detected_url_score[1]
-
-        # compute the score for the category
-        if url_total:
+        if url_total := undetected_url_score[1] + detected_url_score[1]:
             url_ratio = url_detections / url_total
         else:
             url_ratio = 0
@@ -618,13 +603,10 @@ class Module(Module, multiprocessing.Process):
             response, 'detected_downloaded_samples', 'positives', 'total'
         )
         down_file_detections = (
-            undetected_download_score[0] + detected_download_score[0]
+                undetected_download_score[0] + detected_download_score[0]
         )
-        down_file_total = (
-            undetected_download_score[1] + detected_download_score[1]
-        )
-
-        if down_file_total:
+        if down_file_total := (
+                undetected_download_score[1] + detected_download_score[1]):
             down_file_ratio = down_file_detections / down_file_total
         else:
             down_file_ratio = 0
@@ -636,9 +618,7 @@ class Module(Module, multiprocessing.Process):
             response, 'detected_referrer_samples', 'positives', 'total'
         )
         ref_file_detections = undetected_ref_score[0] + detected_ref_score[0]
-        ref_file_total = undetected_ref_score[1] + detected_ref_score[1]
-
-        if ref_file_total:
+        if ref_file_total := undetected_ref_score[1] + detected_ref_score[1]:
             ref_file_ratio = ref_file_detections / ref_file_total
         else:
             ref_file_ratio = 0
@@ -650,9 +630,7 @@ class Module(Module, multiprocessing.Process):
             response, 'detected_communicating_samples', 'positives', 'total'
         )
         com_file_detections = undetected_com_score[0] + detected_com_score[0]
-        com_file_total = undetected_com_score[1] + detected_com_score[1]
-
-        if com_file_total:
+        if com_file_total := undetected_com_score[1] + detected_com_score[1]:
             com_file_ratio = com_file_detections / com_file_total
         else:
             com_file_ratio = 0

@@ -198,8 +198,7 @@ class ProfilerProcess(multiprocessing.Process):
             with open(self.whitelist_path) as whitelist:
                 # Process lines after comments
                 line_number = 0
-                line = whitelist.readline()
-                while line:
+                while line := whitelist.readline():
                     line_number += 1
                     if line.startswith('"IoCType"'):
                         line = whitelist.readline()
@@ -306,11 +305,10 @@ class ProfilerProcess(multiprocessing.Process):
 
                         else:
                             self.print(f'{data} is not a valid {type_}.', 1, 0)
-                    except:
+                    except Exception:
                         self.print(
                             f'Line {line_number} in whitelist.conf is invalid. Skipping.'
                         )
-                    line = whitelist.readline()
         except FileNotFoundError:
             self.print(
                 f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead"
@@ -338,13 +336,11 @@ class ProfilerProcess(multiprocessing.Process):
             org_asn = []
             file = f'slips_files/organizations_info/{org}_asn'
             with open(file, 'r') as f:
-                line = f.readline()
-                while line:
+                while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     # Read all as upper
                     org_asn.append(line.upper())
-                    line = f.readline()
             return org_asn
 
         except (FileNotFoundError, IOError):
@@ -370,12 +366,10 @@ class ProfilerProcess(multiprocessing.Process):
             domains = []
             file = f'slips_files/organizations_info/{org}_domains'
             with open(file, 'r') as f:
-                line = f.readline()
-                while line:
+                while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     domains.append(line.lower())
-                    line = f.readline()
             return domains
         except (FileNotFoundError, IOError):
             return False
@@ -393,8 +387,7 @@ class ProfilerProcess(multiprocessing.Process):
             org_subnets = []
             file = f'slips_files/organizations_info/{org}'
             with open(file, 'r') as f:
-                line = f.readline()
-                while line:
+                while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     try:
@@ -404,7 +397,6 @@ class ProfilerProcess(multiprocessing.Process):
                     except ValueError:
                         # not a valid line, ignore it
                         pass
-                    line = f.readline()
             return org_subnets
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
@@ -420,8 +412,7 @@ class ProfilerProcess(multiprocessing.Process):
             except requests.exceptions.ConnectionError:
                 # Connection reset by peer
                 return False
-            ip_space = json.loads(response.text)
-            if ip_space:
+            if ip_space := json.loads(response.text):
                 with open(f'slips_files/organizations_info/{org}', 'w') as f:
                     for subnet in ip_space:
                         # get ipv4 only
@@ -498,21 +489,16 @@ class ProfilerProcess(multiprocessing.Process):
                     if nr_commas > nr_tabs:
                         # Commas is the separator
                         self.separator = ','
-                        if nr_commas > 40:
-                            self.input_type = 'nfdump'
-                        else:
-                            # comma separated argus file
-                            self.input_type = 'argus'
-                    elif nr_tabs >= nr_commas:
+                        self.input_type = 'nfdump' if nr_commas > 40 else 'argus'
+                    else:
                         # Tabs is the separator
                         # Probably a conn.log file alone from zeek
                         # probably a zeek tab file or a binetflow tab file
                         if '->' in data or 'StartTime' in data:
-                            self.separator = '\t'
                             self.input_type = 'argus-tabs'
                         else:
-                            self.separator = '	'
                             self.input_type = 'zeek-tabs'
+                        self.separator = '\t'
             return self.input_type
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -608,11 +594,11 @@ class ProfilerProcess(multiprocessing.Process):
         if not self.timeformat:
             # The time format was not defined from configuration file neither from last flows.
             self.timeformat = utils.define_time_format(time)
-            if not self.timeformat:
-                # We did not find the right time format.
-                self.outputqueue.put(
-                    '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
-                )
+        if not self.timeformat:
+            # We did not find the right time format.
+            self.outputqueue.put(
+                '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
+            )
         defined_datetime: datetime = None
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':

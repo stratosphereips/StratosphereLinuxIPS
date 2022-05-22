@@ -70,23 +70,16 @@ class Whitelist:
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
 
-        # self.print(f'List of whitelist: Domains: {whitelisted_domains}, IPs: {whitelisted_IPs}, Orgs: {whitelisted_orgs}')
-
-        # check if we have domains whitelisted
-        whitelisted_domains = __database__.get_whitelist('domains')
-        if whitelisted_domains:
-            # self.print('Check the domains')
-            # Check if the domain is whitelisted
+        if whitelisted_domains := __database__.get_whitelist('domains'):
+            ssl_domain = column_values.get('server_name', '')  # ssl.log
             # Domain names are stored in different zeek files using different names.
-            # Try to get the domain from each file.
-            domains_to_check = []
-            ssl_domain = column_values.get('server_name', '')   # ssl.log
-            domains_to_check.append(ssl_domain)
-            http_domain = column_values.get('host', '')   # http.log
+            # Try to get the domain from each file.            domains_to_check = [ssl_domain]
+            domains_to_check = [ssl_domain]
+            http_domain = column_values.get('host', '')  # http.log
             domains_to_check.append(http_domain)
             notice_domain = column_values.get('sub', '').replace(
                 'CN=', ''
-            )   # in notice.log
+            )  # in notice.log
             domains_to_check.append(notice_domain)
 
             (
@@ -156,9 +149,7 @@ class Whitelist:
         saddr = column_values['saddr']
         daddr = column_values['daddr']
 
-        # check if we have IPs whitelisted
-        whitelisted_IPs = __database__.get_whitelist('IPs')
-        if whitelisted_IPs:
+        if whitelisted_IPs := __database__.get_whitelist('IPs'):
             # self.print('Check the IPs')
             # Check if the IPs are whitelisted
             ips_to_whitelist = list(whitelisted_IPs.keys())
@@ -168,7 +159,7 @@ class Whitelist:
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and (
-                    'flows' in what_to_ignore or 'both' in what_to_ignore
+                        'flows' in what_to_ignore or 'both' in what_to_ignore
                 ):
                     # self.print(f"Whitelisting the src IP {column_values['saddr']}")
                     return True
@@ -183,20 +174,16 @@ class Whitelist:
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
 
-        # check if we have orgs whitelisted
-        whitelisted_orgs = __database__.get_whitelist('organizations')
-
-        # Check if the orgs are whitelisted
-        if whitelisted_orgs:
+        if whitelisted_orgs := __database__.get_whitelist('organizations'):
             # self.print('Check if the organization is whitelisted')
             # Check if IP belongs to a whitelisted organization range
             # Check if the ASN of this IP is any of these organizations
 
             for org in whitelisted_orgs:
-                from_ = whitelisted_orgs[org]['from']   # src or dst or both
+                from_ = whitelisted_orgs[org]['from']  # src or dst or both
                 what_to_ignore = whitelisted_orgs[org][
                     'what_to_ignore'
-                ]   # flows, alerts or both
+                ]  # flows, alerts or both
                 # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
                 # get the domains of this flow
@@ -297,11 +284,7 @@ class Whitelist:
                                     #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
-        # check if we have mac addresses whitelisted
-        whitelisted_mac = __database__.get_whitelist('mac')
-
-        if whitelisted_mac:
-
+        if whitelisted_mac := __database__.get_whitelist('mac'):
             # try to get the mac address of the current flow
             src_mac = column_values.get('src_mac', False)
             if not src_mac:

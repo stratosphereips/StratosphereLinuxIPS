@@ -96,11 +96,11 @@ class EvidenceProcess(multiprocessing.Process):
         if logs_folder:
             # these json files are inside the logs dir, not the output/ dir
             self.logs_jsonfile = self.clean_file(
-                logs_folder + '/', 'alerts.json'
-            )
+                f'{logs_folder}/', 'alerts.json'
+                )
             self.logs_logfile = self.clean_file(
-                logs_folder + '/', 'alerts.log'
-            )
+                f'{logs_folder}/', 'alerts.log'
+                )
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -180,7 +180,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.popup_alerts = self.config.get(
                 'detection', 'popup_alerts'
             ).lower()
-            self.popup_alerts = True if 'yes' in self.popup_alerts else False
+            self.popup_alerts = 'yes' in self.popup_alerts
 
             # In docker, disable alerts no matter what slips.conf says
             if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
@@ -202,8 +202,8 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             now = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
             ip = profileid.split('_')[-1].strip()
-            alert_to_print = f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
-            return alert_to_print
+            return f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+
         except Exception as inst:
             self.print('Error in print_alert()')
             self.print(type(inst))
@@ -230,25 +230,19 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info = dns_resolution_detection_info.get(
             'domains', []
         )
-        dns_resolution_detection_info = (
-            dns_resolution_detection_info[0:3]
-            if dns_resolution_detection_info
-            else ''
-        )
+        dns_resolution_detection_info = dns_resolution_detection_info[
+                                        :3] if dns_resolution_detection_info else ''
+
         dns_resolution_ip = __database__.get_dns_resolution(ip)
         dns_resolution_ip = dns_resolution_ip.get('domains', [])
         if len(dns_resolution_ip) >= 1:
             dns_resolution_ip = dns_resolution_ip[0]
         elif len(dns_resolution_ip) == 0:
             dns_resolution_ip = ''
-        dns_resolution_ip_final = (
-            f' DNS: {dns_resolution_ip[0:3]}. '
-            if (
-                dns_resolution_detection_info
-                and len(dns_resolution_ip[0:3]) > 0
-            )
-            else '. '
-        )
+        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_detection_info and len(
+            dns_resolution_ip[:3]
+            ) > 0 else '. '
+
         srcip = profileid.split('_')[1]
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
@@ -354,8 +348,7 @@ class EvidenceProcess(multiprocessing.Process):
             src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
             src_dns_domains = src_dns_domains.get('domains', [])
 
-            for dns_domain in src_dns_domains:
-                domains_to_check_src.append(dns_domain)
+            domains_to_check_src.extend(iter(src_dns_domains))
         except (KeyError, TypeError):
             pass
         try:

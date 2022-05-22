@@ -134,10 +134,8 @@ class Helper:
         if type(start_time) == datetime.datetime:
             if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
                 confidence = 0.1
-        else:
-            # start_time is float
-            if '-i' in sys.argv and (now - start_time < 18000):
-                confidence = 0.1
+        elif '-i' in sys.argv and (now - start_time < 18000):
+            confidence = 0.1
 
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
@@ -219,7 +217,7 @@ class Helper:
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
-        description = 'password guessing by Zeek enegine. ' + msg
+        description = f'password guessing by Zeek enegine. {msg}'
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'
@@ -247,7 +245,7 @@ class Helper:
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
         threat_level = 'medium'
-        description = 'horizontal port scan by Zeek engine. ' + msg
+        description = f'horizontal port scan by Zeek engine. {msg}'
         type_evidence = 'PortScanType2'
         type_detection = 'dport'
         source_target_tag = 'Recon'
@@ -278,7 +276,7 @@ class Helper:
         confidence = 1
         threat_level = 'medium'
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
-        description = 'vertical port scan by Zeek engine. ' + msg
+        description = f'vertical port scan by Zeek engine. {msg}'
         type_evidence = 'PortScanType1'
         category = 'Recon.Scanning'
         type_detection = 'dstip'

@@ -373,7 +373,7 @@ class InputProcess(multiprocessing.Process):
                     # Add log file to database
                     file_name_without_extension = file[:-4]
                     __database__.add_zeek_file(
-                        self.given_path + '/' + file_name_without_extension
+                        f'{self.given_path}/{file_name_without_extension}'
                     )
 
             # We want to stop bro if no new line is coming.
@@ -485,7 +485,7 @@ class InputProcess(multiprocessing.Process):
 
     def handle_nfdump(self):
         try:
-            command = 'nfdump -b -N -o csv -q -r ' + self.given_path
+            command = f'nfdump -b -N -o csv -q -r {self.given_path}'
             # Execute command
             result = subprocess.run(command.split(), stdout=subprocess.PIPE)
             # Get command output
@@ -525,7 +525,7 @@ class InputProcess(multiprocessing.Process):
             rotation_interval = (
                 "-e 'redef Log::default_rotation_interval = 0sec;'"
             )
-            if self.input_type is 'interface':
+            if self.input_type == 'interface':
                 if self.rotation:
                     rotation_interval = (
                         "-e 'redef Log::default_rotation_interval =  1min;'"
@@ -534,7 +534,7 @@ class InputProcess(multiprocessing.Process):
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
-            elif self.input_type is 'pcap':
+            elif self.input_type == 'pcap':
                 # Find if the pcap file name was absolute or relative
                 if self.given_path[0] == '/':
                     # If absolute, do nothing
@@ -553,7 +553,7 @@ class InputProcess(multiprocessing.Process):
                     os.remove(os.path.join(self.zeek_folder, f))
 
             # Run zeek on the pcap or interface. The redef is to have json files
-            zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
+            zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
             # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
             # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
             # we have our own copy pf local.zeek in __load__.zeek
@@ -571,8 +571,7 @@ class InputProcess(multiprocessing.Process):
 
             lines = self.read_zeek_files()
             self.print(
-                'We read everything. No more input. '
-                'Stopping input process. Sent {} lines'.format(lines)
+                f'We read everything. No more input. Stopping input process. Sent {lines} lines'
             )
 
             self.stop_observer()
@@ -648,28 +647,25 @@ class InputProcess(multiprocessing.Process):
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
             if self.input_type == 'stdin':
                 self.read_from_stdin()
-            elif self.input_type is 'zeek_folder':
+            elif self.input_type == 'zeek_folder':
                 # is a zeek folder
                 self.read_zeek_folder()
-            elif self.input_type is 'zeek_log_file':
+            elif self.input_type == 'zeek_log_file':
                 # Is a zeek.log file
                 file_name = self.given_path.split('/')[-1]
                 if 'log' in file_name:
                     self.handle_zeek_log_file()
                 else:
                     return False
-            elif self.input_type is 'nfdump':
+            elif self.input_type == 'nfdump':
                 # binary nfdump file
                 self.handle_nfdump()
-            elif (
-                    self.input_type is 'binetflow'
-                    or 'binetflow-tabs' in self.input_type
-            ):
+            elif self.input_type == 'binetflow' or 'binetflow-tabs' in self.input_type:
                 # argus or binetflow
                 self.handle_binetflow()
-            elif self.input_type is 'pcap' or self.input_type is 'interface':
+            elif self.input_type in ['pcap', 'interface']:
                 self.handle_pcap_and_interface()
-            elif self.input_type is 'suricata':
+            elif self.input_type == 'suricata':
                 self.handle_suricata()
             else:
                 # if self.input_type is 'file':
@@ -689,9 +685,7 @@ class InputProcess(multiprocessing.Process):
                 f'Problem with Input Process. line {exception_line}', 0, 1
             )
             self.print(
-                'Stopping input process. Sent {} lines'.format(self.lines),
-                0,
-                1,
+                f'Stopping input process. Sent {self.lines} lines', 0, 1
             )
             self.print(type(inst), 0, 1)
             self.print(inst.args, 0, 1)

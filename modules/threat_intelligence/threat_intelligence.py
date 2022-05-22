@@ -86,13 +86,9 @@ class Module(Module, multiprocessing.Process):
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        # dns_resolution = __database__.get_dns_resolution(ip)
-        # dns_resolution = dns_resolution.get('domains', [])
-        # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
-
-        if 'src' in ip_state:
+        if 'src' in type_detection:
             direction = 'from'
-        elif 'dst' in ip_state:
+        elif 'dst' in type_detection:
             direction = 'to'
         ip_identification = __database__.getIPIdentification(ip)
         description = (
@@ -100,8 +96,7 @@ class Module(Module, multiprocessing.Process):
             f' Source: {ip_info["source"]}. Description: {ip_info["description"]}'
         )
 
-        tags_temp = ip_info.get('tags', False)
-        if tags_temp:
+        if tags_temp := ip_info.get('tags', False):
             # We need tags_temp so we avoid doing a replace on a bool.
             tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
         else:
@@ -157,24 +152,17 @@ class Module(Module, multiprocessing.Process):
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
-        confidence = 1
-        if is_subdomain:
-            confidence = 0.7
-
+        confidence = 0.7 if is_subdomain else 1
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
         tags = (
             domain_info.get('tags', False)
-            .replace('[', '')
-            .replace(']', '')
-            .replace("'", '')
+                .replace('[', '')
+                .replace(']', '')
+                .replace("'", '')
         )
-        if tags:
-            source_target_tag = tags.capitalize()
-        else:
-            source_target_tag = 'BlacklistedDomain'
-
+        source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
         description = (
             f'connection to a blacklisted domain {domain}. '
             f'Found in feed {domain_info["source"]}, with tags {tags}. '
@@ -229,7 +217,7 @@ class Module(Module, multiprocessing.Process):
         line_number = 0
         with open(ti_file_path) as local_ti_file:
 
-            self.print('Reading local file {}'.format(ti_file_path), 2, 0)
+            self.print(f'Reading local file {ti_file_path}', 2, 0)
 
             # skip comments
             while True:
@@ -381,7 +369,7 @@ class Module(Module, multiprocessing.Process):
         line_number = 0
 
         with open(path) as local_ja3_file:
-            self.print('Reading local file {}'.format(path), 2, 0)
+            self.print(f'Reading local file {path}', 2, 0)
 
             # skip comments
             while True:
@@ -444,9 +432,7 @@ class Module(Module, multiprocessing.Process):
 
             # In the case of the local file, we dont store the e-tag
             # we calculate the hash
-            new_hash = utils.get_hash_from_file(
-                path_to_files + '/' + localfile
-            )
+            new_hash = utils.get_hash_from_file(f'{path_to_files}/{localfile}')
 
             if not new_hash:
                 # Something failed. Do not download
@@ -461,8 +447,7 @@ class Module(Module, multiprocessing.Process):
                 # The 2 hashes are identical. File is up to date.
                 self.print(f'File {localfile} is up to date.', 2, 0)
 
-                return True
-            elif old_hash != new_hash:
+            else:
                 # Our malicious file was changed. Load the new one
                 self.print(f'Updating the local TI file {localfile}', 2, 0)
                 if old_hash:
@@ -479,20 +464,16 @@ class Module(Module, multiprocessing.Process):
                     self.parse_ti_file(full_path_to_file)
 
                 # Store the new etag and time of file in the database
-                malicious_file_info = {}
-                malicious_file_info['e-tag'] = new_hash
-                malicious_file_info['time'] = ''
+                malicious_file_info = {'e-tag': new_hash, 'time': ''}
                 __database__.set_TI_file_info(localfile, malicious_file_info)
-                return True
+            return True
 
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         """
         Set malicious IP in IPsInfo.
         """
 
-        ip_data = {}
-        # Maybe we should change the key to 'status' or something like that.
-        ip_data['threatintelligence'] = ip_description
+        ip_data = {'threatintelligence': ip_description}
         __database__.setInfoForIPs(
             ip, ip_data
         )  # Set in the IP info that IP is blacklisted
@@ -503,9 +484,7 @@ class Module(Module, multiprocessing.Process):
         a blacklisted IP or not.
         """
 
-        if protocol == 'ICMP' and ip_state == 'dstip':
-            return True
-        return False
+        return protocol == 'ICMP' and ip_state == 'dstip'
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing

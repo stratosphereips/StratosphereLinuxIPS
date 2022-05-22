@@ -158,7 +158,7 @@ class Module(Module, multiprocessing.Process):
             self.asn_db = maxminddb.open_database(
                 'databases/GeoLite2-ASN.mmdb'
             )
-        except:
+        except Exception:
             self.print(
                 'Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. '
                 'Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en '
@@ -170,7 +170,7 @@ class Module(Module, multiprocessing.Process):
             self.country_db = maxminddb.open_database(
                 'databases/GeoLite2-Country.mmdb'
             )
-        except:
+        except Exception:
             self.print(
                 'Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. '
                 'Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. '
@@ -214,8 +214,7 @@ class Module(Module, multiprocessing.Process):
         if not hasattr(self, 'country_db'):
             return False
 
-        geoinfo = self.country_db.get(ip)
-        if geoinfo:
+        if geoinfo := self.country_db.get(ip):
             try:
                 countrydata = geoinfo['country']
                 countryname = countrydata['names']['en']
@@ -237,9 +236,7 @@ class Module(Module, multiprocessing.Process):
         returns the family of the IP, AF_INET or AF_INET6
         :param ip: str
         """
-        if ':' in ip:
-            return socket.AF_INET6
-        return socket.AF_INET
+        return socket.AF_INET6 if ':' in ip else socket.AF_INET
 
     def get_rdns(self, ip):
         """
@@ -267,6 +264,7 @@ class Module(Module, multiprocessing.Process):
 
     # MAC functions
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
+        # sourcery skip: remove-redundant-pass
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
@@ -278,13 +276,12 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
-        MAC_vendor = __database__.get_mac_vendor_from_profile(profileid)
-        if MAC_vendor:
+        if MAC_vendor := __database__.get_mac_vendor_from_profile(profileid):
             return True
 
         MAC_info = {'MAC': mac_addr}
         if host_name:
-            MAC_info.update({'host_name': host_name})
+            MAC_info['host_name'] = host_name
 
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
@@ -294,13 +291,13 @@ class Module(Module, multiprocessing.Process):
             if line == '':
                 # reached the end of file without finding the vendor
                 # set the vendor to unknown to avoid searching for it again
-                MAC_info.update({'Vendor': 'Unknown'})
+                MAC_info['Vendor'] = 'Unknown'
                 break
 
             if oui in line:
                 line = json.loads(line)
                 vendor = line['companyName']
-                MAC_info.update({'Vendor': vendor})
+                MAC_info['Vendor'] = vendor
                 break
 
         if MAC_info['Vendor'] == 'Unknown':
@@ -315,9 +312,8 @@ class Module(Module, multiprocessing.Process):
                         '[', ''
                     )
                     online_info = json.loads(online_info)
-                    vendor = online_info.get('company', False)
-                    if vendor:
-                        MAC_info.update({'Vendor': vendor})
+                    if vendor := online_info.get('company', False):
+                        MAC_info['Vendor'] = vendor
                 else:
                     # If there is no match in the online database,
                     # you will receive an empty response with a status code of HTTP/1.1 204 No Content
@@ -382,7 +378,7 @@ class Module(Module, multiprocessing.Process):
             # no creation date was found for this domain
             return False
 
-        today = datetime.datetime.today()
+        today = datetime.datetime.now()
 
         # calculate age
         day = today.day - creation_date.day
@@ -433,8 +429,7 @@ class Module(Module, multiprocessing.Process):
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query', False)
-                    if domain:
+                    if domain := flow_data.get('query', False):
                         self.get_age(domain)
 
                 message = self.c1.get_message(timeout=self.timeout)
@@ -464,8 +459,8 @@ class Module(Module, multiprocessing.Process):
                         # ------ GeoCountry -------
                         # Get the geocountry
                         if (
-                            cached_ip_info == {}
-                            or 'geocountry' not in cached_ip_info
+                                cached_ip_info == {}
+                                or 'geocountry' not in cached_ip_info
                         ):
                             self.get_geocountry(ip)
 
@@ -473,10 +468,10 @@ class Module(Module, multiprocessing.Process):
                         # Get the ASN
                         # only update the ASN for this IP if more than 1 month
                         # passed since last ASN update on this IP
-                        update_asn = self.asn.update_asn(
-                            cached_ip_info, self.update_period
-                        )
-                        if update_asn:
+                        if update_asn := self.asn.update_asn(
+                                cached_ip_info,
+                                self.update_period
+                        ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
 

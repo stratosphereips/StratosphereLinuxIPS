@@ -62,14 +62,12 @@ class FileEventHandler(RegexMatchingEventHandler):
             for file in os.listdir('zeek_files/'):
                 if 'reporter' in file:
                     with open(f'zeek_files/{file}', 'r') as f:
-                        line = f.readline()
-                        while line:
+                        while line := f.readline():
                             if 'termination' in line:
                                 # to use shutdown gracefully we need to get slips.py PID and send it a sigint
                                 PIDs = __database__.get_PIDs()
                                 pid = PIDs['slips.py']
                                 os.kill(int(pid), signal.SIGINT)
                                 break
-                            line = f.readline()
         if 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')
