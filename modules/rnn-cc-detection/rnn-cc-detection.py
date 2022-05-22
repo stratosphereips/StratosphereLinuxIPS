@@ -6,6 +6,7 @@ from slips_files.common.slips_utils import utils
 import platform
 import warnings
 import json
+
 # Your imports
 import numpy as np
 import sys
@@ -54,12 +55,21 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def set_evidence(self, score, confidence, uid, timestamp, tupleid='', profileid='', twid=''):
-        '''
+    def set_evidence(
+        self,
+        score,
+        confidence,
+        uid,
+        timestamp,
+        tupleid='',
+        profileid='',
+        twid='',
+    ):
+        """
         Set an evidence for malicious Tuple
-        '''
+        """
 
         # to reduce false positives
         if score < 0.99:
@@ -75,14 +85,27 @@ class Module(Module, multiprocessing.Process):
         portproto = f'{port}/{proto}'
         port_info = __database__.get_port_info(portproto)
         ip_identification = __database__.getIPIdentification(dstip)
-        description = f'C&C channel, destination IP: {dstip} ' \
-                      f'port: {port_info.upper() if port_info else ""} {portproto} ' \
-                      f'score: {format(score, ".4f")}. {ip_identification}'
-        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                 threat_level, confidence, description, timestamp,
-                                 categroy, source_target_tag=source_target_tag,
-                                 port=port, proto=proto,
-                                 profileid=profileid, twid=twid, uid=uid)
+        description = (
+            f'C&C channel, destination IP: {dstip} '
+            f'port: {port_info.upper() if port_info else ""} {portproto} '
+            f'score: {format(score, ".4f")}. {ip_identification}'
+        )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            categroy,
+            source_target_tag=source_target_tag,
+            port=port,
+            proto=proto,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -96,7 +119,7 @@ class Module(Module, multiprocessing.Process):
         max_length = 500
 
         # Convert each of the stratosphere letters to an integer. There are 50
-        vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
+        vocabulary = list('abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*')
         int_of_letters = {}
         for i, letter in enumerate(vocabulary):
             int_of_letters[letter] = float(i)
@@ -113,11 +136,15 @@ class Module(Module, multiprocessing.Process):
         # self.print(f'Padded Seq sent: {pre_behavioral_model}')
 
         # Convert to ndarray
-        pre_behavioral_model = np.array([[int_of_letters[i]] for i in pre_behavioral_model])
+        pre_behavioral_model = np.array(
+            [[int_of_letters[i]] for i in pre_behavioral_model]
+        )
         # self.print(f'The sequence has shape {pre_behavioral_model.shape}')
 
         # Reshape into (1, 500, 1) We need the first 1, because this is one sample only, but keras expects a 3d vector
-        pre_behavioral_model = np.reshape(pre_behavioral_model, (1, max_length, 1))
+        pre_behavioral_model = np.reshape(
+            pre_behavioral_model, (1, max_length, 1)
+        )
 
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
@@ -127,7 +154,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
-    def run(self, model_file="modules/rnn-cc-detection/rnn_model.h5"):
+    def run(self, model_file='modules/rnn-cc-detection/rnn_model.h5'):
         utils.drop_root_privs()
         # TODO: set the decision threshold in the function call
         try:
@@ -170,20 +197,44 @@ class Module(Module, multiprocessing.Process):
                         # Define why this threshold
                         threshold = 0.7
                         # function to convert each letter of behavioral model to ascii
-                        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+                        behavioral_model = self.convert_input_for_module(
+                            pre_behavioral_model
+                        )
                         # predict the score of behavioral model being c&c channel
-                        self.print(f'predicting the sequence: {pre_behavioral_model}', 3, 0)
+                        self.print(
+                            f'predicting the sequence: {pre_behavioral_model}',
+                            3,
+                            0,
+                        )
                         score = tcpmodel.predict(behavioral_model)
-                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 3, 0)
+                        self.print(
+                            f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
+                            3,
+                            0,
+                        )
                         # get a float instead of numpy array
                         score = score[0][0]
                         if score > threshold:
                             threshold_confidence = 100
-                            if len(pre_behavioral_model) >= threshold_confidence:
+                            if (
+                                len(pre_behavioral_model)
+                                >= threshold_confidence
+                            ):
                                 confidence = 1
                             else:
-                                confidence = len(pre_behavioral_model)/threshold_confidence
-                            self.set_evidence(score, confidence, uid, stime, tupleid, profileid, twid)
+                                confidence = (
+                                    len(pre_behavioral_model)
+                                    / threshold_confidence
+                                )
+                            self.set_evidence(
+                                score,
+                                confidence,
+                                uid,
+                                stime,
+                                tupleid,
+                                profileid,
+                                twid,
+                            )
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold

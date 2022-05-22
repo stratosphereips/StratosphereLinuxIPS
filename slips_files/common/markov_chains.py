@@ -6,11 +6,13 @@
 import math
 import sys
 
+
 class Matrix(dict):
-    """ The basic matrix object """
+    """The basic matrix object"""
+
     def __init__(self, *args, **kw):
-        super(Matrix,self).__init__(*args, **kw)
-        self.itemlist = super(Matrix,self).keys()
+        super(Matrix, self).__init__(*args, **kw)
+        self.itemlist = super(Matrix, self).keys()
 
     def set_init_vector(self, init_vector):
         self.init_vector = init_vector
@@ -34,38 +36,38 @@ class Matrix(dict):
             # The len of the states should be > 1 because a state of only one char does NOT have any transition.
             while index < len(states) - 1 and len(states) > 1:
                 statestuple = (states[index], states[index + 1])
-                #print '\t\ttuple to search: {}'.format(statestuple)
+                # print '\t\ttuple to search: {}'.format(statestuple)
                 try:
                     prob12 = math.log(float(self[statestuple]))
-                    #print '\t\tValue for this tuple: {}'.format(self[statestuple])
-                    #print '\t\tprob12 inside {} (decimal {})'.format(prob12, math.exp(prob12))
+                    # print '\t\tValue for this tuple: {}'.format(self[statestuple])
+                    # print '\t\tprob12 inside {} (decimal {})'.format(prob12, math.exp(prob12))
                 except KeyError:
                     # The transition is not in the matrix
-                    #print '\t\twalk key error. The transition is not in the matrix'
-                    #prob12 = float('-inf')
+                    # print '\t\twalk key error. The transition is not in the matrix'
+                    # prob12 = float('-inf')
                     cum_prob = float('-inf')
                     break
-                #except IndexError:
-                    #print '\t\twalk index error'
+                # except IndexError:
+                # print '\t\twalk index error'
                 cum_prob += prob12
-                #print '\t\ttotal prob so far {}'.format(cum_prob)
+                # print '\t\ttotal prob so far {}'.format(cum_prob)
                 index += 1
-            #print '\t\tFinal Prob (log): {}'.format(cum_prob)
+            # print '\t\tFinal Prob (log): {}'.format(cum_prob)
             return cum_prob
         except Exception as err:
-            print( type(err))
-            print( err.args)
-            print( err)
+            print(type(err))
+            print(err.args)
+            print(err)
             sys.exit(-1)
 
 
 def maximum_likelihood_probabilities(states, order=1):
-    """ Our own second order Markov Chain implementation """
+    """Our own second order Markov Chain implementation"""
     initial_matrix = {}
     initial_vector = {}
     total_transitions = 0
     amount_of_states = len(states)
-    #print 'Receiving {} states to compute the Markov Matrix of {} order'.format(amount_of_states, order)
+    # print 'Receiving {} states to compute the Markov Matrix of {} order'.format(amount_of_states, order)
     # 1st order
     if order == 1:
         # Create matrix
@@ -98,14 +100,18 @@ def maximum_likelihood_probabilities(states, order=1):
         init_vector = {}
         for state1 in initial_matrix:
             # Create the init vector
-            init_vector[state1] = initial_vector[state1] / float(total_transitions)
+            init_vector[state1] = initial_vector[state1] / float(
+                total_transitions
+            )
             for state2 in initial_matrix[state1]:
                 value = initial_matrix[state1][state2]
-                initial_matrix[state1][state2] = value / float(initial_vector[state1])
+                initial_matrix[state1][state2] = value / float(
+                    initial_vector[state1]
+                )
                 # Change the style of the matrix
-                matrix[(state1,state2)] = initial_matrix[state1][state2]
+                matrix[(state1, state2)] = initial_matrix[state1][state2]
         matrix.set_init_vector(init_vector)
-        #print init_vector
-        #for value in matrix:
+        # print init_vector
+        # for value in matrix:
         #    print value, matrix[value]
     return (init_vector, matrix)

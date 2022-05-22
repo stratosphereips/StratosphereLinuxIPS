@@ -3,8 +3,8 @@ import platform
 import psutil
 import pwd
 
-class Notify:
 
+class Notify:
     def setup_notifications(self):
         """
         Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
@@ -31,7 +31,7 @@ class Notify:
             user = str(psutil.users()[0].name)
         else:
             # get the first user from the 'who' command
-            user = cmd_output.split("\n")[0].split()[0]
+            user = cmd_output.split('\n')[0].split()[0]
 
         # get the uid
         uid = pwd.getpwnam(user).pw_uid
@@ -46,4 +46,6 @@ class Notify:
             #  is notify_cmd is set in setup_notifications function depending on the user
             os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
         elif platform.system() == 'Darwin':
-            os.system(f"osascript -e 'display notification \"{alert_to_log}\" with title \"Slips\"' ")
+            os.system(
+                f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
+            )

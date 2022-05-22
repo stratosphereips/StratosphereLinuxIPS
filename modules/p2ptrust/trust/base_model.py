@@ -14,7 +14,7 @@ class BaseModel(Model):
         self.reliability_weight = 0.7
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print("[TrustDB] " + text, verbose, debug)
+        self.printer.print('[TrustDB] ' + text, verbose, debug)
 
     def get_opinion_on_ip(self, ipaddr: str) -> (float, float, float):
         """
@@ -33,12 +33,18 @@ class BaseModel(Model):
         reports_on_ip = self.trustdb.get_opinion_on_ip(ipaddr)
         if len(reports_on_ip) == 0:
             return None, None
-        combined_score, combined_confidence = self.assemble_peer_opinion(reports_on_ip)
+        combined_score, combined_confidence = self.assemble_peer_opinion(
+            reports_on_ip
+        )
 
-        self.trustdb.update_cached_network_opinion("ip", ipaddr, combined_score, combined_confidence, 0)
+        self.trustdb.update_cached_network_opinion(
+            'ip', ipaddr, combined_score, combined_confidence, 0
+        )
         return combined_score, combined_confidence
 
-    def compute_peer_trust(self, reliability: float, score: float, confidence: float) -> float:
+    def compute_peer_trust(
+        self, reliability: float, score: float, confidence: float
+    ) -> float:
         """
         Compute the opinion value from a peer by multiplying his report data and his reputation
 
@@ -48,7 +54,9 @@ class BaseModel(Model):
         :return: The trust we should put in the report given by this peer
         """
 
-        return ((reliability * self.reliability_weight) + (score * confidence))/2
+        return (
+            (reliability * self.reliability_weight) + (score * confidence)
+        ) / 2
 
     def normalize_peer_reputations(self, peers: list) -> (float, float, list):
         """
@@ -61,11 +69,13 @@ class BaseModel(Model):
         """
 
         # move trust values from [-1, 1] to [0, 1]
-        normalized_trust = [(t + 1)/2 for t in peers]
+        normalized_trust = [(t + 1) / 2 for t in peers]
 
         normalize_net_trust_sum = sum(normalized_trust)
 
-        weighted_trust = [nt / normalize_net_trust_sum for nt in normalized_trust]
+        weighted_trust = [
+            nt / normalize_net_trust_sum for nt in normalized_trust
+        ]
         return weighted_trust
 
     def assemble_peer_opinion(self, data: list) -> (float, float, float):
@@ -85,13 +95,27 @@ class BaseModel(Model):
         reporters = []
 
         for peer_report in data:
-            report_score, report_confidence, reporter_reliability, reporter_score, reporter_confidence = peer_report
+            (
+                report_score,
+                report_confidence,
+                reporter_reliability,
+                reporter_score,
+                reporter_confidence,
+            ) = peer_report
             reports.append((report_score, report_confidence))
-            reporters.append(self.compute_peer_trust(reporter_reliability, reporter_score, reporter_confidence))
+            reporters.append(
+                self.compute_peer_trust(
+                    reporter_reliability, reporter_score, reporter_confidence
+                )
+            )
 
         weighted_reporters = self.normalize_peer_reputations(reporters)
 
-        combined_score = sum([r[0]*w for r, w, in zip(reports, weighted_reporters)])
-        combined_confidence = sum([max(0, r[1]*w) for r, w, in zip(reports, reporters)])/len(reporters)
+        combined_score = sum(
+            [r[0] * w for r, w, in zip(reports, weighted_reporters)]
+        )
+        combined_confidence = sum(
+            [max(0, r[1] * w) for r, w, in zip(reports, reporters)]
+        ) / len(reporters)
 
         return combined_score, combined_confidence

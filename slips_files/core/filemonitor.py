@@ -24,8 +24,9 @@ from watchdog.events import RegexMatchingEventHandler
 from .database import __database__
 from slips_files.common.slips_utils import utils
 
+
 class FileEventHandler(RegexMatchingEventHandler):
-    REGEX = [r".*\.log$", r".*\.conf$"]
+    REGEX = [r'.*\.log$', r'.*\.conf$']
 
     def __init__(self, config, redis_port):
         super().__init__(self.REGEX)
@@ -40,20 +41,17 @@ class FileEventHandler(RegexMatchingEventHandler):
             __database__.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
-        """ this will be triggered everytime zeek renames all log files"""
+        """this will be triggered everytime zeek renames all log files"""
         # tell inputProcess to delete old files
         if event.dest_path != 'True':
-            to_send = {'old_file': event.dest_path,
-                       'new_file': event.src_path}
+            to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
             to_send = json.dumps(to_send)
-            __database__.publish("remove_old_files", to_send)
+            __database__.publish('remove_old_files', to_send)
             # give inputProc.py time to close the handle and delete the file
             time.sleep(3)
 
-
-
     def on_modified(self, event):
-        """ this will be triggered everytime zeek modifies a log file"""
+        """this will be triggered everytime zeek modifies a log file"""
         # we only need to know modifications to reporter.log,
         # so if zeek recieves a termination signal,
         # slips would know about it
@@ -63,7 +61,7 @@ class FileEventHandler(RegexMatchingEventHandler):
             # get the exact file name (a ts is appended to it)
             for file in os.listdir('zeek_files/'):
                 if 'reporter' in file:
-                    with open(f'zeek_files/{file}','r') as f:
+                    with open(f'zeek_files/{file}', 'r') as f:
                         line = f.readline()
                         while line:
                             if 'termination' in line:
@@ -74,4 +72,4 @@ class FileEventHandler(RegexMatchingEventHandler):
                                 break
                             line = f.readline()
         if 'whitelist' in filename:
-            __database__.publish("reload_whitelist", "reload")
+            __database__.publish('reload_whitelist', 'reload')

@@ -10,7 +10,6 @@ import sys
 import json
 
 
-
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ensembling'
@@ -60,17 +59,17 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def set_label_per_flow_dstip(self, profileid, twid):
-        '''
+        """
         Funciton to perform first and second stage of the ensembling.
         Function assigns ensembling label per each flow in this profileid and twid,
         groups the flows with same destination IP, and calculates the amount
         of normal and malicious flows per each dstip in this profileid and twid.
         : param: profileid, twid
         : return: None
-        '''
+        """
 
         flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
         dstip_labels_total = dict()
@@ -86,16 +85,38 @@ class Module(Module, multiprocessing.Process):
             try:
                 dstip_labels_total[flow_data['daddr']]
             except KeyError as err:
-                dstip_labels_total[flow_data['daddr']] = {self.normal_label: 0, self.malicious_label:0}
+                dstip_labels_total[flow_data['daddr']] = {
+                    self.normal_label: 0,
+                    self.malicious_label: 0,
+                }
 
-            if malicious_label_total == normal_label_total == 0 or normal_label_total > malicious_label_total:
-                __database__.set_first_stage_ensembling_label_to_flow(profileid, twid, flow_uid, self.normal_label)
+            if (
+                malicious_label_total == normal_label_total == 0
+                or normal_label_total > malicious_label_total
+            ):
+                __database__.set_first_stage_ensembling_label_to_flow(
+                    profileid, twid, flow_uid, self.normal_label
+                )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
-                dstip_labels_total[flow_data['daddr']][self.normal_label] = dstip_labels_total[flow_data['daddr']].get(self.normal_label, 0) + 1
+                dstip_labels_total[flow_data['daddr']][self.normal_label] = (
+                    dstip_labels_total[flow_data['daddr']].get(
+                        self.normal_label, 0
+                    )
+                    + 1
+                )
             elif malicious_label_total >= normal_label_total:
-                __database__.set_first_stage_ensembling_label_to_flow(profileid, twid, flow_uid, self.malicious_label)
+                __database__.set_first_stage_ensembling_label_to_flow(
+                    profileid, twid, flow_uid, self.malicious_label
+                )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
-                dstip_labels_total[flow_data['daddr']][self.malicious_label] = dstip_labels_total[flow_data['daddr']].get(self.malicious_label, 0) + 1
+                dstip_labels_total[flow_data['daddr']][
+                    self.malicious_label
+                ] = (
+                    dstip_labels_total[flow_data['daddr']].get(
+                        self.malicious_label, 0
+                    )
+                    + 1
+                )
 
     def run(self):
         utils.drop_root_privs()

@@ -11,6 +11,7 @@ import os
 import json
 import sys
 
+
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RiskIQ'
@@ -29,17 +30,23 @@ class Module(Module, multiprocessing.Process):
         self.timeout = 0
         self.read_configuration()
 
-
     def read_configuration(self):
         try:
             # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get('threatintelligence', 'RiskIQ_credentials_path')
-            with open(RiskIQ_credentials_path,'r') as f:
-                self.riskiq_email = f.readline().replace('\n','')
-                self.riskiq_key = f.readline().replace('\n','')
+            RiskIQ_credentials_path = self.config.get(
+                'threatintelligence', 'RiskIQ_credentials_path'
+            )
+            with open(RiskIQ_credentials_path, 'r') as f:
+                self.riskiq_email = f.readline().replace('\n', '')
+                self.riskiq_key = f.readline().replace('\n', '')
                 if len(self.riskiq_key) != 64:
                     raise NameError
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError, FileNotFoundError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+            FileNotFoundError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_email = None
             self.riskiq_key = None
@@ -62,8 +69,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
-
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def get_passive_dns(self, ip) -> list:
         """
@@ -82,7 +88,11 @@ class Module(Module, multiprocessing.Process):
             results = response.get('results', False)
             if results:
                 for pt_results in results:
-                    pt_data[pt_results['lastSeen']] = [pt_results['firstSeen'], pt_results['resolve'], pt_results['collected']]
+                    pt_data[pt_results['lastSeen']] = [
+                        pt_results['firstSeen'],
+                        pt_results['resolve'],
+                        pt_results['collected'],
+                    ]
                 # Sort them by datetime and convert to list, sort the first 10 entries only
                 sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
             else:
@@ -96,7 +106,6 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
 
     def run(self):
         utils.drop_root_privs()

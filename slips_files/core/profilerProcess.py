@@ -36,14 +36,11 @@ from .whitelist import Whitelist
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
-    """ A class to create the profiles for IPs and the rest of data """
-    def __init__(self,
-                 inputqueue,
-                 outputqueue,
-                 verbose,
-                 debug,
-                 config,
-                 redis_port):
+    """A class to create the profiles for IPs and the rest of data"""
+
+    def __init__(
+        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+    ):
         self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -91,20 +88,32 @@ class ProfilerProcess(multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """ Read the configuration file for what we need """
+        """Read the configuration file for what we need"""
         # Get the home net if we have one from the config
         try:
-            self.home_net = ipaddress.ip_network(self.config.get('parameters', 'home_network'))
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.home_net = ipaddress.ip_network(
+                self.config.get('parameters', 'home_network')
+            )
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.home_net = False
         try:
-            self.whitelist_path = self.config.get('parameters', 'whitelist_path')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.whitelist_path = self.config.get(
+                'parameters', 'whitelist_path'
+            )
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             self.whitelist_path = 'whitelist.conf'
 
         # Get the time window width, if it was not specified as a parameter
@@ -119,43 +128,64 @@ class ProfilerProcess(multiprocessing.Process):
         except configparser.NoOptionError:
             # By default we use 3600 seconds, 1hs
             self.width = 3600
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no
             # configuration file specified
             self.width = 3600
 
         # Report the time window width
         if self.width == 9999999999:
-            self.print(f'Time Windows Width used: {self.width} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.', 3, 0)
+            self.print(
+                f'Time Windows Width used: {self.width} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.',
+                3,
+                0,
+            )
         else:
             self.print(f'Time Windows Width used: {self.width} seconds.', 3, 0)
 
         # Get the format of the time in the flows
         try:
             self.timeformat = self.config.get('timestamp', 'format')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # This has to be None, beacause we try to detect the time format below, if it is None.
             self.timeformat = None
         ##
         # Get the direction of analysis
         try:
-            self.analysis_direction = self.config.get('parameters', 'analysis_direction')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.analysis_direction = self.config.get(
+                'parameters', 'analysis_direction'
+            )
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.analysis_direction = 'all'
         # Get the default label for all this flow. Used during training usually
         try:
             self.label = self.config.get('parameters', 'label')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # By default
             self.label = 'unknown'
 
-
     def read_whitelist(self):
-        """ Reads the content of whitelist.conf and stores information about each ip/org/domain in the database """
+        """Reads the content of whitelist.conf and stores information about each ip/org/domain in the database"""
 
         # since this function can be run when the user modifies whitelist.conf
         # we need to check if the dicts are already there
@@ -170,7 +200,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line_number = 0
                 line = whitelist.readline()
                 while line:
-                    line_number+=1
+                    line_number += 1
                     if line.startswith('"IoCType"'):
                         line = whitelist.readline()
                         continue
@@ -180,26 +210,39 @@ class ProfilerProcess(multiprocessing.Process):
                         if whitelisted_IPs:
                             for ip in list(whitelisted_IPs):
                                 # make sure the user commented the line we have in cache exactly
-                                if ip in line and whitelisted_IPs[ip]['from'] in line\
-                                        and whitelisted_IPs[ip]['what_to_ignore'] in line:
+                                if (
+                                    ip in line
+                                    and whitelisted_IPs[ip]['from'] in line
+                                    and whitelisted_IPs[ip]['what_to_ignore']
+                                    in line
+                                ):
                                     # remove that entry from whitelisted_ips
                                     whitelisted_IPs.pop(ip)
                                     break
 
                         if whitelisted_domains:
                             for domain in list(whitelisted_domains):
-                                if domain in line \
-                                and whitelisted_domains[domain]['from'] in line \
-                                and whitelisted_domains[domain]['what_to_ignore'] in line:
+                                if (
+                                    domain in line
+                                    and whitelisted_domains[domain]['from']
+                                    in line
+                                    and whitelisted_domains[domain][
+                                        'what_to_ignore'
+                                    ]
+                                    in line
+                                ):
                                     # remove that entry from whitelisted_domains
                                     whitelisted_domains.pop(domain)
                                     break
 
                         if whitelisted_orgs:
                             for org in list(whitelisted_orgs):
-                                if org in line \
-                                and whitelisted_orgs[org]['from'] in line \
-                                and whitelisted_orgs[org]['what_to_ignore'] in line:
+                                if (
+                                    org in line
+                                    and whitelisted_orgs[org]['from'] in line
+                                    and whitelisted_orgs[org]['what_to_ignore']
+                                    in line
+                                ):
                                     # remove that entry from whitelisted_domains
                                     whitelisted_orgs.pop(org)
                                     break
@@ -207,64 +250,84 @@ class ProfilerProcess(multiprocessing.Process):
                         line = whitelist.readline()
                         continue
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
-                    line = line.replace("\n","").replace(" ","").split(",")
+                    line = line.replace('\n', '').replace(' ', '').split(',')
                     try:
-                        type_, data, from_, what_to_ignore = (line[0]).lower(), line[1], line[2], line[3]
+                        type_, data, from_, what_to_ignore = (
+                            (line[0]).lower(),
+                            line[1],
+                            line[2],
+                            line[3],
+                        )
                     except IndexError:
                         # line is missing a column, ignore it.
-                        self.print(f"Line {line_number} in whitelist.conf is missing a column. Skipping.")
+                        self.print(
+                            f'Line {line_number} in whitelist.conf is missing a column. Skipping.'
+                        )
                         line = whitelist.readline()
                         continue
 
                     # Validate the type before processing
                     try:
-                        if ('ip' in type_ and
-                            (validators.ip_address.ipv6(data)
-                             or validators.ip_address.ipv4(data))):
-                            whitelisted_IPs[data] = {'from': from_,
-                                                     'what_to_ignore': what_to_ignore}
+                        if 'ip' in type_ and (
+                            validators.ip_address.ipv6(data)
+                            or validators.ip_address.ipv4(data)
+                        ):
+                            whitelisted_IPs[data] = {
+                                'from': from_,
+                                'what_to_ignore': what_to_ignore,
+                            }
                         elif 'domain' in type_ and validators.domain(data):
-                            whitelisted_domains[data] = {'from': from_,
-                                                         'what_to_ignore': what_to_ignore}
+                            whitelisted_domains[data] = {
+                                'from': from_,
+                                'what_to_ignore': what_to_ignore,
+                            }
                         elif 'mac' in type_ and validators.mac_address(data):
-                            whitelisted_mac[data] = {'from': from_,
-                                                    'what_to_ignore': what_to_ignore}
+                            whitelisted_mac[data] = {
+                                'from': from_,
+                                'what_to_ignore': what_to_ignore,
+                            }
                         elif 'org' in type_:
-                            #organizations dicts look something like this:
+                            # organizations dicts look something like this:
                             #  {'google': {'from':'dst',
                             #               'what_to_ignore': 'alerts'
                             #               'IPs': {'34.64.0.0/10': subnet}}
                             try:
                                 # org already whitelisted, update info
                                 whitelisted_orgs[data]['from'] = from_
-                                whitelisted_orgs[data]['what_to_ignore'] = what_to_ignore
+                                whitelisted_orgs[data][
+                                    'what_to_ignore'
+                                ] = what_to_ignore
                             except KeyError:
                                 # first time seeing this org
-                                whitelisted_orgs[data] = {'from' : from_,
-                                                          'what_to_ignore' : what_to_ignore}
+                                whitelisted_orgs[data] = {
+                                    'from': from_,
+                                    'what_to_ignore': what_to_ignore,
+                                }
 
                         else:
-                            self.print(f"{data} is not a valid {type_}.",1,0)
+                            self.print(f'{data} is not a valid {type_}.', 1, 0)
                     except:
-                        self.print(f"Line {line_number} in whitelist.conf is invalid. Skipping.")
+                        self.print(
+                            f'Line {line_number} in whitelist.conf is invalid. Skipping.'
+                        )
                     line = whitelist.readline()
         except FileNotFoundError:
-            self.print(f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead")
+            self.print(
+                f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead"
+            )
             if self.whitelist_path != 'whitelist.conf':
                 self.whitelist_path = 'whitelist.conf'
                 self.whitelist.read_whitelist()
 
-
-
         # store everything in the cache db because we'll be needing this info in the evidenceProcess
-        __database__.set_whitelist("IPs", whitelisted_IPs)
-        __database__.set_whitelist("domains", whitelisted_domains)
-        __database__.set_whitelist("organizations", whitelisted_orgs)
-        __database__.set_whitelist("mac", whitelisted_mac)
+        __database__.set_whitelist('IPs', whitelisted_IPs)
+        __database__.set_whitelist('domains', whitelisted_domains)
+        __database__.set_whitelist('organizations', whitelisted_orgs)
+        __database__.set_whitelist('mac', whitelisted_mac)
 
         return line_number
 
-    def load_org_asn(self, org) -> list :
+    def load_org_asn(self, org) -> list:
         """
         Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
@@ -272,13 +335,13 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # Each file is named after the organization's name followed by _asn
-            org_asn =[]
+            org_asn = []
             file = f'slips_files/organizations_info/{org}_asn'
-            with open(file,'r') as f:
+            with open(file, 'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace("\n","").strip()
+                    line = line.replace('\n', '').strip()
                     # Read all as upper
                     org_asn.append(line.upper())
                     line = f.readline()
@@ -288,14 +351,15 @@ class ProfilerProcess(multiprocessing.Process):
             # theres no slips_files/organizations_info/{org}_asn for this org
             # see if the org has asn cached in our db
             asn_cache = __database__.get_asn_cache()
-            org_asn =[]
+            org_asn = []
             for asn in asn_cache:
                 if org in asn.lower():
                     org_asn.append(org)
-            if org_asn != []: return org_asn
+            if org_asn != []:
+                return org_asn
             return False
 
-    def load_org_domains(self, org) -> list :
+    def load_org_domains(self, org) -> list:
         """
         Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
         org: 'google', 'facebook', 'twitter', etc...
@@ -303,20 +367,20 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # Each file is named after the organization's name followed by _domains
-            domains =[]
+            domains = []
             file = f'slips_files/organizations_info/{org}_domains'
-            with open(file,'r') as f:
+            with open(file, 'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace("\n","").strip()
+                    line = line.replace('\n', '').strip()
                     domains.append(line.lower())
                     line = f.readline()
             return domains
         except (FileNotFoundError, IOError):
             return False
 
-    def load_org_IPs(self, org) -> list :
+    def load_org_IPs(self, org) -> list:
         """
         Reads the specified org's info from slips_files/organizations_info and stores the info in the database
         if there's no file for this org, it get the IP ranges from asnlookup.com
@@ -328,11 +392,11 @@ class ProfilerProcess(multiprocessing.Process):
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
             org_subnets = []
             file = f'slips_files/organizations_info/{org}'
-            with open(file,'r') as f:
+            with open(file, 'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
-                    line = line.replace("\n","").strip()
+                    line = line.replace('\n', '').strip()
                     try:
                         # make sure this line is a valid network
                         is_valid_line = ipaddress.ip_network(line)
@@ -347,14 +411,18 @@ class ProfilerProcess(multiprocessing.Process):
             org_subnets = []
             # see if we can get asn about this org
             try:
-                response = requests.get('http://asnlookup.com/api/lookup?org=' + org.replace('_', ' '),
-                                        headers ={  'User-Agent': 'ASNLookup PY/Client'}, timeout = 10)
+                response = requests.get(
+                    'http://asnlookup.com/api/lookup?org='
+                    + org.replace('_', ' '),
+                    headers={'User-Agent': 'ASNLookup PY/Client'},
+                    timeout=10,
+                )
             except requests.exceptions.ConnectionError:
                 # Connection reset by peer
                 return False
             ip_space = json.loads(response.text)
             if ip_space:
-                with open(f'slips_files/organizations_info/{org}','w') as f:
+                with open(f'slips_files/organizations_info/{org}', 'w') as f:
                     for subnet in ip_space:
                         # get ipv4 only
                         if ':' not in subnet:
@@ -448,33 +516,36 @@ class ProfilerProcess(multiprocessing.Process):
             return self.input_type
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'\tProblem in define_type() line {exception_line}', 0, 1)
+            self.print(
+                f'\tProblem in define_type() line {exception_line}', 0, 1
+            )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
     def define_columns(self, new_line):
-        """ Define the columns for Argus and Zeek-tabs from the line received """
+        """Define the columns for Argus and Zeek-tabs from the line received"""
         # These are the indexes for later fast processing
         line = new_line['data']
         self.column_idx = {
-            'starttime' : False,
-            'endtime' : False,
-            'dur' : False,
-            'proto' : False,
-            'appproto' : False,
-            'saddr' : False,
-            'sport' : False,
-            'dir' : False,
-            'daddr' : False,
-            'dport' : False,
-            'state' : False,
-            'pkts' : False,
-            'spkts' : False,
-            'dpkts' : False,
-            'bytes' : False,
-            'sbytes' : False,
-            'dbytes' : False}
+            'starttime': False,
+            'endtime': False,
+            'dur': False,
+            'proto': False,
+            'appproto': False,
+            'saddr': False,
+            'sport': False,
+            'dir': False,
+            'daddr': False,
+            'dport': False,
+            'state': False,
+            'pkts': False,
+            'spkts': False,
+            'dpkts': False,
+            'bytes': False,
+            'sbytes': False,
+            'dbytes': False,
+        }
 
         try:
             nline = line.strip().split(self.separator)
@@ -509,14 +580,19 @@ class ProfilerProcess(multiprocessing.Process):
             # We need a temp dict because we can not change the size of dict while analyzing it
             temp_dict = {}
             for i in self.column_idx:
-                if type(self.column_idx[i]) == bool and self.column_idx[i] == False:
+                if (
+                    type(self.column_idx[i]) == bool
+                    and self.column_idx[i] == False
+                ):
                     continue
                 temp_dict[i] = self.column_idx[i]
             self.column_idx = temp_dict
             return self.column_idx
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'\tProblem in define_columns() line {exception_line}', 0, 1)
+            self.print(
+                f'\tProblem in define_columns() line {exception_line}', 0, 1
+            )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst), 0, 1)
             sys.exit(1)
@@ -534,13 +610,17 @@ class ProfilerProcess(multiprocessing.Process):
             self.timeformat = utils.define_time_format(time)
             if not self.timeformat:
                 # We did not find the right time format.
-                self.outputqueue.put("01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+                self.outputqueue.put(
+                    '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
+                )
         defined_datetime: datetime = None
         if self.timeformat:
             if self.timeformat == 'unixtimestamp':
                 # The format of time is in epoch unix timestamp.
                 # Correct datetime according to the current timezone
-                defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                defined_datetime = datetime.fromtimestamp(
+                    float(time), self.local_timezone
+                )
             else:
                 try:
                     # The format of time is a complete date.
@@ -550,24 +630,25 @@ class ProfilerProcess(multiprocessing.Process):
                     # the local zone when nothing is specified.
                     # https://docs.python.org/3/library/datetime.html#datetime.timezone
                     # convert epoch to datetime obj and use the current timezone
-                    #self.print(time)
-                    #self.print(self.local_timezone)
-                    #defined_datetime = datetime.strptime(time, self.timeformat)#.astimezone(self.local_timezone)
-                    #defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
-                    #defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                    # self.print(time)
+                    # self.print(self.local_timezone)
+                    # defined_datetime = datetime.strptime(time, self.timeformat)#.astimezone(self.local_timezone)
+                    # defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
+                    # defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
                     # convert dt obj to user specified tiemformat
-                    #defined_datetime = defined_datetime.strftime(self.timeformat)
+                    # defined_datetime = defined_datetime.strftime(self.timeformat)
                     defined_datetime = time
                 except ValueError:
                     defined_datetime = None
         else:
             # We do not know the time format so we can not read it.
             self.outputqueue.put(
-                "01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.")
+                '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
+            )
 
         # if defined_datetime is None and self.timeformat:
-            # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
-            # pass
+        # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
+        # pass
         return defined_datetime
 
     def process_zeek_tabs_input(self, new_line: str) -> None:
@@ -613,7 +694,9 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dur'] = float(line[8])
             except (IndexError, ValueError):
                 self.column_values['dur'] = 0
-            self.column_values['endtime'] = str(self.column_values['starttime']) + str(timedelta(seconds=self.column_values['dur']))
+            self.column_values['endtime'] = str(
+                self.column_values['starttime']
+            ) + str(timedelta(seconds=self.column_values['dur']))
             self.column_values['proto'] = line[6]
             try:
                 self.column_values['appproto'] = line[7]
@@ -641,7 +724,9 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dpkts'] = float(line[18])
             except (IndexError, ValueError):
                 self.column_values['dpkts'] = 0
-            self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
+            self.column_values['pkts'] = (
+                self.column_values['spkts'] + self.column_values['dpkts']
+            )
             try:
                 self.column_values['sbytes'] = float(line[9])
             except (IndexError, ValueError):
@@ -650,7 +735,9 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dbytes'] = float(line[10])
             except (IndexError, ValueError):
                 self.column_values['dbytes'] = 0
-            self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
+            self.column_values['bytes'] = (
+                self.column_values['sbytes'] + self.column_values['dbytes']
+            )
             try:
                 self.column_values['state_hist'] = line[15]
             except IndexError:
@@ -694,7 +781,9 @@ class ProfilerProcess(multiprocessing.Process):
                 if type(self.column_values['answers']) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    self.column_values['answers'] =[self.column_values['answers']]
+                    self.column_values['answers'] = [
+                        self.column_values['answers']
+                    ]
             except IndexError:
                 self.column_values['answers'] = ''
             try:
@@ -817,7 +906,6 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['is_DoH'] = ''
 
-
         elif 'ssh.log' in new_line['type']:
             self.column_values['type'] = 'ssh'
             try:
@@ -914,9 +1002,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'dhcp'
             #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
             self.column_values['daddr'] = line[3]
-            self.column_values['client_addr'] = line[2] # the same as saddr
+            self.column_values['client_addr'] = line[2]   # the same as saddr
             self.column_values['server_addr'] = line[3]
-            self.column_values['mac'] = line[4] # this is the client mac
+            self.column_values['mac'] = line[4]   # this is the client mac
             self.column_values['host_name'] = line[5]
             self.column_values['saddr'] = self.column_values['client_addr']
             self.column_values['daddr'] = self.column_values['server_addr']
@@ -959,13 +1047,13 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel.log' in new_line['type']:
             self.column_values['type'] = 'tunnel'
         elif 'notice.log' in new_line['type']:
-            #fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
+            # fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] == '-' :
+            if self.column_values['saddr'] == '-':
                 try:
-                    self.column_values['saddr'] = line[13] #  src field
+                    self.column_values['saddr'] = line[13]   #  src field
                 except IndexError:
                     # line doesn't have a p field
                     # keep it - as it is
@@ -976,10 +1064,10 @@ class ProfilerProcess(multiprocessing.Process):
                 if self.column_values['daddr'] == '-':
                     self.column_values['daddr'] = self.column_values['saddr']
 
-            self.column_values['dport'] = line[5] # id.orig_p
+            self.column_values['dport'] = line[5]   # id.orig_p
             if self.column_values['dport'] == '-':
                 try:
-                    self.column_values['dport'] = line[15] # p field
+                    self.column_values['dport'] = line[15]   # p field
                 except IndexError:
                     # line doesn't have a p field
                     # keep it - as it is
@@ -987,21 +1075,27 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['sport'] = line[3]
             self.column_values['note'] = line[10]
             self.column_values['scanning_ip'] = self.column_values['saddr']
-            self.column_values['scanned_port'] =  self.column_values['dport']
-            self.column_values['msg'] = line[11] # we're looking for self signed certs in this field
+            self.column_values['scanned_port'] = self.column_values['dport']
+            self.column_values['msg'] = line[
+                11
+            ]   # we're looking for self signed certs in this field
         elif 'files.log' in new_line['type']:
-            """ Parse the fields we're interested in in the files.log file """
+            """Parse the fields we're interested in in the files.log file"""
             # the slash before files to distinguish between 'files' in the dir name and file.log
-            self.column_values.update({'type' :'files',
-                                'uid' : line[4],
-                                'saddr' : line[2],
-                                'daddr' : line[3], #rx_hosts
-                                'size' : line[13], # downloaded file size
-                                'md5' : line[19],
-                                # used for detecting ssl certs
-                                'source' : line[5],
-                                'analyzers' : line[7],
-                                'sha1' : line[19]})
+            self.column_values.update(
+                {
+                    'type': 'files',
+                    'uid': line[4],
+                    'saddr': line[2],
+                    'daddr': line[3],  # rx_hosts
+                    'size': line[13],  # downloaded file size
+                    'md5': line[19],
+                    # used for detecting ssl certs
+                    'source': line[5],
+                    'analyzers': line[7],
+                    'sha1': line[19],
+                }
+            )
 
         elif 'arp.log' in new_line['type']:
             self.column_values['type'] = 'arp'
@@ -1035,17 +1129,16 @@ class ProfilerProcess(multiprocessing.Process):
         # We need to set it to empty at the beggining so any new flow has the key 'type'
         self.column_values['type'] = ''
 
-
         # to set the default value to '' if ts isn't found
-        ts = line.get('ts',False)
+        ts = line.get('ts', False)
         if ts:
             self.column_values['starttime'] = self.get_time(ts)
         else:
             self.column_values['starttime'] = ''
 
-        self.column_values['uid'] = line.get('uid',False)
-        self.column_values['saddr'] = line.get('id.orig_h','')
-        self.column_values['daddr'] = line.get('id.resp_h','')
+        self.column_values['uid'] = line.get('uid', False)
+        self.column_values['saddr'] = line.get('id.orig_h', '')
+        self.column_values['daddr'] = line.get('id.resp_h', '')
 
         # Handle each zeek file type separately
         if 'conn' in file_type:
@@ -1055,125 +1148,161 @@ class ProfilerProcess(multiprocessing.Process):
             # 'orig_ip_bytes': 58, 'resp_pkts': 1, 'resp_ip_bytes': 122, 'orig_l2_addr': 'b8:27:eb:6a:47:b8',
             # 'resp_l2_addr': 'a6:d1:8c:1f:ce:64', 'type': './zeek_files/conn'}
 
-            self.column_values.update({
-                'type' :  'conn',
-                'dur': float(line.get('duration',0)),
-                'endtime' : str(self.column_values['starttime']) + str(timedelta(seconds=float(line.get('duration',0)))),
-                'proto' : line['proto'],
-                'appproto' : line.get('service',''),
-                'sport' : line.get('id.orig_p',''),
-                'dport' : line.get('id.resp_p',''),
-                'state' : line.get('conn_state',''),
-                'dir' : '->',
-                'spkts' : line.get('orig_pkts',0),
-                'dpkts' : line.get('resp_pkts',0),
-                'sbytes' : line.get('orig_bytes',0),
-                'dbytes' : line.get('resp_bytes',0),
-                'pkts' : line.get('orig_bytes',0) + line.get('resp_pkts',0),
-                'bytes' :  line.get('orig_bytes',0) + line.get('resp_bytes',0),
-                'state_hist' : line.get('history', line.get('conn_state','')),
-                'smac': line.get('orig_l2_addr',''),
-                'dmac' : line.get('resp_l2_addr','')})
+            self.column_values.update(
+                {
+                    'type': 'conn',
+                    'dur': float(line.get('duration', 0)),
+                    'endtime': str(self.column_values['starttime'])
+                    + str(timedelta(seconds=float(line.get('duration', 0)))),
+                    'proto': line['proto'],
+                    'appproto': line.get('service', ''),
+                    'sport': line.get('id.orig_p', ''),
+                    'dport': line.get('id.resp_p', ''),
+                    'state': line.get('conn_state', ''),
+                    'dir': '->',
+                    'spkts': line.get('orig_pkts', 0),
+                    'dpkts': line.get('resp_pkts', 0),
+                    'sbytes': line.get('orig_bytes', 0),
+                    'dbytes': line.get('resp_bytes', 0),
+                    'pkts': line.get('orig_bytes', 0)
+                    + line.get('resp_pkts', 0),
+                    'bytes': line.get('orig_bytes', 0)
+                    + line.get('resp_bytes', 0),
+                    'state_hist': line.get(
+                        'history', line.get('conn_state', '')
+                    ),
+                    'smac': line.get('orig_l2_addr', ''),
+                    'dmac': line.get('resp_l2_addr', ''),
+                }
+            )
 
         elif 'dns' in file_type:
-            #{"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
-            self.column_values.update({'type' : 'dns',
-                                'query' : line.get('query',''),
-                                'qclass_name' : line.get('qclass_name',''),
-                                'qtype_name' : line.get('qtype_name',''),
-                                'rcode_name' : line.get('rcode_name',''),
-                                'answers' : line.get('answers',''),
-                                'TTLs' : line.get('TTLs','')})
+            # {"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
+            self.column_values.update(
+                {
+                    'type': 'dns',
+                    'query': line.get('query', ''),
+                    'qclass_name': line.get('qclass_name', ''),
+                    'qtype_name': line.get('qtype_name', ''),
+                    'rcode_name': line.get('rcode_name', ''),
+                    'answers': line.get('answers', ''),
+                    'TTLs': line.get('TTLs', ''),
+                }
+            )
 
             if type(self.column_values['answers']) == str:
                 # If the answer is only 1, Zeek gives a string
                 # so convert to a list
-                self.column_values.update({'answers' : [self.column_values['answers']] })
+                self.column_values.update(
+                    {'answers': [self.column_values['answers']]}
+                )
 
         elif 'http' in file_type:
             # {"ts":158.957403,"uid":"CnNLbE2dyfy5KyqEhh","id.orig_h":"10.0.2.105","id.orig_p":49158,"id.resp_h":"64.182.208.181","id.resp_p":80,"trans_depth":1,"method":"GET","host":"icanhazip.com","uri":"/","version":"1.1","user_agent":"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.38 (KHTML, like Gecko) Chrome/45.0.2456.99 Safari/537.38","request_body_len":0,"response_body_len":13,"status_code":200,"status_msg":"OK","tags":[],"resp_fuids":["FwraVxIOACcjkaGi3"],"resp_mime_types":["text/plain"]}
-            self.column_values.update({'type' : 'http',
-                 'method' : line.get('method',''),
-                 'host' : line.get('host',''),
-                 'uri' : line.get('uri',''),
-                 'httpversion' : line.get('version',0),
-                 'user_agent' : line.get('user_agent',''),
-                 'request_body_len' : line.get('request_body_len',0),
-                 'response_body_len' : line.get('response_body_len',0),
-                 'status_code' : line.get('status_code',''),
-                 'status_msg' : line.get('status_msg',''),
-                 'resp_mime_types' : line.get('resp_mime_types',''),
-                 'resp_fuids' : line.get('resp_fuids','')})
+            self.column_values.update(
+                {
+                    'type': 'http',
+                    'method': line.get('method', ''),
+                    'host': line.get('host', ''),
+                    'uri': line.get('uri', ''),
+                    'httpversion': line.get('version', 0),
+                    'user_agent': line.get('user_agent', ''),
+                    'request_body_len': line.get('request_body_len', 0),
+                    'response_body_len': line.get('response_body_len', 0),
+                    'status_code': line.get('status_code', ''),
+                    'status_msg': line.get('status_msg', ''),
+                    'resp_mime_types': line.get('resp_mime_types', ''),
+                    'resp_fuids': line.get('resp_fuids', ''),
+                }
+            )
 
         elif 'ssl' in file_type:
             # {"ts":12087.045499,"uid":"CdoFDp4iW79I5ZmsT7","id.orig_h":"10.0.2.105","id.orig_p":49704,"id.resp_h":"195.211.240.166","id.resp_p":443,"version":"SSLv3","cipher":"TLS_RSA_WITH_RC4_128_SHA","resumed":false,"established":true,"cert_chain_fuids":["FhGp1L3yZXuURiPqq7"],"client_cert_chain_fuids":[],"subject":"OU=DAHUATECH,O=DAHUA,L=HANGZHOU,ST=ZHEJIANG,C=CN,CN=192.168.1.108","issuer":"O=DahuaTech,L=HangZhou,ST=ZheJiang,C=CN,CN=Product Root CA","validation_status":"unable to get local issuer certificate"}
             # {"ts":1382354909.915615,"uid":"C7W6ZA4vI8FxJ9J0bh","id.orig_h":"147.32.83.53","id.orig_p":36567,"id.resp_h":"195.113.214.241","id.resp_p":443,"version":"TLSv12","cipher":"TLS_ECDHE_ECDSA_WITH_RC4_128_SHA","curve":"secp256r1","server_name":"id.google.com.ar","resumed":false,"established":true,"cert_chain_fuids":["FnomJz1vghKIOHtytf","FSvQff1KsaDkRtKXo4","Fif2PF48bytqq6xMDb"],"client_cert_chain_fuids":[],"subject":"CN=*.google.com,O=Google Inc,L=Mountain View,ST=California,C=US","issuer":"CN=Google Internet Authority G2,O=Google Inc,C=US","validation_status":"ok"}
-            self.column_values.update({'type' :'ssl',
-                 'sslversion' : line.get('version',''),
-                 'sport' : line.get('id.orig_p',','),
-                 'dport' : line.get('id.resp_p',','),
-                 'cipher' : line.get('cipher',''),
-                 'resumed' : line.get('resumed',''),
-                 'established' : line.get('established',''),
-                 'cert_chain_fuids' : line.get('cert_chain_fuids',''),
-                 'client_cert_chain_fuids' : line.get('client_cert_chain_fuids',''),
-                 'subject' : line.get('subject',''),
-                 'issuer' : line.get('issuer',''),
-                 'validation_status' : line.get('validation_status',''),
-                 'curve' : line.get('curve',''),
-                 'server_name' : line.get('server_name',''),
-                 'ja3': line.get('ja3',''),
-                 'is_DoH': line.get('is_DoH', 'false'),
-                 'ja3s' : line.get('ja3s','')})
+            self.column_values.update(
+                {
+                    'type': 'ssl',
+                    'sslversion': line.get('version', ''),
+                    'sport': line.get('id.orig_p', ','),
+                    'dport': line.get('id.resp_p', ','),
+                    'cipher': line.get('cipher', ''),
+                    'resumed': line.get('resumed', ''),
+                    'established': line.get('established', ''),
+                    'cert_chain_fuids': line.get('cert_chain_fuids', ''),
+                    'client_cert_chain_fuids': line.get(
+                        'client_cert_chain_fuids', ''
+                    ),
+                    'subject': line.get('subject', ''),
+                    'issuer': line.get('issuer', ''),
+                    'validation_status': line.get('validation_status', ''),
+                    'curve': line.get('curve', ''),
+                    'server_name': line.get('server_name', ''),
+                    'ja3': line.get('ja3', ''),
+                    'is_DoH': line.get('is_DoH', 'false'),
+                    'ja3s': line.get('ja3s', ''),
+                }
+            )
 
         elif 'ssh' in file_type:
-            self.column_values.update({
-                'type': 'ssh',
-                'version': line.get('version',''),
-                'auth_success': line.get('auth_success',''),
-                'auth_attempts': line.get('auth_attempts',''),
-                'client': line.get('client',''),
-                'server': line.get('server',''),
-                'cipher_alg': line.get('cipher_alg',''),
-                'mac_alg': line.get('mac_alg',''),
-                'compression_alg': line.get('compression_alg',''),
-                'kex_alg': line.get('kex_alg',''),
-                'host_key_alg': line.get('host_key_alg',''),
-                'host_key': line.get('host_key','')})
+            self.column_values.update(
+                {
+                    'type': 'ssh',
+                    'version': line.get('version', ''),
+                    'auth_success': line.get('auth_success', ''),
+                    'auth_attempts': line.get('auth_attempts', ''),
+                    'client': line.get('client', ''),
+                    'server': line.get('server', ''),
+                    'cipher_alg': line.get('cipher_alg', ''),
+                    'mac_alg': line.get('mac_alg', ''),
+                    'compression_alg': line.get('compression_alg', ''),
+                    'kex_alg': line.get('kex_alg', ''),
+                    'host_key_alg': line.get('host_key_alg', ''),
+                    'host_key': line.get('host_key', ''),
+                }
+            )
 
         elif 'irc' in file_type:
             self.column_values.update({'type': 'irc'})
         elif 'long' in file_type:
             self.column_values.update({'type': 'long'})
         elif 'dhcp' in file_type:
-            self.column_values.update({
-                'type' :  'dhcp',
-                'client_addr' : line.get('client_addr',''),
-                'server_addr' : line.get('server_addr',''),
-                'host_name' : line.get('host_name',''),
-                'mac' : line.get('mac',''), # this is the client mac
-                'saddr' : line.get('client_addr',''),
-                'daddr' : line.get('server_addr','')})
+            self.column_values.update(
+                {
+                    'type': 'dhcp',
+                    'client_addr': line.get('client_addr', ''),
+                    'server_addr': line.get('server_addr', ''),
+                    'host_name': line.get('host_name', ''),
+                    'mac': line.get('mac', ''),  # this is the client mac
+                    'saddr': line.get('client_addr', ''),
+                    'daddr': line.get('server_addr', ''),
+                }
+            )
 
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
 
-             # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
-            if (self.column_values['saddr'] == '' and self.column_values['daddr'] == ''
-                and line.get('mac',False) ):
-                self.column_values.update({'saddr' : line.get('mac','')})
+            # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
+            if (
+                self.column_values['saddr'] == ''
+                and self.column_values['daddr'] == ''
+                and line.get('mac', False)
+            ):
+                self.column_values.update({'saddr': line.get('mac', '')})
 
         elif 'dce_rpc' in file_type:
             self.column_values.update({'type': 'dce_rpc'})
         elif 'dnp3' in file_type:
             self.column_values.update({'type': 'dnp3'})
         elif 'ftp' in file_type:
-            self.column_values.update({
-                'type': 'ftp',
-                'used_port': line.get("data_channel.resp_p",False)})
+            self.column_values.update(
+                {
+                    'type': 'ftp',
+                    'used_port': line.get('data_channel.resp_p', False),
+                }
+            )
 
         elif 'kerberos' in file_type:
-            self.column_values.update({'type':'kerberos'})
+            self.column_values.update({'type': 'kerberos'})
         elif 'mysql' in file_type:
             self.column_values.update({'type': 'mysql'})
         elif 'modbus' in file_type:
@@ -1191,9 +1320,9 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'smb_mapping' in file_type:
             self.column_values.update({'type': 'smb_mapping'})
         elif 'smtp' in file_type:
-            self.column_values.update({'type': 'smtp',
-                                       'last_reply': line.get('last_reply','')
-                                       })
+            self.column_values.update(
+                {'type': 'smtp', 'last_reply': line.get('last_reply', '')}
+            )
         elif 'socks' in file_type:
             self.column_values.update({'type': 'socks'})
         elif 'syslog' in file_type:
@@ -1201,68 +1330,91 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'tunnel' in file_type:
             self.column_values.update({'type': 'tunnel'})
         elif 'notice' in file_type:
-            """ Parse the fields we're interested in in the notice.log file """
+            """Parse the fields we're interested in in the notice.log file"""
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
-            self.column_values.update({'type' : 'notice',
-                                'sport' : line.get('id.orig_p', ''),
-                                'dport' : line.get('id.resp_p', ''),
-                                # self.column_values['scanned_ip'] = line.get('dst', '')
-                                'note' : line.get('note', ''),
-                                'msg' : line.get('msg', ''), # we,'re looking for self signed certs in this field
-                                'scanned_port' : line.get('p', ''),
-                                'scanning_ip' : line.get('src', '')})
+            self.column_values.update(
+                {
+                    'type': 'notice',
+                    'sport': line.get('id.orig_p', ''),
+                    'dport': line.get('id.resp_p', ''),
+                    # self.column_values['scanned_ip'] = line.get('dst', '')
+                    'note': line.get('note', ''),
+                    'msg': line.get(
+                        'msg', ''
+                    ),  # we,'re looking for self signed certs in this field
+                    'scanned_port': line.get('p', ''),
+                    'scanning_ip': line.get('src', ''),
+                }
+            )
 
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] == '' :
-                self.column_values.update({'saddr' : line.get('src','' )})
+            if self.column_values['saddr'] == '':
+                self.column_values.update({'saddr': line.get('src', '')})
             if self.column_values['daddr'] == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
-                self.column_values.update({'daddr' : line.get('dst', self.column_values['saddr']) })
+                self.column_values.update(
+                    {'daddr': line.get('dst', self.column_values['saddr'])}
+                )
 
         elif 'files.log' in file_type:
-            """ Parse the fields we're interested in in the files.log file """
+            """Parse the fields we're interested in in the files.log file"""
             # the slash before files to distinguish between 'files' in the dir name and file.log
-            self.column_values.update({'type' :'files',
-                                'uid' : line.get('conn_uids',[''])[0],
-                                'saddr' : line.get('tx_hosts',[''])[0],
-                                'daddr' : line.get('rx_hosts',[''])[0],
-                                'size' : line.get('seen_bytes', ''), # downloaded file size
-                                'md5' : line.get('md5', ''),
-                                # used for detecting ssl certs
-                                'source' : line.get('source', ''),
-                                'analyzers' : line.get('analyzers', ''),
-                                'sha1' : line.get('sha1', '')})
+            self.column_values.update(
+                {
+                    'type': 'files',
+                    'uid': line.get('conn_uids', [''])[0],
+                    'saddr': line.get('tx_hosts', [''])[0],
+                    'daddr': line.get('rx_hosts', [''])[0],
+                    'size': line.get('seen_bytes', ''),  # downloaded file size
+                    'md5': line.get('md5', ''),
+                    # used for detecting ssl certs
+                    'source': line.get('source', ''),
+                    'analyzers': line.get('analyzers', ''),
+                    'sha1': line.get('sha1', ''),
+                }
+            )
 
         elif 'arp' in file_type:
-            self.column_values.update({'type' : 'arp',
-                                'src_mac' : line.get('src_mac', ''),
-                                'dst_mac' : line.get('dst_mac', ''),
-                                'saddr' : line.get('orig_h',''),
-                                'daddr' : line.get('resp_h',''),
-                                'dst_hw' : line.get('resp_hw',''),
-                                'src_hw' : line.get('orig_hw',''),
-                                'operation' : line.get('operation','') })
+            self.column_values.update(
+                {
+                    'type': 'arp',
+                    'src_mac': line.get('src_mac', ''),
+                    'dst_mac': line.get('dst_mac', ''),
+                    'saddr': line.get('orig_h', ''),
+                    'daddr': line.get('resp_h', ''),
+                    'dst_hw': line.get('resp_hw', ''),
+                    'src_hw': line.get('orig_hw', ''),
+                    'operation': line.get('operation', ''),
+                }
+            )
         elif 'known_services' in file_type:
-            self.column_values.update({'type': 'known_services',
-                                'saddr' : line.get('host', ''),
-                                # this file doesn't have a daddr field, but we need it in add_flow_to_profile
-                                'daddr' : '0.0.0.0',
-                                'port_num' : line.get('port_num', ''),
-                                'port_proto' : line.get('port_proto', ''),
-                                'service' : line.get('service', '')})
+            self.column_values.update(
+                {
+                    'type': 'known_services',
+                    'saddr': line.get('host', ''),
+                    # this file doesn't have a daddr field, but we need it in add_flow_to_profile
+                    'daddr': '0.0.0.0',
+                    'port_num': line.get('port_num', ''),
+                    'port_proto': line.get('port_proto', ''),
+                    'service': line.get('service', ''),
+                }
+            )
         elif 'software' in file_type:
             software_type = line.get('software_type', '')
             # store info about everything except http:broswer
             # we're already reading browser UA from http.log
-            if software_type == "HTTP::BROWSER":
+            if software_type == 'HTTP::BROWSER':
                 return True
-            self.column_values.update({'type' : 'software',
-                                       'saddr': line.get('host', ''),
-                                       'software_type': software_type,
-                                       'unparsed_version': line.get('unparsed_version', ''),
-                                       'version.major':  line.get('version.major', ''),
-                                       'version.minor':   line.get('version.minor', '')
-                                       })
+            self.column_values.update(
+                {
+                    'type': 'software',
+                    'saddr': line.get('host', ''),
+                    'software_type': software_type,
+                    'unparsed_version': line.get('unparsed_version', ''),
+                    'version.major': line.get('version.major', ''),
+                    'version.minor': line.get('version.minor', ''),
+                }
+            )
         else:
             return False
         return True
@@ -1273,29 +1425,32 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         self.column_values = {
-            'starttime' : False,
-            'endtime' : False,
-            'dur' : False,
-            'proto' : False,
-            'appproto' : False,
-            'saddr' : False,
-            'sport' : False,
-            'dir' : False,
-            'daddr' : False,
-            'dport' : False,
-            'state' : False,
-            'pkts' : False,
-            'spkts' : False,
-            'dpkts' : False,
-            'bytes' : False,
-            'sbytes' : False,
-            'dbytes' : False,
-            'type' : 'argus'}
+            'starttime': False,
+            'endtime': False,
+            'dur': False,
+            'proto': False,
+            'appproto': False,
+            'saddr': False,
+            'sport': False,
+            'dir': False,
+            'daddr': False,
+            'dport': False,
+            'state': False,
+            'pkts': False,
+            'spkts': False,
+            'dpkts': False,
+            'bytes': False,
+            'sbytes': False,
+            'dbytes': False,
+            'type': 'argus',
+        }
 
         # Read the lines fast
         nline = line.strip().split(self.separator)
         try:
-            self.column_values['starttime'] = self.get_time(nline[self.column_idx['starttime']])
+            self.column_values['starttime'] = self.get_time(
+                nline[self.column_idx['starttime']]
+            )
         except KeyError:
             pass
         try:
@@ -1355,11 +1510,15 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['sbytes'] = int(nline[self.column_idx['sbytes']])
+            self.column_values['sbytes'] = int(
+                nline[self.column_idx['sbytes']]
+            )
         except KeyError:
             pass
         try:
-            self.column_values['dbytes'] = int(nline[self.column_idx['dbytes']])
+            self.column_values['dbytes'] = int(
+                nline[self.column_idx['dbytes']]
+            )
         except KeyError:
             pass
 
@@ -1369,24 +1528,25 @@ class ProfilerProcess(multiprocessing.Process):
         """
         self.separator = ','
         self.column_values = {
-            'starttime' : False,
-            'endtime' : False,
-            'dur' : False,
-            'proto' : False,
-            'appproto' : False,
-            'saddr' : False,
-            'sport' : False,
-            'dir' : False,
-            'daddr' : False,
-            'dport' : False,
-            'state' : False,
-            'pkts' : False,
-            'spkts' : False,
-            'dpkts' : False,
-            'bytes' : False,
-            'sbytes' : False,
-            'dbytes' : False,
-            'type' : 'nfdump'}
+            'starttime': False,
+            'endtime': False,
+            'dur': False,
+            'proto': False,
+            'appproto': False,
+            'saddr': False,
+            'sport': False,
+            'dir': False,
+            'daddr': False,
+            'dport': False,
+            'state': False,
+            'pkts': False,
+            'spkts': False,
+            'dpkts': False,
+            'bytes': False,
+            'sbytes': False,
+            'dbytes': False,
+            'type': 'nfdump',
+        }
         # Read the lines fast
         line = new_line['data']
         nline = line.strip().split(self.separator)
@@ -1440,7 +1600,9 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['pkts'] = self.column_values['spkts'] + self.column_values['dpkts']
+            self.column_values['pkts'] = (
+                self.column_values['spkts'] + self.column_values['dpkts']
+            )
         except IndexError:
             pass
         try:
@@ -1452,15 +1614,17 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['bytes'] = self.column_values['sbytes'] + self.column_values['dbytes']
+            self.column_values['bytes'] = (
+                self.column_values['sbytes'] + self.column_values['dbytes']
+            )
         except IndexError:
             pass
 
     def process_suricata_input(self, line) -> None:
-        """ Read suricata json input """
+        """Read suricata json input"""
 
         # convert to dict if it's not a dict already
-        if type(line)== str:
+        if type(line) == str:
             # lien is the actual data
             line = json.loads(line)
         else:
@@ -1470,7 +1634,6 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyError:
                 # can't find the line!
                 return True
-
 
         self.column_values: dict = {}
         try:
@@ -1484,19 +1647,19 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = False
         self.column_values['endtime'] = False
         self.column_values['dur'] = 0
-        self.column_values['flow_id'] = line.get('flow_id',False)
-        self.column_values['saddr'] = line.get('src_ip',False)
-        self.column_values['sport'] = line.get('src_port',False)
-        self.column_values['daddr'] = line.get('dest_ip',False)
-        self.column_values['dport'] = line.get('dest_port',False)
-        self.column_values['proto'] = line.get('proto',False)
-        self.column_values['type'] = line.get('event_type',False)
+        self.column_values['flow_id'] = line.get('flow_id', False)
+        self.column_values['saddr'] = line.get('src_ip', False)
+        self.column_values['sport'] = line.get('src_port', False)
+        self.column_values['daddr'] = line.get('dest_ip', False)
+        self.column_values['dport'] = line.get('dest_port', False)
+        self.column_values['proto'] = line.get('proto', False)
+        self.column_values['type'] = line.get('event_type', False)
         self.column_values['dir'] = '->'
-        self.column_values['appproto'] = line.get('app_proto',False)
+        self.column_values['appproto'] = line.get('app_proto', False)
 
         if self.column_values['type']:
             """
-            event_type: 
+            event_type:
             -flow
             -tls
             -http
@@ -1513,47 +1676,68 @@ class ProfilerProcess(multiprocessing.Process):
                     try:
                         # Define time again, because this is line of flow type and
                         # we do not want timestamp but start time.
-                        self.column_values['starttime'] = self.get_time(line['flow']['start'])
+                        self.column_values['starttime'] = self.get_time(
+                            line['flow']['start']
+                        )
                     except KeyError:
                         self.column_values['starttime'] = False
                     try:
-                        self.column_values['endtime'] = self.get_time(line['flow']['end'])
+                        self.column_values['endtime'] = self.get_time(
+                            line['flow']['end']
+                        )
                     except KeyError:
                         self.column_values['endtime'] = False
 
                     try:
-                        self.column_values['dur'] = (self.column_values['endtime'] - self.column_values['starttime']).total_seconds()
+                        self.column_values['dur'] = (
+                            self.column_values['endtime']
+                            - self.column_values['starttime']
+                        ).total_seconds()
                     except (KeyError, TypeError):
                         self.column_values['dur'] = 0
                     try:
-                        self.column_values['spkts'] = line['flow']['pkts_toserver']
+                        self.column_values['spkts'] = line['flow'][
+                            'pkts_toserver'
+                        ]
                     except KeyError:
                         self.column_values['spkts'] = 0
                     try:
-                        self.column_values['dpkts'] = line['flow']['pkts_toclient']
+                        self.column_values['dpkts'] = line['flow'][
+                            'pkts_toclient'
+                        ]
                     except KeyError:
                         self.column_values['dpkts'] = 0
 
-                    self.column_values['pkts'] = self.column_values['dpkts'] + self.column_values['spkts']
+                    self.column_values['pkts'] = (
+                        self.column_values['dpkts']
+                        + self.column_values['spkts']
+                    )
 
                     try:
-                        self.column_values['sbytes'] = line['flow']['bytes_toserver']
+                        self.column_values['sbytes'] = line['flow'][
+                            'bytes_toserver'
+                        ]
                     except KeyError:
                         self.column_values['sbytes'] = 0
 
                     try:
-                        self.column_values['dbytes'] = line['flow']['bytes_toclient']
+                        self.column_values['dbytes'] = line['flow'][
+                            'bytes_toclient'
+                        ]
                     except KeyError:
                         self.column_values['dbytes'] = 0
 
-                    self.column_values['bytes'] = self.column_values['dbytes'] + self.column_values['sbytes']
+                    self.column_values['bytes'] = (
+                        self.column_values['dbytes']
+                        + self.column_values['sbytes']
+                    )
 
                     try:
                         """
-                        There are different states in which a flow can be. 
-                        Suricata distinguishes three flow-states for TCP and two for UDP. For TCP, 
+                        There are different states in which a flow can be.
+                        Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
                         these are: New, Established and Closed,for UDP only new and established.
-                        For each of these states Suricata can employ different timeouts. 
+                        For each of these states Suricata can employ different timeouts.
                         """
                         self.column_values['state'] = line['flow']['state']
                     except KeyError:
@@ -1561,7 +1745,9 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.column_values['type'] == 'http':
                 if line.get('http', None):
                     try:
-                        self.column_values['method'] = line['http']['http_method']
+                        self.column_values['method'] = line['http'][
+                            'http_method'
+                        ]
                     except KeyError:
                         self.column_values['method'] = ''
                     try:
@@ -1573,23 +1759,33 @@ class ProfilerProcess(multiprocessing.Process):
                     except KeyError:
                         self.column_values['uri'] = ''
                     try:
-                        self.column_values['user_agent'] = line['http']['http_user_agent']
+                        self.column_values['user_agent'] = line['http'][
+                            'http_user_agent'
+                        ]
                     except KeyError:
                         self.column_values['user_agent'] = ''
                     try:
-                        self.column_values['status_code'] = line['http']['status']
+                        self.column_values['status_code'] = line['http'][
+                            'status'
+                        ]
                     except KeyError:
                         self.column_values['status_code'] = ''
                     try:
-                        self.column_values['httpversion'] = line['http']['protocol']
+                        self.column_values['httpversion'] = line['http'][
+                            'protocol'
+                        ]
                     except KeyError:
                         self.column_values['httpversion'] = ''
                     try:
-                        self.column_values['response_body_len'] = line['http']['length']
+                        self.column_values['response_body_len'] = line['http'][
+                            'length'
+                        ]
                     except KeyError:
                         self.column_values['response_body_len'] = 0
                     try:
-                        self.column_values['request_body_len'] = line['http']['request_body_len']
+                        self.column_values['request_body_len'] = line['http'][
+                            'request_body_len'
+                        ]
                     except KeyError:
                         self.column_values['request_body_len'] = 0
                     self.column_values['status_msg'] = ''
@@ -1608,7 +1804,9 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['TTLs'] = ''
 
                     try:
-                        self.column_values['qtype_name'] = line['dns']['rrtype']
+                        self.column_values['qtype_name'] = line['dns'][
+                            'rrtype'
+                        ]
                     except KeyError:
                         self.column_values['qtype_name'] = ''
                     # can not find in eve.json:
@@ -1618,11 +1816,15 @@ class ProfilerProcess(multiprocessing.Process):
                     if type(self.column_values['answers']) == str:
                         # If the answer is only 1, Zeek gives a string
                         # so convert to a list
-                        self.column_values['answers'] = [self.column_values['answers']]
+                        self.column_values['answers'] = [
+                            self.column_values['answers']
+                        ]
             elif self.column_values['type'] == 'tls':
                 if line.get('tls', None):
                     try:
-                        self.column_values['sslversion'] = line['tls']['version']
+                        self.column_values['sslversion'] = line['tls'][
+                            'version'
+                        ]
                     except KeyError:
                         self.column_values['sslversion'] = ''
                     try:
@@ -1639,26 +1841,36 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['server_name'] = ''
 
                     try:
-                        self.column_values['notbefore'] = datetime.strptime((line['tls']['notbefore']), '%Y-%m-%dT%H:%M:%S')
+                        self.column_values['notbefore'] = datetime.strptime(
+                            (line['tls']['notbefore']), '%Y-%m-%dT%H:%M:%S'
+                        )
                     except KeyError:
                         self.column_values['notbefore'] = ''
 
                     try:
-                        self.column_values['notafter'] = datetime.strptime((line['tls']['notafter']), '%Y-%m-%dT%H:%M:%S')
+                        self.column_values['notafter'] = datetime.strptime(
+                            (line['tls']['notafter']), '%Y-%m-%dT%H:%M:%S'
+                        )
                     except KeyError:
                         self.column_values['notafter'] = ''
             elif self.column_values['type'] == 'alert':
                 if line.get('alert', None):
                     try:
-                        self.column_values['signature'] = line['alert']['signature']
+                        self.column_values['signature'] = line['alert'][
+                            'signature'
+                        ]
                     except KeyError:
                         self.column_values['signature'] = ''
                     try:
-                        self.column_values['category'] = line['alert']['category']
+                        self.column_values['category'] = line['alert'][
+                            'category'
+                        ]
                     except KeyError:
                         self.column_values['category'] = ''
                     try:
-                        self.column_values['severity'] = line['alert']['severity']
+                        self.column_values['severity'] = line['alert'][
+                            'severity'
+                        ]
                     except KeyError:
                         self.column_values['severity'] = ''
             elif self.column_values['type'] == 'fileinfo':
@@ -1666,7 +1878,6 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
-
 
     def publish_to_new_MAC(self, mac, ip):
         """
@@ -1682,14 +1893,12 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             ip_obj = ipaddress.IPv6Address(ip)
 
-
-        if (mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff')
-                and not (ip_obj.is_multicast or ip_obj.is_link_local)):
+        if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
+            ip_obj.is_multicast or ip_obj.is_link_local
+        ):
             # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-            to_send = {'MAC': mac,
-                       'profileid': f'profile_{ip}'}
+            to_send = {'MAC': mac, 'profileid': f'profile_{ip}'}
             __database__.publish('new_MAC', json.dumps(to_send))
-
 
     def add_flow_to_profile(self):
         """
@@ -1704,8 +1913,24 @@ class ProfilerProcess(multiprocessing.Process):
 
             if not self.column_values:
                 return True
-            elif self.column_values['type'] not in ('ssh', 'ssl', 'http', 'dns', 'conn', 'flow', 'argus', 'nfdump', 'notice',
-                                                    'dhcp', 'files', 'known_services', 'arp', 'ftp', 'smtp', 'software'):
+            elif self.column_values['type'] not in (
+                'ssh',
+                'ssl',
+                'http',
+                'dns',
+                'conn',
+                'flow',
+                'argus',
+                'nfdump',
+                'notice',
+                'dhcp',
+                'files',
+                'known_services',
+                'arp',
+                'ftp',
+                'smtp',
+                'software',
+            ):
                 # Not a supported type
                 return True
             elif self.column_values['starttime'] is None:
@@ -1727,19 +1952,29 @@ class ProfilerProcess(multiprocessing.Process):
                     # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
                     # Some times if there is no microseconds, the datatime object just give us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
                     try:
-                        date_time = datetime.strptime(str(self.column_values['starttime']), '%Y-%m-%d %H:%M:%S.%f')
+                        date_time = datetime.strptime(
+                            str(self.column_values['starttime']),
+                            '%Y-%m-%d %H:%M:%S.%f',
+                        )
                     except ValueError:
-                        date_time = datetime.strptime(str(self.column_values['starttime']) + '.000000', '%Y-%m-%d %H:%M:%S.%f')
+                        date_time = datetime.strptime(
+                            str(self.column_values['starttime']) + '.000000',
+                            '%Y-%m-%d %H:%M:%S.%f',
+                        )
                     starttime = date_time.timestamp()
                 except ValueError as e:
-                    self.print("We can not recognize time format.", 0, 1)
-                    self.print("{}".format((type(e))), 0, 1)
+                    self.print('We can not recognize time format.', 0, 1)
+                    self.print('{}'.format((type(e))), 0, 1)
 
             # This uid check is for when we read things that are not zeek
-            if 'uid' not in self.column_values or not self.column_values.get('uid', ''):
+            if 'uid' not in self.column_values or not self.column_values.get(
+                'uid', ''
+            ):
                 # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
                 # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
-                self.column_values['uid'] = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+                self.column_values['uid'] = base64.b64encode(
+                    binascii.b2a_hex(os.urandom(9))
+                ).decode('utf-8')
             uid = self.column_values['uid']
             flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
@@ -1758,17 +1993,30 @@ class ProfilerProcess(multiprocessing.Process):
                 # Compute the rev_profileid
                 rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
                 if not rev_profileid:
-                    self.print("The dstip profile was not here... create", 3, 0)
+                    self.print(
+                        'The dstip profile was not here... create', 3, 0
+                    )
                     # Create a reverse profileid for managing the data going to the dstip.
-                    rev_profileid = 'profile' + self.id_separator + str(daddr_as_obj)
-                    __database__.addProfile(rev_profileid, starttime, self.width)
+                    rev_profileid = (
+                        'profile' + self.id_separator + str(daddr_as_obj)
+                    )
+                    __database__.addProfile(
+                        rev_profileid, starttime, self.width
+                    )
                     # Try again
-                    rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+                    rev_profileid = __database__.getProfileIdFromIP(
+                        daddr_as_obj
+                    )
                     # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
                 rev_twid = self.get_timewindow(starttime, rev_profileid)
                 return rev_profileid, rev_twid
 
-            if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+            if (
+                'flow' in flow_type
+                or 'conn' in flow_type
+                or 'argus' in flow_type
+                or 'nfdump' in flow_type
+            ):
                 dur = self.column_values['dur']
                 sport = self.column_values['sport']
                 dport = self.column_values['dport']
@@ -1814,25 +2062,35 @@ class ProfilerProcess(multiprocessing.Process):
                     profileid = get_rev_profile(starttime, client_addr)[0]
                 if mac_addr:
                     # send this to ip_info module to get vendor info about this MAC
-                    to_send = {'MAC': mac_addr,
-                               'profileid': profileid}
-                    if host_name: to_send.update({'host_name': host_name})
+                    to_send = {'MAC': mac_addr, 'profileid': profileid}
+                    if host_name:
+                        to_send.update({'host_name': host_name})
                     __database__.publish('new_MAC', json.dumps(to_send))
 
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
             elif 'software' in flow_type:
-                __database__.add_user_agent_to_profile(profileid, self.column_values['unparsed_version'])
-                __database__.add_software_to_profile(profileid,
-                                                     self.column_values['software_type'],
-                                                     self.column_values['version.major'],
-                                                     self.column_values['version.minor'])
+                __database__.add_user_agent_to_profile(
+                    profileid, self.column_values['unparsed_version']
+                )
+                __database__.add_software_to_profile(
+                    profileid,
+                    self.column_values['software_type'],
+                    self.column_values['version.major'],
+                    self.column_values['version.minor'],
+                )
                 # change the datetime to epoch to be able to use json
                 epoch_time = self.column_values['starttime'].timestamp()
-                self.column_values.update({'starttime': epoch_time,
-                                           'twid': self.get_timewindow(epoch_time, profileid)})
-                __database__.publish('new_software', json.dumps(self.column_values))
+                self.column_values.update(
+                    {
+                        'starttime': epoch_time,
+                        'twid': self.get_timewindow(epoch_time, profileid),
+                    }
+                )
+                __database__.publish(
+                    'new_software', json.dumps(self.column_values)
+                )
             # Create the objects of IPs
             try:
                 saddr_as_obj = ipaddress.IPv4Address(self.saddr)
@@ -1855,98 +2113,196 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 role = 'Client'
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                if (
+                    'flow' in flow_type
+                    or 'conn' in flow_type
+                    or 'argus' in flow_type
+                    or 'nfdump' in flow_type
+                ):
                     # Tuple
                     tupleid = f'{daddr_as_obj}-{dport}-{proto}'
                     # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='OutTuples')
+                    symbol = self.compute_symbol(
+                        profileid,
+                        twid,
+                        tupleid,
+                        starttime,
+                        dur,
+                        allbytes,
+                        tuple_key='OutTuples',
+                    )
                     # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
                     # Add the out tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime, uid)
+                    __database__.add_tuple(
+                        profileid, twid, tupleid, symbol, role, starttime, uid
+                    )
                     # Add the dstip
-                    __database__.add_ips(profileid, twid, daddr_as_obj, self.column_values, role)
+                    __database__.add_ips(
+                        profileid, twid, daddr_as_obj, self.column_values, role
+                    )
                     # Add the dstport
                     port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    __database__.add_port(
+                        profileid,
+                        twid,
+                        daddr_as_obj,
+                        self.column_values,
+                        role,
+                        port_type,
+                    )
                     # Add the srcport
                     port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    __database__.add_port(
+                        profileid,
+                        twid,
+                        daddr_as_obj,
+                        self.column_values,
+                        role,
+                        port_type,
+                    )
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj),
-                                          dport=dport, proto=proto, state=state, pkts=pkts, allbytes=allbytes,
-                                          spkts=spkts, sbytes=sbytes, appproto=appproto, uid=uid,
-                                          label=self.label, flow_type=flow_type)
+                    __database__.add_flow(
+                        profileid=profileid,
+                        twid=twid,
+                        stime=starttime,
+                        dur=dur,
+                        saddr=str(saddr_as_obj),
+                        sport=sport,
+                        daddr=str(daddr_as_obj),
+                        dport=dport,
+                        proto=proto,
+                        state=state,
+                        pkts=pkts,
+                        allbytes=allbytes,
+                        spkts=spkts,
+                        sbytes=sbytes,
+                        appproto=appproto,
+                        uid=uid,
+                        label=self.label,
+                        flow_type=flow_type,
+                    )
 
                 elif 'dns' in flow_type:
-                    __database__.add_out_dns(profileid, twid, starttime, flow_type, uid, query, qclass_name,
-                                             qtype_name, rcode_name, answers, ttls)
+                    __database__.add_out_dns(
+                        profileid,
+                        twid,
+                        starttime,
+                        flow_type,
+                        uid,
+                        query,
+                        qclass_name,
+                        qtype_name,
+                        rcode_name,
+                        answers,
+                        ttls,
+                    )
                 elif flow_type == 'http':
 
-                    __database__.add_out_http(profileid, twid, starttime, flow_type, uid, self.column_values['method'],
-                                              self.column_values['host'], self.column_values['uri'],
-                                              self.column_values['httpversion'], self.column_values['user_agent'],
-                                              self.column_values['request_body_len'], self.column_values['response_body_len'],
-                                              self.column_values['status_code'], self.column_values['status_msg'],
-                                              self.column_values['resp_mime_types'], self.column_values['resp_fuids'])
+                    __database__.add_out_http(
+                        profileid,
+                        twid,
+                        starttime,
+                        flow_type,
+                        uid,
+                        self.column_values['method'],
+                        self.column_values['host'],
+                        self.column_values['uri'],
+                        self.column_values['httpversion'],
+                        self.column_values['user_agent'],
+                        self.column_values['request_body_len'],
+                        self.column_values['response_body_len'],
+                        self.column_values['status_code'],
+                        self.column_values['status_msg'],
+                        self.column_values['resp_mime_types'],
+                        self.column_values['resp_fuids'],
+                    )
                 elif flow_type == 'ssl':
-                    __database__.add_out_ssl(profileid, twid, starttime, daddr_as_obj,self.column_values['dport'],
-                                             flow_type, uid, self.column_values['sslversion'],
-                                             self.column_values['cipher'], self.column_values['resumed'],
-                                             self.column_values['established'], self.column_values['cert_chain_fuids'],
-                                             self.column_values['client_cert_chain_fuids'], self.column_values['subject'],
-                                             self.column_values['issuer'], self.column_values['validation_status'],
-                                             self.column_values['curve'], self.column_values['server_name'],
-                                             self.column_values['ja3'], self.column_values['ja3s'],
-                                             self.column_values['is_DoH'])
+                    __database__.add_out_ssl(
+                        profileid,
+                        twid,
+                        starttime,
+                        daddr_as_obj,
+                        self.column_values['dport'],
+                        flow_type,
+                        uid,
+                        self.column_values['sslversion'],
+                        self.column_values['cipher'],
+                        self.column_values['resumed'],
+                        self.column_values['established'],
+                        self.column_values['cert_chain_fuids'],
+                        self.column_values['client_cert_chain_fuids'],
+                        self.column_values['subject'],
+                        self.column_values['issuer'],
+                        self.column_values['validation_status'],
+                        self.column_values['curve'],
+                        self.column_values['server_name'],
+                        self.column_values['ja3'],
+                        self.column_values['ja3s'],
+                        self.column_values['is_DoH'],
+                    )
                 elif flow_type == 'ssh':
-                    __database__.add_out_ssh(profileid, twid, starttime, flow_type, uid, self.column_values['version'],
-                                             self.column_values['auth_attempts'], self.column_values['auth_success'],
-                                             self.column_values['client'], self.column_values['server'],
-                                             self.column_values['cipher_alg'], self.column_values['mac_alg'],
-                                             self.column_values['compression_alg'], self.column_values['kex_alg'],
-                                             self.column_values['host_key_alg'], self.column_values['host_key'])
+                    __database__.add_out_ssh(
+                        profileid,
+                        twid,
+                        starttime,
+                        flow_type,
+                        uid,
+                        self.column_values['version'],
+                        self.column_values['auth_attempts'],
+                        self.column_values['auth_success'],
+                        self.column_values['client'],
+                        self.column_values['server'],
+                        self.column_values['cipher_alg'],
+                        self.column_values['mac_alg'],
+                        self.column_values['compression_alg'],
+                        self.column_values['kex_alg'],
+                        self.column_values['host_key_alg'],
+                        self.column_values['host_key'],
+                    )
                 elif flow_type == 'notice':
-                     __database__.add_out_notice(profileid,twid,
-                                                 starttime,
-                                                 self.column_values['daddr'],
-                                                 self.column_values['sport'],
-                                                 self.column_values['dport'],
-                                                 self.column_values['note'],
-                                                 self.column_values['msg'],
-                                                 self.column_values['scanned_port'],
-                                                 self.column_values['scanning_ip'],
-                                                 self.column_values['uid']
-                                                 )
+                    __database__.add_out_notice(
+                        profileid,
+                        twid,
+                        starttime,
+                        self.column_values['daddr'],
+                        self.column_values['sport'],
+                        self.column_values['dport'],
+                        self.column_values['note'],
+                        self.column_values['msg'],
+                        self.column_values['scanned_port'],
+                        self.column_values['scanning_ip'],
+                        self.column_values['uid'],
+                    )
                 elif flow_type == 'ftp':
                     used_port = self.column_values['used_port']
                     if used_port:
                         __database__.set_ftp_port(used_port)
                 elif flow_type == 'smtp':
                     to_send = {
-                        'uid' : self.column_values['uid'],
+                        'uid': self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
-                        'profileid' : profileid,
-                        'twid' : twid,
-                        'ts' : starttime,
-                        'last_reply': self.column_values['last_reply']}
+                        'profileid': profileid,
+                        'twid': twid,
+                        'ts': starttime,
+                        'last_reply': self.column_values['last_reply'],
+                    }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_smtp', to_send)
                 elif flow_type == 'files':
-                    """" Send files.log data to new_downloaded_file channel in vt module to see if it's malicious """
+                    """ " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
                     to_send = {
-                        'uid' : self.column_values['uid'],
+                        'uid': self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
-                        'size' : self.column_values['size'],
-                        'md5':  self.column_values['md5'],
-                        'sha1':  self.column_values['sha1'],
-                        'analyzers':  self.column_values['analyzers'],
-                        'source':  self.column_values['source'],
-                        'profileid' : profileid,
-                        'twid' : twid,
-                        'ts' : starttime
+                        'size': self.column_values['size'],
+                        'md5': self.column_values['md5'],
+                        'sha1': self.column_values['sha1'],
+                        'analyzers': self.column_values['analyzers'],
+                        'source': self.column_values['source'],
+                        'profileid': profileid,
+                        'twid': twid,
+                        'ts': starttime,
                     }
                     to_send = json.dumps(to_send)
                     __database__.publish('new_downloaded_file', to_send)
@@ -1954,21 +2310,21 @@ class ProfilerProcess(multiprocessing.Process):
                 elif flow_type == 'known_services':
                     # Send known_services.log data to new_service channel in flowalerts module
                     to_send = {
-                        'uid' : self.column_values['uid'],
+                        'uid': self.column_values['uid'],
                         'saddr': self.column_values['saddr'],
-                        'port_num' : self.column_values['port_num'],
-                        'port_proto':  self.column_values['port_proto'],
-                        'service':  self.column_values['service'],
-                        'profileid' : profileid,
-                        'twid' : twid,
-                        'ts' : starttime
+                        'port_num': self.column_values['port_num'],
+                        'port_proto': self.column_values['port_proto'],
+                        'service': self.column_values['service'],
+                        'profileid': profileid,
+                        'twid': twid,
+                        'ts': starttime,
                     }
                     to_send = json.dumps(to_send)
-                    __database__.publish("new_service",to_send)
+                    __database__.publish('new_service', to_send)
 
                 elif flow_type == 'arp':
                     to_send = {
-                        'uid' : self.column_values['uid'],
+                        'uid': self.column_values['uid'],
                         'daddr': self.column_values['daddr'],
                         'saddr': self.column_values['saddr'],
                         'dst_mac': self.column_values['dst_mac'],
@@ -1976,21 +2332,32 @@ class ProfilerProcess(multiprocessing.Process):
                         'dst_hw': self.column_values['dst_hw'],
                         'src_hw': self.column_values['src_hw'],
                         'operation': self.column_values['operation'],
-                        'ts' : starttime,
-                        'profileid' : profileid,
-                        'twid' : twid,
+                        'ts': starttime,
+                        'profileid': profileid,
+                        'twid': twid,
                     }
                     # send to arp module
                     to_send = json.dumps(to_send)
                     __database__.publish('new_arp', to_send)
 
-                    self.publish_to_new_MAC(self.column_values['dst_mac'], self.daddr)
-                    self.publish_to_new_MAC(self.column_values['src_mac'], self.saddr)
+                    self.publish_to_new_MAC(
+                        self.column_values['dst_mac'], self.daddr
+                    )
+                    self.publish_to_new_MAC(
+                        self.column_values['src_mac'], self.saddr
+                    )
 
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur='0',
-                                          saddr=str(saddr_as_obj), daddr=str(daddr_as_obj),
-                                          proto='ARP', uid=uid)
+                    __database__.add_flow(
+                        profileid=profileid,
+                        twid=twid,
+                        stime=starttime,
+                        dur='0',
+                        saddr=str(saddr_as_obj),
+                        daddr=str(daddr_as_obj),
+                        proto='ARP',
+                        uid=uid,
+                    )
 
             def store_features_going_in(profileid, twid, starttime):
                 """
@@ -1998,32 +2365,82 @@ class ProfilerProcess(multiprocessing.Process):
                 """
                 role = 'Server'
                 # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-                if 'flow' in flow_type or 'conn' in flow_type or 'argus' in flow_type or 'nfdump' in flow_type:
+                if (
+                    'flow' in flow_type
+                    or 'conn' in flow_type
+                    or 'argus' in flow_type
+                    or 'nfdump' in flow_type
+                ):
                     # Tuple. We use the src ip, but the dst port still!
-                    tupleid = str(saddr_as_obj) + '-' + str(dport) + '-' + proto
+                    tupleid = (
+                        str(saddr_as_obj) + '-' + str(dport) + '-' + proto
+                    )
                     # Compute symbols.
-                    symbol = self.compute_symbol(profileid, twid, tupleid, starttime, dur, allbytes, tuple_key='InTuples')
+                    symbol = self.compute_symbol(
+                        profileid,
+                        twid,
+                        tupleid,
+                        starttime,
+                        dur,
+                        allbytes,
+                        tuple_key='InTuples',
+                    )
                     # Add the src tuple
-                    __database__.add_tuple(profileid, twid, tupleid, symbol, role, starttime, uid)
+                    __database__.add_tuple(
+                        profileid, twid, tupleid, symbol, role, starttime, uid
+                    )
                     # Add the srcip
-                    __database__.add_ips(profileid, twid, saddr_as_obj, self.column_values, role)
+                    __database__.add_ips(
+                        profileid, twid, saddr_as_obj, self.column_values, role
+                    )
                     # Add the dstport
                     port_type = 'Dst'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    __database__.add_port(
+                        profileid,
+                        twid,
+                        daddr_as_obj,
+                        self.column_values,
+                        role,
+                        port_type,
+                    )
                     # Add the srcport
                     port_type = 'Src'
-                    __database__.add_port(profileid, twid, daddr_as_obj, self.column_values, role, port_type)
+                    __database__.add_port(
+                        profileid,
+                        twid,
+                        daddr_as_obj,
+                        self.column_values,
+                        role,
+                        port_type,
+                    )
                     # Add the flow with all the fields interpreted
-                    __database__.add_flow(profileid=profileid, twid=twid, stime=starttime, dur=dur,
-                                          saddr=str(saddr_as_obj), sport=sport, daddr=str(daddr_as_obj), dport=dport,
-                                          proto=proto, state=state, pkts=pkts, allbytes=allbytes, spkts=spkts, sbytes=sbytes,
-                                          appproto=appproto, uid=uid, label=self.label)
+                    __database__.add_flow(
+                        profileid=profileid,
+                        twid=twid,
+                        stime=starttime,
+                        dur=dur,
+                        saddr=str(saddr_as_obj),
+                        sport=sport,
+                        daddr=str(daddr_as_obj),
+                        dport=dport,
+                        proto=proto,
+                        state=state,
+                        pkts=pkts,
+                        allbytes=allbytes,
+                        spkts=spkts,
+                        sbytes=sbytes,
+                        appproto=appproto,
+                        uid=uid,
+                        label=self.label,
+                    )
                     # No dns check going in. Probably ok.
 
             ##########################################
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.print("Storing data in the profile: {}".format(profileid), 3, 0)
+            self.print(
+                'Storing data in the profile: {}'.format(profileid), 3, 0
+            )
 
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
             twid = self.get_timewindow(starttime, profileid)
@@ -2033,16 +2450,24 @@ class ProfilerProcess(multiprocessing.Process):
                 if self.analysis_direction == 'out':
                     # Home and only out. Check if the src IP is in the home. If yes, store only out
                     if saddr_as_obj in self.home_net:
-                        __database__.addProfile(profileid, starttime, self.width)
+                        __database__.addProfile(
+                            profileid, starttime, self.width
+                        )
                         store_features_going_out(profileid, twid, starttime)
                 elif self.analysis_direction == 'all':
                     # Home and all. Check if src IP or dst IP are in home. Store all
                     if saddr_as_obj in self.home_net:
-                        __database__.addProfile(profileid, starttime, self.width)
+                        __database__.addProfile(
+                            profileid, starttime, self.width
+                        )
                         store_features_going_out(profileid, twid, starttime)
                     if daddr_as_obj in self.home_net:
-                        rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
-                        store_features_going_in(rev_profileid, rev_twid, starttime)
+                        rev_profileid, rev_twid = get_rev_profile(
+                            starttime, daddr_as_obj
+                        )
+                        store_features_going_in(
+                            rev_profileid, rev_twid, starttime
+                        )
             elif not self.home_net:
                 # No home. Create profiles for everybody
                 if self.analysis_direction == 'out':
@@ -2052,7 +2477,9 @@ class ProfilerProcess(multiprocessing.Process):
                 elif self.analysis_direction == 'all':
                     # No home. Store all
                     __database__.addProfile(profileid, starttime, self.width)
-                    rev_profileid, rev_twid = get_rev_profile(starttime, daddr_as_obj)
+                    rev_profileid, rev_twid = get_rev_profile(
+                        starttime, daddr_as_obj
+                    )
                     store_features_going_out(profileid, twid, starttime)
                     store_features_going_in(rev_profileid, rev_twid, starttime)
 
@@ -2150,15 +2577,27 @@ class ProfilerProcess(multiprocessing.Process):
             return profileid, twid
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.print("Error in add_flow_to_profile profilerProcess. {}".format(traceback.format_exc()), 0, 1)
-            self.print("{}".format(type(inst)), 0, 1)
-            self.print("{}".format(inst), 0, 1)
+            self.print(
+                'Error in add_flow_to_profile profilerProcess. {}'.format(
+                    traceback.format_exc()
+                ),
+                0,
+                1,
+            )
+            self.print('{}'.format(type(inst)), 0, 1)
+            self.print('{}'.format(inst), 0, 1)
             return False
 
-    def compute_symbol(self, profileid, twid,
-                       tupleid, current_time,
-                       current_duration, current_size,
-                       tuple_key: str):
+    def compute_symbol(
+        self,
+        profileid,
+        twid,
+        tupleid,
+        current_time,
+        current_duration,
+        current_size,
+        tuple_key: str,
+    ):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere ips model of letters
@@ -2169,7 +2608,18 @@ class ProfilerProcess(multiprocessing.Process):
             current_duration = float(current_duration)
             current_size = int(current_size)
             now_ts = float(current_time)
-            self.print("Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}".format(profileid, tupleid, current_time, type(current_time), current_duration, current_size), 3, 0)
+            self.print(
+                'Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
+                    profileid,
+                    tupleid,
+                    current_time,
+                    type(current_time),
+                    current_duration,
+                    current_size,
+                ),
+                3,
+                0,
+            )
             # Variables for computing the symbol of each tuple
             T2 = False
             TD = False
@@ -2184,14 +2634,17 @@ class ProfilerProcess(multiprocessing.Process):
             ts1 = float(250)
             ts2 = float(1100)
 
-
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
-            (last_last_ts, last_ts) = __database__.getT2ForProfileTW(profileid, twid, tupleid, tuple_key)
+            (last_last_ts, last_ts) = __database__.getT2ForProfileTW(
+                profileid, twid, tupleid, tuple_key
+            )
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
-            def compute_periodicity(now_ts: float, last_ts: float, last_last_ts: float):
-                """ Function to compute the periodicity """
+            def compute_periodicity(
+                now_ts: float, last_ts: float, last_last_ts: float
+            ):
+                """Function to compute the periodicity"""
                 zeros = ''
                 if last_last_ts is False or last_ts is False:
                     TD = -1
@@ -2237,11 +2690,17 @@ class ProfilerProcess(multiprocessing.Process):
                     elif TD > tt3:
                         # Strongly not periodicity
                         TD = 4
-                self.print("Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}".format(profileid, tupleid, T1, T2, TD), 3,0)
+                self.print(
+                    'Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}'.format(
+                        profileid, tupleid, T1, T2, TD
+                    ),
+                    3,
+                    0,
+                )
                 return TD, zeros
 
             def compute_duration():
-                """ Function to compute letter of the duration """
+                """Function to compute letter of the duration"""
                 if current_duration <= td1:
                     return 1
                 elif current_duration > td1 and current_duration <= td2:
@@ -2250,7 +2709,7 @@ class ProfilerProcess(multiprocessing.Process):
                     return 3
 
             def compute_size():
-                """ Function to compute letter of the size """
+                """Function to compute letter of the size"""
                 if current_size <= ts1:
                     return 1
                 elif current_size > ts1 and current_size <= ts2:
@@ -2259,7 +2718,7 @@ class ProfilerProcess(multiprocessing.Process):
                     return 3
 
             def compute_letter():
-                """ Function to compute letter """
+                """Function to compute letter"""
                 # format of this map is as follows
                 # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
                 periodicity_map = {
@@ -2269,33 +2728,35 @@ class ProfilerProcess(multiprocessing.Process):
                         # 'size' : {duration: letter, diration: letter, etc.}
                         '1': {'1': '1', '2': '2', '3': '3'},
                         '2': {'1': '4', '2': '5', '3': '6'},
-                        '3' : {'1': '7', '2': '8', '3': '9'},
+                        '3': {'1': '7', '2': '8', '3': '9'},
                     },
                     '1': {
                         '1': {'1': 'a', '2': 'b', '3': 'c'},
                         '2': {'1': 'd', '2': 'e', '3': 'f'},
-                        '3' : {'1': 'g', '2': 'h', '3':'i'},
+                        '3': {'1': 'g', '2': 'h', '3': 'i'},
                     },
                     '2': {
                         '1': {'1': 'A', '2': 'B', '3': 'C'},
                         '2': {'1': 'D', '2': 'E', '3': 'F'},
-                        '3' : {'1': 'G', '2': 'H', '3':'I'},
+                        '3': {'1': 'G', '2': 'H', '3': 'I'},
                     },
                     '3': {
                         '1': {'1': 'r', '2': 's', '3': 't'},
                         '2': {'1': 'u', '2': 'v', '3': 'w'},
-                        '3' : {'1': 'x', '2': 'y', '3':'z'},
+                        '3': {'1': 'x', '2': 'y', '3': 'z'},
                     },
                     '4': {
                         '1': {'1': 'R', '2': 'S', '3': 'T'},
                         '2': {'1': 'U', '2': 'V', '3': 'W'},
-                        '3' : {'1': 'X', '2': 'Y', '3':'Z'},
-                    }
+                        '3': {'1': 'X', '2': 'Y', '3': 'Z'},
+                    },
                 }
-                return periodicity_map[str(periodicity)][str(size)][str(duration)]
+                return periodicity_map[str(periodicity)][str(size)][
+                    str(duration)
+                ]
 
             def compute_timechar():
-                """ Function to compute the timechar """
+                """Function to compute the timechar"""
                 # self.print(f'Compute timechar. Profileid: {profileid} T2: {T2}', 0, 5)
                 if not isinstance(T2, bool):
                     if T2 <= timedelta(seconds=5).total_seconds():
@@ -2324,14 +2785,20 @@ class ProfilerProcess(multiprocessing.Process):
                     # Flows are not sorted!
                     # What is going on here when the flows are not ordered?? Are we losing flows?
                     # Put a warning
-                    self.print("Warning: Coming flows are not sorted -> Some time diff are less than zero.", 0, 2)
+                    self.print(
+                        'Warning: Coming flows are not sorted -> Some time diff are less than zero.',
+                        0,
+                        2,
+                    )
                     pass
             except TypeError:
                 T2 = False
             # self.print("T2:{}".format(T2), 0, 1)
             # p = __database__.start_profiling()
             # Compute the rest
-            periodicity, zeros = compute_periodicity(now_ts, last_ts, last_last_ts)
+            periodicity, zeros = compute_periodicity(
+                now_ts, last_ts, last_last_ts
+            )
             duration = compute_duration()
             # self.print("Duration: {}".format(duration), 0, 1)
             size = compute_size()
@@ -2340,20 +2807,32 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print("Letter: {}".format(letter), 0, 1)
             timechar = compute_timechar()
             # self.print("TimeChar: {}".format(timechar), 0, 1)
-            self.print("Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}".format(profileid, tupleid, periodicity, duration, size, letter, timechar),  3, 0)
+            self.print(
+                'Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}'.format(
+                    profileid,
+                    tupleid,
+                    periodicity,
+                    duration,
+                    size,
+                    letter,
+                    timechar,
+                ),
+                3,
+                0,
+            )
             # p = __database__.end_profiling(p)
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.print("Error in compute_symbol in profilerProcess.", 0, 1)
-            self.print("{}".format(type(inst)), 0, 1)
-            self.print("{}".format(inst), 0, 1)
-            self.print("{}".format(traceback.format_exc()), 0, 1)
+            self.print('Error in compute_symbol in profilerProcess.', 0, 1)
+            self.print('{}'.format(type(inst)), 0, 1)
+            self.print('{}'.format(inst), 0, 1)
+            self.print('{}'.format(traceback.format_exc()), 0, 1)
 
     def get_timewindow(self, flowtime, profileid):
-        """"
+        """ "
         This function should get the id of the TW in the database where the flow belong.
         If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
         - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
@@ -2370,30 +2849,73 @@ class ProfilerProcess(multiprocessing.Process):
                     # profileid is None if we're dealing with a profile
                     # outside of home_network when this param is given
                     return False
-                [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
+                [
+                    (lasttwid, lasttw_start_time)
+                ] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
-                self.print('The last TW id for profile {} was {}. Start:{}. End: {}'.format(profileid, lasttwid, lasttw_start_time, lasttw_end_time), 3, 0)
+                self.print(
+                    'The last TW id for profile {} was {}. Start:{}. End: {}'.format(
+                        profileid, lasttwid, lasttw_start_time, lasttw_end_time
+                    ),
+                    3,
+                    0,
+                )
                 # There was a last TW, so check if the current flow belongs here.
-                if lasttw_end_time > flowtime and lasttw_start_time <= flowtime:
-                    self.print("The flow ({}) is on the last time window ({})".format(flowtime, lasttw_end_time), 3, 0)
+                if (
+                    lasttw_end_time > flowtime
+                    and lasttw_start_time <= flowtime
+                ):
+                    self.print(
+                        'The flow ({}) is on the last time window ({})'.format(
+                            flowtime, lasttw_end_time
+                        ),
+                        3,
+                        0,
+                    )
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
-                    self.print("The flow ({}) is NOT on the last time window ({}). Its newer".format(flowtime, lasttw_end_time), 3, 0)
-                    amount_of_new_tw = int((flowtime - lasttw_end_time) / self.width)
-                    self.print("We have to create {} empty TWs in the midle.".format(amount_of_new_tw), 3, 0)
+                    self.print(
+                        'The flow ({}) is NOT on the last time window ({}). Its newer'.format(
+                            flowtime, lasttw_end_time
+                        ),
+                        3,
+                        0,
+                    )
+                    amount_of_new_tw = int(
+                        (flowtime - lasttw_end_time) / self.width
+                    )
+                    self.print(
+                        'We have to create {} empty TWs in the midle.'.format(
+                            amount_of_new_tw
+                        ),
+                        3,
+                        0,
+                    )
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end
                         twid = __database__.addNewTW(profileid, new_start)
-                        self.print("Creating the TW id {}. Start: {}.".format(twid, new_start), 3, 0)
+                        self.print(
+                            'Creating the TW id {}. Start: {}.'.format(
+                                twid, new_start
+                            ),
+                            3,
+                            0,
+                        )
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
                 elif lasttw_start_time > flowtime:
                     # The flow was not in the last TW, its OLDER that it
-                    self.print("The flow ({}) is NOT on the last time window ({}). Its older".format(flowtime, lasttw_end_time), 3, 0)
+                    self.print(
+                        'The flow ({}) is NOT on the last time window ({}). Its older'.format(
+                            flowtime, lasttw_end_time
+                        ),
+                        3,
+                        0,
+                    )
                     # Find out if we already have this TW in the past
                     data = __database__.getTWofTime(profileid, flowtime)
                     if data:
@@ -2404,22 +2926,42 @@ class ProfilerProcess(multiprocessing.Process):
                         # There was no TW that included the time of this flow, so create them in the past
                         # How many new TW we need in the past?
                         # amount_of_new_tw is the total amount of tw we should have under the new situation
-                        amount_of_new_tw = int((lasttw_end_time - flowtime) / self.width)
+                        amount_of_new_tw = int(
+                            (lasttw_end_time - flowtime) / self.width
+                        )
                         # amount_of_current_tw is the real amount of tw we have now
-                        amount_of_current_tw = __database__.getamountTWsfromProfile(profileid)
+                        amount_of_current_tw = (
+                            __database__.getamountTWsfromProfile(profileid)
+                        )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.print("We need to create {} TW before the first".format(diff + 1), 3, 0)
+                        self.print(
+                            'We need to create {} TW before the first'.format(
+                                diff + 1
+                            ),
+                            3,
+                            0,
+                        )
                         # Get the first TW
-                        [(firsttwid, firsttw_start_time)] = __database__.getFirstTWforProfile(profileid)
+                        [
+                            (firsttwid, firsttw_start_time)
+                        ] = __database__.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
                         for id in range(0, diff + 1):
                             new_start = temp_start
                             # The method to add an older TW is the same as to add a new one, just the starttime changes
-                            twid = __database__.addNewOlderTW(profileid, new_start)
-                            self.print("Creating the new older TW id {}. Start: {}.".format(twid, new_start), 3, 0)
+                            twid = __database__.addNewOlderTW(
+                                profileid, new_start
+                            )
+                            self.print(
+                                'Creating the new older TW id {}. Start: {}.'.format(
+                                    twid, new_start
+                                ),
+                                3,
+                                0,
+                            )
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
@@ -2432,11 +2974,11 @@ class ProfilerProcess(multiprocessing.Process):
                     startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
                 twid = __database__.addNewTW(profileid, startoftw)
-                #self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
+                # self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
             return twid
         except Exception as e:
-            self.print("Error in get_timewindow().", 0, 1)
-            self.print("{}".format(e), 0, 1)
+            self.print('Error in get_timewindow().', 0, 1)
+            self.print('{}'.format(e), 0, 1)
 
     def shutdown_gracefully(self):
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
@@ -2453,13 +2995,19 @@ class ProfilerProcess(multiprocessing.Process):
                     # if timewindows are not updated for a long time (see at logsProcess.py),
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     self.shutdown_gracefully()
-                    self.print("Stopping Profiler Process. Received {} lines ({})".format(
-                        rec_lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')), 2,0)
+                    self.print(
+                        'Stopping Profiler Process. Received {} lines ({})'.format(
+                            rec_lines,
+                            datetime.now().strftime('%Y-%m-%d--%H:%M:%S'),
+                        ),
+                        2,
+                        0,
+                    )
                     return True
 
                 # Received new input data
                 # Extract the columns smartly
-                self.print("< Received Line: {}".format(line),2,0)
+                self.print('< Received Line: {}'.format(line), 2, 0)
                 rec_lines += 1
 
                 if not self.input_type:
@@ -2471,14 +3019,17 @@ class ProfilerProcess(multiprocessing.Process):
                 # What type of input do we have?
                 if not self.input_type:
                     # the above define_type can't define the type of input
-                    self.print("Can't determine input type.",5,6)
+                    self.print("Can't determine input type.", 5, 6)
 
                 elif self.input_type == 'zeek':
                     # self.print('Zeek line')
                     self.process_zeek_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                elif self.input_type == 'argus' or self.input_type == 'argus-tabs':
+                elif (
+                    self.input_type == 'argus'
+                    or self.input_type == 'argus-tabs'
+                ):
                     # self.print('Argus line')
                     # Argus puts the definition of the columns on the first line only
                     # So read the first line and define the columns
@@ -2517,7 +3068,11 @@ class ProfilerProcess(multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if message and message['channel'] == 'reload_whitelist' and type(message['data']) == str:
+                if (
+                    message
+                    and message['channel'] == 'reload_whitelist'
+                    and type(message['data']) == str
+                ):
                     # if whitelist.conf is edited using pycharm
                     # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
@@ -2528,8 +3083,18 @@ class ProfilerProcess(multiprocessing.Process):
                 return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                self.print("Error. Stopped Profiler Process. Received {} lines".format(rec_lines), 0, 1)
-                self.print(f"\tProblem with Profiler Process. line {exception_line}", 0, 1)
+                self.print(
+                    'Error. Stopped Profiler Process. Received {} lines'.format(
+                        rec_lines
+                    ),
+                    0,
+                    1,
+                )
+                self.print(
+                    f'\tProblem with Profiler Process. line {exception_line}',
+                    0,
+                    1,
+                )
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)

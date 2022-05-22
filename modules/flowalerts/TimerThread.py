@@ -1,5 +1,6 @@
 import threading
 
+
 class TimerThread(threading.Thread):
     """Thread that executes 1 task after N seconds. Only to run the process_global_data."""
 
@@ -16,7 +17,8 @@ class TimerThread(threading.Thread):
 
     def run(self):
         try:
-            if self._finished.isSet(): return True
+            if self._finished.isSet():
+                return True
 
             # sleep for interval or until shutdown
             self._finished.wait(self._interval)
@@ -28,5 +30,5 @@ class TimerThread(threading.Thread):
             return True
 
     def task(self):
-        #print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
+        # print(f'Executing the function with {self.parameters} on {datetime.datetime.now()}')
         self.function(*self.parameters)

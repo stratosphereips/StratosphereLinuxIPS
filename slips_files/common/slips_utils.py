@@ -11,22 +11,26 @@ import time
 import platform
 import os
 
+
 class Utils(object):
     name = 'utils'
     description = 'Common functions used by different modules of slips.'
     authors = ['Alya Gomaa']
 
     def __init__(self):
-        self.home_network_ranges = ('192.168.0.0/16', '172.16.0.0/12', '10.0.0.0/8')
+        self.home_network_ranges = (
+            '192.168.0.0/16',
+            '172.16.0.0/12',
+            '10.0.0.0/8',
+        )
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
         self.threat_levels = {
             'info': 0,
             'low': 0.2,
             'medium': 0.5,
             'high': 0.8,
-            'critical': 1
+            'critical': 1,
         }
-
 
     def drop_root_privs(self):
         """
@@ -38,8 +42,8 @@ class Utils(object):
             return
         try:
             # Get the uid/gid of the user that launched sudo
-            sudo_uid = int(os.getenv("SUDO_UID"))
-            sudo_gid = int(os.getenv("SUDO_GID"))
+            sudo_uid = int(os.getenv('SUDO_UID'))
+            sudo_gid = int(os.getenv('SUDO_GID'))
         except TypeError:
             # env variables are not set, you're not root
             return
@@ -58,8 +62,11 @@ class Utils(object):
                 name = kw.get('log_name', method.__name__.upper())
                 kw['log_time'][name] = int((te - ts) * 1000)
             else:
-                print(f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m')
+                print(
+                    f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m'
+                )
             return result
+
         return timed
 
     def define_time_format(self, time: str) -> str:
@@ -108,19 +115,19 @@ class Utils(object):
         """
         if '+' in timestamp:
             # timestamp contains UTC offset, set the new format accordingly
-            newformat = "%Y-%m-%d %H:%M:%S%z"
+            newformat = '%Y-%m-%d %H:%M:%S%z'
         else:
             # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = "%Y-%m-%d %H:%M:%S"
+            newformat = '%Y-%m-%d %H:%M:%S'
 
         # is the seconds field a float?
         if '.' in timestamp:
             # append .f to the seconds field
-            newformat = newformat.replace('S','S.%f')
+            newformat = newformat.replace('S', 'S.%f')
         return newformat
 
     def get_own_IPs(self):
-        """ Returns a list of our local and public IPs"""
+        """Returns a list of our local and public IPs"""
         IPs = []
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -133,7 +140,7 @@ class Utils(object):
         # get public ip
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
-        text_output = result.stdout.decode("utf-8").replace('\n','')
+        text_output = result.stdout.decode('utf-8').replace('\n', '')
         if not text_output or 'Connection timed out' in text_output:
             return IPs
 
@@ -169,10 +176,12 @@ class Utils(object):
             2. The msg has valid data
         """
 
-        return (message
-                and type(message['data']) == str
-                and message['data'] != 'stop_process'
-                and message['channel'] == channel)
+        return (
+            message
+            and type(message['data']) == str
+            and message['data'] != 'stop_process'
+            and message['channel'] == channel
+        )
 
     def get_branch_info(self):
         """
@@ -189,7 +198,6 @@ class Utils(object):
             # we can't add repo metadata
             return False
 
-
     def format_timestamp(self, timestamp):
         """
         Function to unify timestamps printed to log files, notification and cli.
@@ -201,20 +209,22 @@ class Utils(object):
             timestamp = timestamp.strftime(self.get_ts_format(timestamp))
         elif timestamp and type(timestamp) == float:
             # The timestamp is a float
-            timestamp = datetime.fromtimestamp(timestamp).astimezone().isoformat()
+            timestamp = (
+                datetime.fromtimestamp(timestamp).astimezone().isoformat()
+            )
         elif ' ' in timestamp:
             # self.print(f'DATETIME: {timestamp}')
             # The timestamp is a string with spaces
-            timestamp = timestamp.replace('/','-')
-            #dt_string = "2020-12-18 3:11:09"
+            timestamp = timestamp.replace('/', '-')
+            # dt_string = "2020-12-18 3:11:09"
             # format of incoming ts
             try:
-                newformat = "%Y-%m-%d %H:%M:%S.%f%z"
+                newformat = '%Y-%m-%d %H:%M:%S.%f%z'
                 # convert to datetime obj
                 timestamp = datetime.strptime(timestamp, newformat)
             except ValueError:
                 # The string did not have a time zone
-                newformat = "%Y-%m-%d %H:%M:%S.%f"
+                newformat = '%Y-%m-%d %H:%M:%S.%f'
                 # convert to datetime obj
                 timestamp = datetime.strptime(timestamp, newformat)
             # convert to iso format
@@ -222,24 +232,34 @@ class Utils(object):
 
         return timestamp
 
-    def IDEA_format(self, srcip, type_evidence, type_detection,
-                    detection_info, description,
-                    confidence, category, conn_count, source_target_tag,
-                    port, proto):
+    def IDEA_format(
+        self,
+        srcip,
+        type_evidence,
+        type_detection,
+        detection_info,
+        description,
+        confidence,
+        category,
+        conn_count,
+        source_target_tag,
+        port,
+        proto,
+    ):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
         Detailed explanation of IDEA categories: https://idea.cesnet.cz/en/classifications
         """
-        IDEA_dict = {'Format': 'IDEA0',
-                     'ID': str(uuid4()),
-                     # both times represet the time of the detection, we probably don't need flow_datetime
-                     'DetectTime': datetime.now(timezone.utc).isoformat(),
-                     'EventTime': datetime.now(timezone.utc).isoformat(),
-                     'Category': [category],
-                     'Confidence': confidence,
-                     'Source': [{}]
-                     }
-
+        IDEA_dict = {
+            'Format': 'IDEA0',
+            'ID': str(uuid4()),
+            # both times represet the time of the detection, we probably don't need flow_datetime
+            'DetectTime': datetime.now(timezone.utc).isoformat(),
+            'EventTime': datetime.now(timezone.utc).isoformat(),
+            'Category': [category],
+            'Confidence': confidence,
+            'Source': [{}],
+        }
 
         # is the srcip ipv4/ipv6 or mac?
         if validators.ipv4(srcip):
@@ -253,8 +273,7 @@ class Utils(object):
         if source_target_tag:
             # for example: this will be 'Botnet' in case of C&C alerts not C&C,
             # because it describes the source ip
-            IDEA_dict['Source'][0].update({'Type': [source_target_tag] })
-
+            IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
 
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
@@ -267,11 +286,7 @@ class Utils(object):
             elif validators.ipv6(dstip):
                 ip_version = 'IP6'
 
-            IDEA_dict['Source'].append({
-                ip_version: [dstip],
-                'Type': ['CC']
-            })
-
+            IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
 
         # some evidence have a dst ip
         if 'dstip' in type_detection or 'dip' in type_detection:
@@ -297,7 +312,7 @@ class Utils(object):
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
             # update the dstip description if specified in the evidence
             if source_target_tag:
-                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+                IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
         elif 'domain' in type_detection:
             # the ioc is a domain
@@ -306,13 +321,13 @@ class Utils(object):
 
             # update the dstdomain description if specified in the evidence
             if source_target_tag:
-                IDEA_dict['Target'][0].update({'Type': [source_target_tag] })
+                IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
         # add the port/proto
         # for all alerts, the srcip is in IDEA_dict['Source'][0] and the dstip is in IDEA_dict['Target'][0]
         # for alert that only have a source, this is the port/proto of the source ip
         key = 'Source'
-        idx = 0 # this idx is used for selecting the right dict to add port/proto
+        idx = 0   # this idx is used for selecting the right dict to add port/proto
 
         if 'Target' in IDEA_dict:
             # if the alert has a target, add the port/proto to the target(dstip)
@@ -326,34 +341,41 @@ class Utils(object):
             idx = 1
 
         if port:
-            IDEA_dict[key][idx].update({'Port': [int(port)] })
+            IDEA_dict[key][idx].update({'Port': [int(port)]})
         if proto:
-            IDEA_dict[key][idx].update({'Proto': [proto.lower()] })
+            IDEA_dict[key][idx].update({'Proto': [proto.lower()]})
 
         # add the description
         attachment = {
-            'Attach': [{
-                'Content': description,
-                "ContentType": "text/plain",
-            }]
+            'Attach': [
+                {
+                    'Content': description,
+                    'ContentType': 'text/plain',
+                }
+            ]
         }
         IDEA_dict.update(attachment)
 
         # only evidence of type scanning have conn_count
-        if conn_count: IDEA_dict.update({'ConnCount': conn_count})
+        if conn_count:
+            IDEA_dict.update({'ConnCount': conn_count})
 
         if 'MaliciousDownloadedFile' in type_evidence:
-            IDEA_dict.update({
-                'Attach': [
-                    {
-                        'Type': ["Malware"],
-                        "Hash": [f'md5:{detection_info}'],
-                        "Size": int(description.split("size:")[1].split("from")[0])
-
-                    }
-                ]
-            })
+            IDEA_dict.update(
+                {
+                    'Attach': [
+                        {
+                            'Type': ['Malware'],
+                            'Hash': [f'md5:{detection_info}'],
+                            'Size': int(
+                                description.split('size:')[1].split('from')[0]
+                            ),
+                        }
+                    ]
+                }
+            )
 
         return IDEA_dict
+
 
 utils = Utils()

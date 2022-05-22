@@ -31,19 +31,23 @@ import threading
 import subprocess
 import shutil
 
+
 # Input Process
 class InputProcess(multiprocessing.Process):
-    """ A class process to run the process of the flows """
-    def __init__(self,
-                 outputqueue,
-                 profilerqueue,
-                 input_type,
-                 input_information,
-                 config,
-                 packet_filter,
-                 zeek_or_bro,
-                 line_type,
-                 redis_port):
+    """A class process to run the process of the flows"""
+
+    def __init__(
+            self,
+            outputqueue,
+            profilerqueue,
+            input_type,
+            input_information,
+            config,
+            packet_filter,
+            zeek_or_bro,
+            line_type,
+            redis_port,
+    ):
         multiprocessing.Process.__init__(self)
         self.name = 'InputProcess'
         self.outputqueue = outputqueue
@@ -73,41 +77,63 @@ class InputProcess(multiprocessing.Process):
         # number of lines read
         self.lines = 0
         # these are the files that slips doesn't read
-        self.ignored_files = {'capture_loss', 'loaded_scripts',
-                             'packet_filter', 'stats', 'ocsp',
-                             'weird', 'reporter', 'x509'}
+        self.ignored_files = {
+            'capture_loss',
+            'loaded_scripts',
+            'packet_filter',
+            'stats',
+            'ocsp',
+            'weird',
+            'reporter',
+            'x509',
+        }
         # create the remover thread
-        self.remover_thread = threading.Thread(target=self.remove_old_zeek_files, daemon=True)
+        self.remover_thread = threading.Thread(
+            target=self.remove_old_zeek_files, daemon=True
+        )
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
 
-
     def read_configuration(self):
-        """ Read the configuration file for what we need """
+        """Read the configuration file for what we need"""
 
         try:
             self.packet_filter = self.config.get('parameters', 'pcapfilter')
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.packet_filter = 'ip or not ip'
 
         try:
-            self.tcp_inactivity_timeout = self.config.get('parameters', 'tcp_inactivity_timeout')
+            self.tcp_inactivity_timeout = self.config.get(
+                'parameters', 'tcp_inactivity_timeout'
+            )
             # make sure the value is a valid int
             self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
 
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError, ValueError):
+        except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+                ValueError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.tcp_inactivity_timeout = '5'
 
         try:
             self.rotation = self.config.get('parameters', 'rotation')
-            self.rotation = True if 'yes' in self.rotation else False
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.rotation = 'yes' in self.rotation
+        except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.rotation = True
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -127,13 +153,17 @@ class InputProcess(multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def stop_queues(self):
-        """ Stops the profiler and output queues """
+        """Stops the profiler and output queues"""
 
-        self.profilerqueue.put("stop")
-        self.outputqueue.put("02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n".format(self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')))
+        self.profilerqueue.put('stop')
+        self.outputqueue.put(
+            '02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n'.format(
+                self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
+            )
+        )
         self.outputqueue.close()
         self.profilerqueue.close()
 
@@ -147,18 +177,18 @@ class InputProcess(multiprocessing.Process):
             line = {'type': 'nfdump'}
             if not self.nfdump_output:
                 # The nfdump command returned nothing
-                self.print("Error reading nfdump output ", 1, 3)
+                self.print('Error reading nfdump output ', 1, 3)
             else:
                 lines = len(self.nfdump_output.splitlines())
                 for nfdump_line in self.nfdump_output.splitlines():
                     # this line is taken from stdout we need to remove whitespaces
-                    nfdump_line.replace(' ','')
+                    nfdump_line.replace(' ', '')
                     ts = nfdump_line.split(',')[0]
                     if not ts[0].isdigit():
                         # The first letter is not digit -> not valid line.
                         # TODO: What is this valid line check?? explain
                         continue
-                    line['data']  = nfdump_line
+                    line['data'] = nfdump_line
                     self.profilerqueue.put(line)
 
             return lines
@@ -184,7 +214,9 @@ class InputProcess(multiprocessing.Process):
                     if not filename.endswith('.log'):
                         filename += '.log'
                     # Ignore the files that do not contain data. These are the zeek log files that we don't use
-                    filename_without_ext = filename.split('/')[-1].split('.')[0]
+                    filename_without_ext = filename.split('/')[-1].split('.')[
+                        0
+                    ]
                     if filename_without_ext in self.ignored_files:
                         continue
 
@@ -224,7 +256,6 @@ class InputProcess(multiprocessing.Process):
                             # comes here if I/O operation failed due to a closed file.
                             # to get the new dict of open handles.
                             continue
-
 
                         # self.print(f'Reading from file {filename}, the line {zeek_line}', 0, 6)
                         # Did the file end?
@@ -309,7 +340,7 @@ class InputProcess(multiprocessing.Process):
                 line_to_send = cache_lines[file_with_earliest_flow]
 
                 # self.print('Line to send from file {}. {}'.format(file_with_earliest_flow, line_to_send))
-                self.print("	> Sent Line: {}".format(line_to_send), 0, 3)
+                self.print('	> Sent Line: {}'.format(line_to_send), 0, 3)
                 self.profilerqueue.put(line_to_send)
                 # Count the read lines
                 lines += 1
@@ -326,7 +357,7 @@ class InputProcess(multiprocessing.Process):
             # We reach here after the break produced if no zeek files are being updated.
             # No more files to read. Close the files
             for file, handle in self.open_file_handlers.items():
-                self.print('Closing file {}'.format(file), 2, 0)
+                self.print(f'Closing file {file}', 2, 0)
                 handle.close()
             return lines
         except KeyboardInterrupt:
@@ -341,12 +372,18 @@ class InputProcess(multiprocessing.Process):
                 if extension == '.log':
                     # Add log file to database
                     file_name_without_extension = file[:-4]
-                    __database__.add_zeek_file(self.given_path + '/' + file_name_without_extension)
+                    __database__.add_zeek_file(
+                        self.given_path + '/' + file_name_without_extension
+                    )
 
             # We want to stop bro if no new line is coming.
             self.bro_timeout = 1
             lines = self.read_zeek_files()
-            self.print(f"\nWe read everything from the folder. No more input. Stopping input process. Sent {lines} lines", 2, 0)
+            self.print(
+                f'\nWe read everything from the folder. No more input. Stopping input process. Sent {lines} lines',
+                2,
+                0,
+            )
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -380,11 +417,12 @@ class InputProcess(multiprocessing.Process):
 
     def handle_binetflow(self):
         try:
-            self.lines =0
+            self.lines = 0
             self.read_lines_delay = 0.02
             with open(self.given_path) as file_stream:
                 line = {'type': 'argus'}
-                # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
+                # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,
+                # Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
                 # self.profilerqueue.put(fake)
 
                 # read first line to determine the type of line, tab or comma separated
@@ -430,7 +468,9 @@ class InputProcess(multiprocessing.Process):
     def handle_zeek_log_file(self):
         try:
             try:
-                file_name_without_extension = self.given_path[:self.given_path.index('.log')]
+                file_name_without_extension = self.given_path[
+                                              : self.given_path.index('.log')
+                                              ]
             except IndexError:
                 # filename doesn't have an extension, probably not a conn.log
                 return False
@@ -451,19 +491,21 @@ class InputProcess(multiprocessing.Process):
             # Get command output
             self.nfdump_output = result.stdout.decode('utf-8')
             self.lines = self.read_nfdump_output()
-            self.print("We read everything. No more input. Stopping input process. Sent {} lines".format(self.lines))
+            self.print(
+                f'We read everything. No more input. Stopping input process. Sent {self.lines} lines'
+            )
             return True
         except KeyboardInterrupt:
             return True
 
     def handle_pcap_and_interface(self) -> int:
-        """ Returns the number of zeek lines read """
+        """Returns the number of zeek lines read"""
 
         try:
             # Create zeek_folder if does not exist.
             if not os.path.exists(self.zeek_folder):
                 os.makedirs(self.zeek_folder)
-            self.print(f"Storing zeek log files in {self.zeek_folder}")
+            self.print(f'Storing zeek log files in {self.zeek_folder}')
             # Now start the observer of new files. We need the observer because Zeek does not create all the files
             # at once, but when the traffic appears. That means that we need
             # some process to tell us which files to read in real time when they appear
@@ -473,17 +515,23 @@ class InputProcess(multiprocessing.Process):
             # Create an observer
             self.event_observer = Observer()
             # Schedule the observer with the callback on the file handler
-            self.event_observer.schedule(self.event_handler,  self.zeek_folder, recursive=True)
+            self.event_observer.schedule(
+                self.event_handler, self.zeek_folder, recursive=True
+            )
             # Start the observer
             self.event_observer.start()
 
             # rotation is disabled unless it's an interface
-            rotation_interval = "-e 'redef Log::default_rotation_interval = 0sec;'"
+            rotation_interval = (
+                "-e 'redef Log::default_rotation_interval = 0sec;'"
+            )
             if self.input_type is 'interface':
                 if self.rotation:
-                    rotation_interval = "-e 'redef Log::default_rotation_interval =  1min;'"
+                    rotation_interval = (
+                        "-e 'redef Log::default_rotation_interval =  1min;'"
+                    )
                 # Change the bro command
-                bro_parameter = '-i ' + self.given_path
+                bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
             elif self.input_type is 'pcap':
@@ -504,16 +552,17 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
-
             # Run zeek on the pcap or interface. The redef is to have json files
             zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
             # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
             # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
             # we have our own copy pf local.zeek in __load__.zeek
-            command = f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} ' \
-                      f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins ' \
-                      f'tcp_attempt_delay=1min -f {self.packet_filter} ' \
-                      f'{zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
+            command = (
+                f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} '
+                f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins '
+                f'tcp_attempt_delay=1min -f {self.packet_filter} '
+                f'{zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
+            )
             self.print(f'Zeek command: {command}', 3, 0)
             # Run zeek.
             os.system(command)
@@ -521,8 +570,10 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             lines = self.read_zeek_files()
-            self.print("We read everything. No more input. "
-                       "Stopping input process. Sent {} lines".format(lines))
+            self.print(
+                'We read everything. No more input. '
+                'Stopping input process. Sent {} lines'.format(lines)
+            )
 
             self.stop_observer()
             return True
@@ -555,7 +606,9 @@ class InputProcess(multiprocessing.Process):
                 # new log file should be dns.log without the ts
                 old_log_file = changed_files['old_file']
                 new_log_file = changed_files['new_file']
-                new_logfile_without_path = new_log_file.split('/')[-1].split('.')[0]
+                new_logfile_without_path = new_log_file.split('/')[-1].split(
+                    '.'
+                )[0]
                 if new_logfile_without_path in self.ignored_files:
                     # just delete the old file
                     os.remove(old_log_file)
@@ -578,12 +631,10 @@ class InputProcess(multiprocessing.Process):
                 os.remove(old_log_file)
                 lock.release()
 
-
     def shutdown_gracefully(self):
         # Stop the observer
         self.stop_observer()
         __database__.publish('finished_modules', self.name)
-
 
     def run(self):
         utils.drop_root_privs()
@@ -610,18 +661,22 @@ class InputProcess(multiprocessing.Process):
             elif self.input_type is 'nfdump':
                 # binary nfdump file
                 self.handle_nfdump()
-            elif self.input_type is 'binetflow' or 'binetflow-tabs' in self.input_type:
+            elif (
+                    self.input_type is 'binetflow'
+                    or 'binetflow-tabs' in self.input_type
+            ):
                 # argus or binetflow
                 self.handle_binetflow()
-            elif (self.input_type is 'pcap'
-                  or self.input_type is 'interface'):
+            elif self.input_type is 'pcap' or self.input_type is 'interface':
                 self.handle_pcap_and_interface()
             elif self.input_type is 'suricata':
                 self.handle_suricata()
             else:
                 # if self.input_type is 'file':
                 # default value
-                self.print(f'Unrecognized file type "{self.input_type}". Stopping.')
+                self.print(
+                    f'Unrecognized file type "{self.input_type}". Stopping.'
+                )
                 return False
             self.shutdown_gracefully()
             return True
@@ -630,11 +685,17 @@ class InputProcess(multiprocessing.Process):
             return False
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f"Problem with Input Process. line {exception_line}", 0, 1)
-            self.print("Stopping input process. Sent {} lines".format(self.lines), 0, 1)
+            self.print(
+                f'Problem with Input Process. line {exception_line}', 0, 1
+            )
+            self.print(
+                'Stopping input process. Sent {} lines'.format(self.lines),
+                0,
+                1,
+            )
             self.print(type(inst), 0, 1)
             self.print(inst.args, 0, 1)
             self.print(inst, 0, 1)
-            self.print(traceback.format_exc(), 0 , 1)
+            self.print(traceback.format_exc(), 0, 1)
             self.shutdown_gracefully()
             return False

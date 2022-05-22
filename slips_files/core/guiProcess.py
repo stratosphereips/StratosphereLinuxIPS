@@ -23,10 +23,13 @@ import os
 
 # Gui Process
 class GuiProcess(multiprocessing.Process):
-    """ 
+    """
     The Gui process is only meant to start the Kalipso interface
     """
-    def __init__(self, inputqueue, outputqueue, verbose, debug, config, redis_port):
+
+    def __init__(
+        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+    ):
         self.myname = 'Gui'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
@@ -54,12 +57,14 @@ class GuiProcess(multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def run(self):
         utils.drop_root_privs()
         try:
-            os.system(f'cd modules/kalipso;node kalipso.js -p {self.redis_port}')
+            os.system(
+                f'cd modules/kalipso;node kalipso.js -p {self.redis_port}'
+            )
         except KeyboardInterrupt:
             self.print('Stoppting the Gui Process')
             return True

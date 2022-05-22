@@ -4,8 +4,13 @@ import configparser
 import json
 from typing import Dict
 
-from modules.p2ptrust.utils.utils import validate_ip_address, validate_timestamp, \
-    get_ip_info_from_slips, send_evaluation_to_go, send_empty_evaluation_to_go
+from modules.p2ptrust.utils.utils import (
+    validate_ip_address,
+    validate_timestamp,
+    get_ip_info_from_slips,
+    send_evaluation_to_go,
+    send_empty_evaluation_to_go,
+)
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
 
@@ -18,20 +23,24 @@ class GoDirector:
     If peer sends invalid data, his reputation is lowered.
     """
 
-    def __init__(self,
-                 printer: Printer,
-                 trustdb: TrustDB,
-                 config: configparser.ConfigParser,
-                 storage_name: str,
-                 override_p2p: bool = False,
-                 report_func=None,
-                 request_func=None,
-                 gopy_channel: str = "p2p_gopy",
-                 pygo_channel: str = "p2p_pygo"):
+    def __init__(
+        self,
+        printer: Printer,
+        trustdb: TrustDB,
+        config: configparser.ConfigParser,
+        storage_name: str,
+        override_p2p: bool = False,
+        report_func=None,
+        request_func=None,
+        gopy_channel: str = 'p2p_gopy',
+        pygo_channel: str = 'p2p_pygo',
+    ):
 
         # todo what is override_p2p
         if override_p2p and not (report_func and request_func):
-            raise Exception("Override_p2p set but not provided appropriate functions")
+            raise Exception(
+                'Override_p2p set but not provided appropriate functions'
+            )
 
         self.printer = printer
         self.trustdb = trustdb
@@ -43,36 +52,46 @@ class GoDirector:
         self.request_func = request_func
 
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
-        self.evaluation_processors = {"score_confidence": self.process_evaluation_score_confidence}
-        self.key_type_processors = {"ip": validate_ip_address}
+        self.evaluation_processors = {
+            'score_confidence': self.process_evaluation_score_confidence
+        }
+        self.key_type_processors = {'ip': validate_ip_address}
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print("[TrustDB] " + text, verbose, debug)
+        self.printer.print('[TrustDB] ' + text, verbose, debug)
 
     def handle_gopy_data(self, data_dict: dict):
         """
         Method that receives raw data from peers sent into p2p_gopy redis channel
         """
         try:
-            message_type = data_dict["message_type"]
-            message_contents = data_dict["message_contents"]
-            if message_type == "peer_update":
+            message_type = data_dict['message_type']
+            message_contents = data_dict['message_contents']
+            if message_type == 'peer_update':
                 # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
-            elif message_type == "go_data":
+            elif message_type == 'go_data':
                 # a peer request or update
                 self.process_go_data(message_contents)
 
             else:
-                self.print("Invalid command: " + message_type, 0, 2)
+                self.print('Invalid command: ' + message_type, 0, 2)
 
         except json.decoder.JSONDecodeError:
-            self.print(f"Couldn't load message from pigeon - invalid Json from the pigeon: {data_dict}", 0, 1)
+            self.print(
+                f"Couldn't load message from pigeon - invalid Json from the pigeon: {data_dict}",
+                0,
+                1,
+            )
 
         except KeyError:
-            self.print(f"Json from the pigeon: {data_dict} doesn't contain "
-                       "expected values message_type or message_contents", 0, 1)
+            self.print(
+                f"Json from the pigeon: {data_dict} doesn't contain "
+                'expected values message_type or message_contents',
+                0,
+                1,
+            )
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
@@ -90,20 +109,20 @@ class GoDirector:
         # report is the dictionary containing reporter, report_time and message
 
         # if intersection of a set of expected keys and the actual keys has four items, it means all keys are there
-        key_reporter = "reporter"
-        key_report_time = "report_time"
-        key_message = "message"
+        key_reporter = 'reporter'
+        key_report_time = 'report_time'
+        key_message = 'message'
 
         expected_keys = {key_reporter, key_report_time, key_message}
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
         if len(expected_keys & set(report.keys())) != 3:
-            self.print("Some key is missing in report", 0, 1)
+            self.print('Some key is missing in report', 0, 1)
             return
 
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
-            self.print("Invalid timestamp", 0, 1)
+            self.print('Invalid timestamp', 0, 1)
             return
 
         reporter = report[key_reporter]
@@ -111,18 +130,19 @@ class GoDirector:
         # decode b64
         message_type, data = self.validate_message(message)
 
-        self.print(f"[The Network -> Slips] Received msg {data} from peer {reporter}")
+        self.print(
+            f'[The Network -> Slips] Received msg {data} from peer {reporter}'
+        )
 
-        if message_type == "report":
+        if message_type == 'report':
             # a peer reporting an IP
             self.process_message_report(reporter, report_time, data)
 
-
-        elif message_type == "request":
+        elif message_type == 'request':
             # a peer requesting info about an ip
             self.process_message_request(reporter, report_time, data)
 
-        elif message_type == "blame":
+        elif message_type == 'blame':
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
             # which gives the report to evidenceProcess to decide whether to block or not
@@ -130,8 +150,10 @@ class GoDirector:
 
         else:
             # TODO: lower reputation
-            self.print(f"Peer {report} sent unknown message type {message_type}: {data}")
-            self.print("Peer sent unknown message type", 0, 2)
+            self.print(
+                f'Peer {report} sent unknown message type {message_type}: {data}'
+            )
+            self.print('Peer sent unknown message type', 0, 2)
 
     def validate_message(self, message: str) -> (str, dict):
         """
@@ -145,49 +167,57 @@ class GoDirector:
         try:
             decoded = base64.b64decode(message)
             data = json.loads(decoded)
-            return data["message_type"], data
+            return data['message_type'], data
 
         except binascii.Error:
-            self.print("base64 cannot be parsed properly", 0, 2)
+            self.print('base64 cannot be parsed properly', 0, 2)
 
         except json.decoder.JSONDecodeError:
-            self.print("Peer sent invalid json", 0, 2)
+            self.print('Peer sent invalid json', 0, 2)
 
         except KeyError:
             self.print("Peer didn't specify message type", 0, 2)
 
-        return "", {}
+        return '', {}
 
     def validate_message_request(self, data: Dict) -> bool:
         """
         Validate keys in message request. Check for corrupted fields and also supported fields
         """
         try:
-            key = data["key"]
-            key_type = data["key_type"]
-            evaluation_type = data["evaluation_type"]
+            key = data['key']
+            key_type = data['key_type']
+            evaluation_type = data['evaluation_type']
         except KeyError:
-            self.print("Correct keys are missing in the message", 0, 2)
+            self.print('Correct keys are missing in the message', 0, 2)
             # TODO: lower reputation
             return False
 
         # validate key_type and key
-        if key_type != "ip":
+        if key_type != 'ip':
             self.print(f"Module can't process key type {key_type}", 0, 2)
             return False
 
         if not self.key_type_processors[key_type](key):
-            self.print(f"Provided key {key} isn't a valid value for it's type {key_type}", 0, 2)
+            self.print(
+                f"Provided key {key} isn't a valid value for it's type {key_type}",
+                0,
+                2,
+            )
             # TODO: lower reputation
             return False
 
         # validate evaluation type
-        if evaluation_type != "score_confidence":
-            self.print(f"Module can't process evaluation type {evaluation_type}", 0, 2)
+        if evaluation_type != 'score_confidence':
+            self.print(
+                f"Module can't process evaluation type {evaluation_type}", 0, 2
+            )
             return False
         return True
 
-    def process_message_request(self, reporter: str, _: int, data: Dict) -> None:
+    def process_message_request(
+        self, reporter: str, _: int, data: Dict
+    ) -> None:
         """
         Handle data request from a peer
 
@@ -203,8 +233,12 @@ class GoDirector:
         if not self.validate_message_request(data):
             return
 
-        key = data["key"]
-        self.print(f"[The Network -> Slips] request about {key} from: {reporter}", 2, 0)
+        key = data['key']
+        self.print(
+            f'[The Network -> Slips] request about {key} from: {reporter}',
+            2,
+            0,
+        )
 
         if self.override_p2p:
             # print("Overriding p2p")
@@ -220,16 +254,28 @@ class GoDirector:
         """
         score, confidence = get_ip_info_from_slips(key)
         if score is not None:
-            send_evaluation_to_go(key, score, confidence, reporter, self.pygo_channel)
-            self.print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.", 2, 0)
+            send_evaluation_to_go(
+                key, score, confidence, reporter, self.pygo_channel
+            )
+            self.print(
+                f'[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.',
+                2,
+                0,
+            )
             # print(f"[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.")
         else:
             # send_empty_evaluation_to_go(key, reporter, self.pygo_channel)
             # self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}", 2, 0)
-            self.print(f"[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}", 2, 0)
+            self.print(
+                f'[Slips -> The Network] Slips has no info about IP: {key}. Not responding to {reporter}',
+                2,
+                0,
+            )
             # self.print(f"[DEBUGGING] [Slips -> The Network] Slips has no info about IP: {key}. Responded with empty report to {reporter}")
 
-    def process_message_report(self, reporter: str, report_time: int, data: dict):
+    def process_message_report(
+        self, reporter: str, report_time: int, data: dict
+    ):
         """
         Handle a report from a peer
 
@@ -243,12 +289,12 @@ class GoDirector:
 
         # validate keys in message
         try:
-            key = data["key"]
-            key_type = data["key_type"]
-            evaluation_type = data["evaluation_type"]
-            evaluation = data["evaluation"]
+            key = data['key']
+            key_type = data['key_type']
+            evaluation_type = data['evaluation_type']
+            evaluation = data['evaluation']
         except KeyError:
-            self.print("Correct keys are missing in the message", 0, 2)
+            self.print('Correct keys are missing in the message', 0, 2)
             # TODO: lower reputation
             return
 
@@ -275,18 +321,26 @@ class GoDirector:
             self.report_func(reporter, report_time, data)
             return
 
-        self.evaluation_processors[evaluation_type](reporter, report_time, key_type, key, evaluation)
+        self.evaluation_processors[evaluation_type](
+            reporter, report_time, key_type, key, evaluation
+        )
         if evaluation != None:
-            self.print(f"[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}", 2, 0)
+            self.print(
+                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}',
+                2,
+                0,
+            )
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
-    def process_evaluation_score_confidence(self,
-                                            reporter: str,
-                                            report_time: int,
-                                            key_type: str,
-                                            key: str,
-                                            evaluation: dict):
+    def process_evaluation_score_confidence(
+        self,
+        reporter: str,
+        report_time: int,
+        key_type: str,
+        key: str,
+        evaluation: dict,
+    ):
         """
         Handle reported score and confidence
 
@@ -301,41 +355,47 @@ class GoDirector:
         """
 
         if evaluation is None:
-            self.print(f"Peer {reporter} has no data to share about {key}", 2, 0)
+            self.print(
+                f'Peer {reporter} has no data to share about {key}', 2, 0
+            )
             return
 
         if type(evaluation) != dict:
-            self.print("Evaluation is not a dictionary", 0, 2)
+            self.print('Evaluation is not a dictionary', 0, 2)
             # TODO: lower reputation
             return
 
         # check that fields are present and with correct type
         try:
-            score = float(evaluation["score"])
-            confidence = float(evaluation["confidence"])
+            score = float(evaluation['score'])
+            confidence = float(evaluation['confidence'])
         except KeyError:
-            self.print("Score or confidence are missing", 0, 2)
+            self.print('Score or confidence are missing', 0, 2)
             # TODO: lower reputation
             return
         except ValueError:
-            self.print("Score or confidence have wrong data type", 0, 2)
+            self.print('Score or confidence have wrong data type', 0, 2)
             # TODO: lower reputation
             return
 
         # validate value ranges (must be from <0, 1>)
         if score < -1 or score > 1:
-            self.print("Score value is out of bounds", 0, 2)
+            self.print('Score value is out of bounds', 0, 2)
             # TODO: lower reputation
             return
 
         if confidence < 0 or confidence > 1:
-            self.print("Confidence value is out of bounds", 0, 2)
+            self.print('Confidence value is out of bounds', 0, 2)
             # TODO: lower reputation
             return
 
-        self.trustdb.insert_new_go_report(reporter, key_type, key, score, confidence, report_time)
-        result = f"Data processing ok: reporter {reporter}, report time {report_time}, key {key} ({key_type}), " \
-                 f"score {score}, confidence {confidence}"
+        self.trustdb.insert_new_go_report(
+            reporter, key_type, key, score, confidence, report_time
+        )
+        result = (
+            f'Data processing ok: reporter {reporter}, report time {report_time}, key {key} ({key_type}), '
+            f'score {score}, confidence {confidence}'
+        )
         self.print(result, 2, 0)
 
     def process_go_update(self, data: dict) -> None:
@@ -352,41 +412,48 @@ class GoDirector:
         """
         ip_address, reliability, peerid, timestamp = '', '', '', ''
         try:
-            peerid = data["peerid"]
+            peerid = data['peerid']
         except KeyError:
-            self.print("Peerid missing", 0, 1)
+            self.print('Peerid missing', 0, 1)
             return
 
         # timestamp is optional. If it is not provided (or is wrong), it is set to None, and None timestamp is replaced
         # with current time in the database
         try:
-            timestamp = data["timestamp"]
+            timestamp = data['timestamp']
             timestamp = validate_timestamp(timestamp)
             if timestamp is None:
-                self.print("Timestamp is invalid", 2, 0)
+                self.print('Timestamp is invalid', 2, 0)
         except KeyError:
-            self.print(f"Timestamp is missing from data {data}", 2, 0)
+            self.print(f'Timestamp is missing from data {data}', 2, 0)
             timestamp = None
 
         try:
-            reliability = float(data["reliability"])
-            self.trustdb.insert_go_reliability(peerid, reliability, timestamp=timestamp)
+            reliability = float(data['reliability'])
+            self.trustdb.insert_go_reliability(
+                peerid, reliability, timestamp=timestamp
+            )
         except KeyError:
-            self.print("Reliability missing", 2, 0)
+            self.print('Reliability missing', 2, 0)
         except ValueError:
-            self.print("Reliability is not a float", 2, 0)
+            self.print('Reliability is not a float', 2, 0)
 
         try:
-            ip_address = data["ip"]
+            ip_address = data['ip']
             if not validate_ip_address(ip_address):
-                self.print(f"IP address {ip_address} is invalid", 2, 0)
+                self.print(f'IP address {ip_address} is invalid', 2, 0)
                 return
-            self.trustdb.insert_go_ip_pairing(peerid, ip_address, timestamp=timestamp)
-            self.print(f"[The Network -> Slips] Peer update or new peer {peerid} "
-                       f"with IP: {ip_address} "
-                       f"Reliability: {reliability } ", 2, 0)
-
+            self.trustdb.insert_go_ip_pairing(
+                peerid, ip_address, timestamp=timestamp
+            )
+            self.print(
+                f'[The Network -> Slips] Peer update or new peer {peerid} '
+                f'with IP: {ip_address} '
+                f'Reliability: {reliability } ',
+                2,
+                0,
+            )
 
         except KeyError:
-            self.print("IP address missing", 2, 0)
+            self.print('IP address missing', 2, 0)
             return

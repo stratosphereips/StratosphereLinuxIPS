@@ -8,13 +8,17 @@ import ipwhois
 import json
 import requests
 import maxminddb
+
 # from dns.resolver import NoResolverConfiguration
+
 
 class ASN:
     def __init__(self):
         # Open the maxminddb ASN offline db
         try:
-            self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
+            self.asn_db = maxminddb.open_database(
+                'databases/GeoLite2-ASN.mmdb'
+            )
         except:
             # errors are printed in IP_info
             pass
@@ -48,7 +52,9 @@ class ASN:
         :param cached_data: ip cached info from the database, dict
         """
         try:
-            update = (time.time() - cached_data['asn']['timestamp']) > update_period
+            update = (
+                time.time() - cached_data['asn']['timestamp']
+            ) > update_period
             return update
         except (KeyError, TypeError):
             # no there's no cached asn info,or no timestamp, or cached_data is None
@@ -70,9 +76,9 @@ class ASN:
             # found info in geolite
             asnorg = asninfo['autonomous_system_organization']
             data['asn'] = {'asnorg': asnorg}
-        except (KeyError,TypeError):
+        except (KeyError, TypeError):
             # asn info not found in geolite
-            data['asn'] ={'asnorg': 'Unknown'}
+            data['asn'] = {'asnorg': 'Unknown'}
 
         return data
 
@@ -86,10 +92,13 @@ class ASN:
             whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
             asnorg = whois_info.get('asn_description', False)
             asn_cidr = whois_info.get('asn_cidr', False)
-            if asnorg and asn_cidr not in ('' , 'NA'):
+            if asnorg and asn_cidr not in ('', 'NA'):
                 __database__.set_asn_cache(asnorg, asn_cidr)
             return True
-        except (ipwhois.exceptions.IPDefinedError,ipwhois.exceptions.HTTPLookupError):
+        except (
+            ipwhois.exceptions.IPDefinedError,
+            ipwhois.exceptions.HTTPLookupError,
+        ):
             # private ip or RDAP lookup failed. don't cache
             return False
         # except NoResolverConfiguration:
@@ -120,18 +129,21 @@ class ASN:
 
         url = 'http://ip-api.com/json/'
         try:
-            response = requests.get( f'{url}/{ip}', timeout=5)
+            response = requests.get(f'{url}/{ip}', timeout=5)
             if response.status_code == 200:
                 ip_info = json.loads(response.text)
                 if ip_info.get('as', '') != '':
                     asn['asn']['asnorg'] = ip_info['as']
-        except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError):
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+        ):
             pass
 
         return asn
 
     def get_asn(self, ip, cached_ip_info):
-        """ Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
+        """Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
 
         # do we have asn cached for this range?
         cached_asn = self.get_cached_asn(ip)
@@ -146,7 +158,7 @@ class ASN:
             self.cache_ip_range(ip)
         else:
             # found cached asn for this ip range, store it
-            cached_ip_info.update({'asn' : {'asnorg': cached_asn}})
+            cached_ip_info.update({'asn': {'asnorg': cached_asn}})
 
         # store asn info in the db
         cached_ip_info['asn'].update({'timestamp': time.time()})

@@ -17,7 +17,8 @@ import requests
 import json
 from contextlib import redirect_stdout
 
-#todo add to conda env
+# todo add to conda env
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -46,45 +47,143 @@ class Module(Module, multiprocessing.Process):
         # update asn every 1 month
         self.update_period = 2592000
         # we can only getthe age of these tlds
-        self.valid_tlds = ['.ac_uk', '.am', '.amsterdam', '.ar', '.at', '.au',
-                           '.bank', '.be', '.biz', '.br', '.by', '.ca', '.cc',
-                           '.cl', '.club', '.cn', '.co', '.co_il', '.co_jp', '.com',
-                           '.com_au', '.com_tr', '.cr', '.cz', '.de', '.download', '.edu',
-                           '.education', '.eu', '.fi', '.fm', '.fr', '.frl', '.game', '.global_',
-                           '.hk', '.id_', '.ie', '.im', '.in_', '.info', '.ink', '.io',
-                           '.ir', '.is_', '.it', '.jp', '.kr', '.kz', '.link', '.lt', '.lv',
-                           '.me', '.mobi', '.mu', '.mx', '.name', '.net', '.ninja',
-                           '.nl', '.nu', '.nyc', '.nz', '.online', '.org', '.pe',
-                           '.pharmacy', '.pl', '.press', '.pro', '.pt', '.pub', '.pw',
-                           '.rest', '.ru', '.ru_rf', '.rw', '.sale', '.se', '.security',
-                           '.sh', '.site', '.space', '.store', '.tech', '.tel', '.theatre',
-                           '.tickets', '.trade', '.tv', '.ua', '.uk', '.us', '.uz', '.video',
-                           '.website', '.wiki', '.work', '.xyz', '.za']
-    
+        self.valid_tlds = [
+            '.ac_uk',
+            '.am',
+            '.amsterdam',
+            '.ar',
+            '.at',
+            '.au',
+            '.bank',
+            '.be',
+            '.biz',
+            '.br',
+            '.by',
+            '.ca',
+            '.cc',
+            '.cl',
+            '.club',
+            '.cn',
+            '.co',
+            '.co_il',
+            '.co_jp',
+            '.com',
+            '.com_au',
+            '.com_tr',
+            '.cr',
+            '.cz',
+            '.de',
+            '.download',
+            '.edu',
+            '.education',
+            '.eu',
+            '.fi',
+            '.fm',
+            '.fr',
+            '.frl',
+            '.game',
+            '.global_',
+            '.hk',
+            '.id_',
+            '.ie',
+            '.im',
+            '.in_',
+            '.info',
+            '.ink',
+            '.io',
+            '.ir',
+            '.is_',
+            '.it',
+            '.jp',
+            '.kr',
+            '.kz',
+            '.link',
+            '.lt',
+            '.lv',
+            '.me',
+            '.mobi',
+            '.mu',
+            '.mx',
+            '.name',
+            '.net',
+            '.ninja',
+            '.nl',
+            '.nu',
+            '.nyc',
+            '.nz',
+            '.online',
+            '.org',
+            '.pe',
+            '.pharmacy',
+            '.pl',
+            '.press',
+            '.pro',
+            '.pt',
+            '.pub',
+            '.pw',
+            '.rest',
+            '.ru',
+            '.ru_rf',
+            '.rw',
+            '.sale',
+            '.se',
+            '.security',
+            '.sh',
+            '.site',
+            '.space',
+            '.store',
+            '.tech',
+            '.tel',
+            '.theatre',
+            '.tickets',
+            '.trade',
+            '.tv',
+            '.ua',
+            '.uk',
+            '.us',
+            '.uz',
+            '.video',
+            '.website',
+            '.wiki',
+            '.work',
+            '.xyz',
+            '.za',
+        ]
+
     def open_dbs(self):
-        """ Function to open the different offline databases used in this module. ASN, Country etc.. """
-        
+        """Function to open the different offline databases used in this module. ASN, Country etc.."""
+
         # Open the maxminddb ASN offline db
         try:
-            self.asn_db = maxminddb.open_database('databases/GeoLite2-ASN.mmdb')
+            self.asn_db = maxminddb.open_database(
+                'databases/GeoLite2-ASN.mmdb'
+            )
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. '
-                       'Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en '
-                       'Please note it must be the MaxMind DB version.')
+            self.print(
+                'Error opening the geolite2 db in databases/GeoLite2-ASN.mmdb. '
+                'Please download it from https://dev.maxmind.com/geoip/docs/databases/asn?lang=en '
+                'Please note it must be the MaxMind DB version.'
+            )
 
         # Open the maminddb Country offline db
         try:
-            self.country_db = maxminddb.open_database('databases/GeoLite2-Country.mmdb')
+            self.country_db = maxminddb.open_database(
+                'databases/GeoLite2-Country.mmdb'
+            )
         except:
-            self.print('Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. '
-                       'Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. '
-                       'Please note it must be the MaxMind DB version.')
-        
+            self.print(
+                'Error opening the geolite2 db in databases/GeoLite2-Country.mmdb. '
+                'Please download it from https://dev.maxmind.com/geoip/geolite2-free-geolocation-data?lang=en. '
+                'Please note it must be the MaxMind DB version.'
+            )
+
         try:
-            self.mac_db = open('databases/macaddress-db.json','r')
+            self.mac_db = open('databases/macaddress-db.json', 'r')
         except OSError:
-            self.print('Error opening the macaddress db in databases/macaddress-db.json. '
-                       'Please download it from https://macaddress.io/database-download/json.')
+            self.print(
+                'Error opening the macaddress db in databases/macaddress-db.json. '
+                'Please download it from https://macaddress.io/database-download/json.'
+            )
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -104,8 +203,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
-
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -172,9 +270,11 @@ class Module(Module, multiprocessing.Process):
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
-        if (not hasattr(self, 'mac_db')
-                or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
-                or '00:00:00:00:00:00' in mac_addr.lower()):
+        if (
+            not hasattr(self, 'mac_db')
+            or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
+            or '00:00:00:00:00:00' in mac_addr.lower()
+        ):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
@@ -203,7 +303,6 @@ class Module(Module, multiprocessing.Process):
                 MAC_info.update({'Vendor': vendor})
                 break
 
-
         if MAC_info['Vendor'] == 'Unknown':
             # couldn't find vendor using offline db, search online
             url = 'https://www.macvendorlookup.com/api/v2'
@@ -212,7 +311,9 @@ class Module(Module, multiprocessing.Process):
                 if response.status_code == 200:
                     # this onnline db returns results in an array like str [{results}],
                     # make it json
-                    online_info = response.text.replace("]","").replace("[","")
+                    online_info = response.text.replace(']', '').replace(
+                        '[', ''
+                    )
                     online_info = json.loads(online_info)
                     vendor = online_info.get('company', False)
                     if vendor:
@@ -221,9 +322,12 @@ class Module(Module, multiprocessing.Process):
                     # If there is no match in the online database,
                     # you will receive an empty response with a status code of HTTP/1.1 204 No Content
                     pass
-            except (requests.exceptions.ReadTimeout, requests.exceptions.ConnectionError, json.decoder.JSONDecodeError):
+            except (
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError,
+                json.decoder.JSONDecodeError,
+            ):
                 pass
-
 
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
@@ -286,14 +390,17 @@ class Module(Module, multiprocessing.Process):
         year = today.year - creation_date.year
 
         # get the age in days
-        age = (year*365) + (month*30) + day
+        age = (year * 365) + (month * 30) + day
         __database__.setInfoForDomains(domain, {'Age': age})
         return age
 
     def shutdown_gracefully(self):
-        if hasattr(self, 'asn_db'): self.asn_db.close()
-        if hasattr(self, 'country_db'): self.country_db.close()
-        if hasattr(self, 'mac_db'): self.mac_db.close()
+        if hasattr(self, 'asn_db'):
+            self.asn_db.close()
+        if hasattr(self, 'country_db'):
+            self.country_db.close()
+        if hasattr(self, 'mac_db'):
+            self.mac_db.close()
         # confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -314,16 +421,18 @@ class Module(Module, multiprocessing.Process):
                     self.get_vendor(mac_addr, host_name, profileid)
 
                 message = self.c3.get_message(timeout=self.timeout)
-                if (message and message['data'] == 'stop_process'):
+                if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
-                    data = message["data"]
+                    data = message['data']
                     data = json.loads(data)
                     profileid = data['profileid']
                     twid = data['twid']
                     uid = data['uid']
-                    flow_data = json.loads(data['flow']) # this is a dict {'uid':json flow data}
+                    flow_data = json.loads(
+                        data['flow']
+                    )   # this is a dict {'uid':json flow data}
                     domain = flow_data.get('query', False)
                     if domain:
                         self.get_age(domain)
@@ -354,14 +463,19 @@ class Module(Module, multiprocessing.Process):
 
                         # ------ GeoCountry -------
                         # Get the geocountry
-                        if cached_ip_info == {} or 'geocountry' not in cached_ip_info:
+                        if (
+                            cached_ip_info == {}
+                            or 'geocountry' not in cached_ip_info
+                        ):
                             self.get_geocountry(ip)
 
                         # ------ ASN -------
                         # Get the ASN
                         # only update the ASN for this IP if more than 1 month
                         # passed since last ASN update on this IP
-                        update_asn = self.asn.update_asn(cached_ip_info, self.update_period)
+                        update_asn = self.asn.update_asn(
+                            cached_ip_info, self.update_period
+                        )
                         if update_asn:
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)

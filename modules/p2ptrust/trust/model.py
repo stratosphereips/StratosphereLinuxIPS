@@ -10,7 +10,12 @@ class Model:
     This class defines a method that trust model is expected to have.
     """
 
-    def __init__(self, printer: Printer, trustdb: TrustDB, config: configparser.ConfigParser):
+    def __init__(
+        self,
+        printer: Printer,
+        trustdb: TrustDB,
+        config: configparser.ConfigParser,
+    ):
         self.printer = printer
         self.trustdb = trustdb
         self.config = config

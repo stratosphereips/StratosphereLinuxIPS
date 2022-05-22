@@ -14,6 +14,7 @@ import subprocess
 import json
 import datetime
 
+
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'leak_detector'
@@ -29,18 +30,19 @@ class Module(Module, multiprocessing.Process):
         # self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:
-            self.pcap = sys.argv[sys.argv.index('-f')+1]
+            self.pcap = sys.argv[sys.argv.index('-f') + 1]
         except ValueError:
             # this error is raised when we start this module in the unit tests so there's no argv
             # ignore it
             pass
         self.yara_rules_path = 'modules/leak_detector/yara_rules/rules/'
-        self.compiled_yara_rules_path = 'modules/leak_detector/yara_rules/compiled/'
+        self.compiled_yara_rules_path = (
+            'modules/leak_detector/yara_rules/compiled/'
+        )
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -60,7 +62,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def get_packet_info(self, offset: int):
         """
@@ -68,7 +70,7 @@ class Module(Module, multiprocessing.Process):
         returns  a tuple with packet info (srcip, dstip, proto, sport, dport, ts) or False if not found
         """
         offset = int(offset)
-        with open(self.pcap ,'rb') as f:
+        with open(self.pcap, 'rb') as f:
             # every pcap header is 24 bytes
             f.read(24)
             packet_number = 0
@@ -84,7 +86,9 @@ class Module(Module, multiprocessing.Process):
                 # get the length of the Packet Data field (the second last 4 bytes of the header), [::-1] for little endian
                 packet_data_length = packet_header[8:12][::-1]
                 # convert the hex into decimal
-                packet_length_in_decimal = int.from_bytes(packet_data_length, "big")
+                packet_length_in_decimal = int.from_bytes(
+                    packet_data_length, 'big'
+                )
 
                 # read until the end of this packet
                 f.read(packet_length_in_decimal)
@@ -94,22 +98,28 @@ class Module(Module, multiprocessing.Process):
                     # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
                     # use tshark to get packet info
                     command = f'tshark -r {self.pcap} -T json -Y frame.number=={packet_number}'
-                    result = subprocess.run(command.split(), stdout=subprocess.PIPE, stderr=open('/dev/null','w'))
-                    json_packet = result.stdout.decode("utf-8")
-                    json_packet =  json.loads(json_packet)
+                    result = subprocess.run(
+                        command.split(),
+                        stdout=subprocess.PIPE,
+                        stderr=open('/dev/null', 'w'),
+                    )
+                    json_packet = result.stdout.decode('utf-8')
+                    json_packet = json.loads(json_packet)
                     if json_packet:
                         # sometime tshark can't find the desired packet?
                         json_packet = json_packet[0]['_source']['layers']
 
                         # get ip family and used protocol
-                        used_protocols = json_packet['frame']['frame.protocols']
+                        used_protocols = json_packet['frame'][
+                            'frame.protocols'
+                        ]
                         if 'ipv6' in used_protocols:
                             ip_family = 'ipv6'
                         else:
                             ip_family = 'ip'
 
                         if 'tcp' in used_protocols:
-                            proto='tcp'
+                            proto = 'tcp'
                         elif 'udp' in used_protocols:
                             proto = 'udp'
                         else:
@@ -125,18 +135,17 @@ class Module(Module, multiprocessing.Process):
                         except KeyError:
                             continue
 
-                        return  (srcip, dstip, proto, sport, dport, ts)
+                        return (srcip, dstip, proto, sport, dport, ts)
 
         return False
 
-
-    def set_evidence_yara_match(self, info:dict):
+    def set_evidence_yara_match(self, info: dict):
         """
         This function is called when yara finds a match
         :param info: a dict with info about the matched rule, example keys 'tags', 'matches', 'rule', 'strings' etc.
         """
         rule = info.get('rule')
-        meta = info.get('meta',False)
+        meta = info.get('meta', False)
         # strings is a list of tuples containing information about the matching strings.
         # Each tuple has the form: (<offset>, <string identifier>, <string data>).
         strings = info.get('strings')
@@ -150,9 +159,14 @@ class Module(Module, multiprocessing.Process):
             # we now know there's a match at offset x, we need to know offset x belongs to which packet
             packet_info = self.get_packet_info(offset)
             if packet_info:
-                srcip, dstip, proto, sport, dport, ts = packet_info[0], packet_info[1], \
-                                                        packet_info[2],packet_info[3], \
-                                                        packet_info[4],packet_info[5]
+                srcip, dstip, proto, sport, dport, ts = (
+                    packet_info[0],
+                    packet_info[1],
+                    packet_info[2],
+                    packet_info[3],
+                    packet_info[4],
+                    packet_info[5],
+                )
                 type_detection = 'dstip'
                 detection_info = dstip
                 source_target_tag = 'CC'
@@ -164,10 +178,14 @@ class Module(Module, multiprocessing.Process):
                 portproto = f'{dport}/{proto}'
                 port_info = __database__.get_port_info(portproto)
                 ip_identification = __database__.getIPIdentification(dstip)
-                description = f"IP: {srcip} detected {rule} to destination address: {dstip} {ip_identification} " \
-                              f"port: {port_info if port_info else ''} {portproto}"
+                description = (
+                    f'IP: {srcip} detected {rule} to destination address: {dstip} {ip_identification} '
+                    f"port: {port_info if port_info else ''} {portproto}"
+                )
                 # generate a random uid
-                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
+                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+                    'utf-8'
+                )
                 profileid = f'profile_{srcip}'
                 # make sure we have this profileid
                 if __database__.hasProfile(profileid):
@@ -179,11 +197,22 @@ class Module(Module, multiprocessing.Process):
 
                     if twid:
                         twid = twid[0]
-                        __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                                 threat_level, confidence, description, ts,
-                                                 category, source_target_tag=source_target_tag,
-                                                 port=dport, proto=proto,
-                                                 profileid=profileid, twid=twid, uid=uid)
+                        __database__.setEvidence(
+                            type_evidence,
+                            type_detection,
+                            detection_info,
+                            threat_level,
+                            confidence,
+                            description,
+                            ts,
+                            category,
+                            source_target_tag=source_target_tag,
+                            port=dport,
+                            proto=proto,
+                            profileid=profileid,
+                            twid=twid,
+                            uid=uid,
+                        )
 
     def compile_and_save_rules(self):
         """
@@ -196,7 +225,9 @@ class Module(Module, multiprocessing.Process):
             pass
 
         for yara_rule in os.listdir(self.yara_rules_path):
-            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, f'{yara_rule}_compiled')
+            compiled_rule_path = os.path.join(
+                self.compiled_yara_rules_path, f'{yara_rule}_compiled'
+            )
             # if we already have the rule compiled, don't compiler again
             if os.path.exists(compiled_rule_path):
                 # we already have the rule compiled
@@ -212,16 +243,19 @@ class Module(Module, multiprocessing.Process):
             compiled_rule.save(compiled_rule_path)
 
     def find_matches(self):
-        """ Run yara rules on the given pcap and find matches"""
+        """Run yara rules on the given pcap and find matches"""
         for compiled_rule in os.listdir(self.compiled_yara_rules_path):
-            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
+            compiled_rule_path = os.path.join(
+                self.compiled_yara_rules_path, compiled_rule
+            )
             # load the compiled rules
             rule = yara.load(compiled_rule_path)
             # call set_evidence_yara_match when a match is found
-            matches = rule.match(self.pcap,
-                                 callback=self.set_evidence_yara_match,
-                                 which_callbacks=yara.CALLBACK_MATCHES)
-
+            matches = rule.match(
+                self.pcap,
+                callback=self.set_evidence_yara_match,
+                which_callbacks=yara.CALLBACK_MATCHES,
+            )
 
     def run(self):
         utils.drop_root_privs()

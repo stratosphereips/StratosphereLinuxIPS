@@ -67,7 +67,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -88,7 +88,7 @@ class Module(Module, multiprocessing.Process):
                     # Example of printing the number of profiles in the
                     # Database every second
                     data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data),3,0)
+                    self.print('Amount of profiles: {}'.format(data), 3, 0)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

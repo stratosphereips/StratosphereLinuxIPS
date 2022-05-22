@@ -25,9 +25,7 @@ class Printer:
         """
 
         levels = f'{verbose}{debug}'
-        msg = f"{levels}|{self.name}|{text}"
+        msg = f'{levels}|{self.name}|{text}'
         self.output_queue.put(msg)
         # with open(self.logs_file,'a') as f:
         #     f.write(f'[p2ptrust] {text}\n')
-
-

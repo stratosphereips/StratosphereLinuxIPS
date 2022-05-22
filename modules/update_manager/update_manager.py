@@ -1,10 +1,9 @@
-
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
-import platform,os
+import platform, os
 import sys
 
 # Your imports
@@ -35,18 +34,28 @@ class UpdateManager(Module, multiprocessing.Process):
         __database__.start(self.config, self.redis_port)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
-        self.update_manager = UpdateFileManager(self.outputqueue, config, redis_port)
+        self.update_manager = UpdateFileManager(
+            self.outputqueue, config, redis_port
+        )
         # Timer to update the ThreatIntelligence files
-        self.timer_manager = InfiniteTimer(self.update_period, self.update_TI_files)
+        self.timer_manager = InfiniteTimer(
+            self.update_period, self.update_TI_files
+        )
         self.timeout = 0
 
     def read_configuration(self):
-        """ Read the configuration file for what we need """
+        """Read the configuration file for what we need"""
         try:
             # update period
-            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
+            self.update_period = self.config.get(
+                'threatintelligence', 'malicious_data_update_period'
+            )
             self.update_period = float(self.update_period)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400
 
@@ -68,12 +77,12 @@ class UpdateManager(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def update_TI_files(self):
-        '''
+        """
         Update malicious files
-        '''
+        """
         self.update_manager.update()
 
     def shutdown_gracefully(self):
@@ -82,7 +91,6 @@ class UpdateManager(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return True
-
 
     async def update_ti_files(self, outputqueue, config, redis_port):
         """
@@ -100,7 +108,11 @@ class UpdateManager(Module, multiprocessing.Process):
         try:
             # Starting timer to update files
             self.timer_manager.start()
-            asyncio.run(self.update_ti_files(self.outputqueue, self.config, self.redis_port))
+            asyncio.run(
+                self.update_ti_files(
+                    self.outputqueue, self.config, self.redis_port
+                )
+            )
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -108,8 +120,6 @@ class UpdateManager(Module, multiprocessing.Process):
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             return True
-
-
 
         # Main loop function
         while True:
@@ -119,7 +129,6 @@ class UpdateManager(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
