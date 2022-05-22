@@ -98,7 +98,7 @@ class Daemon:
             # output dir to store running.log and error.log
             self.output_dir = self.config.get('modes', 'output_dir')
             if not self.output_dir.endswith('/'):
-                self.output_dir = self.output_dir + '/'
+                self.output_dir = f'{self.output_dir}/'
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -426,7 +426,7 @@ class Main:
         # Walk recursively through all modules and packages found on the . folder.
         # __path__ is the current path of this python program
         for loader, module_name, ispkg in pkgutil.walk_packages(
-            modules.__path__, modules.__name__ + '.'
+                modules.__path__, f'{modules.__name__}.'
         ):
             if any(module_name.__contains__(mod) for mod in to_ignore):
                 continue
@@ -459,15 +459,13 @@ class Main:
             # Walk through all members of currently imported modules.
             for member_name, member_object in inspect.getmembers(module):
                 # Check if current member is a class.
-                if inspect.isclass(member_object):
-                    if (
-                        issubclass(member_object, Module)
-                        and member_object is not Module
-                    ):
-                        plugins[member_object.name] = dict(
-                            obj=member_object,
-                            description=member_object.description,
-                        )
+                if inspect.isclass(member_object) and (issubclass(
+                        member_object, Module
+                ) and member_object is not Module):
+                    plugins[member_object.name] = dict(
+                        obj=member_object,
+                        description=member_object.description,
+                    )
 
         # Change the order of the blocking module(load it first) so it can receive msgs sent from other modules
         if 'Blocking' in plugins:
@@ -481,11 +479,7 @@ class Main:
         # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
         for arg in sys.argv:
             if 'slips.py' in arg:
-                # get the path preceeding slips.py
-                # (may be ../ or  ../../ or '' if slips.py is in the cwd),
-                # this path is where slips.conf will be
-                cwd = arg[: arg.index('slips.py')]
-                return cwd
+                return arg[: arg.index('slips.py')]
 
     def prepare_zeek_scripts(self):
         """
@@ -503,16 +497,16 @@ class Main:
             # There is a conf, but there is no option, or no section or no configuration file specified
             home_network = utils.home_network_ranges
 
-        zeek_scripts_dir = os.getcwd() + '/zeek-scripts'
+        zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
         # add local sites if not there
         is_local_nets_defined = False
-        with open(zeek_scripts_dir + '/slips-conf.zeek', 'r') as slips_conf:
+        with open(f'{zeek_scripts_dir}/slips-conf.zeek', 'r') as slips_conf:
             if 'local_nets' in slips_conf.read():
                 is_local_nets_defined = True
 
         if not is_local_nets_defined:
             with open(
-                zeek_scripts_dir + '/slips-conf.zeek', 'a'
+                    f'{zeek_scripts_dir}/slips-conf.zeek', 'a'
             ) as slips_conf:
                 # update home network
                 slips_conf.write(
