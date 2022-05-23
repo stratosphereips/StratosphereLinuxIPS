@@ -1,10 +1,13 @@
 -0.9.1
 * Slips
- - Drop root privileges in modules that don't need them
- - Added support for running slips in the background as a daemon
- - Fix the issue of growing zeek logs by deleting old zeek logs every 1 day. (optional but enabled by default)
- - Added support for running several instances of slips at the same time.
--0.9.0
+
+- Drop root privileges in modules that don't need them
+- Added support for running slips in the background as a daemon
+- Fix the issue of growing zeek logs by deleting old zeek logs every 1 day. (optional but enabled by default)
+- Added support for running several instances of slips at the same time.
+- Saving and loading the db in macos
+- Fix reading flows from stdin, now it supports zeek, argus and suricata -0.9.0
+
 * Slips
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
  - Parse zeek software.log and extract software type, version and user agent from it

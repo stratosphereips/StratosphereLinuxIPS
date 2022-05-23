@@ -8,6 +8,7 @@ Slips can read the packets directly from the **network interface** of the host m
 - Argus flows (CSV file separated by commas or TABs) 
 - Zeek/Bro flows from a Zeek folder with log files
 - Nfdump flows from a binary nfdump file
+- Text flows from stdin in zeek, argus or suricata form
 
 It's recommended to use PCAPs.
 
@@ -45,40 +46,46 @@ tr:nth-child(even) {
 <table>
 	<tr>
 		<th>File/interface</th>
-		<th>Slips Argument</th>
+		<th>Argument</th>
 		<th>Example command</th>
 	</tr>
 	<tr>
 		<td>Network interface (*)</td>
 		<td>-i</td>
-		<td>./slips.py -c slips.conf -i en0</td>
+		<td>./slips.py -i en0</td>
 	</tr>
 	<tr>
 		<td>pcap</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.pcap</td>
+		<td>./slips.py -f test.pcap</td>
 	</tr>
 	<tr>
 		<td>Argus binetflow</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.binetflow</td>
+		<td>./slips.py -f test.binetflow</td>
 	</tr>
 	<tr>
 		<td>Zeek/Bro folder/log</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f zeek_files</td>
+		<td>./slips.py -f zeek_files</td>
 	</tr>
 	<tr>
 		<td>Nfdump flow</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.nfdump </td>
+		<td>./slips.py -f test.nfdump </td>
 	</tr>
+    <tr>
+		<td>stdin</td>
+		<td>-f</td>
+		<td>./slips.py -f zeek </td>
+	</tr>    
+
 </table>
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
-
-There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
+There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models
+separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
 
 ## Daemonized vs interactive mode
 
@@ -470,13 +477,40 @@ Below is a table showing each level of both.
 
 #### Using errors.log and running.log
 
-Slips also logs all errors to output/errors.log (interactive mode), and  /var/log/slips/error.log (daemonized mode) whether you're using -e or not. See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode) for more information about the 2 modes
+Slips also logs all errors to output/errors.log (interactive mode), and /var/log/slips/error.log (daemonized mode)
+whether you're using -e or not.
+See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode)
+for more information about the 2 modes
 
-General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of interactive mode 
+General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of
+interactive mode
+
+## Reading Input from stdin
+
+Slips supports reading input flows in text format from stdin in interactive mode.
+
+Supported flow from stdin are zeek (json form), suricata and argus.
+
+For example you can run slips using:
+
+```./slips.py -f zeek```
+
+or
+
+```./slips.py -f suricata```
+
+and you once you see the following line:
+
+```[InputProcess] Receiving flows from stdin.```
+
+you can start giving slips flows in you desired format.
+
+This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
 ## Plug in a zeek script
 
-Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file name in ```zeek-scripts/__load__.zeek```.
+Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file
+name in ```zeek-scripts/__load__.zeek```.
 
 For example, if you want to add a zeek script called ```arp.zeek``` you should add it to ```__load__.zeek``` like this:
 
