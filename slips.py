@@ -842,8 +842,7 @@ class Main:
 
             # clear the server opened on this port
             try:
-                connected = __database__.connect_to_redis_server(port)
-                if connected:
+                if connected := __database__.connect_to_redis_server(port):
                     __database__.r.flushall()
                     __database__.r.script_flush()
             except redis.exceptions.ConnectionError:
@@ -1164,6 +1163,136 @@ class Main:
         self.mode = mode
         self.daemon = daemon
 
+    def handle_flows_from_stdin(self, input_information):
+        if input_information.lower() not in (
+                'argus',
+                'suricata',
+                'zeek',
+                'nfdump',
+        ):
+            print(
+                f'[Main] Invalid file path {input_information}. Stopping.'
+            )
+            sys.exit(-1)
+            return False
+
+        if self.mode == 'daemonized':
+            print(
+                "Can't read input from stdin in daemonized mode. "
+                "Stopping"
+            )
+            sys.exit(-1)
+            return False
+        line_type = input_information
+        input_type = 'stdin'
+        return input_type, line_type.lower()
+
+    def load_db(self):
+        input_type = 'database'
+        # input_information = 'database'
+        from slips_files.core.database import __database__
+        __database__.start(self.config, 6379)
+        if not __database__.load(self.args.db):
+            print(f'Error loading the database {self.args.db}.')
+        else:
+            print(
+                f'{self.args.db} loaded successfully. Run ./kalipso.sh'
+            )
+        self.terminate_slips()
+
+    def get_input_file_type(self, input_information):
+        """input_information: given file"""
+        # default value
+        input_type = 'file'
+        # Get the type of file
+        cmd_result = subprocess.run(
+            ['file', input_information], stdout=subprocess.PIPE
+        )
+        # Get command output
+        cmd_result = cmd_result.stdout.decode('utf-8')
+
+        if 'pcap' in cmd_result:
+            input_type = 'pcap'
+        elif 'dBase' in cmd_result:
+            input_type = 'nfdump'
+            if shutil.which('nfdump') is None:
+                # If we do not have nfdump, terminate Slips.
+                print(
+                    'nfdump is not installed. terminating slips.'
+                )
+                self.terminate_slips()
+        elif 'CSV' in cmd_result:
+            input_type = 'binetflow'
+        elif 'directory' in cmd_result:
+            input_type = 'zeek_folder'
+        else:
+            # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
+            # use first line to determine
+            with open(input_information, 'r') as f:
+                while True:
+                    # get the first line that isn't a comment
+                    first_line = f.readline().replace('\n', '')
+                    if not first_line.startswith('#'):
+                        break
+            if 'flow_id' in first_line:
+                input_type = 'suricata'
+            else:
+                # this is a text file, it can be binetflow or zeek_log_file
+                try:
+                    # is it a json log file
+                    json.loads(first_line)
+                    input_type = 'zeek_log_file'
+                except json.decoder.JSONDecodeError:
+                    # this is a tab separated file
+                    # is it zeek log file or binetflow file?
+                    tabs_found = re.search(
+                        '\s{1,}-\s{1,}', first_line
+                    )
+                    if (
+                            '->' in first_line
+                            or 'StartTime' in first_line
+                    ):
+                        # tab separated files are usually binetflow tab files
+                        input_type = 'binetflow-tabs'
+                    elif tabs_found:
+                        input_type = 'zeek_log_file'
+
+        return input_type
+
+    def check_input_type(self, ) -> tuple:
+        """
+        returns input_type, input_information
+        supported input types are:
+            interface, argus, suricata, zeek, nfdump, db
+        supported input_information:
+            given filepath, interface or type of line given in stdin
+        """
+        # only defined in stdin lines
+        line_type = False
+        # -I
+        if self.args.interface:
+            input_information = self.args.interface
+            input_type = 'interface'
+            # return input_type, input_information
+
+        if self.args.db:
+            self.load_db()
+            return
+
+        if not self.args.filepath:
+            print('[Main] You need to define an input source.')
+            sys.exit(-1)
+        # -f file/stdin-type
+        input_information = self.args.filepath
+        if os.path.exists(input_information):
+            input_type = self.get_input_file_type(input_information)
+        else:
+            input_type, line_type = self.handle_flows_from_stdin(
+                input_information
+            )
+
+        return input_type, input_information, line_type
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1234,116 +1363,8 @@ class Main:
                     print("Can't use -s and -b together")
                     self.terminate_slips()
 
-            line_type = False
             # Check the type of input
-            if self.args.interface:
-                input_information = self.args.interface
-                input_type = 'interface'
-            elif self.args.filepath:
-                input_information = self.args.filepath
-                # check invalid file path
-                if (
-                    not os.path.exists(input_information)
-                    and input_information != 'stdin'
-                ):
-                    print(
-                        f'[Main] Invalid file path {input_information}. Stopping.'
-                    )
-                    os._exit(-1)
-
-                if input_information != 'stdin':
-                    # default value
-                    input_type = 'file'
-                    # Get the type of file
-                    cmd_result = subprocess.run(
-                        ['file', input_information], stdout=subprocess.PIPE
-                    )
-                    # Get command output
-                    cmd_result = cmd_result.stdout.decode('utf-8')
-
-                    if 'pcap' in cmd_result:
-                        input_type = 'pcap'
-                    elif 'dBase' in cmd_result:
-                        input_type = 'nfdump'
-                        if shutil.which('nfdump') == None:
-                            # If we do not have nfdump, terminate Slips.
-                            print(
-                                'nfdump is not installed. terminating slips.'
-                            )
-                            self.terminate_slips()
-                    elif 'CSV' in cmd_result:
-                        input_type = 'binetflow'
-                    elif 'directory' in cmd_result:
-                        input_type = 'zeek_folder'
-                    else:
-                        # is it a zeek log file or suricata, binetflow tabs , or binetflow comma separated file?
-                        # use first line to determine
-                        with open(input_information, 'r') as f:
-                            while True:
-                                # get the first line that isn't a comment
-                                first_line = f.readline().replace('\n', '')
-                                if not first_line.startswith('#'):
-                                    break
-                        if 'flow_id' in first_line:
-                            input_type = 'suricata'
-                        else:
-                            # this is a text file , it can be binetflow or zeek_log_file
-                            try:
-                                # is it a json log file
-                                json.loads(first_line)
-                                input_type = 'zeek_log_file'
-                            except json.decoder.JSONDecodeError:
-                                # this is a tab separated file
-                                # is it zeek log file or binetflow file?
-                                # line = re.split(r'\s{2,}', first_line)[0]
-                                tabs_found = re.search(
-                                    '\s{1,}-\s{1,}', first_line
-                                )
-                                if (
-                                    '->' in first_line
-                                    or 'StartTime' in first_line
-                                ):
-                                    # tab separated files are usually binetflow tab files
-                                    input_type = 'binetflow-tabs'
-                                elif tabs_found:
-                                    input_type = 'zeek_log_file'
-                elif self.mode == 'interactive':
-                    input_type = 'stdin'
-                    line_type = input(
-                        'Enter the flow type, available options are:\nargus, argus-tabs, suricata, zeek, zeek-tabs or nfdump\n'
-                    )
-                    if line_type.lower() not in (
-                        'argus',
-                        'argus-tabs',
-                        'suricata',
-                        'zeek',
-                        'zeek-tabs',
-                        'nfdump',
-                    ):
-                        print(f'[Main] invalid line type {line_type}')
-                        sys.exit(-1)
-                else:
-                    print(
-                        "Slips can't take input from stdin while in daemonized mode. Start slips again with -I"
-                    )
-                    sys.exit(-1)
-            elif self.args.db:
-                input_type = 'database'
-                input_information = 'database'
-                from slips_files.core.database import __database__
-
-                __database__.start(self.config, 6379)
-                if not __database__.load(self.args.db):
-                    print(f'Error loading the database {self.args.db}.')
-                else:
-                    print(
-                        f'{self.args.db} loaded successfully. Run ./kalipso.sh'
-                    )
-                self.terminate_slips()
-
-            else:
-                print('[Main] You need to define an input source.')
-                sys.exit(-1)
+            input_type, input_information, line_type = self.check_input_type()
 
             # If we need zeek (bro), test if we can run it.
             # Need to be assign to something because we pass it to inputProcess later
@@ -1354,8 +1375,7 @@ class Main:
                     # If we do not have bro or zeek, terminate Slips.
                     print('Error. No zeek or bro binary found.')
                     self.terminate_slips()
-                else:
-                    self.prepare_zeek_scripts()
+                self.prepare_zeek_scripts()
 
             # Remove default alerts files, if exists, don't remove if we're stopping the daemon
             # set alerts.log and alerts.json default paths,
@@ -1760,7 +1780,7 @@ class Main:
                             )
                         # How many profiles we have?
                         profilesLen = str(__database__.getProfilesLen())
-                        if self.mode != 'daemonized':
+                        if self.mode != 'daemonized' and input_type != 'stdin':
                             print(
                                 f'Total Number of Profiles in DB so far: {profilesLen}. '
                                 f'Modified Profiles in the last TW: {amount_of_modified}. '
