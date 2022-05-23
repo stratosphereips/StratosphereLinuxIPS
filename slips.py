@@ -841,10 +841,14 @@ class Main:
                 continue
 
             # clear the server opened on this port
-            connected = __database__.connect_to_redis_server(port)
-            if connected:
-                __database__.r.flushall()
-                __database__.r.script_flush()
+            try:
+                connected = __database__.connect_to_redis_server(port)
+                if connected:
+                    __database__.r.flushall()
+                    __database__.r.script_flush()
+            except redis.exceptions.ConnectionError:
+                # server already killed!
+                continue
 
             # signal 0 is to check if the process is still running or not
             # it returns 1 if the process exited

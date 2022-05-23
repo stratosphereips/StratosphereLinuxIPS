@@ -222,7 +222,9 @@ class Module(Module, multiprocessing.Process):
 
     def port_belongs_to_an_org(self, daddr, portproto, profileid):
         """
-        Checks weather a port is known to be used by a specific organization or not
+        Checks wehether a port is known to be used by a specific
+        organization or not, and returns true if the daddr belongs to the
+        same org as the port
         """
         if organization_info := __database__.get_organization_of_port(
                 portproto
@@ -236,14 +238,14 @@ class Module(Module, multiprocessing.Process):
 
             if daddr in org_ip:
                 # it's an ip and it belongs to this org, consider the port as known
-                return False
+                return True
 
             # is it a range?
             try:
                 # we have the org range in our database, check if the daddr belongs to this range
                 if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
                     # it does, consider the port as known
-                    return False
+                    return True
             except ValueError:
                 # not a range either since nothing is specified,
                 # check the source and dst mac address vendors
