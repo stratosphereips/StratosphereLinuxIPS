@@ -505,6 +505,8 @@ and you once you see the following line:
 
 you can start giving slips flows in you desired format.
 
+All zeek lines taken from stdin should be in json form and are treated as conn.log lines.
+
 This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
 ## Plug in a zeek script
