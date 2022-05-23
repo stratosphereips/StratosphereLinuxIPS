@@ -1168,7 +1168,6 @@ class Main:
                 'argus',
                 'suricata',
                 'zeek',
-                'nfdump',
         ):
             print(
                 f'[Main] Invalid file path {input_information}. Stopping.'
