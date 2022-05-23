@@ -523,27 +523,32 @@ class ProfilerProcess(multiprocessing.Process):
             sys.exit(1)
 
     def define_columns(self, new_line):
-        """Define the columns for Argus and Zeek-tabs from the line received"""
+        """
+        Define the columns for Argus and Zeek-tabs from the line received
+        :param new_line: should be the header line of the argus/zeek-tabs file
+        """
         # These are the indexes for later fast processing
         line = new_line['data']
+        # use null instead of false because 0==False and starttime index
+        # won't be adde to the temp_dict at the end of this function
         self.column_idx = {
-            'starttime': False,
-            'endtime': False,
-            'dur': False,
-            'proto': False,
-            'appproto': False,
-            'saddr': False,
-            'sport': False,
-            'dir': False,
-            'daddr': False,
-            'dport': False,
-            'state': False,
-            'pkts': False,
-            'spkts': False,
-            'dpkts': False,
-            'bytes': False,
-            'sbytes': False,
-            'dbytes': False,
+            'starttime': 'null',
+            'endtime': 'null',
+            'dur': 'null',
+            'proto': 'null',
+            'appproto': 'null',
+            'saddr': 'null',
+            'sport': 'null',
+            'dir': 'null',
+            'daddr': 'null',
+            'dport': 'null',
+            'state': 'null',
+            'pkts': 'null',
+            'spkts': 'null',
+            'dpkts': 'null',
+            'bytes': 'null',
+            'sbytes': 'null',
+            'dbytes': 'null',
         }
 
         try:
@@ -573,18 +578,19 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_idx['bytes'] = nline.index(field)
                 elif 'srcbytes' in field.lower():
                     self.column_idx['sbytes'] = nline.index(field)
+                elif 'srcpkts' in field.lower():
+                    self.column_idx['spkts'] = nline.index(field)
+                elif 'dstpkts' in field.lower():
+                    self.column_idx['dpkts'] = nline.index(field)
             # Some of the fields were not found probably,
             # so just delete them from the index if their value is False.
             # If not we will believe that we have data on them
             # We need a temp dict because we can not change the size of dict while analyzing it
             temp_dict = {}
-            for i in self.column_idx:
-                if (
-                    type(self.column_idx[i]) == bool
-                    and self.column_idx[i] == False
-                ):
+            for k, e in self.column_idx.items():
+                if e == 'null':
                     continue
-                temp_dict[i] = self.column_idx[i]
+                temp_dict[k] = e
             self.column_idx = temp_dict
             return self.column_idx
         except Exception as inst:
