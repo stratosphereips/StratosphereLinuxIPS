@@ -1164,6 +1164,26 @@ class Main:
         self.mode = mode
         self.daemon = daemon
 
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
+        """
+
+        levels = f'{verbose}{debug}'
+        self.print(f'{levels}|{self.name}|{text}')
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1442,7 +1462,7 @@ class Main:
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
                 # Create the queue
-                outputProcessQueue = Queue()
+                self.outputqueue = Queue()
                 # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
                 # lsof will provide a list of all open fds belonging to slips
                 command = f'lsof -p {os.getpid()}'
@@ -1469,7 +1489,7 @@ class Main:
 
                 # Create the output thread and start it
                 outputProcessThread = OutputProcess(
-                    outputProcessQueue,
+                    self.outputqueue,
                     self.args.verbose,
                     self.args.debug,
                     self.config,
@@ -1488,14 +1508,14 @@ class Main:
                 # now that we have successfully connected to the db,
                 # log the PID of the started redis-server
                 self.log_redis_server_PID(redis_port, input_information)
-                outputProcessQueue.put(
+                self.print(
                     f'10|main|Using redis server on port: {redis_port}'
                 )
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
                 # Print the PID of the main slips process. We do it here because we needed the queue to the output process
-                outputProcessQueue.put(
+                self.print(
                     '10|main|Started main program [PID {}]'.format(os.getpid())
                 )
                 # Output pid
@@ -1503,14 +1523,14 @@ class Main:
                     'OutputProcess', int(outputProcessThread.pid)
                 )
 
-                outputProcessQueue.put(
+                self.print(
                     '10|main|Started output thread [PID {}]'.format(
                         outputProcessThread.pid
                     )
                 )
 
                 # Start each module in the folder modules
-                outputProcessQueue.put('01|main|Starting modules')
+                self.print('01|main|Starting modules')
                 to_ignore = self.read_configuration(
                     self.config, 'modules', 'disable'
                 )
@@ -1575,7 +1595,7 @@ class Main:
                         if module_name not in to_ignore:
                             module_class = modules_to_call[module_name]['obj']
                             ModuleProcess = module_class(
-                                outputProcessQueue, self.config, redis_port
+                                self.outputqueue, self.config, redis_port
                             )
                             ModuleProcess.start()
                             __database__.store_process_PID(
@@ -1584,7 +1604,7 @@ class Main:
                             description = modules_to_call[module_name][
                                 'description'
                             ]
-                            outputProcessQueue.put(
+                            self.print(
                                 f'10|main|\t\tStarting the module {module_name} '
                                 f'({description}) '
                                 f'[PID {ModuleProcess.pid}]'
@@ -1595,9 +1615,9 @@ class Main:
                 # if self.args.gui:
                 #     # Create the curses thread
                 #     guiProcessQueue = Queue()
-                #     guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, self.args.verbose, self.args.debug, self.config)
+                #     guiProcessThread = GuiProcess(guiProcessQueue, self.outputqueue, self.args.verbose, self.args.debug, self.config)
                 #     guiProcessThread.start()
-                #     outputProcessQueue.put('quiet')
+                #     self.print('quiet')
 
                 do_logs = self.read_configuration(
                     self.config, 'parameters', 'create_log_files'
@@ -1610,14 +1630,14 @@ class Main:
                     logsProcessQueue = Queue()
                     logsProcessThread = LogsProcess(
                         logsProcessQueue,
-                        outputProcessQueue,
+                        self.outputqueue,
                         self.args.verbose,
                         self.args.debug,
                         self.config,
                         logs_folder,
                     )
                     logsProcessThread.start()
-                    outputProcessQueue.put(
+                    self.print(
                         '10|main|Started logsfiles thread [PID {}]'.format(
                             logsProcessThread.pid
                         )
@@ -1635,14 +1655,14 @@ class Main:
                 # Create the thread and start it
                 evidenceProcessThread = EvidenceProcess(
                     evidenceProcessQueue,
-                    outputProcessQueue,
+                    self.outputqueue,
                     self.config,
                     self.args.output,
                     logs_folder,
                     redis_port,
                 )
                 evidenceProcessThread.start()
-                outputProcessQueue.put(
+                self.print(
                     '10|main|Started Evidence thread [PID {}]'.format(
                         evidenceProcessThread.pid
                     )
@@ -1658,14 +1678,14 @@ class Main:
                 # Create the profile thread and start it
                 profilerProcessThread = ProfilerProcess(
                     profilerProcessQueue,
-                    outputProcessQueue,
+                    self.outputqueue,
                     self.args.verbose,
                     self.args.debug,
                     self.config,
                     redis_port,
                 )
                 profilerProcessThread.start()
-                outputProcessQueue.put(
+                self.print(
                     '10|main|Started Profiler thread [PID {}]'.format(
                         profilerProcessThread.pid
                     )
@@ -1679,7 +1699,7 @@ class Main:
                 # Input process
                 # Create the input process and start it
                 inputProcess = InputProcess(
-                    outputProcessQueue,
+                    self.outputqueue,
                     profilerProcessQueue,
                     input_type,
                     input_information,
@@ -1690,7 +1710,7 @@ class Main:
                     redis_port,
                 )
                 inputProcess.start()
-                outputProcessQueue.put(
+                self.print(
                     '10|main|Started input thread [PID {}]'.format(
                         inputProcess.pid
                     )
@@ -1702,7 +1722,7 @@ class Main:
                 # warn about unused open redis servers
                 open_servers = len(self.get_open_servers_PIDs())
                 if open_servers > 1:
-                    print(
+                    self.print(
                         f'[Main] Warning: You have {open_servers} redis servers running. '
                         f'Run Slips with --killall to stop them.'
                     )
@@ -1721,7 +1741,7 @@ class Main:
                             __database__.set_host_ip(hostIP)
                             break
                         except redis.exceptions.DataError:
-                            print(
+                            self.print(
                                 'Not Connected to the internet. Reconnecting in 10s.'
                             )
                             time.sleep(10)
@@ -1761,7 +1781,7 @@ class Main:
                         # How many profiles we have?
                         profilesLen = str(__database__.getProfilesLen())
                         if self.mode != 'daemonized':
-                            print(
+                            self.print(
                                 f'Total Number of Profiles in DB so far: {profilesLen}. '
                                 f'Modified Profiles in the last TW: {amount_of_modified}. '
                                 f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
