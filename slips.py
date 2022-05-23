@@ -1157,7 +1157,8 @@ class Main:
 
     def set_mode(self, mode, daemon=''):
         """
-        Slips has 2 modes, daemonized and interactive, this function sets up the mode so that slips knows in which mode it's operating
+        Slips has 2 modes, daemonized and interactive, this function
+        sets up the mode so that slips knows in which mode it's operating
         :param mode: daemonized of interavtive
         :param daemon: Daemon() instance
         """
@@ -1589,6 +1590,12 @@ class Main:
                                 f'({description}) '
                                 f'[PID {ModuleProcess.pid}]'
                             )
+                    # give outputprocess time to print all the started modules
+                    time.sleep(1)
+                    print('-' * 27)
+                    outputProcessQueue.put(
+                        f"10|main|Disabled Modules: {to_ignore}"
+                    )
 
                 # Get the type of output from the parameters
                 # Several combinations of outputs should be able to be used
