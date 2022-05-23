@@ -3033,7 +3033,16 @@ class ProfilerProcess(multiprocessing.Process):
                     # Argus puts the definition of the columns on the first line only
                     # So read the first line and define the columns
                     try:
-                        # Are the columns defined? Just try to access them
+                        # argus from stdin
+                        if not hasattr(self, 'column_idx'):
+                            self.define_columns(
+                                {
+                                    'data': "StartTime,Dur,Proto,SrcAddr,Sport,"
+                                            "Dir,"
+                                            "DstAddr,Dport,State,sTos,dTos,TotPkts,"
+                                            "TotBytes,SrcBytes,SrcPkts,Label"
+                                }
+                            )
                         _ = self.column_idx['starttime']
                         # Yes
                         # Quickly process all lines
