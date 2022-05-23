@@ -69,6 +69,15 @@ class ProfilerProcess(multiprocessing.Process):
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
+        self.separators = {
+            'zeek': '',
+            'suricata': '',
+            'nfdump': ',',
+            'argus': ',',
+            'zeek-tabs': '\t',
+            'argus-tabs': '\t'
+
+        }
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -455,19 +464,21 @@ class ProfilerProcess(multiprocessing.Process):
                 return False
 
             if file_type == 'stdin':
-                # don't determine the type of line given sing define_type(),
+                # don't determine the type of line given using define_type(),
                 # the type of line is taken directly from the user
                 # because define_type expects zeek lines in a certain format and the user won't reformat the zeek line
                 # before giving it to slips
                 self.input_type = line['line_type']
+                self.separator = self.separators[self.input_type]
                 return self.input_type
+
             # In the case of Zeek from an interface or pcap,
             # the structure is a JSON
             # So try to convert into a dict
             if type(data) == dict:
                 try:
                     _ = data['data']
-                    self.separator = '	'
+                    # self.separator = '	'
                     self.input_type = 'zeek-tabs'
                 except KeyError:
                     self.input_type = 'zeek'
@@ -488,7 +499,7 @@ class ProfilerProcess(multiprocessing.Process):
                     nr_tabs = len(data.split('   '))
                     if nr_commas > nr_tabs:
                         # Commas is the separator
-                        self.separator = ','
+                        # self.separator = ','
                         self.input_type = 'nfdump' if nr_commas > 40 else 'argus'
                     else:
                         # Tabs is the separator
@@ -498,8 +509,10 @@ class ProfilerProcess(multiprocessing.Process):
                             self.input_type = 'argus-tabs'
                         else:
                             self.input_type = 'zeek-tabs'
-                        self.separator = '\t'
+                        # self.separator = '\t'
+            self.separator = self.separators[self.input_type]
             return self.input_type
+
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(

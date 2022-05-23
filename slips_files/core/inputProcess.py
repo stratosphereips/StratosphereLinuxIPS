@@ -390,30 +390,31 @@ class InputProcess(multiprocessing.Process):
             return False
 
     def read_from_stdin(self):
-        try:
-            self.print('Receiving flows from the stdin.')
-            # By default read the stdin
-            sys.stdin.close()
-            sys.stdin = os.fdopen(0, 'r')
-            file_stream = sys.stdin
-            line = {'type': 'stdin'}
-            for t_line in file_stream:
-                if t_line == '\n':
-                    continue
-                # tell profilerprocess the type of line the user gave slips
-                line['line_type'] = self.line_type
-                # profilerprocess expects a dict if the type of line is zeek
-                if self.line_type == 'zeek':
-                    t_line = json.loads(t_line)
+        self.print('Receiving flows from stdin.')
+        # By default read the stdin
+        sys.stdin.close()
+        sys.stdin = os.fdopen(0, 'r')
+        file_stream = sys.stdin
+        # tell profilerprocess the type of line the user gave slips
+        line_info = {
+            'type': 'stdin',
+            'line_type': self.line_type
+        }
+        for line in file_stream:
+            if line == '\n':
+                continue
 
-                line['data'] = t_line
-                self.print(f'	> Sent Line: {t_line}', 0, 3)
-                self.profilerqueue.put(line)
-                self.lines += 1
-            self.stop_queues()
-            return True
-        except KeyboardInterrupt:
-            return True
+            # slips supports zeek json only, tabs arent supported
+            if self.line_type == 'zeek':
+                line = json.loads(line)
+
+            line_info['data'] = line
+            self.print(f'	> Sent Line: {line_info}', 0, 3)
+            self.profilerqueue.put(line_info)
+            self.lines += 1
+
+        self.stop_queues()
+        return True
 
     def handle_binetflow(self):
         try:
