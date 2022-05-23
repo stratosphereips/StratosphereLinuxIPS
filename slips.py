@@ -294,6 +294,7 @@ class Daemon:
 class Main:
     def __init__(self):
         # Set up the default path for alerts.log and alerts.json. In our case, it is output folder.
+        self.name = 'main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'
@@ -524,6 +525,19 @@ class Main:
         #         if file_name not in loaded_scripts:
         #             # found a file in the dir that isn't in __load__.zeek, add it
         #             f.write(f'\n@load ./{file_name}')
+
+    def start_gui_process(self):
+        # Get the type of output from the parameters
+        # Several combinations of outputs should be able to be used
+        if self.args.gui:
+            # Create the curses thread
+            guiProcessQueue = Queue()
+            guiProcessThread = GuiProcess(
+                guiProcessQueue, self.outputqueue, self.args.verbose,
+                self.args.debug, self.config
+            )
+            guiProcessThread.start()
+            self.print('quiet')
 
     def add_metadata(self):
         """
@@ -1182,7 +1196,67 @@ class Main:
         """
 
         levels = f'{verbose}{debug}'
-        self.print(f'{levels}|{self.name}|{text}')
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+
+    def get_disabled_modules(self) -> list:
+        to_ignore = self.read_configuration(
+            self.config, 'modules', 'disable'
+        )
+        use_p2p = self.read_configuration(
+            self.config, 'P2P', 'use_p2p'
+        )
+
+        if not to_ignore:
+            return []
+        # Convert string to list
+        to_ignore = (
+            to_ignore.replace('[', '')
+                .replace(']', '')
+                .replace(' ', '')
+                .split(',')
+        )
+        # Ignore exporting alerts module if export_to is empty
+        export_to = (
+            self.config.get('ExportingAlerts', 'export_to')
+                .rstrip('][')
+                .replace(' ', '')
+                .lower()
+        )
+        if (
+                'stix' not in export_to
+                and 'slack' not in export_to
+                and 'json' not in export_to
+        ):
+            to_ignore.append('exporting_alerts')
+        if (
+                not use_p2p
+                or use_p2p == 'no'
+                or not self.args.interface
+        ):
+            to_ignore.append('p2ptrust')
+
+        # ignore CESNET sharing module if send and receive are are disabled in slips.conf
+        send_to_warden = self.config.get(
+            'CESNET', 'send_alerts'
+        ).lower()
+        receive_from_warden = self.config.get(
+            'CESNET', 'receive_alerts'
+        ).lower()
+        if 'no' in send_to_warden and 'no' in receive_from_warden:
+            to_ignore.append('CESNET')
+        # don't run blocking module unless specified
+        if (
+                not self.args.clearblocking
+                and not self.args.blocking
+                or (self.args.blocking and not self.args.interface)
+        ):  # ignore module if not using interface
+            to_ignore.append('blocking')
+
+        # leak detector only works on pcap files
+        if input_type != 'pcap':
+            to_ignore.append('leak_detector')
+
+        return to_ignore
 
     def start(self):
         """Main Slips Function"""
@@ -1531,64 +1605,11 @@ class Main:
 
                 # Start each module in the folder modules
                 self.print('01|main|Starting modules')
-                to_ignore = self.read_configuration(
-                    self.config, 'modules', 'disable'
-                )
-                use_p2p = self.read_configuration(
-                    self.config, 'P2P', 'use_p2p'
-                )
 
                 # This plugins import will automatically load the modules and put them in the __modules__ variable
                 # if slips is given a .rdb file, don't load the modules as we don't need them
-                if to_ignore and not self.args.db:
-                    # Convert string to list
-                    to_ignore = (
-                        to_ignore.replace('[', '')
-                        .replace(']', '')
-                        .replace(' ', '')
-                        .split(',')
-                    )
-                    # Ignore exporting alerts module if export_to is empty
-                    export_to = (
-                        self.config.get('ExportingAlerts', 'export_to')
-                        .rstrip('][')
-                        .replace(' ', '')
-                        .lower()
-                    )
-                    if (
-                        'stix' not in export_to
-                        and 'slack' not in export_to
-                        and 'json' not in export_to
-                    ):
-                        to_ignore.append('exporting_alerts')
-                    if (
-                        not use_p2p
-                        or use_p2p == 'no'
-                        or not self.args.interface
-                    ):
-                        to_ignore.append('p2ptrust')
-
-                    # ignore CESNET sharing module if send and receive are are disabled in slips.conf
-                    send_to_warden = self.config.get(
-                        'CESNET', 'send_alerts'
-                    ).lower()
-                    receive_from_warden = self.config.get(
-                        'CESNET', 'receive_alerts'
-                    ).lower()
-                    if 'no' in send_to_warden and 'no' in receive_from_warden:
-                        to_ignore.append('CESNET')
-                    # don't run blocking module unless specified
-                    if (
-                        not self.args.clearblocking
-                        and not self.args.blocking
-                        or (self.args.blocking and not self.args.interface)
-                    ):  # ignore module if not using interface
-                        to_ignore.append('blocking')
-
-                    # leak detector only works on pcap files
-                    if input_type != 'pcap':
-                        to_ignore.append('leak_detector')
-
+                if not self.args.db:
+                    to_ignore = self.get_disabled_modules()
                     # Import all the modules
                     modules_to_call = self.load_modules(to_ignore)[0]
                     for module_name in modules_to_call:
@@ -1610,14 +1631,7 @@ class Main:
                                 f'[PID {ModuleProcess.pid}]'
                             )
 
-                # Get the type of output from the parameters
-                # Several combinations of outputs should be able to be used
-                # if self.args.gui:
-                #     # Create the curses thread
-                #     guiProcessQueue = Queue()
-                #     guiProcessThread = GuiProcess(guiProcessQueue, self.outputqueue, self.args.verbose, self.args.debug, self.config)
-                #     guiProcessThread.start()
-                #     self.print('quiet')
+                # self.start_gui_process()
 
                 do_logs = self.read_configuration(
                     self.config, 'parameters', 'create_log_files'
