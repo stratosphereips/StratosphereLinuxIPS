@@ -105,6 +105,14 @@ class OutputProcess(multiprocessing.Process):
         open(self.errors_logfile, 'w').close()
         self.log_branch_info(self.errors_logfile)
 
+    def log_line(self, sender, msg):
+        """
+        Log error line to slips.log
+        """
+        with open(self.slips_logfile, 'a') as slips_logfile:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            slips_logfile.write(f'{date_time} {sender}{msg}\n')
+
     def change_stdout(self, file):
         # io.TextIOWrapper creates a file object of this file
         # Pass 0 to open() to switch output buffering off (only allowed in binary mode)
@@ -205,7 +213,6 @@ class OutputProcess(multiprocessing.Process):
         """
         (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
-
         # if verbosity level is 3 make it red
         if debug_level == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
@@ -216,6 +223,7 @@ class OutputProcess(multiprocessing.Process):
                 and verbose_level <= 3
                 and verbose_level <= self.verbose
         ):
+            self.log_line(sender, msg)
             if 'Start' in msg:
                 print(f'{msg}')
                 return
@@ -225,6 +233,7 @@ class OutputProcess(multiprocessing.Process):
                 and debug_level <= 3
                 and debug_level <= self.debug
         ):
+            self.log_line(sender, msg)
             if 'Start' in msg:
                 print(f'{msg}')
                 return
@@ -234,6 +243,7 @@ class OutputProcess(multiprocessing.Process):
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
         # make sure thee msg is an error. debug_level==1 is the one printing errors
         if debug_level == 1:
+            self.log_line(sender, msg)
             # it's an error. we should log it
             self.log_error(sender, msg)
 
