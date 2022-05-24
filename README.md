@@ -2,15 +2,46 @@
 
 Slips v0.9.0
 
+##### Repo Stars Over Time
+
+[![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)
+[![GitHub watchers](https://badgen.net/github/watchers/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
+[![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
+[![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
+[![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
+[![GitHub open-pull-requests](https://badgen.net/github/open-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
+[![GitHub pull-requests closed](https://badgen.net/github/closed-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
+[![GitHub version](https://badge.fury.io/gh/stratosphereips%2FStratosphereLinuxIPS.svg)](https://github.com/stratosphereips/StratosphereLinuxIPS)
+![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS)
+[![License](https://img.shields.io/badge/license-GPLv2-green)](./LICENSE)
+![GitHub Org's stars](https://img.shields.io/github/stars/stratosphereips/StratosphereLinuxIPS?style=plastic)
+![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=green&style=plastic)
+![GitHub language count](https://img.shields.io/github/languages/count/stratosphereips/StratosphereLinuxIPS)
+![Docker Image Size (tag)](https://img.shields.io/docker/image-size/stratosphereips/slips/latest?color=yellow&label=docker%20image%20size)
+![GitHub repo size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
+![Docker Pulls](https://img.shields.io/docker/pulls/stratosphereips/slips)
+![Python](https://img.shields.io/badge/Python-3.8-yellow)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/m/stratosphereips/StratosphereLinuxIPS)
+
+[![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
+[![License](https://img.shields.io/badge/Blog-Stratosphere-red)](https://www.stratosphereips.org/blog/tag/slips)
+[![Docker](https://img.shields.io/badge/Docker-latest-success)](https://hub.docker.com/r/stratosphereips/slips_p2p)
+![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
+<hr>
+
 Behavioral Machine Learning Based Intrusion Prevention System
 </h1>
 
-Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in the network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to provide a good visualisation for the analyst. It can analyze network traffic in real time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and highlights suspicious behaviour that need the analyst attention. 
+Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in the
+network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to
+provide a good visualisation for the analyst. It can analyze network traffic in real time, network captures such as pcap
+files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and
+highlights suspicious behaviour that need the analyst attention.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
 
 <h3 align="center"> 
-    
+
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
 </h3>
 
