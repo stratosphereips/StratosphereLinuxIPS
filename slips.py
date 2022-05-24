@@ -1192,13 +1192,13 @@ class Main:
             1 - print exceptions
             2 - unsupported and unhandled types (cases that may cause errors)
             3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
+        :param text: text to print. Can include format like f'Test {here}'
         """
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def get_disabled_modules(self) -> list:
+    def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
             self.config, 'modules', 'disable'
         )
@@ -1562,7 +1562,7 @@ class Main:
                     stderr = self.daemon.stderr
 
                 # Create the output thread and start it
-                outputProcessThread = OutputProcess(
+                output_process = OutputProcess(
                     self.outputqueue,
                     self.args.verbose,
                     self.args.debug,
@@ -1572,7 +1572,7 @@ class Main:
                     stderr=stderr,
                 )
                 # this process starts the db
-                outputProcessThread.start()
+                output_process.start()
 
                 if self.args.save:
                     __database__.enable_redis_snapshots()
@@ -1583,33 +1583,31 @@ class Main:
                 # log the PID of the started redis-server
                 self.log_redis_server_PID(redis_port, input_information)
                 self.print(
-                    f'10|main|Using redis server on port: {redis_port}'
+                    f'Using redis server on port: {redis_port}', 1, 0
                 )
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
                 # Print the PID of the main slips process. We do it here because we needed the queue to the output process
                 self.print(
-                    '10|main|Started main program [PID {}]'.format(os.getpid())
+                    f'Started main program [PID {os.getpid()}]', 1, 0
                 )
                 # Output pid
                 __database__.store_process_PID(
-                    'OutputProcess', int(outputProcessThread.pid)
+                    'OutputProcess', int(output_process.pid)
                 )
 
                 self.print(
-                    '10|main|Started output thread [PID {}]'.format(
-                        outputProcessThread.pid
-                    )
+                    f'Started output thread [PID {output_process.pid}]', 1, 0
                 )
 
                 # Start each module in the folder modules
-                self.print('01|main|Starting modules')
+                self.print('Starting modules', 0, 1)
 
                 # This plugins import will automatically load the modules and put them in the __modules__ variable
                 # if slips is given a .rdb file, don't load the modules as we don't need them
                 if not self.args.db:
-                    to_ignore = self.get_disabled_modules()
+                    to_ignore = self.get_disabled_modules(input_type)
                     # Import all the modules
                     modules_to_call = self.load_modules(to_ignore)[0]
                     for module_name in modules_to_call:
@@ -1626,9 +1624,9 @@ class Main:
                                 'description'
                             ]
                             self.print(
-                                f'10|main|\t\tStarting the module {module_name} '
+                                f'\t\tStarting the module {module_name} '
                                 f'({description}) '
-                                f'[PID {ModuleProcess.pid}]'
+                                f'[PID {ModuleProcess.pid}]', 1, 0
                             )
 
                 # self.start_gui_process()
@@ -1642,7 +1640,7 @@ class Main:
                     logs_folder = self.create_folder_for_logs()
                     # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
                     logsProcessQueue = Queue()
-                    logsProcessThread = LogsProcess(
+                    logs_process = LogsProcess(
                         logsProcessQueue,
                         self.outputqueue,
                         self.args.verbose,
@@ -1650,14 +1648,13 @@ class Main:
                         self.config,
                         logs_folder,
                     )
-                    logsProcessThread.start()
+                    logs_process.start()
                     self.print(
-                        '10|main|Started logsfiles thread [PID {}]'.format(
-                            logsProcessThread.pid
-                        )
+                        f'Started logsfiles thread '
+                        f'[PID {logs_process.pid}]', 1, 0
                     )
                     __database__.store_process_PID(
-                        'logsProcess', int(logsProcessThread.pid)
+                        'logsProcess', int(logs_process.pid)
                     )
                 else:
                     # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
@@ -1667,7 +1664,7 @@ class Main:
                 # Create the queue for the evidence thread
                 evidenceProcessQueue = Queue()
                 # Create the thread and start it
-                evidenceProcessThread = EvidenceProcess(
+                evidence_process = EvidenceProcess(
                     evidenceProcessQueue,
                     self.outputqueue,
                     self.config,
@@ -1675,14 +1672,13 @@ class Main:
                     logs_folder,
                     redis_port,
                 )
-                evidenceProcessThread.start()
+                evidence_process.start()
                 self.print(
-                    '10|main|Started Evidence thread [PID {}]'.format(
-                        evidenceProcessThread.pid
-                    )
+                    f'Started Evidence Process '
+                    f'[PID {evidence_process.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
-                    'EvidenceProcess', int(evidenceProcessThread.pid)
+                    'EvidenceProcess', int(evidence_process.pid)
                 )
                 __database__.store_process_PID('slips.py', int(os.getpid()))
 
@@ -1690,7 +1686,7 @@ class Main:
                 # Create the queue for the profile thread
                 profilerProcessQueue = Queue()
                 # Create the profile thread and start it
-                profilerProcessThread = ProfilerProcess(
+                profiler_process = ProfilerProcess(
                     profilerProcessQueue,
                     self.outputqueue,
                     self.args.verbose,
@@ -1698,14 +1694,13 @@ class Main:
                     self.config,
                     redis_port,
                 )
-                profilerProcessThread.start()
+                profiler_process.start()
                 self.print(
-                    '10|main|Started Profiler thread [PID {}]'.format(
-                        profilerProcessThread.pid
-                    )
+                    f'Started Profiler Process '
+                    f'[PID {profiler_process.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
-                    'ProfilerProcess', int(profilerProcessThread.pid)
+                    'ProfilerProcess', int(profiler_process.pid)
                 )
 
                 self.c1 = __database__.subscribe('finished_modules')
@@ -1725,9 +1720,7 @@ class Main:
                 )
                 inputProcess.start()
                 self.print(
-                    '10|main|Started input thread [PID {}]'.format(
-                        inputProcess.pid
-                    )
+                    f'Started input thread [PID {inputProcess.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
                     'InputProcess', int(inputProcess.pid)
@@ -1795,8 +1788,9 @@ class Main:
                         # How many profiles we have?
                         profilesLen = str(__database__.getProfilesLen())
                         if self.mode != 'daemonized':
-                            self.print(
-                                f'Total Number of Profiles in DB so far: {profilesLen}. '
+                            print(
+                                f'Total Number of Profiles in DB so '
+                                f'far: {profilesLen}. '
                                 f'Modified Profiles in the last TW: {amount_of_modified}. '
                                 f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
                                 end='\r',
