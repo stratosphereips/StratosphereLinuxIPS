@@ -83,12 +83,16 @@ def test_port_belongs_to_an_org(database, outputQueue):
     portproto = '65509/tcp'
     database.set_organization_of_port('apple', '', portproto)
     assert (
-        flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) == True
+            flowalerts.port_belongs_to_an_org(
+                daddr, portproto, profileid
+            ) == True
     )
     # doesn't belong to any org
-    portproto = '65508/tcp'
+    portproto = '78965/tcp'
     assert (
-        flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) == False
+            flowalerts.port_belongs_to_an_org(
+                daddr, portproto, profileid
+            ) == False
     )
 
 
