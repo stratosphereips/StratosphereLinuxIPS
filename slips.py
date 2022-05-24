@@ -95,7 +95,7 @@ class Daemon:
         self.config = self.slips.read_conf_file()
 
         try:
-            # output dir to store running.log and error.log
+            # output dir to store running.log and errors.log
             self.output_dir = self.config.get('modes', 'output_dir')
             if not self.output_dir.endswith('/'):
                 self.output_dir = f'{self.output_dir}/'
@@ -150,7 +150,8 @@ class Daemon:
 
         # this is where alerts.log and alerts.json are stored, in interactive mode
         # they're stored in output/ dir in slips main dir
-        # in daemonized mode they're stored in the same dir as running.log and error.log
+        # in daemonized mode they're stored in the same dir as running.log
+        # and errors.log
         self.slips.alerts_default_path = self.output_dir
 
         self.setup_std_streams()
@@ -652,8 +653,6 @@ class Main:
                                 print(
                                     f'[Main] Module{module_name} just published in '
                                     f"finished_modules channel and Slips doesn't know about it's PID!",
-                                    0,
-                                    1,
                                 )
                                 # pass insead of continue because
                                 # this module is finished and we need to print that it has stopped
@@ -1730,7 +1729,7 @@ class Main:
                 open_servers = len(self.get_open_servers_PIDs())
                 if open_servers > 1:
                     self.print(
-                        f'[Main] Warning: You have {open_servers} redis servers running. '
+                        f'Warning: You have {open_servers} redis servers running. '
                         f'Run Slips with --killall to stop them.'
                     )
 
