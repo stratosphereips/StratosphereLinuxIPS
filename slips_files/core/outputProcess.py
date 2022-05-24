@@ -37,13 +37,16 @@ class OutputProcess(multiprocessing.Process):
         redis_port,
         stdout='',
         stderr='output/errors.log',
+        slips_logfile='output/slips.log'
     ):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
         # create the file and clear it
         self.errors_logfile = stderr
+        self.slips_logfile = slips_logfile
         self.create_errors_log()
+        self.create_slips_log()
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -58,25 +61,49 @@ class OutputProcess(multiprocessing.Process):
         # Start the DB
         __database__.start(self.config, redis_port)
 
-    def create_errors_log(self):
+    def get_output_dir(self) -> str:
+        """
+        Default output dir is output/ unless -o is given
+        """
+        # default output dir
+        output_dir = 'output/'
         if '-o' in sys.argv:
             output_dir = sys.argv[sys.argv.index('-o') + 1]
             # add / to the end of output dir if not there
             output_dir = (
                 output_dir if output_dir.endswith('/') else f'{output_dir}/'
             )
-            self.errors_logfile = self.errors_logfile.replace(
-                'output/', output_dir
-            )
+        return output_dir
 
-        open(self.errors_logfile, 'w').close()
+    def log_branch_info(self, logfile):
         branch_info = utils.get_branch_info()
-        if branch_info != False:
+        if branch_info:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
-            with open(self.errors_logfile, 'w') as f:
+            with open(logfile, 'w') as f:
                 f.write(f'Using {branch} - {commit} - {now}\n\n')
+
+    def create_slips_log(self):
+        output_dir = self.get_output_dir()
+        self.slips_logfile = self.slips_logfile.replace(
+            'output/', output_dir
+        )
+
+        open(self.slips_logfile, 'w').close()
+        self.log_branch_info(self.slips_logfile)
+
+    def create_errors_log(self):
+        output_dir = self.get_output_dir()
+        self.errors_logfile = self.errors_logfile.replace(
+            'output/', output_dir
+        )
+        dir_name = os.path.dirname(self.errors_logfile)
+        if not os.path.exists(dir_name):
+            os.mkdir(os.path.dirname(self.errors_logfile))
+
+        open(self.errors_logfile, 'w').close()
+        self.log_branch_info(self.errors_logfile)
 
     def change_stdout(self, file):
         # io.TextIOWrapper creates a file object of this file
@@ -155,35 +182,48 @@ class OutputProcess(multiprocessing.Process):
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
-                f'\tProblem with process line in OutputProcess() line {exception_line}',
-                0,
-                1,
+                f'\tProblem with process line in OutputProcess() line '
+                f'{exception_line}', 0, 1,
             )
             print(type(inst), 0, 1)
             print(inst.args, 0, 1)
             print(inst, 0, 1)
             sys.exit(1)
 
+    def log_error(self, sender, msg):
+        """
+        Log error line to errors.log
+        """
+        with open(self.errors_logfile, 'a') as errors_logfile:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            errors_logfile.write(f'{date_time} {sender}{msg}\n')
+
     def output_line(self, line):
-        """Get a line of text and output it correctly"""
+        """
+        Extract the level, sender and msg from line and format it and
+        print
+        """
         (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
+
         # if verbosity level is 3 make it red
         if debug_level == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
         if (
-            verbose_level > 0
-            and verbose_level <= 3
-            and verbose_level <= self.verbose
+                verbose_level > 0
+                and verbose_level <= 3
+                and verbose_level <= self.verbose
         ):
             if 'Start' in msg:
                 print(f'{msg}')
                 return
             print(f'{sender}{msg}')
         elif (
-            debug_level > 0 and debug_level <= 3 and debug_level <= self.debug
+                debug_level > 0
+                and debug_level <= 3
+                and debug_level <= self.debug
         ):
             if 'Start' in msg:
                 print(f'{msg}')
@@ -195,9 +235,7 @@ class OutputProcess(multiprocessing.Process):
         # make sure thee msg is an error. debug_level==1 is the one printing errors
         if debug_level == 1:
             # it's an error. we should log it
-            with open(self.errors_logfile, 'a') as errors_logfile:
-                date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
-                errors_logfile.write(f'{date_time} {sender}{msg}\n')
+            self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
