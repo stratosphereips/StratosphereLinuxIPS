@@ -95,7 +95,7 @@ class Daemon:
         self.config = self.slips.read_conf_file()
 
         try:
-            # output dir to store running.log and error.log
+            # output dir to store running.log and errors.log
             self.output_dir = self.config.get('modes', 'output_dir')
             if not self.output_dir.endswith('/'):
                 self.output_dir = f'{self.output_dir}/'
@@ -150,7 +150,8 @@ class Daemon:
 
         # this is where alerts.log and alerts.json are stored, in interactive mode
         # they're stored in output/ dir in slips main dir
-        # in daemonized mode they're stored in the same dir as running.log and error.log
+        # in daemonized mode they're stored in the same dir as running.log
+        # and errors.log
         self.slips.alerts_default_path = self.output_dir
 
         self.setup_std_streams()
@@ -294,6 +295,7 @@ class Daemon:
 class Main:
     def __init__(self):
         # Set up the default path for alerts.log and alerts.json. In our case, it is output folder.
+        self.name = 'main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'
@@ -525,6 +527,19 @@ class Main:
         #             # found a file in the dir that isn't in __load__.zeek, add it
         #             f.write(f'\n@load ./{file_name}')
 
+    def start_gui_process(self):
+        # Get the type of output from the parameters
+        # Several combinations of outputs should be able to be used
+        if self.args.gui:
+            # Create the curses thread
+            guiProcessQueue = Queue()
+            guiProcessThread = GuiProcess(
+                guiProcessQueue, self.outputqueue, self.args.verbose,
+                self.args.debug, self.config
+            )
+            guiProcessThread.start()
+            self.print('quiet')
+
     def add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
@@ -638,8 +653,6 @@ class Main:
                                 print(
                                     f'[Main] Module{module_name} just published in '
                                     f"finished_modules channel and Slips doesn't know about it's PID!",
-                                    0,
-                                    1,
                                 )
                                 # pass insead of continue because
                                 # this module is finished and we need to print that it has stopped
@@ -1164,6 +1177,86 @@ class Main:
         self.mode = mode
         self.daemon = daemon
 
+    def print(self, text, verbose=1, debug=0):
+        """
+        Function to use to print text using the outputqueue of slips.
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like f'Test {here}'
+        """
+
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
+
+    def get_disabled_modules(self, input_type) -> list:
+        to_ignore = self.read_configuration(
+            self.config, 'modules', 'disable'
+        )
+        use_p2p = self.read_configuration(
+            self.config, 'P2P', 'use_p2p'
+        )
+
+        if not to_ignore:
+            return []
+        # Convert string to list
+        to_ignore = (
+            to_ignore.replace('[', '')
+                .replace(']', '')
+                .replace(' ', '')
+                .split(',')
+        )
+        # Ignore exporting alerts module if export_to is empty
+        export_to = (
+            self.config.get('ExportingAlerts', 'export_to')
+                .rstrip('][')
+                .replace(' ', '')
+                .lower()
+        )
+        if (
+                'stix' not in export_to
+                and 'slack' not in export_to
+                and 'json' not in export_to
+        ):
+            to_ignore.append('exporting_alerts')
+        if (
+                not use_p2p
+                or use_p2p == 'no'
+                or not self.args.interface
+        ):
+            to_ignore.append('p2ptrust')
+
+        # ignore CESNET sharing module if send and receive are are disabled in slips.conf
+        send_to_warden = self.config.get(
+            'CESNET', 'send_alerts'
+        ).lower()
+        receive_from_warden = self.config.get(
+            'CESNET', 'receive_alerts'
+        ).lower()
+        if 'no' in send_to_warden and 'no' in receive_from_warden:
+            to_ignore.append('CESNET')
+        # don't run blocking module unless specified
+        if (
+                not self.args.clearblocking
+                and not self.args.blocking
+                or (self.args.blocking and not self.args.interface)
+        ):  # ignore module if not using interface
+            to_ignore.append('blocking')
+
+        # leak detector only works on pcap files
+        if input_type != 'pcap':
+            to_ignore.append('leak_detector')
+
+        return to_ignore
+
     def handle_flows_from_stdin(self, input_information):
         if input_information.lower() not in (
                 'argus',
@@ -1462,7 +1555,7 @@ class Main:
                 # Output thread. This thread should be created first because it handles
                 # the output of the rest of the threads.
                 # Create the queue
-                outputProcessQueue = Queue()
+                self.outputqueue = Queue()
                 # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
                 # lsof will provide a list of all open fds belonging to slips
                 command = f'lsof -p {os.getpid()}'
@@ -1488,8 +1581,8 @@ class Main:
                     stderr = self.daemon.stderr
 
                 # Create the output thread and start it
-                outputProcessThread = OutputProcess(
-                    outputProcessQueue,
+                output_process = OutputProcess(
+                    self.outputqueue,
                     self.args.verbose,
                     self.args.debug,
                     self.config,
@@ -1498,7 +1591,7 @@ class Main:
                     stderr=stderr,
                 )
                 # this process starts the db
-                outputProcessThread.start()
+                output_process.start()
 
                 if self.args.save:
                     __database__.enable_redis_snapshots()
@@ -1508,94 +1601,39 @@ class Main:
                 # now that we have successfully connected to the db,
                 # log the PID of the started redis-server
                 self.log_redis_server_PID(redis_port, input_information)
-                outputProcessQueue.put(
-                    f'10|main|Using redis server on port: {redis_port}'
+                self.print(
+                    f'Using redis server on port: {redis_port}', 1, 0
                 )
 
                 # Before starting update malicious file
                 # create an event loop and allow it to run the update_file_manager asynchronously
                 # Print the PID of the main slips process. We do it here because we needed the queue to the output process
-                outputProcessQueue.put(
-                    '10|main|Started main program [PID {}]'.format(os.getpid())
+                self.print(
+                    f'Started main program [PID {os.getpid()}]', 1, 0
                 )
                 # Output pid
                 __database__.store_process_PID(
-                    'OutputProcess', int(outputProcessThread.pid)
+                    'OutputProcess', int(output_process.pid)
                 )
 
-                outputProcessQueue.put(
-                    '10|main|Started output thread [PID {}]'.format(
-                        outputProcessThread.pid
-                    )
+                self.print(
+                    f'Started output thread [PID {output_process.pid}]', 1, 0
                 )
 
                 # Start each module in the folder modules
-                outputProcessQueue.put('01|main|Starting modules')
-                to_ignore = self.read_configuration(
-                    self.config, 'modules', 'disable'
-                )
-                use_p2p = self.read_configuration(
-                    self.config, 'P2P', 'use_p2p'
-                )
+                self.print('Starting modules', 0, 1)
 
                 # This plugins import will automatically load the modules and put them in the __modules__ variable
                 # if slips is given a .rdb file, don't load the modules as we don't need them
-                if to_ignore and not self.args.db:
-                    # Convert string to list
-                    to_ignore = (
-                        to_ignore.replace('[', '')
-                        .replace(']', '')
-                        .replace(' ', '')
-                        .split(',')
-                    )
-                    # Ignore exporting alerts module if export_to is empty
-                    export_to = (
-                        self.config.get('ExportingAlerts', 'export_to')
-                        .rstrip('][')
-                        .replace(' ', '')
-                        .lower()
-                    )
-                    if (
-                        'stix' not in export_to
-                        and 'slack' not in export_to
-                        and 'json' not in export_to
-                    ):
-                        to_ignore.append('exporting_alerts')
-                    if (
-                        not use_p2p
-                        or use_p2p == 'no'
-                        or not self.args.interface
-                    ):
-                        to_ignore.append('p2ptrust')
-
-                    # ignore CESNET sharing module if send and receive are are disabled in slips.conf
-                    send_to_warden = self.config.get(
-                        'CESNET', 'send_alerts'
-                    ).lower()
-                    receive_from_warden = self.config.get(
-                        'CESNET', 'receive_alerts'
-                    ).lower()
-                    if 'no' in send_to_warden and 'no' in receive_from_warden:
-                        to_ignore.append('CESNET')
-                    # don't run blocking module unless specified
-                    if (
-                        not self.args.clearblocking
-                        and not self.args.blocking
-                        or (self.args.blocking and not self.args.interface)
-                    ):  # ignore module if not using interface
-                        to_ignore.append('blocking')
-
-                    # leak detector only works on pcap files
-                    if input_type != 'pcap':
-                        to_ignore.append('leak_detector')
-
+                if not self.args.db:
+                    to_ignore = self.get_disabled_modules(input_type)
                     # Import all the modules
                     modules_to_call = self.load_modules(to_ignore)[0]
                     for module_name in modules_to_call:
                         if module_name not in to_ignore:
                             module_class = modules_to_call[module_name]['obj']
                             ModuleProcess = module_class(
-                                outputProcessQueue, self.config, redis_port
+                                self.outputqueue, self.config, redis_port
                             )
                             ModuleProcess.start()
                             __database__.store_process_PID(
@@ -1604,10 +1642,10 @@ class Main:
                             description = modules_to_call[module_name][
                                 'description'
                             ]
-                            outputProcessQueue.put(
-                                f'10|main|\t\tStarting the module {module_name} '
+                            self.print(
+                                f'\t\tStarting the module {module_name} '
                                 f'({description}) '
-                                f'[PID {ModuleProcess.pid}]'
+                                f'[PID {ModuleProcess.pid}]', 1, 0
                             )
                     # give outputprocess time to print all the started modules
                     time.sleep(1)
@@ -1616,14 +1654,7 @@ class Main:
                         f"10|main|Disabled Modules: {to_ignore}"
                     )
 
-                # Get the type of output from the parameters
-                # Several combinations of outputs should be able to be used
-                # if self.args.gui:
-                #     # Create the curses thread
-                #     guiProcessQueue = Queue()
-                #     guiProcessThread = GuiProcess(guiProcessQueue, outputProcessQueue, self.args.verbose, self.args.debug, self.config)
-                #     guiProcessThread.start()
-                #     outputProcessQueue.put('quiet')
+                # self.start_gui_process()
 
                 do_logs = self.read_configuration(
                     self.config, 'parameters', 'create_log_files'
@@ -1634,22 +1665,21 @@ class Main:
                     logs_folder = self.create_folder_for_logs()
                     # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
                     logsProcessQueue = Queue()
-                    logsProcessThread = LogsProcess(
+                    logs_process = LogsProcess(
                         logsProcessQueue,
-                        outputProcessQueue,
+                        self.outputqueue,
                         self.args.verbose,
                         self.args.debug,
                         self.config,
                         logs_folder,
                     )
-                    logsProcessThread.start()
-                    outputProcessQueue.put(
-                        '10|main|Started logsfiles thread [PID {}]'.format(
-                            logsProcessThread.pid
-                        )
+                    logs_process.start()
+                    self.print(
+                        f'Started logsfiles thread '
+                        f'[PID {logs_process.pid}]', 1, 0
                     )
                     __database__.store_process_PID(
-                        'logsProcess', int(logsProcessThread.pid)
+                        'logsProcess', int(logs_process.pid)
                     )
                 else:
                     # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
@@ -1659,22 +1689,21 @@ class Main:
                 # Create the queue for the evidence thread
                 evidenceProcessQueue = Queue()
                 # Create the thread and start it
-                evidenceProcessThread = EvidenceProcess(
+                evidence_process = EvidenceProcess(
                     evidenceProcessQueue,
-                    outputProcessQueue,
+                    self.outputqueue,
                     self.config,
                     self.args.output,
                     logs_folder,
                     redis_port,
                 )
-                evidenceProcessThread.start()
-                outputProcessQueue.put(
-                    '10|main|Started Evidence thread [PID {}]'.format(
-                        evidenceProcessThread.pid
-                    )
+                evidence_process.start()
+                self.print(
+                    f'Started Evidence Process '
+                    f'[PID {evidence_process.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
-                    'EvidenceProcess', int(evidenceProcessThread.pid)
+                    'EvidenceProcess', int(evidence_process.pid)
                 )
                 __database__.store_process_PID('slips.py', int(os.getpid()))
 
@@ -1682,22 +1711,21 @@ class Main:
                 # Create the queue for the profile thread
                 profilerProcessQueue = Queue()
                 # Create the profile thread and start it
-                profilerProcessThread = ProfilerProcess(
+                profiler_process = ProfilerProcess(
                     profilerProcessQueue,
-                    outputProcessQueue,
+                    self.outputqueue,
                     self.args.verbose,
                     self.args.debug,
                     self.config,
                     redis_port,
                 )
-                profilerProcessThread.start()
-                outputProcessQueue.put(
-                    '10|main|Started Profiler thread [PID {}]'.format(
-                        profilerProcessThread.pid
-                    )
+                profiler_process.start()
+                self.print(
+                    f'Started Profiler Process '
+                    f'[PID {profiler_process.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
-                    'ProfilerProcess', int(profilerProcessThread.pid)
+                    'ProfilerProcess', int(profiler_process.pid)
                 )
 
                 self.c1 = __database__.subscribe('finished_modules')
@@ -1705,7 +1733,7 @@ class Main:
                 # Input process
                 # Create the input process and start it
                 inputProcess = InputProcess(
-                    outputProcessQueue,
+                    self.outputqueue,
                     profilerProcessQueue,
                     input_type,
                     input_information,
@@ -1716,10 +1744,8 @@ class Main:
                     redis_port,
                 )
                 inputProcess.start()
-                outputProcessQueue.put(
-                    '10|main|Started input thread [PID {}]'.format(
-                        inputProcess.pid
-                    )
+                self.print(
+                    f'Started input thread [PID {inputProcess.pid}]', 1, 0
                 )
                 __database__.store_process_PID(
                     'InputProcess', int(inputProcess.pid)
@@ -1728,8 +1754,8 @@ class Main:
                 # warn about unused open redis servers
                 open_servers = len(self.get_open_servers_PIDs())
                 if open_servers > 1:
-                    print(
-                        f'[Main] Warning: You have {open_servers} redis servers running. '
+                    self.print(
+                        f'Warning: You have {open_servers} redis servers running. '
                         f'Run Slips with --killall to stop them.'
                     )
 
@@ -1747,7 +1773,7 @@ class Main:
                             __database__.set_host_ip(hostIP)
                             break
                         except redis.exceptions.DataError:
-                            print(
+                            self.print(
                                 'Not Connected to the internet. Reconnecting in 10s.'
                             )
                             time.sleep(10)
@@ -1788,7 +1814,8 @@ class Main:
                         profilesLen = str(__database__.getProfilesLen())
                         if self.mode != 'daemonized' and input_type != 'stdin':
                             print(
-                                f'Total Number of Profiles in DB so far: {profilesLen}. '
+                                f'Total Number of Profiles in DB so '
+                                f'far: {profilesLen}. '
                                 f'Modified Profiles in the last TW: {amount_of_modified}. '
                                 f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
                                 end='\r',
