@@ -1367,6 +1367,7 @@ class Main:
             input_information = self.args.interface
             input_type = 'interface'
             # return input_type, input_information
+            return input_type, input_information, line_type
 
         if self.args.db:
             self.load_db()
