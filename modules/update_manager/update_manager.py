@@ -101,7 +101,7 @@ class UpdateManager(Module, multiprocessing.Process):
         update_finished = asyncio.create_task(update_manager.update())
 
         # wait for UpdateFileManager to finish before starting all the modules
-        # await update_finished
+        await update_finished
 
     def run(self):
         utils.drop_root_privs()

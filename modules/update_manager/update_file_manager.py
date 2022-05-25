@@ -605,7 +605,10 @@ class UpdateFileManager:
                 return False
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
-            file_info = {'e-tag': self.new_e_tag, 'time': self.new_update_time}
+            file_info = {
+                'e-tag': self.new_e_tag,
+                'time': self.new_update_time
+            }
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
             # self.print(f'Successfully updated in DB the remote file {link_to_download}')
@@ -624,6 +627,7 @@ class UpdateFileManager:
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            return False
 
     def update_riskiq_feed(self):
         """Get and parse RiskIQ feed"""
@@ -901,68 +905,16 @@ class UpdateFileManager:
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
-
         filename = ti_file_path.split('/')[-1]
-        malicious_ips_dict = {}
         malicious_domains_dict = {}
         with open(ti_file_path) as feed:
             self.print(
-                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
+                f'Reading next line in the file {ti_file_path} for IoC', 3, 0
             )
-            try:
-                file = json.loads(feed.read())
-            except json.decoder.JSONDecodeError:
-                # not a json file??
-                return False
 
-            for description, iocs in file.items():
-                # iocs is a list of dicts
-                for ioc in iocs:
-                    # ioc is a dict with keys 'IP', 'ports', 'domains'
-                    # process IPs
-                    ip = ioc.get('IP', '')
-                    # verify its a valid ip
-                    try:
-                        ip_address = ipaddress.IPv4Address(ip.strip())
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(ip.strip())
-                        except ipaddress.AddressValueError:
-                            # not a valid IP
-                            continue
-                    malicious_ips_dict[ip] = json.dumps(
-                        {
-                            {
-                                'description': description,
-                                'source': filename,
-                                'threat_level': threat_level,
-                                'tags': tags,
-                            }
-                        }
-                    )
-                    # process domains
-                    domains = ioc.get('domains', [])
-                    for domain in domains:
-                        if validators.domain(domain.strip()):
-                            # this is a valid domain
-                            malicious_domains_dict[domain] = json.dumps(
-                                {
-                                    {
-                                        'description': description,
-                                        'source': filename,
-                                        'threat_level': threat_level,
-                                        'tags': tags,
-                                    }
-                                }
-                            )
-            # Add all loaded malicious ips to the database
-            __database__.add_ips_to_IoC(malicious_ips_dict)
-            # Add all loaded malicious domains to the database
-            __database__.add_domains_to_IoC(malicious_domains_dict)
-            return True
+        return True
 
-    async def parse_ti_feed(
+    def parse_ti_feed(
             self, link_to_download, malicious_data_path: str
     ) -> bool:
         """
@@ -978,22 +930,23 @@ class UpdateFileManager:
             # Check if the file has any content
             filesize = os.path.getsize(malicious_data_path)
             if filesize == 0:
-                yield False
+                return False
+
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
             with open(malicious_data_path) as feed:
                 self.print(
-                    'Reading next lines in the file {} for IoC'.format(
-                        malicious_data_path
-                    ), 3, 0,
+                    f'Reading next lines in the file {malicious_data_path} '
+                    f'for IoC', 3, 0,
                 )
                 # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
                     self.parse_json_ti_feed(
                         link_to_download, malicious_data_path
                     )
-                    yield True
+                    return True
+
                 # Remove comments and find the description column if possible
                 description_column = None
                 # if any keyword of the following is present in a line
@@ -1110,7 +1063,7 @@ class UpdateFileManager:
                         f' Could not find a column with an IP or domain',
                         0, 1,
                     )
-                    yield False
+                    return False
                 # Now that we read the first line, go back so we can process it
                 feed.seek(current_file_position)
 
@@ -1166,7 +1119,7 @@ class UpdateFileManager:
                             f'{description_column}. Line: {line} in '
                             f'{malicious_data_path}', 0, 1,
                         )
-                        yield False
+                        return False
 
                     self.print(
                         '\tRead Data {}: {}'.format(data, description), 3, 0
@@ -1347,7 +1300,8 @@ class UpdateFileManager:
                                     'tags': tags,
                                 }
                             )
-                            # print(f'Dulicate up range {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
+                            # print(f'Duplicate up range {data} found in
+                            # sources: {source} old threat_level: {ip_info["threat_level"]}
 
                         except KeyError:
                             # We don't have info about this range, Store the ip in our local dict
@@ -1368,20 +1322,19 @@ class UpdateFileManager:
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             __database__.add_ip_range_to_IoC(malicious_ip_ranges)
-            yield True
+            return True
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem while updating {link_to_download} line {exception_line}',
-                0,
-                1,
+                f'Problem while updating {link_to_download} line '
+                f'{exception_line}', 0, 1,
             )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             self.print(traceback.format_exc(), 0, 1)
-            yield False
+            return False
 
     async def update(self) -> bool:
         """
@@ -1428,7 +1381,10 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
-            self.print(f'Downloading the remote file {file_to_download}', 1, 0)
+            # self.print(
+            #     f'Downloading the remote '
+            #     f'file {file_to_download}', 1, 0
+            # )
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
             # to download the next file instead of being idle
