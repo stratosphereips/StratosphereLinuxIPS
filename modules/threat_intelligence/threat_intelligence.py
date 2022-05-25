@@ -310,8 +310,7 @@ class Module(Module, multiprocessing.Process):
                             self.print(
                                 f'Error while reading the TI file {local_ti_file}.'
                                 f' Line {line_number} has invalid data: {ioc}',
-                                0,
-                                1,
+                                0, 1,
                             )
 
         # Add all loaded malicious ips to the database

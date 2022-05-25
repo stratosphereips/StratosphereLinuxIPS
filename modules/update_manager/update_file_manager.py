@@ -28,6 +28,9 @@ class UpdateFileManager:
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
+        self.today = time.time()
+        # don't store iocs older than 1 week
+        self.interval = 604800
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -907,12 +910,44 @@ class UpdateFileManager:
         threat_level = self.url_feeds[link_to_download]['threat_level']
         filename = ti_file_path.split('/')[-1]
         malicious_domains_dict = {}
+        pattern = "%Y-%m-%dT%H:%M:%S"
         with open(ti_file_path) as feed:
             self.print(
-                f'Reading next line in the file {ti_file_path} for IoC', 3, 0
+                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
             )
+            try:
+                file = json.loads(feed.read())
+            except json.decoder.JSONDecodeError:
+                # not a json file??
+                return False
 
-        return True
+            for ioc in file:
+                date = ioc['InsertDate']
+                epoch_date = int(
+                    time.mktime(
+                        time.strptime(
+                            date,
+                            pattern
+                        )
+                    )
+                )
+                diff = self.today - epoch_date
+                if diff > self.interval:
+                    continue
+                domain = ioc['DomainAddress']
+                if not validators.domain(domain):
+                    continue
+                malicious_domains_dict[domain] = json.dumps(
+                    {
+                        'description': '',
+                        'source': filename,
+                        'threat_level': threat_level,
+                        'tags': tags,
+                    }
+                )
+            # Add all loaded malicious domains to the database
+            __database__.add_domains_to_IoC(malicious_domains_dict)
+            return True
 
     def parse_ti_feed(
             self, link_to_download, malicious_data_path: str
