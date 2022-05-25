@@ -529,7 +529,7 @@ class InputProcess(multiprocessing.Process):
             if self.input_type == 'interface':
                 if self.rotation:
                     rotation_interval = (
-                        "-e 'redef Log::default_rotation_interval =  1h;'"
+                        "-e 'redef Log::default_rotation_interval =  1day;'"
                     )
                 # Change the bro command
                 bro_parameter = f'-i {self.given_path}'
