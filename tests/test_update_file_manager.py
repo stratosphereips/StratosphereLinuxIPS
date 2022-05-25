@@ -96,7 +96,7 @@ def test_download_malicious_file2(outputQueue, database, url):
 def test_read_ports_info(outputQueue, database):
     update_manager = create_update_manager_instance(outputQueue)
     filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-    assert update_manager.read_ports_info(filepath) > 39900
+    assert update_manager.read_ports_info(filepath) > 39000
     org = json.loads(database.get_organization_of_port('5243/udp'))
     assert 'org_name' in org
     assert org['org_name'] == 'Viber'

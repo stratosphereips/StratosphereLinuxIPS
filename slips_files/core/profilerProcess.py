@@ -1450,7 +1450,6 @@ class ProfilerProcess(multiprocessing.Process):
             'type': 'argus',
         }
 
-        # Read the lines fast
         nline = line.strip().split(self.separator)
         try:
             self.column_values['starttime'] = self.get_time(
@@ -3040,7 +3039,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # So read the first line and define the columns
                     try:
                         # argus from stdin
-                        if not hasattr(self, 'column_idx'):
+                        if '-f' in sys.argv and 'argus' in sys.argv:
                             self.define_columns(
                                 {
                                     'data': "StartTime,Dur,Proto,SrcAddr,Sport,"
@@ -3083,9 +3082,9 @@ class ProfilerProcess(multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if (
-                    message
-                    and message['channel'] == 'reload_whitelist'
-                    and type(message['data']) == str
+                        message
+                        and message['channel'] == 'reload_whitelist'
+                        and type(message['data']) == str
                 ):
                     # if whitelist.conf is edited using pycharm
                     # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
@@ -3098,16 +3097,12 @@ class ProfilerProcess(multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(
-                    'Error. Stopped Profiler Process. Received {} lines'.format(
-                        rec_lines
-                    ),
-                    0,
-                    1,
+                    f'Error. Stopped Profiler Process. Received {rec_lines} '
+                    f'lines', 0, 1,
                 )
                 self.print(
-                    f'\tProblem with Profiler Process. line {exception_line}',
-                    0,
-                    1,
+                    f'\tProblem with Profiler Process. line '
+                    f'{exception_line}', 0, 1,
                 )
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)

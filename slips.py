@@ -1650,8 +1650,8 @@ class Main:
                     # give outputprocess time to print all the started modules
                     time.sleep(1)
                     print('-' * 27)
-                    outputProcessQueue.put(
-                        f"10|main|Disabled Modules: {to_ignore}"
+                    self.print(
+                        f"Disabled Modules: {to_ignore}", 1, 0
                     )
 
                 # self.start_gui_process()
