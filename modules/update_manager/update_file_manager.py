@@ -360,15 +360,14 @@ class UpdateFileManager:
                 # response will be used to get e-tag, and if the file was updated
                 # the same response will be used to update the content in our db
                 response = self.download_file(file_to_download)
+                if not response:
+                    return False
 
                 # Get what files are stored in cache db and their E-TAG to compare with current files
                 data = __database__.get_TI_file_info(file_name_to_download)
                 old_e_tag = data.get('e-tag', '')
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
-                if not response:
-                    return False
-
                 new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
                     # use last modified instead
@@ -562,7 +561,6 @@ class UpdateFileManager:
     async def update_TI_file(self, link_to_download: str, response) -> bool:
         """
         Update remote TI files and JA3 feeds by downloading and parsing them
-
         :param response: the output of a request done with requests library
         """
         try:
@@ -582,9 +580,8 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing JA3 feed {link_to_download}. Updating was aborted.',
-                    0,
-                    1,
+                    f'Error parsing JA3 feed {link_to_download}. Updating '
+                    f'was aborted.', 0, 1,
                 )
                 return False
 
@@ -593,19 +590,17 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was aborted.',
-                    0,
-                    1,
+                    f'Error parsing feed {link_to_download}. Updating was '
+                    f'aborted.', 0, 1,
                 )
                 return False
             elif (
-                link_to_download in self.ssl_feeds
-                and not self.parse_ssl_feed(link_to_download, full_path)
+                    link_to_download in self.ssl_feeds
+                    and not self.parse_ssl_feed(link_to_download, full_path)
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was aborted.',
-                    0,
-                    1,
+                    f'Error parsing feed {link_to_download}. Updating was '
+                    f'aborted.', 0, 1,
                 )
                 return False
             # Store the new etag and time of file in the database
@@ -902,7 +897,7 @@ class UpdateFileManager:
             return 'domain'
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
-        # to support nsec/full-results-2019-05-15.json
+        # to support
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
@@ -967,8 +962,8 @@ class UpdateFileManager:
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
-    def parse_ti_feed(
-        self, link_to_download, malicious_data_path: str
+    async def parse_ti_feed(
+            self, link_to_download, malicious_data_path: str
     ) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
@@ -983,8 +978,7 @@ class UpdateFileManager:
             # Check if the file has any content
             filesize = os.path.getsize(malicious_data_path)
             if filesize == 0:
-                return False
-
+                yield False
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
@@ -992,17 +986,14 @@ class UpdateFileManager:
                 self.print(
                     'Reading next lines in the file {} for IoC'.format(
                         malicious_data_path
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
                     self.parse_json_ti_feed(
                         link_to_download, malicious_data_path
                     )
-                    return True
-
+                    yield True
                 # Remove comments and find the description column if possible
                 description_column = None
                 # if any keyword of the following is present in a line
@@ -1117,10 +1108,9 @@ class UpdateFileManager:
                     self.print(
                         f'Error while reading the TI file {malicious_data_path}.'
                         f' Could not find a column with an IP or domain',
-                        0,
-                        1,
+                        0, 1,
                     )
-                    return False
+                    yield False
                 # Now that we read the first line, go back so we can process it
                 feed.seek(current_file_position)
 
@@ -1172,11 +1162,11 @@ class UpdateFileManager:
                     except (IndexError, UnboundLocalError):
                         description = ''
                         self.print(
-                            f'IndexError Description column: {description_column}. Line: {line} in {malicious_data_path}',
-                            0,
-                            1,
+                            f'IndexError Description column: '
+                            f'{description_column}. Line: {line} in '
+                            f'{malicious_data_path}', 0, 1,
                         )
-                        return False
+                        yield False
 
                     self.print(
                         '\tRead Data {}: {}'.format(data, description), 3, 0
@@ -1190,9 +1180,7 @@ class UpdateFileManager:
                         self.print(
                             'The data {} is not valid. It was found in {}.'.format(
                                 data, malicious_data_path
-                            ),
-                            0,
-                            1,
+                            ), 0, 1,
                         )
                         continue
                     if data_type == 'domain':
@@ -1380,7 +1368,7 @@ class UpdateFileManager:
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             __database__.add_ip_range_to_IoC(malicious_ip_ranges)
-            return True
+            yield True
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -1393,7 +1381,7 @@ class UpdateFileManager:
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
             self.print(traceback.format_exc(), 0, 1)
-            return False
+            yield False
 
     async def update(self) -> bool:
         """
@@ -1404,9 +1392,8 @@ class UpdateFileManager:
         except (TypeError, ValueError):
             # User does not want to update the malicious IP list.
             self.print(
-                'Not Updating the remote file of maliciuos IPs and domains because the user did not configure an update time.',
-                0,
-                1,
+                'Not Updating the remote file of maliciuos IPs and domains'
+                ' because the user did not configure an update time.', 0, 1,
             )
             return False
 
@@ -1429,6 +1416,7 @@ class UpdateFileManager:
         files_to_download_dics.update(self.url_feeds)
         files_to_download_dics.update(self.ja3_feeds)
         files_to_download_dics.update(self.ssl_feeds)
+
         for file_to_download in files_to_download_dics.keys():
             file_to_download = file_to_download.strip()
             file_to_download = self.sanitize(file_to_download)
@@ -1440,21 +1428,13 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
-            # self.print(f'Downloading the remote file {file_to_download}', 1, 0)
+            self.print(f'Downloading the remote file {file_to_download}', 1, 0)
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
-            # to download to next file instead of being idle
+            # to download the next file instead of being idle
             task = asyncio.create_task(
                 self.update_TI_file(file_to_download, response)
             )
-
-        # wait for all TI files to update
-        try:
-            await task
-        except UnboundLocalError:
-            # in case all our files are updated, we don't have task defined, skip
-            pass
-        self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
 
         ############### Update RiskIQ domains ################
         # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
@@ -1479,9 +1459,15 @@ class UpdateFileManager:
                 if not self.update_local_file(file):
                     # update failed
                     self.print(
-                        f'An error occurred while updating {file}. Updating was aborted.',
-                        0,
-                        1,
+                        f'An error occurred while updating {file}. Updating '
+                        f'was aborted.', 0, 1,
                     )
-        time.sleep(0.5)
-        print('-' * 27)
+
+        # wait for all TI files to update
+        try:
+            await task
+        except UnboundLocalError:
+            # in case all our files are updated, we don't have task defined, skip
+            pass
+
+        self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
