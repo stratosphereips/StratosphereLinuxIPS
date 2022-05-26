@@ -91,6 +91,9 @@ class OutputProcess(multiprocessing.Process):
         )
 
         open(self.slips_logfile, 'w').close()
+        if not '-D' in sys.argv:
+            __database__.store_std_file("stdout", self.slips_logfile)
+
         self.log_branch_info(self.slips_logfile)
 
     def create_errors_log(self):
@@ -103,6 +106,9 @@ class OutputProcess(multiprocessing.Process):
             os.mkdir(os.path.dirname(self.errors_logfile))
 
         open(self.errors_logfile, 'w').close()
+        # in daemonized mode, we use another stderr specified by Daemon() class
+        if not '-D' in sys.argv:
+            __database__.store_std_file("stderr", self.errors_logfile)
         self.log_branch_info(self.errors_logfile)
 
     def log_line(self, sender, msg):

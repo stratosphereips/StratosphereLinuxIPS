@@ -3770,5 +3770,10 @@ class Database(object):
         """return the path of zeek log files slips is currently using"""
         return self.r.get('zeek_path')
 
+    def store_std_file(self, file_type, path):
+        self.r.set(file_type, path)
+
+    def get_stdfile(self, file_type):
+        return self.r.get(file_type)
 
 __database__ = Database()
