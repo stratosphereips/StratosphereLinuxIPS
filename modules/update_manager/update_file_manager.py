@@ -266,6 +266,9 @@ class UpdateFileManager:
                         __database__.set_port_info(
                             f'{str(port)}/{proto}', name
                         )
+                # mark this file as read so that flowalerts
+                # can start generating unknown ports alerts
+                __database__.mark_known_ports_as_read()
 
             # Store the new hash of file in the database
             file_info = {'hash': self.new_hash}
