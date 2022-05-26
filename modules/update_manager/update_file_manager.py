@@ -1396,7 +1396,16 @@ class UpdateFileManager:
         # self.print('Checking if we need to download TI files.')
         # we update different types of files
         # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-
+        ############### Update slips local files ################
+        for file in os.listdir('slips_files/ports_info'):
+            file = os.path.join('slips_files/ports_info', file)
+            if self.__check_if_update_local_file(file):
+                if not self.update_local_file(file):
+                    # update failed
+                    self.print(
+                        f'An error occurred while updating {file}. Updating '
+                        f'was aborted.', 0, 1,
+                    )
         ############### Update remote TI files ################
         # Check if the remote file is newer than our own
         # For each file that we should update`
@@ -1442,17 +1451,6 @@ class UpdateFileManager:
             else:
                 # self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
                 pass
-
-        ############### Update slips local files ################
-        for file in os.listdir('slips_files/ports_info'):
-            file = os.path.join('slips_files/ports_info', file)
-            if self.__check_if_update_local_file(file):
-                if not self.update_local_file(file):
-                    # update failed
-                    self.print(
-                        f'An error occurred while updating {file}. Updating '
-                        f'was aborted.', 0, 1,
-                    )
 
         # wait for all TI files to update
         try:
