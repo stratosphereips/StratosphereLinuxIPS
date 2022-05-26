@@ -28,9 +28,10 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, config, redis_port):
+    def __init__(self, config, redis_port, monitored_zeek_files):
         super().__init__(self.REGEX)
         self.config = config
+        self.monitored_zeek_files = monitored_zeek_files
         # Start the DB
         __database__.start(self.config, redis_port)
         utils.drop_root_privs()
@@ -59,15 +60,16 @@ class FileEventHandler(RegexMatchingEventHandler):
         if 'reporter' in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
-            for file in os.listdir('zeek_files/'):
-                if 'reporter' in file:
-                    with open(f'zeek_files/{file}', 'r') as f:
-                        while line := f.readline():
-                            if 'termination' in line:
-                                # to use shutdown gracefully we need to get slips.py PID and send it a sigint
-                                PIDs = __database__.get_PIDs()
-                                pid = PIDs['slips.py']
-                                os.kill(int(pid), signal.SIGINT)
-                                break
-        if 'whitelist' in filename:
+            for file in os.listdir(self.monitored_zeek_files):
+                if 'reporter' not in file:
+                    continue
+                with open(os.path.join(self.monitored_zeek_files, file), 'r') as f:
+                    while line := f.readline():
+                        if 'termination' in line:
+                            # to use shutdown gracefully we need to get slips.py PID and send it a sigint
+                            PIDs = __database__.get_PIDs()
+                            pid = PIDs['slips.py']
+                            os.kill(int(pid), signal.SIGINT)
+                            break
+        elif 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')

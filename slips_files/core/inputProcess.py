@@ -512,7 +512,7 @@ class InputProcess(multiprocessing.Process):
             # some process to tell us which files to read in real time when they appear
             # Get the file eventhandler
             # We have to set event_handler and event_observer before running zeek.
-            self.event_handler = FileEventHandler(self.config, self.redis_port)
+            self.event_handler = FileEventHandler(self.config, self.redis_port, self.zeek_folder)
             # Create an observer
             self.event_observer = Observer()
             # Schedule the observer with the callback on the file handler
