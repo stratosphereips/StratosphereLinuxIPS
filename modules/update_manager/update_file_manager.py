@@ -11,7 +11,7 @@ import requests
 import datetime
 import sys
 import asyncio
-
+from datetime import datetime
 
 class UpdateFileManager:
     def __init__(self, outputqueue, config, redis_port):
@@ -31,6 +31,7 @@ class UpdateFileManager:
         self.today = time.time()
         # don't store iocs older than 1 week
         self.interval = 604800
+        self.slips_logfile = __database__.get_stdfile("stdout")
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -180,9 +181,7 @@ class UpdateFileManager:
                 # not a valid threat_level
                 self.print(
                     f'Invalid threat level found in slips.conf: {threat_level} '
-                    f"for TI feed: {url}. Using 'low' instead.",
-                    0,
-                    1,
+                    f"for TI feed: {url}. Using 'low' instead.", 0, 1,
                 )
                 threat_level = 'low'
 
@@ -208,6 +207,18 @@ class UpdateFileManager:
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
+
+    def log(self, text):
+        """
+        Logs the text to slips.log
+        """
+        try:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            with open(self.slips_logfile, 'a') as f:
+                f.write(f'{date_time} [{self.name}] {text}\n')
+        except FileNotFoundError:
+            open(self.slips_logfile, 'w').close()
+            self.log(text)
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """
@@ -240,9 +251,7 @@ class UpdateFileManager:
 
                 except IndexError:
                     self.print(
-                        f'Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.',
-                        0,
-                        1,
+                        f'Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.', 0, 1,
                     )
                     continue
         return line_number
@@ -376,7 +385,7 @@ class UpdateFileManager:
                     # use last modified instead
                     last_modified = self.get_last_modified(response)
                     if not last_modified:
-                        # self.print(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
+                        self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
                         return False
                     # use last modified date instead of e-tag
                     new_e_tag = last_modified
@@ -490,9 +499,7 @@ class UpdateFileManager:
             if sha1_column is None:
                 # can't find a column that contains an ioc
                 self.print(
-                    f'Error while reading the ssl file {full_path}. Could not find a column with sha1 info',
-                    0,
-                    1,
+                    f'Error while reading the ssl file {full_path}. Could not find a column with sha1 info', 0, 1,
                 )
                 return False
 
@@ -552,9 +559,7 @@ class UpdateFileManager:
                     )
                 else:
                     self.print(
-                        f'The data {data} is not valid. It was found in {filename}.',
-                        3,
-                        3,
+                        f'The data {data} is not valid. It was found in {filename}.', 3, 3,
                     )
                     continue
         # Add all loaded malicious sha1 to the database
@@ -614,7 +619,7 @@ class UpdateFileManager:
             }
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            # self.print(f'Successfully updated in DB the remote file {link_to_download}')
+            self.log(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
 
             # done parsing the file, delete it from disk
@@ -666,9 +671,7 @@ class UpdateFileManager:
                         __database__.add_domains_to_IoC(malicious_domains_dict)
             except KeyError:
                 self.print(
-                    f'RiskIQ returned: {response["message"]}. Update Cancelled.',
-                    0,
-                    1,
+                    f'RiskIQ returned: {response["message"]}. Update Cancelled.', 0, 1,
                 )
                 return False
 
@@ -775,9 +778,8 @@ class UpdateFileManager:
                 if ja3_column is None:
                     # can't find a column that contains an ioc
                     self.print(
-                        f'Error while reading the ja3 file {ja3_feed_path}. Could not find a column with JA3 info',
-                        1,
-                        1,
+                        f'Error while reading the ja3 file {ja3_feed_path}. '
+                        f'Could not find a column with JA3 info', 1, 1
                     )
                     return False
 
@@ -847,9 +849,7 @@ class UpdateFileManager:
                         )
                     else:
                         self.print(
-                            f'The data {data} is not valid. It was found in {filename}.',
-                            3,
-                            3,
+                            f'The data {data} is not valid. It was found in {filename}.', 3, 3,
                         )
                         continue
 
@@ -1393,7 +1393,7 @@ class UpdateFileManager:
             )
             return False
 
-        # self.print('Checking if we need to download TI files.')
+        self.log('Checking if we need to download TI files.')
         # we update different types of files
         # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
 
@@ -1416,10 +1416,10 @@ class UpdateFileManager:
                 # either way __check_if_update handles the error printing
                 continue
 
-            # self.print(
-            #     f'Downloading the remote '
-            #     f'file {file_to_download}', 1, 0
-            # )
+            self.log(
+                f'Downloading the remote '
+                f'file {file_to_download}', 1, 0
+            )
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
             # to download the next file instead of being idle
@@ -1435,13 +1435,11 @@ class UpdateFileManager:
             and self.riskiq_key
             and self.__check_if_update('riskiq_domains')
         ):
-            # self.print(f'Updating RiskIQ domains', 1, 0)
+            self.log(f'Updating RiskIQ domains', 1, 0)
             if self.update_riskiq_feed():
-                # self.print('Successfully updated RiskIQ domains.', 1, 0)
-                pass
+                self.log('Successfully updated RiskIQ domains.', 1, 0)
             else:
-                # self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
-                pass
+                self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
 
         ############### Update slips local files ################
         for file in os.listdir('slips_files/ports_info'):
