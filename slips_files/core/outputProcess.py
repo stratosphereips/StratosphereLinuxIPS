@@ -76,7 +76,12 @@ class OutputProcess(multiprocessing.Process):
         """
         creates slips.log and errors.log
         """
-        open(path, 'w').close()
+        try:
+            open(path, 'w').close()
+        except FileNotFoundError:
+            os.mkdir(os.path.dirname(path))
+            self.create_logfile(path)
+
         self.log_branch_info(path)
 
 

@@ -91,12 +91,18 @@ class Daemon:
                 open(file, 'w').close()
 
     def read_configuration(self):
-        """Read the configuration file to get stdout, stderr, logsfile path."""
+        """ Read the configuration file to get stdout, stderr, logsfile path. """
+        # get self.config
         self.config = self.slips.read_conf_file()
 
         try:
-            # output dir to store running.log and errors.log
-            self.output_dir = self.config.get('modes', 'output_dir')
+            # if -o is given override the output_dir in slips.conf
+            if self.slips.args.output != self.slips.alerts_default_path:
+                self.output_dir = self.slips.args.output
+            else:
+                # output dir to store running.log and errors.log
+                self.output_dir = self.config.get('modes', 'output_dir')
+
             if not self.output_dir.endswith('/'):
                 self.output_dir = f'{self.output_dir}/'
         except (
@@ -1107,7 +1113,6 @@ class Main:
         self.args = parser.parse_args()
 
     def read_conf_file(self):
-        # Read the config file name given from the parameters
         # don't use '%' for interpolation.
         self.config = configparser.ConfigParser(interpolation=None)
         try:
