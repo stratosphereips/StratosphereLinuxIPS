@@ -6,8 +6,11 @@
 - Fix the issue of growing zeek logs by deleting old zeek logs every 1 day. (optional but enabled by default)
 - Added support for running several instances of slips at the same time.
 - Saving and loading the db in macos
-- Fix reading flows from stdin, now it supports zeek, argus and suricata -0.9.0
+- Fix reading flows from stdin, now it supports zeek, argus and suricata 
+- Faster Startup of slips, now slips updates the TI files in the background
+- Added slips.log where all Slips logs goes. in daemon and interactive mode
 
+-0.9.0
 * Slips
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
  - Parse zeek software.log and extract software type, version and user agent from it

@@ -164,6 +164,12 @@ class Daemon:
                 f'stdout: {self.stdout}\n'
                 f'stderr: {self.stderr}\n'
             )
+            __database__.store_std_file("stderr", self.stderr)
+            __database__.store_std_file("stdout", self.stdout)
+            __database__.store_std_file("stdin", self.stdin)
+            __database__.store_std_file("pidfile", self.pidfile)
+            __database__.store_std_file("logsfile", self.logsfile)
+
             self.print('Done reading configuration and setting up files.\n')
 
     def terminate(self):
@@ -1564,22 +1570,23 @@ class Main:
                 # Get command output
                 output = result.stdout.decode('utf-8')
                 # if stdout is being redirected we'll find '1w' in one of the lines 1 means stdout, w means write mode
+                # by default, stdout is not redirected
+                current_stdout = ''
                 for line in output.splitlines():
                     if '1w' in line:
                         # stdout is redirected, get the file
                         current_stdout = line.split(' ')[-1]
                         break
-                else:
-                    # stdout is not redirected
-                    current_stdout = ''
-                # stderr is redirected when daemonized, tell outputprocess
-                stderr = (
-                    f'output/{input_information.split("/")[-1]}/errors.log'
-                )
-                if self.args.output:
-                    stderr = f'output/errors.log'
+
                 if self.mode == 'daemonized':
                     stderr = self.daemon.stderr
+                    slips_logfile = self.daemon.stdout
+                else:
+                    stderr = f'{self.args.output}errors.log'
+                    slips_logfile = f'{self.args.output}slips.log'
+                    __database__.store_std_file("stdout", slips_logfile)
+                    __database__.store_std_file("stderr", stderr)
+
 
                 # Create the output thread and start it
                 output_process = OutputProcess(
@@ -1590,6 +1597,7 @@ class Main:
                     redis_port,
                     stdout=current_stdout,
                     stderr=stderr,
+                    slips_logfile=slips_logfile,
                 )
                 # this process starts the db
                 output_process.start()
