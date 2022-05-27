@@ -1906,26 +1906,20 @@ class Main:
 if __name__ == '__main__':
     slips = Main()
     slips.parse_arguments()
-    # if any one of the following args are given, don't start the daemon
-    start_interactive = [
-        slips.args.clearcache,
-        slips.args.killall,
-        slips.args.clearblocking,
-    ]
-    if any(start_interactive) or not slips.args.daemon:
-        slips.start()
-        sys.exit()
-
-    daemon = Daemon(slips)
     if slips.args.stopdaemon:
         # -S is provided
+        daemon = Daemon(slips)
         print('Daemon stopped.')
         daemon.stop()
     elif slips.args.restartdaemon:
         # -R is provided
+        daemon = Daemon(slips)
         print('Daemon restarted.')
         daemon.restart()
-    else:
-        # Default mode (daemonized)
+    elif slips.args.daemon :
+        daemon = Daemon(slips)
         print('Slips daemon started.')
         daemon.start()
+    else:
+        slips.start()
+        sys.exit()
