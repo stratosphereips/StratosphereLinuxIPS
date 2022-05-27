@@ -276,7 +276,14 @@ class Module(Module, multiprocessing.Process):
     ):
         """
         Checks dports that are not in our
-        slips_files/ports_info/services.csv"""
+        slips_files/ports_info/services.csv
+        """
+
+        # make sure update manager is done reading services.csv
+        # to avoid FPs
+        if not __database__.is_known_ports_read():
+            return False
+
         portproto = f'{dport}/{proto}'
         if port_info := __database__.get_port_info(portproto):
             # it's a known port
