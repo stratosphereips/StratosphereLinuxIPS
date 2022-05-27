@@ -15,9 +15,6 @@ import re
 import ast
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
-import socket
-import random
-
 
 def timing(f):
     """Function to measure the time another function takes."""
@@ -232,12 +229,7 @@ class Database(object):
                 self.set_slips_start_time()
         except redis.exceptions.ConnectionError:
             print(f"[DB] Can't connect to redis on port {redis_port}")
-        # Even if the DB is not deleted. We need to delete some temp data
-        self.r.delete('zeekfiles')
-        # By default the slips internal time is 0 until we receive something
-        self.setSlipsInternalTime(0)
-        while self.get_slips_start_time() is None:
-            self.set_slips_start_time()
+
 
     def print(self, text, verbose=1, debug=0):
         """
