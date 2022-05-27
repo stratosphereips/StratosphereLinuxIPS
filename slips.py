@@ -1584,8 +1584,8 @@ class Main:
                 else:
                     stderr = f'{self.args.output}errors.log'
                     slips_logfile = f'{self.args.output}slips.log'
-                    __database__.store_std_file("stdout", stderr)
-                    __database__.store_std_file("stderr", slips_logfile)
+                    __database__.store_std_file("stdout", slips_logfile)
+                    __database__.store_std_file("stderr", stderr)
 
 
                 # Create the output thread and start it

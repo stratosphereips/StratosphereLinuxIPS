@@ -558,8 +558,8 @@ class UpdateFileManager:
                         }
                     )
                 else:
-                    self.print(
-                        f'The data {data} is not valid. It was found in {filename}.', 3, 3,
+                    self.log(
+                        f'The data {data} is not valid. It was found in {filename}.', 3, 0,
                     )
                     continue
         # Add all loaded malicious sha1 to the database
@@ -1417,8 +1417,7 @@ class UpdateFileManager:
                 continue
 
             self.log(
-                f'Downloading the remote '
-                f'file {file_to_download}', 1, 0
+                f'Downloading the remote file {file_to_download}'
             )
             # every function call to update_TI_file is now running concurrently instead of serially
             # so when a server's taking a while to give us the TI feed, we proceed
@@ -1435,11 +1434,11 @@ class UpdateFileManager:
             and self.riskiq_key
             and self.__check_if_update('riskiq_domains')
         ):
-            self.log(f'Updating RiskIQ domains', 1, 0)
+            self.log(f'Updating RiskIQ domains')
             if self.update_riskiq_feed():
-                self.log('Successfully updated RiskIQ domains.', 1, 0)
+                self.log('Successfully updated RiskIQ domains.')
             else:
-                self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+                self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
 
         ############### Update slips local files ################
         for file in os.listdir('slips_files/ports_info'):
