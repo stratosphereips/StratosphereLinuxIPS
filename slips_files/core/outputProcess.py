@@ -76,7 +76,12 @@ class OutputProcess(multiprocessing.Process):
         """
         creates slips.log and errors.log
         """
-        open(path, 'w').close()
+        try:
+            open(path, 'w').close()
+        except FileNotFoundError:
+            os.mkdir(os.path.dirname(path))
+            self.create_logfile(path)
+
         self.log_branch_info(path)
 
 
@@ -84,6 +89,10 @@ class OutputProcess(multiprocessing.Process):
         """
         Log error line to slips.log
         """
+        # don't log in daemon mode, all printed
+        # lines are redirected to slips.log by default
+        if "-D" in sys.argv:
+            return
         with open(self.slips_logfile, 'a') as slips_logfile:
             date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
             slips_logfile.write(f'{date_time} {sender}{msg}\n')
