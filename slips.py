@@ -1578,16 +1578,15 @@ class Main:
                         current_stdout = line.split(' ')[-1]
                         break
 
-                # stderr is redirected when daemonized, tell outputprocess
-                stderr = (
-                    f'output/{input_information.split("/")[-1]}/errors.log'
-                )
-                if self.args.output:
-                    stderr = f'output/errors.log'
-
-
                 if self.mode == 'daemonized':
                     stderr = self.daemon.stderr
+                    slips_logfile = self.daemon.stdout
+                else:
+                    stderr = f'{self.args.output}errors.log'
+                    slips_logfile = f'{self.args.output}slips.log'
+                    __database__.store_std_file("stdout", stderr)
+                    __database__.store_std_file("stderr", slips_logfile)
+
 
                 # Create the output thread and start it
                 output_process = OutputProcess(
@@ -1598,6 +1597,7 @@ class Main:
                     redis_port,
                     stdout=current_stdout,
                     stderr=stderr,
+                    slips_logfile=slips_logfile,
                 )
                 # this process starts the db
                 output_process.start()

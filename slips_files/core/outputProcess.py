@@ -42,11 +42,12 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        # create the file and clear it
+        ####### create the log files
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.create_errors_log()
-        self.create_slips_log()
+        self.create_logfile(self.errors_logfile)
+        self.create_logfile(self.slips_logfile)
+        #######
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -61,19 +62,6 @@ class OutputProcess(multiprocessing.Process):
         # Start the DB
         __database__.start(self.config, redis_port)
 
-    def get_output_dir(self) -> str:
-        """
-        Default output dir is output/ unless -o is given
-        """
-        # default output dir
-        output_dir = 'output/'
-        if '-o' in sys.argv:
-            output_dir = sys.argv[sys.argv.index('-o') + 1]
-            # add / to the end of output dir if not there
-            output_dir = (
-                output_dir if output_dir.endswith('/') else f'{output_dir}/'
-            )
-        return output_dir
 
     def log_branch_info(self, logfile):
         branch_info = utils.get_branch_info()
@@ -84,32 +72,13 @@ class OutputProcess(multiprocessing.Process):
             with open(logfile, 'w') as f:
                 f.write(f'Using {branch} - {commit} - {now}\n\n')
 
-    def create_slips_log(self):
-        output_dir = self.get_output_dir()
-        self.slips_logfile = self.slips_logfile.replace(
-            'output/', output_dir
-        )
+    def create_logfile(self, path):
+        """
+        creates slips.log and errors.log
+        """
+        open(path, 'w').close()
+        self.log_branch_info(path)
 
-        open(self.slips_logfile, 'w').close()
-        if not '-D' in sys.argv:
-            __database__.store_std_file("stdout", self.slips_logfile)
-
-        self.log_branch_info(self.slips_logfile)
-
-    def create_errors_log(self):
-        output_dir = self.get_output_dir()
-        self.errors_logfile = self.errors_logfile.replace(
-            'output/', output_dir
-        )
-        dir_name = os.path.dirname(self.errors_logfile)
-        if not os.path.exists(dir_name):
-            os.mkdir(os.path.dirname(self.errors_logfile))
-
-        open(self.errors_logfile, 'w').close()
-        # in daemonized mode, we use another stderr specified by Daemon() class
-        if not '-D' in sys.argv:
-            __database__.store_std_file("stderr", self.errors_logfile)
-        self.log_branch_info(self.errors_logfile)
 
     def log_line(self, sender, msg):
         """
