@@ -901,54 +901,42 @@ class Main:
 
     def prepare_output_dir(self, input_information):
         """
-        :param input_information: either an interface or a filename (wlp3s0, sample.pcap, etc.)
+        :param input_information: either an interface or a filename (wlp3s0, sample.pcap, zeek_dir/ etc.)
         """
-
-        if self.args.output == self.alerts_default_path:
-            # now that slips can run several instances,
-            # each created dir will be named after the instance
-            # that created it
-            self.args.output += f'{input_information.split("/")[-1]}'
-        else:
+        # default output/
+        if '-o' in sys.argv:
             # -o is given
             # Create output folder for alerts.log and
             # alerts.json if it doesn't  exist
-            if not self.args.output.endswith('/'):
-                self.args.output = self.args.output + '/'
-            try:
-                os.remove(self.args.output + 'alerts.log')
-                os.remove(self.args.output + 'alerts.json')
-            except OSError:
-                # they weren't created in the first place
-                pass
+            files_to_clear = ('alerts.json', 'alerts.log', 'errors.log', 'slips.log')
+            for file in files_to_clear:
+                try:
+                    file = os.path.join(self.args.output, file)
+                    os.remove(file)
+                except OSError:
+                    # they weren't created in the first place
+                    pass
             return
 
-        # this ctr will be appended to the dir name,
-        # so we don't overwrite existing log dirs
-        while os.path.exists(self.args.output):
-            # delete the / at the end
-            if self.args.output.endswith('/'):
-                self.args.output = self.args.output[:-1]
-
-            try:
-                # if the dir ends with a ctr, delete the ctr so we can replace it
-                dir_ends_with = int(self.args.output[-1])
-                # it ends with _ctr, remove the _ and the ctr
-                self.args.output = self.args.output[:-2]
-                dir_ends_with += 1
-                self.args.output += f'_{dir_ends_with}/'
-                continue
-            except ValueError:
-                # found an existing dir that doesn't end with a ctr
-                self.args.output += '_1/'
-
-        if not self.args.output.endswith('/'):
-            self.args.output = self.args.output + '/'
+        # self.args.output is the same as self.alerts_default_path
+        input_information = os.path.normpath(input_information)
+        # now that slips can run several instances,
+        # each created dir will be named after the instance
+        # that created it
+        # it should be output/wlp3s0
+        self.args.output = os.path.join(
+            self.alerts_default_path,
+            os.path.basename(input_information) # get pcap name from path
+        )
+        # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
+        ts = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+        self.args.output += f'_{ts}/'
 
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
 
         print(f'[Main] storing Slips logs in {self.args.output}')
+
 
     def parse_arguments(self):
         # Parse the parameters
@@ -1582,8 +1570,8 @@ class Main:
                     stderr = self.daemon.stderr
                     slips_logfile = self.daemon.stdout
                 else:
-                    stderr = f'{self.args.output}errors.log'
-                    slips_logfile = f'{self.args.output}slips.log'
+                    stderr = os.path.join(self.args.output, 'errors.log')
+                    slips_logfile = os.path.join(self.args.output, 'slips.log')
 
 
 

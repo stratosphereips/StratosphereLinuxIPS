@@ -269,7 +269,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
         Clear the file if exists and return an open handle to it
         """
-        logfile_path = f'{output_folder}{file_to_clean}'
+        logfile_path = os.path.join(output_folder, file_to_clean)
         if path.exists(logfile_path):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
