@@ -1584,8 +1584,7 @@ class Main:
                 else:
                     stderr = f'{self.args.output}errors.log'
                     slips_logfile = f'{self.args.output}slips.log'
-                    __database__.store_std_file("stdout", slips_logfile)
-                    __database__.store_std_file("stderr", stderr)
+
 
 
                 # Create the output thread and start it
@@ -1606,6 +1605,11 @@ class Main:
                     __database__.enable_redis_snapshots()
                 else:
                     __database__.disable_redis_snapshots()
+
+                if not self.mode == 'daemonized':
+                    __database__.store_std_file("stdout", slips_logfile)
+                    __database__.store_std_file("stderr", stderr)
+
 
                 # now that we have successfully connected to the db,
                 # log the PID of the started redis-server
