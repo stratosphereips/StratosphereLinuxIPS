@@ -87,7 +87,7 @@ def test_pcap(
         (
             'dataset/test2.binetflow',
             1,
-            'Connection to unknown destination port 7275/TCP destination IP 64.233.167.192',
+            'Detected Long Connection.',
             'test2/',
             6664,
         ),

@@ -44,7 +44,6 @@ import re
 import random
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
-import asyncio
 from signal import SIGTERM
 
 version = '0.9.0'
@@ -300,7 +299,6 @@ class Daemon:
 
 class Main:
     def __init__(self):
-        # Set up the default path for alerts.log and alerts.json. In our case, it is output folder.
         self.name = 'main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
@@ -1108,7 +1106,6 @@ class Main:
         parser.add_argument(
             '-h', '--help', action='help', help='command line help'
         )
-
         self.args = parser.parse_args()
 
     def read_conf_file(self):
@@ -1467,7 +1464,6 @@ class Main:
             input_type, input_information, line_type = self.check_input_type()
 
             # If we need zeek (bro), test if we can run it.
-            # Need to be assign to something because we pass it to inputProcess later
             zeek_bro = None
             if input_type in ('pcap', 'interface'):
                 zeek_bro = self.check_zeek_or_bro()
@@ -1506,7 +1502,6 @@ class Main:
                 from slips_files.core.guiProcess import GuiProcess
                 from slips_files.core.logsProcess import LogsProcess
                 from slips_files.core.evidenceProcess import EvidenceProcess
-
                 # Any verbosity passed as parameter overrides the configuration. Only check its value
                 if self.args.verbose == None:
                     # Read the verbosity from the config
