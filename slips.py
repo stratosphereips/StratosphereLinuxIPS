@@ -164,11 +164,6 @@ class Daemon:
                 f'stdout: {self.stdout}\n'
                 f'stderr: {self.stderr}\n'
             )
-            __database__.store_std_file("stderr", self.stderr)
-            __database__.store_std_file("stdout", self.stdout)
-            __database__.store_std_file("stdin", self.stdin)
-            __database__.store_std_file("pidfile", self.pidfile)
-            __database__.store_std_file("logsfile", self.logsfile)
 
             self.print('Done reading configuration and setting up files.\n')
 
@@ -1606,7 +1601,13 @@ class Main:
                 else:
                     __database__.disable_redis_snapshots()
 
-                if not self.mode == 'daemonized':
+                if self.mode == 'daemonized':
+                    __database__.store_std_file("stderr", self.daemon.stderr)
+                    __database__.store_std_file("stdout", self.daemon.stdout)
+                    __database__.store_std_file("stdin", self.daemon.stdin)
+                    __database__.store_std_file("pidfile", self.daemon.pidfile)
+                    __database__.store_std_file("logsfile", self.daemon.logsfile)
+                else:
                     __database__.store_std_file("stdout", slips_logfile)
                     __database__.store_std_file("stderr", stderr)
 
