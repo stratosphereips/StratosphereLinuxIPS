@@ -286,9 +286,9 @@ class InputProcess(multiprocessing.Process):
                             timestamp = nline.split('\t')[0]
 
                         try:
-                            float(timestamp)
+
                             # is a dict with {'filename': ts, ...}
-                            file_time[filename] = timestamp
+                            file_time[filename] = float(timestamp)
                             # self.print(f'File {filename}. TS: {timestamp}')
                             # Store the line in the cache
                             # self.print(f'Adding cache and time of {filename}')
