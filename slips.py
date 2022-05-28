@@ -300,7 +300,7 @@ class Daemon:
 
 class Main:
     def __init__(self):
-        self.name = 'main'
+        self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'

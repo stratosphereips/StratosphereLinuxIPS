@@ -249,7 +249,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    expected_evidence = 'vertical port scan'
+    expected_evidence = 'Connection to unknown destination port 5901/TCP'
 
     output_file = f'{output_dir}slips_output.txt'
     command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
