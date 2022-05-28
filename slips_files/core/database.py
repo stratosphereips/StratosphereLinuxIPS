@@ -3769,10 +3769,10 @@ class Database(object):
         because of the delayed reading of services.csv, slips now
         doesn't generate unknown ports alerts unless this variable is True
         """
-        self.r.set("is services.csv read", 'True')
+        self.rcache.set("is services.csv read", 'True')
 
     def is_known_ports_read(self):
-        return True if self.r.get("is services.csv read") else False
+        return True if self.rcache.get("is services.csv read") == 'True' else False
 
     def store_std_file(self, file_type, path):
         self.r.set(file_type, path)
