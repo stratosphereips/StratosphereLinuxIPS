@@ -5,7 +5,7 @@
 
 # run all unit tests, -n *5 means distribute tests on 5 different process
 # -s to see print statements as they are executed
-python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_database.py" -n 5 -p no:warnings -vv -s
+python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_database.py" -n 7 -p no:warnings -vv -s
 # run db tests serially/using 1 worker
 python3  -m pytest tests/test_database.py -n 1 -p no:warnings -vv -s --dist=loadfile
 
@@ -14,23 +14,6 @@ python3 tests/destrctor.py
 
 # clear cache before running the integration tests
 ./slips.py -cc
-
-# delete olt log dirs if they're still there
-rm -r pcap_* > /dev/null 2>&1
-rm -r pcap/ > /dev/null 2>&1
-rm -r pcap2/ > /dev/null 2>&1
-rm -r pcap2/ > /dev/null 2>&1
-rm -r conn_log_* > /dev/null 2>&1
-rm -r conn_log/ > /dev/null 2>&1
-rm -r conn_log-2/ > /dev/null 2>&1
-rm -r sample_zeek_files_* > /dev/null 2>&1
-rm -r sample_zeek_files/ > /dev/null 2>&1
-rm -r test[0-9]/ > /dev/null 2>&1
-rm -r test_* > /dev/null 2>&1
-rm -r suricata/ > /dev/null 2>&1
-rm -r suricata_* > /dev/null 2>&1
-rm -r nfdump_* > /dev/null 2>&1
-rm -r nufdump/ > /dev/null 2>&1
 
 
 # the command to run dataset tests is separated from the rest because it takes so much time,
