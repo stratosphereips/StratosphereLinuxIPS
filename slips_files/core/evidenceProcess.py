@@ -96,10 +96,10 @@ class EvidenceProcess(multiprocessing.Process):
         if logs_folder:
             # these json files are inside the logs dir, not the output/ dir
             self.logs_jsonfile = self.clean_file(
-                f'{logs_folder}/', 'alerts.json'
+                logs_folder, 'alerts.json'
                 )
             self.logs_logfile = self.clean_file(
-                f'{logs_folder}/', 'alerts.log'
+                logs_folder, 'alerts.log'
                 )
 
     def print(self, text, verbose=1, debug=0):

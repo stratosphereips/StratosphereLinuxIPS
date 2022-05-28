@@ -6,7 +6,7 @@ import os
 import pytest
 import shutil
 
-alerts_file = 'alerts.json'
+alerts_file = 'alerts.log'
 
 
 def connect_to_redis(redis_port):
@@ -77,10 +77,6 @@ def test_pcap(
     # remove the generated zeek files
     shutil.rmtree(f"zeek_files_{pcap_path.split('/')[-1]}")
 
-
-@pytest.mark.skipif(
-    'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
-)
 @pytest.mark.parametrize(
     'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
     [
@@ -210,7 +206,7 @@ def test_zeek_dir(
         (
             'dataset/sample_zeek_files-2/conn.log',
             5,
-            'Connection to unknown destination port 17500',
+            'a connection without DNS resolution',
             'conn_log-2/',
             6658,
         ),
@@ -271,6 +267,11 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     shutil.rmtree(output_dir)
 
 
+
+
+@pytest.mark.skipif(
+    'nfdump' not in shutil.which('nfdump'), reason='nfdump is not installed'
+)
 @pytest.mark.parametrize(
     'nfdump_path,  output_dir, redis_port',
     [('dataset/test.nfdump', 'nfdump/', 6656)],
