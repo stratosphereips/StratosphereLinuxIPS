@@ -142,9 +142,10 @@ Instead of compiling zeek, you can grab the zeek binaries for your OS
 
 Packages for Raspbian 11:
 
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.0-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.0-0_armhf.deb)
+[https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_11/armhf/zeek_4.2.1-0_armhf.deb)
+
 
 Packages for Raspbian 10:
 
-[https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.0-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.0-0_armhf.deb)
+[https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb](https://download.opensuse.org/repositories/security:/zeek/Raspbian_10/armhf/zeek_4.2.1-0_armhf.deb)
 

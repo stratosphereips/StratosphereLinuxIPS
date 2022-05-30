@@ -97,23 +97,39 @@ In daemonized mode : Slips runs completely in the background, The output is writ
 
 by default, these are the paths used
 
-stdout = /var/log/slips/running.log
+stdout = /var/log/slips/slips.log
 stderr = /var/log/slips/error.log
-logsfile = /var/log/slips/running.log
+logsfile = /var/log/slips/slips.log
 
  
-This is the default mode, it doesn't require any special flags
+This is the not the default mode, to use it, run slips with -D
+
+
+```./slips.py -i wlp3s0 -D```
 
 To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 
 To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
  
 
+NOTE: ```/val/log``` is owned by root by default, so you can either run slips as room or change the ```/var/log```
+permissions to be owned by the current user using
+
+NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
+ instead of the otput_dir specified in slips.conf 
+
+
+```
+sudo chown $USER /var/log
+```
+
+
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
  
-Run slips with ```-I```to start slips in interactive mode.
+This is the default mode, It doesn't require any flags.
 
-Output files are stored in ```Slips/daemon/``` dir, By default you don't need root to run slips, but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
+Output files are stored in ```output/``` dir, By default you don't need root to run slips, 
+but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
 
 ## Running Several slips instances
 

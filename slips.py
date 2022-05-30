@@ -537,7 +537,7 @@ class Main:
         # Several combinations of outputs should be able to be used
         if self.args.gui:
             # Create the curses thread
-            guiProcessQueue = Queue()
+            guiProcessQueue = multiprocessing.Queue()
             guiProcessThread = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
                 self.args.debug, self.config
