@@ -505,7 +505,7 @@ interactive mode
 
 Slips supports reading input flows in text format from stdin in interactive mode.
 
-Supported flow from stdin are zeek (json form), suricata and argus.
+Supported flow from stdin are zeek conn.log files (json form), suricata and argus.
 
 For example you can run slips using:
 
