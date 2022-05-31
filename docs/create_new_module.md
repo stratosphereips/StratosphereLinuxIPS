@@ -11,7 +11,7 @@ be integrated correctly.
 
 So for example, let's create a module called ```scan_detector```
 
-First, We copy the template module into a new dir called ```scan_detector``` and change the name of the .py file to ```scan_detector```
+First, We copy the template module into a new dir called ```scan_detector``` and change the name of the .py file to ```scan_detector.py```
 
 so now you should have something like this
 ```
@@ -19,7 +19,7 @@ modules/
 ├─ flowalerts/
 ├─ scan_detector/
 │  ├─ __init__.py
-│  ├─ scan_detector
+│  ├─ scan_detector.py
 ```
 
 the __init__.py is to make sure the module is treated as a python package, don't delete it
