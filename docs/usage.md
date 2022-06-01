@@ -112,16 +112,14 @@ To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
  
 
-NOTE: ```/val/log``` is owned by root by default, so you can either run slips as room or change the ```/var/log```
-permissions to be owned by the current user using
+NOTE: Since ```/val/log``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```, 
+creat /var/log/slips as root and slips will use it by default.
+
+If slips can't write there, slips will store the logs in the ```output``` dir by default.
+
 
 NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
  instead of the otput_dir specified in slips.conf 
-
-
-```
-sudo chown $USER /var/log
-```
 
 
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
