@@ -119,6 +119,10 @@ class Database(object):
                 health_check_interval=30,
             )  # password='password')
 
+            # the connection to redis is only established
+            # when you try to execute a command on the server.
+            # so make sure it's established first
+            self.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
             # unable to connect to this port, try another one
