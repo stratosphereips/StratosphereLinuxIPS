@@ -69,18 +69,18 @@ class OutputProcess(multiprocessing.Process):
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
-            with open(logfile, 'w') as f:
+            with open(logfile, 'a') as f:
                 f.write(f'Using {branch} - {commit} - {now}\n\n')
 
     def create_logfile(self, path):
         """
-        creates slips.log and errors.log
+        creates slips.log and errors.log if they don't exist
         """
         try:
-            open(path, 'w').close()
+            open(path, 'a').close()
         except FileNotFoundError:
             os.mkdir(os.path.dirname(path))
-            self.create_logfile(path)
+            open(path, 'w').close()
 
         self.log_branch_info(path)
 
