@@ -1387,76 +1387,78 @@ class UpdateFileManager:
                 ' because the user did not configure an update time.', 0, 1,
             )
             return False
-
-        if self.update_period <= 0:
-            # User does not want to update the malicious IP list.
-            self.print(
-                'Not Updating the remote file of malicious IPs and domains '
-                'because the update period is <= 0.', 0, 1,
-            )
-            return False
-
-        self.log('Checking if we need to download TI files.')
-        # we update different types of files
-        # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-        ############### Update slips local files ################
-        for file in os.listdir('slips_files/ports_info'):
-            file = os.path.join('slips_files/ports_info', file)
-            if self.__check_if_update_local_file(file):
-                if not self.update_local_file(file):
-                    # update failed
-                    self.print(
-                        f'An error occurred while updating {file}. Updating '
-                        f'was aborted.', 0, 1,
-                    )
-        ############### Update remote TI files ################
-        # Check if the remote file is newer than our own
-        # For each file that we should update`
-        files_to_download_dics = {}
-        files_to_download_dics.update(self.url_feeds)
-        files_to_download_dics.update(self.ja3_feeds)
-        files_to_download_dics.update(self.ssl_feeds)
-
-        for file_to_download in files_to_download_dics.keys():
-            file_to_download = file_to_download.strip()
-            file_to_download = self.sanitize(file_to_download)
-
-            response = self.__check_if_update(file_to_download)
-            if not response:
-                # failed to get the response, either a server problem
-                # or the the file is up to date so the response isn't needed
-                # either way __check_if_update handles the error printing
-                continue
-
-            self.log(
-                f'Downloading the remote file {file_to_download}'
-            )
-            # every function call to update_TI_file is now running concurrently instead of serially
-            # so when a server's taking a while to give us the TI feed, we proceed
-            # to download the next file instead of being idle
-            task = asyncio.create_task(
-                self.update_TI_file(file_to_download, response)
-            )
-
-        ############### Update RiskIQ domains ################
-        # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
-        # check if we have a username and api key and a week has passed since we last updated
-        if (
-            self.riskiq_email
-            and self.riskiq_key
-            and self.__check_if_update('riskiq_domains')
-        ):
-            self.log(f'Updating RiskIQ domains')
-            if self.update_riskiq_feed():
-                self.log('Successfully updated RiskIQ domains.')
-            else:
-                self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
-
-        # wait for all TI files to update
         try:
-            await task
-        except UnboundLocalError:
-            # in case all our files are updated, we don't have task defined, skip
-            pass
+            if self.update_period <= 0:
+                # User does not want to update the malicious IP list.
+                self.print(
+                    'Not Updating the remote file of malicious IPs and domains '
+                    'because the update period is <= 0.', 0, 1,
+                )
+                return False
 
-        self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+            self.log('Checking if we need to download TI files.')
+            # we update different types of files
+            # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
+            ############### Update slips local files ################
+            for file in os.listdir('slips_files/ports_info'):
+                file = os.path.join('slips_files/ports_info', file)
+                if self.__check_if_update_local_file(file):
+                    if not self.update_local_file(file):
+                        # update failed
+                        self.print(
+                            f'An error occurred while updating {file}. Updating '
+                            f'was aborted.', 0, 1,
+                        )
+            ############### Update remote TI files ################
+            # Check if the remote file is newer than our own
+            # For each file that we should update`
+            files_to_download_dics = {}
+            files_to_download_dics.update(self.url_feeds)
+            files_to_download_dics.update(self.ja3_feeds)
+            files_to_download_dics.update(self.ssl_feeds)
+
+            for file_to_download in files_to_download_dics.keys():
+                file_to_download = file_to_download.strip()
+                file_to_download = self.sanitize(file_to_download)
+
+                response = self.__check_if_update(file_to_download)
+                if not response:
+                    # failed to get the response, either a server problem
+                    # or the the file is up to date so the response isn't needed
+                    # either way __check_if_update handles the error printing
+                    continue
+
+                self.log(
+                    f'Downloading the remote file {file_to_download}'
+                )
+                # every function call to update_TI_file is now running concurrently instead of serially
+                # so when a server's taking a while to give us the TI feed, we proceed
+                # to download the next file instead of being idle
+                task = asyncio.create_task(
+                    self.update_TI_file(file_to_download, response)
+                )
+
+            ############### Update RiskIQ domains ################
+            # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
+            # check if we have a username and api key and a week has passed since we last updated
+            if (
+                self.riskiq_email
+                and self.riskiq_key
+                and self.__check_if_update('riskiq_domains')
+            ):
+                self.log(f'Updating RiskIQ domains')
+                if self.update_riskiq_feed():
+                    self.log('Successfully updated RiskIQ domains.')
+                else:
+                    self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
+
+            # wait for all TI files to update
+            try:
+                await task
+            except UnboundLocalError:
+                # in case all our files are updated, we don't have task defined, skip
+                pass
+
+            self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+        except KeyboardInterrupt:
+            return False

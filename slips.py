@@ -64,6 +64,7 @@ class Main:
         self.parse_arguments()
         # set self.config
         self.read_conf_file()
+        self.check_given_flags()
         # Check the type of input
         self.input_type, self.input_information, self.line_type = self.check_input_type()
         # If we need zeek (bro), test if we can run it.
@@ -1155,6 +1156,64 @@ class Main:
 
         return input_type, input_information, line_type
 
+    def check_given_flags(self):
+        """
+        check the flags that don't reuiqre starting slips
+        for ex: clear db, clear blocking, killling all servers etc.
+        """
+        if (self.args.verbose and int(self.args.verbose) > 3) or (
+            self.args.debug and int(self.args.debug) > 3
+        ):
+            print('Debug and verbose values range from 0 to 3.')
+            self.terminate_slips()
+
+        # Check if redis server running
+        if self.check_redis_database() is False:
+            print('Redis database is not running. Stopping Slips')
+            self.terminate_slips()
+
+        # Clear cache if the parameter was included
+        if self.args.clearcache:
+            print('Deleting Cache DB in Redis.')
+            self.clear_redis_cache_database()
+            self.terminate_slips()
+
+        # kill all open unused redis servers if the parameter was included
+        if self.args.killall:
+            self.close_open_redis_servers()
+            self.terminate_slips()
+
+        if self.args.clearblocking:
+            if os.geteuid() != 0:
+                print(
+                    'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
+                )
+                self.terminate_slips()
+            else:
+                # start only the blocking module process and the db
+                from slips_files.core.database import __database__
+                from multiprocessing import Queue
+                from modules.blocking.blocking import Module
+
+                blocking = Module(Queue(), self.config)
+                blocking.start()
+                blocking.delete_slipsBlocking_chain()
+                # Tell the blocking module to clear the slips chain
+                self.shutdown_gracefully()
+
+        # Check if user want to save and load a db at the same time
+        if self.args.save:
+            # make sure slips is running as root
+            if os.geteuid() != 0:
+                print(
+                    'Slips needs to be run as root to save the database. Stopping.'
+                )
+                self.terminate_slips()
+            if self.args.db:
+                print("Can't use -s and -b together")
+                self.terminate_slips()
+
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1171,60 +1230,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            if (self.args.verbose and int(self.args.verbose) > 3) or (
-                self.args.debug and int(self.args.debug) > 3
-            ):
-                print('Debug and verbose values range from 0 to 3.')
-                self.terminate_slips()
 
-            # Check if redis server running
-            if self.check_redis_database() is False:
-                print('Redis database is not running. Stopping Slips')
-                self.terminate_slips()
-
-            # Clear cache if the parameter was included
-            if self.args.clearcache:
-                print('Deleting Cache DB in Redis.')
-                self.clear_redis_cache_database()
-                self.terminate_slips()
-
-            # kill all open unused redis servers if the parameter was included
-            if self.args.killall:
-                self.close_open_redis_servers()
-                self.terminate_slips()
-
-            if self.args.clearblocking:
-                if os.geteuid() != 0:
-                    print(
-                        'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
-                    )
-                    self.terminate_slips()
-                else:
-                    # start only the blocking module process and the db
-                    from slips_files.core.database import __database__
-                    from multiprocessing import Queue
-                    from modules.blocking.blocking import Module
-
-                    blocking = Module(Queue(), self.config)
-                    blocking.start()
-                    blocking.delete_slipsBlocking_chain()
-                    # Tell the blocking module to clear the slips chain
-                    self.shutdown_gracefully()
-
-            # Check if user want to save and load a db at the same time
-            if self.args.save:
-                # make sure slips is running as root
-                if os.geteuid() != 0:
-                    print(
-                        'Slips needs to be run as root to save the database. Stopping.'
-                    )
-                    self.terminate_slips()
-                if self.args.db:
-                    print("Can't use -s and -b together")
-                    self.terminate_slips()
-            
-            if self.args.stopdaemon:
-                return
 
             # Also check if the user blocks on interface, does not make sense to block on files
             if (
