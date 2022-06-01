@@ -1,46 +1,119 @@
-# Create a new module
+# How to Create a New Slips Module
 
-Slips is a highly modular software that can be extended. 
 
-Here we describe how to extend slips by creating a new module.
 
-When Slips is run, It automatically loads all the modules inside the ```modules/``` dir
+## What is SLIPS and why are modules useful
+Slips is a machine learning-based intrusion prevention system for Linux and MacOS, developed at the Stratosphere Laboratories from the Czech Technical University in Prague. Slips reads network traffic flows from several sources, applies multiple detections (including machine learning detections) and detects infected computers and attackers in the network. It is easy to extend the functionality of Slips by writing a new module. This blog shows how to create a new module for Slips from scratch.
 
-In ```modules/template/``` we have a template module that has all the structure needed by slips for the module to 
-be integrated correctly.
+## Goal of this Blog
+This blog creates an example module to detect when any private IP address communicates with another private IP address. What we want is to know if, for example, the IP 192.168.4.2, is communicating with the IP 192.168.4.87. This simple idea, but still useful, is going to be the purpose of our module. Also, it will generate an alert for Slips to consider this situation. Our module will be called 'local_connection_detector'.
 
-So for example, let's create a module called ```scan_detector```
+### High-level View of how a Module Works
+Structure of the module.. run(), the idea of while True...
 
-First, We copy the template module into a new dir called ```scan_detector``` and change the name of the .py file to ```scan_detector.py```
 
-so now you should have something like this
+## Developing a Module
+When Slips runs, it automatically loads all the modules inside the ```modules/``` directory. Therefore, our new module should be placed there. Slips has a template module directory that we are going to copy and then modify for our purposes.
+
+```bash
+cp -a modules/template modules/local_connection_detector
+```    
+
+### Changing the Name of the Module
+Change the python file name
+
+```bash
+asdf
+```
+
+Change the name inside the py. Find the lines with the name and description in the class 'Module' and change them:
+
+```python
+name = 'flowmldetection'
+description = (
+    'Train or test a Machine Learning model to detect malicious flows'
+    )
+authors = ['Your name']
+```
+
+At the end you should have a structure like this:
 ```
 modules/
-├─ flowalerts/
 ├─ scan_detector/
 │  ├─ __init__.py
 │  ├─ scan_detector.py
 ```
 
-the __init__.py is to make sure the module is treated as a python package, don't delete it
+The __init__.py is to make sure the module is treated as a python package, don't delete it
 
-Now let's look at the modle structure
 
-<img src="./images/module_init" title="Kalipso infected timewindow">
-<p> Figure 1 </p>
+### Explain the channel you have to register and what it does
+You don't have to modify the code here, but see that...
+```python
+self.c1 = __database__.subscribe('new_flow')
+```
 
-In Figure 1 we have the import that must be included in each module under #Must Imports,
-you can add your own imports in the #Your imports section 
+```python
+message = self.c1.get_message(timeout=self.timeout)
+```
 
-Now we need to change the name of our module to ```Scan Detector``` change the description and author to something meaningful 
+The line xxxxx checks that the channel you subscribe received the data correctly so you can access it.
+```python
+if message and message['channel'] == 'new_flow':
+```
 
-The names and descriptions of the modules are printed when slips is starting along with the module's PID.
+- extract the src ip
+- extract the dst ip
+- check if any are private, import ipaddress, and do ip = ipaddress.ipv4..., is_local()
+- If it is true, generate evidence for slips
 
-You can add your own lines to the __init__() method, just don't delete the already existing lines as they're necessary
+
+### Testing of the Module
+The module is now ready to be uses. You can copy/paste the complete code that is on /ref{complete-core}
+
+```python
+./slips.py -c sdfasfasfdasfd -f dataset/test3.binetflow -o output....
+```
+And you should see in ./output/slips.log something and in ./output/alerts.log your alert
+
+```bash
+example output of alert.log
+```
+
+
+### Conclusion
+-  links
+- The names and descriptions of the modules are printed when slips is starting along with the module's PID.
+- what is the self.print function
+
+## Complete Code
+have the whole asdfasf.py code for copy/paste.
+
+```python
+
+asf
+asf
+asf
+as
+fsa
+dfas
+df
+asfa
+sf
+asf
+asd
+fas
+
+```
+
+
+## Line by Line Explanation of the Module
 
 Let's look at what each line does:
 
-        self.outputqueue = outputqueue
+```python
+self.outputqueue = outputqueue
+```
 
 the outputqueue is used whenever the module wants to print something,
 each module has it's own print() function that uses this queue.
@@ -51,7 +124,11 @@ So in order to print you simply write
 
 and the text will be sent to the outputqueue to process, log, and print to the terminal.
 
-        self.config = config
+---
+
+```python
+self.config = config
+```
 
 This line is necessary if you need to read the ```slips.conf ``` configuration file for your own configurations
 
@@ -60,12 +137,7 @@ This line is necessary if you need to read the ```slips.conf ``` configuration f
 This line starts the redis database, Slips mainly depends on redis Pub/Sub system for modules communications, 
 so if you need to listen on a specific channel after starting the db you can add the following line to __init__()
 
-        self.c1 = __database__.subscribe('new_ip')
 
-now you'll get all msgs sent to that channel.
-
-To get the list of available channels check ```slips_files/core/database.py```,
-you can also create your own channel and it to that list.
 
 
         self.timeout = 0.0000001
@@ -74,22 +146,18 @@ Is used for listening on the redis channel, if your module will be using 1 chann
 listen on more than 1 channel, you need to set a timeout so that the module won't be stck listening on the same channel forever.
 
 
-<hr>
-
-
-Now here's the start() function, this is the main function of each module, it's the one that gets executed when the module starts.
+Now here's the run() function, this is the main function of each module, it's the one that gets executed when the module starts.
 
 All the code in this function should be run in a loop or else the module will finish execution and terminate.
 
 
-<img src="./images/start_method.png" title="Kalipso infected timewindow">
-<p> Figure 2 </p>
 
-Let's explain Figure 2 line by line, first
-
-        utils.drop_root_privs()
+utils.drop_root_privs()
 
 the above line is responsible for dropping root priveledges, so if slips starts with sudo and the module doesn't need the sudo permissions, we drop them.
+
+
+
 
     message = self.c1.get_message(timeout=self.timeout)
 
@@ -114,25 +182,3 @@ inside shutdown_gracefully() we have the following line
 
 This is the module, responding to the stop_message, telling slips.py that it successfully finished processing and
 is terminating.
-
-Now we have the following line
-
-    if message and message['channel'] == 'new_ip':  
-
-so inside this if statement you should do all the processing you need to do whenever slips sees a new ip.
-
-The following lines are for handling exceptions by passing them to outputprocess for logging and printing,
-depending on the verbose and the debug level.
-    
-    except Exception as inst:
-        exception_line = sys.exc_info()[2].tb_lineno
-        self.print(f'Problem on the run() line {exception_line}', 0, 1)
-        self.print(str(type(inst)), 0, 1)
-        self.print(str(inst.args), 0, 1)
-        self.print(str(inst), 0, 1)
-        return True
-
-
-see [Verbose and debug flags docs here](https://https://stratospherelinuxips.readthedocs.io/en/develop/usage.html?highlight=verbose#running-slips-with-verbose-and-debug-flags)
-
-Also the print() function docs have more details.
