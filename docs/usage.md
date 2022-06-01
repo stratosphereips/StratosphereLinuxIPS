@@ -93,7 +93,8 @@ Slips has 2 modes, interactive and daemonized.
 
 **Daemonized** : means , output, logs and alerts are written in files.
 
-In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and ```logsfile``` files specified in ```slips.conf``` 
+In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
+```logsfile``` files specified in ```slips.conf``` 
 
 by default, these are the paths used
 
@@ -101,7 +102,16 @@ stdout = /var/log/slips/slips.log
 stderr = /var/log/slips/error.log
 logsfile = /var/log/slips/slips.log
 
- 
+NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```, 
+creat /var/log/slips as root and slips will use it by default.
+
+If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
+
+NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
+ instead of the otput_dir specified in slips.conf 
+
+
+
 This is the not the default mode, to use it, run slips with -D
 
 
@@ -110,16 +120,7 @@ This is the not the default mode, to use it, run slips with -D
 To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 
 To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
- 
 
-NOTE: Since ```/val/log``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```, 
-creat /var/log/slips as root and slips will use it by default.
-
-If slips can't write there, slips will store the logs in the ```output``` dir by default.
-
-
-NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the otput_dir specified in slips.conf 
 
 
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
