@@ -21,6 +21,7 @@ import errno
 import subprocess
 import re
 import random
+from signal import SIGTERM
 
 class Daemon:
     description = 'This module runs when slips is in daemonized mode'
@@ -41,7 +42,7 @@ class Daemon:
         with open(self.logsfile, 'a') as f:
             f.write(f'{text}\n')
 
-    def setup_std_streams(self):
+    def create_std_streams(self):
         """Create standard steam files and dirs and clear them"""
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
@@ -56,62 +57,50 @@ class Daemon:
                 os.mkdir(os.path.dirname(file))
                 open(file, 'w').close()
 
+    def prepare_std_streams(self, otput_dir):
+        """
+        prepare the path of stderr, stdout, logsfile
+        """
+        self.stderr = os.path.join(otput_dir, self.stderr)
+        self.stdout = os.path.join(otput_dir, self.stdout)
+        self.logsfile = os.path.join(otput_dir, self.logsfile)
+
+
     def read_configuration(self):
         """ Read the configuration file to get stdout, stderr, logsfile path. """
         # get self.config
         self.config = self.slips.read_conf_file()
 
         try:
-            # if -o is given override the output_dir in slips.conf
-            if self.slips.args.output != self.slips.alerts_default_path:
-                self.output_dir = self.slips.args.output
-            else:
-                # output dir to store running.log and errors.log
-                self.output_dir = self.config.get('modes', 'output_dir')
-
-            if not self.output_dir.endswith('/'):
-                self.output_dir = f'{self.output_dir}/'
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.output_dir = '/var/log/slips/'
-
-        try:
             # this file has info about the daemon, started, ended, pid , etc.. by default it's the same as stdout
             self.logsfile = self.config.get('modes', 'logsfile')
-            self.logsfile = self.output_dir + self.logsfile
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
             NameError,
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = '/var/log/slips/running.log'
+            self.logsfile = 'slips.log'
 
         try:
             self.stdout = self.config.get('modes', 'stdout')
-            self.stdout = self.output_dir + self.stdout
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
             NameError,
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = '/var/log/slips/running.log'
+            self.stdout = 'slips.log'
 
         try:
             self.stderr = self.config.get('modes', 'stderr')
-            self.stderr = self.output_dir + self.stderr
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
             NameError,
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = '/var/log/slips/errors.log'
+            self.stderr = 'errors.log'
 
         # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
         self.pidfile_dir = '/etc/slips/'
@@ -120,13 +109,23 @@ class Daemon:
         # we don't use it anyway
         self.stdin = '/dev/null'
 
-        # this is where alerts.log and alerts.json are stored, in interactive mode
-        # they're stored in output/ dir in slips main dir
-        # in daemonized mode they're stored in the same dir as running.log
-        # and errors.log
-        self.slips.alerts_default_path = self.output_dir
+        if '-o' in sys.argv:
+            self.prepare_std_streams(self.slips.args.output)
 
-        self.setup_std_streams()
+        else:
+            # if we have acess to '/var/log/slips/' store the logfiles there, if not , store it in the output/ dir
+            try:
+                output_dir = '/var/log/slips/'
+                os.mkdir(output_dir)
+                # append the path to each logfile
+                self.prepare_std_streams(output_dir)
+                # we have permission, set it as the defaultoutput dir
+                self.slips.args.output = output_dir
+            except PermissionError:
+                self.prepare_std_streams(self.slips.args.output)
+
+        self.create_std_streams()
+
         # when stopping the daemon don't log this info again
         if '-S' not in sys.argv:
             self.print(

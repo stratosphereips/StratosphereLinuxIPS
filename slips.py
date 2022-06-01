@@ -705,7 +705,7 @@ class Main:
         if not os.path.exists(self.args.output):
             os.makedirs(self.args.output)
 
-        print(f'[Main] Storing Slips logs in {self.args.output}')
+        # print(f'[Main] Storing Slips logs in {self.args.output}')
 
 
     def parse_arguments(self):
