@@ -377,11 +377,9 @@ class Main:
                 # generate a random unused port
                 port = random.randint(32768, 65535)
                 # check if 1. we can connect
-                can_connect = __database__.connect_to_redis_server(port)
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
-                db_not_used = len(list(__database__.r.keys())) < 2
-                if can_connect and db_not_used:
+                if __database__.connect_to_redis_server(port) and len(list(__database__.r.keys())) < 2:
                     # if the db managed to connect to this random port, then this is
                     # the port we'll be using
                     return port
