@@ -373,7 +373,7 @@ class Module(Module, multiprocessing.Process):
         source_target_tag = 'UsingSuspiciousUserAgent'
         detection_info = profileid.split('_')[1]
         type_evidence = 'IncompatibleUserAgent'
-        threat_level = 'low'
+        threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
         description = (
