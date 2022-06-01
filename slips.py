@@ -56,20 +56,23 @@ warnings.filterwarnings('ignore')
 
 
 class Main:
-    def __init__(self):
+    def __init__(self, testing=False):
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'
-        self.parse_arguments()
-        # set self.config
-        self.read_conf_file()
-        self.check_given_flags()
-        # Check the type of input
-        self.input_type, self.input_information, self.line_type = self.check_input_type()
-        # If we need zeek (bro), test if we can run it.
-        self.check_zeek_or_bro()
-        self.prepare_output_dir()
+        if not testing:
+            # in testing mode we manally set the following params
+            self.parse_arguments()
+            # set self.config
+            self.read_conf_file()
+            self.check_given_flags()
+            # Check the type of input
+            self.input_type, self.input_information, self.line_type = self.check_input_type()
+            # If we need zeek (bro), test if we can run it.
+            if self.check_zeek_or_bro():
+                self.prepare_zeek_scripts()
+            self.prepare_output_dir()
 
     def read_configuration(self, config, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
@@ -175,18 +178,18 @@ class Main:
         """
         self.zeek_bro = None
         if self.input_type not in ('pcap', 'interface'):
-            return
+            return False
 
         if shutil.which('zeek'):
-            self.prepare_zeek_scripts()
             self.zeek_bro = 'zeek'
         elif shutil.which('bro'):
-            self.prepare_zeek_scripts()
             self.zeek_bro = 'bro'
         else:
             print('Error. No zeek or bro binary found.')
             self.terminate_slips()
             return False
+
+        return self.zeek_bro
 
     def terminate_slips(self):
         """
@@ -254,12 +257,6 @@ class Main:
             plugins.move_to_end('Blocking', last=False)
 
         return plugins, failed_to_load_modules
-
-    def get_cwd(self):
-        # Can't use os.getcwd() because slips directory name won't always be Slips plus this way requires less parsing
-        for arg in sys.argv:
-            if 'slips.py' in arg:
-                return arg[: arg.index('slips.py')]
 
     def prepare_zeek_scripts(self):
         """
@@ -711,7 +708,7 @@ class Main:
 
     def parse_arguments(self):
         # Parse the parameters
-        slips_conf_path = self.get_cwd() + 'slips.conf'
+        slips_conf_path = os.path.join(os.getcwd() ,'slips.conf')
         parser = ArgumentParser(
             usage='./slips.py -c <configfile> [options] [file]', add_help=False
         )

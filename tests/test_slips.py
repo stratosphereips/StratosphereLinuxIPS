@@ -19,7 +19,11 @@ def do_nothing(*args):
 
 def create_Main_instance():
     """returns an instance of Main() class in slips.py"""
-    return Main()
+    main = Main(testing=True)
+    main.input_information = 'test.pcap'
+    main.input_type = 'pcap'
+    main.line_type = False
+    return main
 
 
 def test_load_modules():
