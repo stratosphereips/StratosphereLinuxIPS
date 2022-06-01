@@ -95,13 +95,12 @@ class Module(Module, multiprocessing.Process):
             f'connection {direction} blacklisted IP {ip} {ip_identification}.'
             f' Source: {ip_info["source"]}. Description: {ip_info["description"]}'
         )
-
+        tags = ''
         if tags_temp := ip_info.get('tags', False):
             # We need tags_temp so we avoid doing a replace on a bool.
             tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
-        else:
-            tags = ''
-        if tags:
+
+        if tags != '':
             description += f' tags={tags}'
             source_target_tag = tags.capitalize()
         else:
@@ -206,7 +205,7 @@ class Module(Module, multiprocessing.Process):
     def parse_ti_file(self, ti_file_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and store in the db.
-        This also helps in having unique ioc across files
+        This also helps iexcept Excen having unique ioc across files
         Returns nothing, but the dictionary should be filled
         :param ti_file_path: full path_to local threat intel file
         """
@@ -303,6 +302,7 @@ class Module(Module, multiprocessing.Process):
                                     'description': description,
                                     'source': data_file_name,
                                     'threat_level': threat_level,
+                                    'tags': '',
                                 }
                             )
                         else:

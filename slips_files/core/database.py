@@ -1933,7 +1933,7 @@ class Database(object):
                 )
                 identification += (
                     'Tags: '
-                    + current_data['threatintelligence']['tags']
+                    + current_data['threatintelligence'].get('tags','')
                     + ', '
                 )
 
