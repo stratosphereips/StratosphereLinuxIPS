@@ -2898,6 +2898,9 @@ class Database(object):
         return data
 
     def get_default_gateway(self):
+        """
+        return a string with the ip or False
+        """
         # if we have the gateway in our db , return it
         stored_gateway = self.r.get('default_gateway')
 
@@ -2914,7 +2917,7 @@ class Database(object):
                         route_default_result,
                     ).group(0)
                 except AttributeError:
-                    gateway = ''
+                    gateway = False
 
             elif platform.system() == 'Linux':
                 route_default_result = re.findall(
