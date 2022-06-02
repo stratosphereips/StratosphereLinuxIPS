@@ -119,23 +119,33 @@ class Main:
         """
         Check if we have redis-server running (this is the cache db it should always be running)
         """
-        try:
-            r = redis.StrictRedis(
-                host=redis_host,
-                port=redis_port,
-                db=1,
-                charset='utf-8',
-                decode_responses=True,
-            )
-            r.ping()
-        except Exception as ex:
-            print(
-                '[DB] Error: Is redis cache database running? '
-                'You can run it as: "redis-server --daemonize yes"'
-            )
-            return False
+        tries = 0
+        while True:
+            try:
+                r = redis.StrictRedis(
+                    host=redis_host,
+                    port=redis_port,
+                    db=1,
+                    charset='utf-8',
+                    decode_responses=True,
+                )
+                r.ping()
+                return True
+            except Exception as ex:
+                # only try to open redi-server once.
+                if tries == 2:
+                    print('[Main] Problem starting redis cache database. Stopping')
+                    self.terminate_slips()
+                    return False
 
-        return True
+                print('[Main] Starting redis cache database..')
+                os.system(
+                    f'redis-server --daemonize yes  > /dev/null 2>&1'
+                )
+                # give the server time to start
+                time.sleep(1)
+                tries += 1
+
 
     def generate_random_redis_port(self):
         """Keeps trying to connect to random generated ports until we're connected.
