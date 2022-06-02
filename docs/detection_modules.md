@@ -79,11 +79,6 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>threat intelligence</td>
-    <td>checks if each IP is in a list of malicious IPs</td>
-    <td>✅</td>
-  </tr>
-  <tr>
     <td>timeline</td>
     <td>creates a timeline of what happened in the network based on all the flows and type of data available</td>
     <td>✅</td>

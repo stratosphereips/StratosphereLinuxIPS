@@ -50,5 +50,6 @@ This documentation gives an overview how Slips works, how to use it and how to h
    P2P
    slips_in_action
    contributing
+   create_new_module
 
 
