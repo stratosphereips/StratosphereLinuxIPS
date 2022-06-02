@@ -9,7 +9,22 @@ Slips is a machine learning-based intrusion prevention system for Linux and MacO
 This blog creates an example module to detect when any private IP address communicates with another private IP address. What we want is to know if, for example, the IP 192.168.4.2, is communicating with the IP 192.168.4.87. This simple idea, but still useful, is going to be the purpose of our module. Also, it will generate an alert for Slips to consider this situation. Our module will be called 'local_connection_detector'.
 
 ### High-level View of how a Module Works
-Structure of the module.. run(), the idea of while True...
+
+The Module consists of the __init__() function for initializations, for example starting the database, 
+setting up the outputqueue for printing and logging, subscribing to channels, etc.
+
+The main function of each module is the ```run()```, this function should contain a while True that keeps looping as long as
+Slips is running so that the module doesn't terminate.
+
+Each module has it's own print() function that handles text printing and logging by passing everything to the 
+```OutputProcess.py``` for processing
+
+Each Module also has it's own shutdown_gracefully() function that handles cleaning up after the module is done processing.
+It handles for example:
+- Saving a model before Slips stops
+- Saving alerts in a .txt file if the module's job is to export alerts
+- Telling the main module (slips.py) that the module is done processing so slips.py can kill it
+etc.
 
 
 ## Developing a Module
@@ -20,13 +35,11 @@ cp -a modules/template modules/local_connection_detector
 ```    
 
 ### Changing the Name of the Module
-Change the python file name
 
-```bash
-asdf
-```
+Each module in Slips should have a name, author and description.
 
-Change the name inside the py file. Find the lines with the name and description in the class 'Module' and change them:
+We should change the name inside the py file by finding the lines with the name and description in the class 'Module'
+and changing them:
 
 ```python
 name = 'local_connection_detector'
@@ -44,7 +57,7 @@ modules/
 │  ├─ local_connection_detector.py
 ```
 
-The __init__.py is to make sure the module is treated as a python package, don't delete it
+The __init__.py is to make sure the module is treated as a python package, don't delete it.
 
 
 ### Redis Pub/Sub
@@ -94,7 +107,7 @@ def run(self):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for('new_flow', message):
+                if utils.is_msg_intended_for(message, 'new_flow'):
                     #TODO
                     pass
 
@@ -111,17 +124,11 @@ def run(self):
 
 Now that we have the flow, we need to:
 
-- extract the source IP
-- extract the destination IP
-- check if both of them are private
-- generate an evidence
+- Extract the source IP
+- Extract the destination IP
+- Check if both of them are private
+- Generate an evidence
 
-
-The message we recieved in the channel should look like this:
-
-```
-
-```
 
 Extracting IPs is done by the following:
 
@@ -137,15 +144,16 @@ daddr = flow['daddr']
 
 Now we need to check if both of them are private.
 
-Remember we don't want to set evidence on connections from/to the default gateway
+Remember, we don't want to set evidence on connections from/to the default gateway.
 
-we'll do so by using the ipadddress library
+we'll do so by using the ipadddress library and the ```get_default_gateway``` function from out database.
 
 ```python
 import ipaddress
 srcip_obj = ipaddress.ip_address(saddr)
 dstip_obj = ipaddress.ip_address(daddr)
-gateway_conn = daddr == __database__.get_default_gateway() or saddr == __database__.get_default_gateway()
+gateway_conn = (daddr == __database__.get_default_gateway() 
+                or saddr == __database__.get_default_gateway())
 if srcip_obj.is_private and dstip_obj.is_private and not gateway_conn:
     #TODO
     pass
@@ -174,9 +182,11 @@ detection_info = saddr
 # describe the evidence
 description = f'Detected a connection to a local device {daddr}'
 timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
-# the crrent profile is the source ip, this comes in the msg received in the channel
+# the crrent profile is the source ip, this comes in 
+# the msg received in the channel
 profileid = message['profileid']
-# Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
+# Profiles are split into timewindows, each timewindow is 1h, 
+# this comes in the msg received in the channel
 twid = message['twid']
 
 __database__.setEvidence(
@@ -194,10 +204,6 @@ __database__.setEvidence(
 ```
 
 
-For more info about the threat levels, [check the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html#threat-levels)
-Detailed explanation of [IDEA categories](https://idea.cesnet.cz/en/classifications)
-Detailed explanation of [Profiles and timewindows](https://idea.cesnet.cz/en/classifications)
-
 
 ### Testing the Module
 The module is now ready to be used. 
@@ -205,11 +211,13 @@ You can copy/paste the complete code that is
 [here](https://stratospherelinuxips.readthedocs.io/en/develop/create_new_module.html#complete-code)
 
 
-First we starts slips by using the following command, -o is to store the output in the ```local_conn_detector/``` dir.
+First we start Slips by using the following command:
 
 ```bash
 ./slips.py -i wlp3s0 -o local_conn_detector
 ```
+
+-o is to store the output in the ```local_conn_detector/``` dir.
 
 Then we make a connnection to a local ip
 
@@ -233,9 +241,24 @@ Using develop - 9f5f9412a3c941b3146d92c8cb2f1f12aab3699e - 2022-06-02 16:51:43.9
 
 
 ### Conclusion
--  links
-- The names and descriptions of the modules are printed when slips is starting along with the module's PID.
-- what is the self.print function
+
+Due to the high modularity of slips, adding a new slips module is as easy as modifying a few lines in our
+template module, and slips handles running 
+your module and integrating it for you.
+
+This is the [list of the modules](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detection-modules)
+Slips currently have. You can enhance them, add detections, suggest new ideas using
+[our Discord](https://discord.com/invite/zu5HwMFy5C) or by opening
+a PR.
+
+For more info about the threat levels, [check the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html#threat-levels)
+
+Detailed explanation of [IDEA categories here](https://idea.cesnet.cz/en/classifications)
+
+Detailed explanation of [Slips profiles and timewindows here](https://idea.cesnet.cz/en/classifications)
+
+[Contributing guidelines](https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html)
+
 
 ## Complete Code
 Here is the whole local_connection_detector.py code for copy/paste.
