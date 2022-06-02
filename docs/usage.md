@@ -132,11 +132,14 @@ but if you changed the default output files to files placed in a dir owned by ro
 
 ## Running Several slips instances
 
-You can run several instances of slips at the same time, and the output of each instance will be stored in ```output/filename/```  directory. 
+You can run several instances of slips at the same time, and the output of each instance will be stored in
+```output/filename_timestamp/```  directory. 
 
 Each instance of Slips will connect to redis server on a randomly generated port.
 
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 0, to store the IoCs taken from TI files.
+
+Both redis servers, the main sever and the cache server are opened automatically by Slips.
 
 When running ./kalipso.sh, you will be prompted with the following
 
@@ -151,9 +154,9 @@ Once you're done, you can run slips with ```--killall``` to close all the redis 
 
 ```./slips.py --killall```
 
-NOTICE: if you run more than 1 instance of slips on the same file or the same interface, 
-slips will overwrite the all the logs in the ```output/<filename/inteface>``` dir and all zeek logs 
-in ```zeek_files_<filename>/``` dir
+NOTICE: if you run more than one instance of Slips on the same file or the same interface, 
+Slips will generate a new directory with the name of the file and the new timestamp inside the ```output/``` dir
+
 
 
 ## Reading the output
