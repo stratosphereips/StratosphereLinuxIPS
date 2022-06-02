@@ -227,10 +227,10 @@ class Database(object):
                 # Even if the DB is not deleted. We need to delete some temp data
                 # Zeek_files
                 self.r.delete('zeekfiles')
-                # By default the slips internal time is 0 until we receive something
-                self.setSlipsInternalTime(0)
-                while self.get_slips_start_time() is None:
-                    self.set_slips_start_time()
+            # By default the slips internal time is 0 until we receive something
+            self.setSlipsInternalTime(0)
+            while self.get_slips_start_time() is None:
+                self.set_slips_start_time()
         except redis.exceptions.ConnectionError:
             print(f"[DB] Can't connect to redis on port {redis_port}")
 
