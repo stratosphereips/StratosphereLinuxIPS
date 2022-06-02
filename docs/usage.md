@@ -307,7 +307,11 @@ Slips Support displaying popup notifications whenever there's an alert.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
 
-This feature is supported in Linux and mac and is not supported in docker and it requires root privileges.
+This feature is supported in Linux and it requires root privileges.
+
+This feature is supported in MaOS without root privileges.
+
+This feature is not supported in Docker
 
 ## Slips permissions
 

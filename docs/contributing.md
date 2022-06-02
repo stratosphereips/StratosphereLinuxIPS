@@ -161,6 +161,8 @@ Before pushing, run the unit tests and integration tests by:
 
 2- Run all tests ```./tests/run_all_tests.sh``` 
 
+Slips supports the -P flag to run redis on your port of choice. this flag is only used for
+testing and integration tests so that slips can keep track of the ports it opened while testing and close them later.
 
 ### Adding your own unit tests
 
