@@ -2,6 +2,12 @@
 
 Slips v0.9.0
 
+
+<h3 align="center"> 
+
+[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
+</h3>
+
 ##### Repo Stars Over Time
 
 [![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)
@@ -21,7 +27,7 @@ Slips v0.9.0
 ![GitHub repo size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
 ![Docker Pulls](https://img.shields.io/docker/pulls/stratosphereips/slips)
 ![Python](https://img.shields.io/badge/Python-3.8-yellow)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/m/stratosphereips/StratosphereLinuxIPS)
+
 
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
 [![License](https://img.shields.io/badge/Blog-Stratosphere-red)](https://www.stratosphereips.org/blog/tag/slips)
@@ -29,6 +35,7 @@ Slips v0.9.0
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
 <hr>
 
+<h1>
 Behavioral Machine Learning Based Intrusion Prevention System
 </h1>
 
@@ -40,10 +47,7 @@ highlights suspicious behaviour that need the analyst attention.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
 
-<h3 align="center"> 
 
-[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
-</h3>
 
 # Features
 
