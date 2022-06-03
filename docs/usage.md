@@ -121,7 +121,7 @@ To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 
 To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
 
-
+Only one instance of the daemon can be running at a time.
 
 **Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
  
