@@ -67,9 +67,7 @@ class FileEventHandler(RegexMatchingEventHandler):
                     while line := f.readline():
                         if 'termination' in line:
                             # to use shutdown gracefully we need to get slips.py PID and send it a sigint
-                            PIDs = __database__.get_PIDs()
-                            pid = PIDs['slips.py']
-                            os.kill(int(pid), signal.SIGINT)
+                            __database__.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')
