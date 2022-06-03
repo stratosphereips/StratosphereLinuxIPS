@@ -225,7 +225,7 @@ class Daemon():
         # Start the daemon
         self.daemonize()
 
-        # any code run after daemonizing will be run inside the daemon
+        # any code run after daemonizing will be run inside the daemon and have the same PID as slips.py
         self.print(f'Slips Daemon is running. [PID {self.pid}]\n')
         # tell Main class that we're running in daemonized mode
         self.slips.set_mode('daemonized', daemon=self)
@@ -236,19 +236,22 @@ class Daemon():
         """Stop the daemon"""
 
 
-        # Try killing the daemon process
+
+        # Kill the damon (aka slips.py)
+        # sending SIGTERM/SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
+        # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
+        # so we won't use signals
+        reporter = os.path.join(self.slips.zeek_folder, 'reporter.log')
+
         try:
-            # delete the pid file
-            self.terminate()
-            self.print(f'Daemon killed [PID {self.pid}]')
-            while 1:
-                os.kill(int(self.pid), SIGTERM)
-                time.sleep(0.1)
-        except OSError as e:
-            e = str(e)
-            if e.find('No such process') <= 0:
-                # some error occured, print it
-                self.print(e)
+            open(reporter, 'r').close()
+        except FileNotFoundError:
+            open(reporter, 'w').close()
+
+        with open(reporter, 'a') as f:
+            f.write('Daemon received a termination signal\n')
+
+        self.delete_pidfile()
 
     def restart(self):
         """Restart the daemon"""
