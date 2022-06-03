@@ -9,6 +9,9 @@
 - Fix reading flows from stdin, now it supports zeek, argus and suricata 
 - Faster Startup of slips, now slips updates the TI files in the background
 - Added slips.log where all Slips logs goes. in daemon and interactive mode
+- Automatic starting of redis servers (cache and main databases). 
+- Added a new TI file https://hole.cert.pl/domains/domains.json
+- Update the docs
 
 -0.9.0
 * Slips

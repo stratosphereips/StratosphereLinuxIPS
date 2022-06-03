@@ -47,9 +47,8 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
     tshark \
     git \
     whois \
-    golang
-
-  sudo apt install -y --no-install-recommends nodejs
+    golang \
+    nodejs
 
 
  echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"
@@ -59,7 +58,7 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
  echo "[+] Executing pip3 install --ignore-installed six\n"
  pip3 install --ignore-installed six
 
- echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs pytest'\n"
+ echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs '\n"
  sudo npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
 
  echo "[+] Installing YARA ...\n"
