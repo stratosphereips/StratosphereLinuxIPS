@@ -62,6 +62,7 @@ class Main:
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'
         if not testing:
+            self.pid = os.getpid()
             # in testing mode we manally set the following params
             self.parse_arguments()
             # set self.config
@@ -73,6 +74,9 @@ class Main:
             if self.check_zeek_or_bro():
                 self.prepare_zeek_scripts()
             self.prepare_output_dir()
+            # this is the zeek dir slips will be using
+            self.zeek_folder = f'./zeek_files_{self.input_information}/'
+
 
     def read_configuration(self, config, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
@@ -1315,7 +1319,7 @@ class Main:
             self.outputqueue = Queue()
             # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
             # lsof will provide a list of all open fds belonging to slips
-            command = f'lsof -p {os.getpid()}'
+            command = f'lsof -p {self.pid}'
             result = subprocess.run(command.split(), capture_output=True)
             # Get command output
             output = result.stdout.decode('utf-8')
@@ -1378,7 +1382,7 @@ class Main:
             # create an event loop and allow it to run the update_file_manager asynchronously
             # Print the PID of the main slips process. We do it here because we needed the queue to the output process
             self.print(
-                f'Started main program [PID {os.getpid()}]', 1, 0
+                f'Started main program [PID {self.pid}]', 1, 0
             )
             # Output pid
             __database__.store_process_PID(
@@ -1474,7 +1478,7 @@ class Main:
             __database__.store_process_PID(
                 'EvidenceProcess', int(evidence_process.pid)
             )
-            __database__.store_process_PID('slips.py', int(os.getpid()))
+            __database__.store_process_PID('slips.py', int(self.pid))
 
             # Profile thread
             # Create the queue for the profile thread
@@ -1561,6 +1565,14 @@ class Main:
             slips_internal_time = 0
             try:
                 while True:
+                    message = self.c1.get_message(timeout=0.01)
+                    if (
+                        message
+                        and utils.is_msg_intended_for(message, 'finished_modules')
+                        and message['data'] == 'stop_slips'
+                    ):
+                        self.shutdown_gracefully()
+
                     # Sleep some time to do rutine checks
                     time.sleep(check_time_sleep)
                     slips_internal_time = (
