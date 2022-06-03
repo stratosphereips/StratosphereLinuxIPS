@@ -46,7 +46,7 @@ from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 
-version = '0.9.0'
+version = '0.9.1'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
