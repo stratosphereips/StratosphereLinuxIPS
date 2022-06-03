@@ -415,11 +415,7 @@ class Main:
 
                     if message and message['data'] == 'stop_process':
                         continue
-                    if (
-                        message
-                        and message['channel'] == 'finished_modules'
-                        and type(message['data']) == str
-                    ):
+                    if utils.is_msg_intended_for(message, 'finished_modules'):
                         # all modules must reply with their names in this channel after
                         # receiving the stop_process msg
                         # to confirm that all processing is done and we can safely exit now
@@ -1667,17 +1663,30 @@ if __name__ == '__main__':
     if slips.args.stopdaemon:
         # -S is provided
         daemon = Daemon(slips)
-        print('Daemon stopped.')
-        daemon.stop()
+        if not daemon.pid:
+            # pidfile /etc/slips/pidfile doesn't exist
+            print(
+                f"Trying to stop Slips daemon.\n"
+                f"Daemon is not running."
+            )
+        else:
+            daemon.stop()
+            # it takes about 5 seconds for the stop_slips msg to arrive in the channel, so give slips time to stop
+            time.sleep(5)
+            print('Daemon stopped.')
+
     elif slips.args.restartdaemon:
         # -R is provided
         daemon = Daemon(slips)
         print('Daemon restarted.')
         daemon.restart()
-    elif slips.args.daemon :
+    elif slips.args.daemon:
         daemon = Daemon(slips)
-        print('Slips daemon started.')
-        daemon.start()
+        if daemon.pid != None:
+            print(f'pidfile {daemon.pidfile} already exists. Daemon already running?')
+        else:
+            print('Slips daemon started.')
+            daemon.start()
     else:
+        # interactive mode
         slips.start()
-        sys.exit()

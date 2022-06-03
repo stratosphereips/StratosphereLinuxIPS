@@ -22,11 +22,14 @@ import subprocess
 import re
 import random
 from signal import SIGTERM
+from signal import SIGINT
+from signal import SIGKILL
 
-class Daemon:
+class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
+
         # to use read_configurations defined in Main
         self.slips = slips
         self.read_configuration()
@@ -36,6 +39,7 @@ class Daemon:
                 self.pid = int(pidfile.read().strip())
         except IOError:
             self.pid = None
+
 
     def print(self, text):
         """Prints output to logsfile specified in slips.conf"""
@@ -138,7 +142,7 @@ class Daemon:
 
             self.print('Done reading configuration and setting up files.\n')
 
-    def terminate(self):
+    def delete_pidfile(self):
         """Deletes the pidfile to mark the daemon as closed"""
 
         self.print('Deleting pidfile...')
@@ -150,9 +154,7 @@ class Daemon:
             self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
             # if an error occured it will be written in logsfile
             self.print('Either Daemon stopped normally or an error occurred.')
-            self.print(
-                'pidfile needs to be deleted before running Slips again.'
-            )
+
 
     def daemonize(self):
         """
@@ -207,6 +209,8 @@ class Daemon:
         if not os.path.exists(self.pidfile_dir):
             os.mkdir(self.pidfile_dir)
 
+        # remember that we are writing this pid to a file
+        # because the parent and the first fork, already exited, so this pid is the daemon pid which is slips.py pid
         self.pid = str(os.getpid())
         with open(self.pidfile, 'w+') as pidfile:
             pidfile.write(self.pid)
@@ -217,12 +221,6 @@ class Daemon:
     def start(self):
         """Main function, Starts the daemon and starts slips normally."""
         self.print('Daemon starting...')
-        # Check for a pidfile to see if the daemon is already running
-        if self.pid:
-            self.print(
-                f'pidfile {self.pid} already exists. Daemon already running?'
-            )
-            sys.exit(1)
 
         # Start the daemon
         self.daemonize()
@@ -236,11 +234,7 @@ class Daemon:
 
     def stop(self):
         """Stop the daemon"""
-        if not self.pid:
-            self.print(
-                f"Trying to stop Slips daemon. PID {self.pid} doesn't exist. Daemon not running."
-            )
-            return
+
 
         # Try killing the daemon process
         try:
