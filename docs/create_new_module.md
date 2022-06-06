@@ -247,6 +247,11 @@ Using develop - 9f5f9412a3c941b3146d92c8cb2f1f12aab3699e - 2022-06-02 16:51:43.9
 ```
 
 
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/module.gif" 
+title="Testing The Module">
+
+
+
 ### Conclusion
 
 Due to the high modularity of slips, adding a new slips module is as easy as modifying a few lines in our
