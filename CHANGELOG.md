@@ -11,7 +11,7 @@
 - Added slips.log where all Slips logs goes. in daemon and interactive mode
 - Automatic starting of redis servers (cache and main databases). 
 - Added a new TI file https://hole.cert.pl/domains/domains.json
-- Update the docs
+- Update the docs and added instructions for contributing and creating a new module
 
 -0.9.0
 * Slips

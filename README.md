@@ -45,7 +45,8 @@ provide a good visualisation for the analyst. It can analyze network traffic in 
 files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and
 highlights suspicious behaviour that need the analyst attention.
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" title="Slips in action.">
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px"
+title="Slips in action.">
 
 
 
