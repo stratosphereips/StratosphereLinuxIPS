@@ -28,7 +28,10 @@ etc.
 
 
 ## Developing a Module
-When Slips runs, it automatically loads all the modules inside the ```modules/``` directory. Therefore, our new module should be placed there. Slips has a template module directory that we are going to copy and then modify for our purposes.
+When Slips runs, it automatically loads all the modules inside the ```modules/``` directory. Therefore, 
+our new module should be placed there.
+
+Slips has a template module directory that we are going to copy and then modify for our purposes.
 
 ```bash
 cp -a modules/template modules/local_connection_detector
@@ -58,6 +61,10 @@ modules/
 ```
 
 The __init__.py is to make sure the module is treated as a python package, don't delete it.
+
+Remember to deleet the __pycache__ dir if it's copied to the new module using:
+
+```rm -r modules/local_connection_detector/__pycache__```
 
 
 ### Redis Pub/Sub
@@ -279,8 +286,8 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'TemplateModule'
-    description = 'Template module'
+    name = 'local_connection_detector'
+    description = 'detects connections to other devices in your local network'
     authors = ['Template Author']
 
     def __init__(self, outputqueue, config, redis_port):
