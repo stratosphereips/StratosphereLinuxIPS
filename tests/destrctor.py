@@ -87,7 +87,6 @@ for redis_port in redis_server_ports:
                     while os.kill(int(redis_pid), 0) != 1:
                         # sigterm is 9
                         os.kill(int(redis_pid), 9)
-                    closed_servers += 1
                 except (ProcessLookupError, PermissionError):
                     # process already exited, sometimes this exception is raised
                     # but the process is still running, keep trying to kill it
@@ -99,6 +98,7 @@ for redis_port in redis_server_ports:
                 print(
                     f'Killed redis-server on port {redis_port} PID: {redis_pid}'
                 )
+                closed_servers += 1
             except redis.exceptions.ConnectionError:
                 continue
 

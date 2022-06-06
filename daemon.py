@@ -120,7 +120,10 @@ class Daemon():
             # if we have acess to '/var/log/slips/' store the logfiles there, if not , store it in the output/ dir
             try:
                 output_dir = '/var/log/slips/'
-                os.mkdir(output_dir)
+                try:
+                    os.mkdir(output_dir)
+                except FileExistsError:
+                    pass
                 # append the path to each logfile
                 self.prepare_std_streams(output_dir)
                 # we have permission, set it as the defaultoutput dir
