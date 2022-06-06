@@ -24,8 +24,12 @@ do
 done < "$file"
 
 
+
+if [[ ${#open_redis_servers[@]} -eq 0 ]]; then
+  echo "You have 0 open redis-servers to use. Make sure you run slips first"
+  exit 1
 # if we have only 1 server open, use it
-if [[ ${#open_redis_servers[@]} -eq 1 ]]; then
+elif [[ ${#open_redis_servers[@]} -eq 1 ]]; then
   port_to_use=${ports[0]}
 # if we have more than 1 open redis server in the arr, prompt which one to use
 elif [[ ${#open_redis_servers[@]} -gt 0 ]]; then
