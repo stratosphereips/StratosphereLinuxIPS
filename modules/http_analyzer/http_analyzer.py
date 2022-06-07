@@ -189,8 +189,9 @@ class Module(Module, multiprocessing.Process):
         vendor = vendor.lower()
 
         user_agent: dict = __database__.get_user_agent_from_profile(profileid)
-        if not user_agent:
+        if not user_agent or type(user_agent) != dict:
             return False
+
         os_type = user_agent.get('os_type', '').lower()
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
@@ -351,10 +352,11 @@ class Module(Module, multiprocessing.Process):
     ):
         """
         Detect if the user is using an Apple UA, then android, then linux etc.
+        Doesn't check multiple ssh clients
         :param user_agent: UA of the current flow
         :param cached_ua: UA of this profile from the db
         """
-        if not cached_ua or not user_agent:
+        if not cached_ua or not user_agent or type(user_agent) != dict:
             return False
 
         os_type = cached_ua['os_type']
@@ -442,9 +444,11 @@ class Module(Module, multiprocessing.Process):
 
                     if (
                         not cached_ua
-                        or cached_ua.get('user_agent', '') != user_agent
-                        and 'server-bag' not in user_agent
+                        or (type(cached_ua) == dict
+                            and cached_ua.get('user_agent', '') != user_agent
+                            and 'server-bag' not in user_agent)
                     ):
+                        # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
                         self.get_user_agent_info(user_agent, profileid)
 
                     if 'server-bag' in user_agent:
