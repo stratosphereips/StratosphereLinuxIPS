@@ -193,146 +193,6 @@ class ProfilerProcess(multiprocessing.Process):
             # By default
             self.label = 'unknown'
 
-    def read_whitelist(self):
-        """Reads the content of whitelist.conf and stores information about each ip/org/domain in the database"""
-
-        # since this function can be run when the user modifies whitelist.conf
-        # we need to check if the dicts are already there
-        whitelisted_IPs = __database__.get_whitelist('IPs')
-        whitelisted_domains = __database__.get_whitelist('domains')
-        whitelisted_orgs = __database__.get_whitelist('organizations')
-        whitelisted_mac = __database__.get_whitelist('mac')
-
-        try:
-            with open(self.whitelist_path) as whitelist:
-                # Process lines after comments
-                line_number = 0
-                while line := whitelist.readline():
-                    line_number += 1
-                    if line.startswith('"IoCType"'):
-                        line = whitelist.readline()
-                        continue
-
-                    # check if the user commented an org, ip or domain that was whitelisted
-                    if line.startswith('#'):
-                        if whitelisted_IPs:
-                            for ip in list(whitelisted_IPs):
-                                # make sure the user commented the line we have in cache exactly
-                                if (
-                                    ip in line
-                                    and whitelisted_IPs[ip]['from'] in line
-                                    and whitelisted_IPs[ip]['what_to_ignore']
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_ips
-                                    whitelisted_IPs.pop(ip)
-                                    break
-
-                        if whitelisted_domains:
-                            for domain in list(whitelisted_domains):
-                                if (
-                                    domain in line
-                                    and whitelisted_domains[domain]['from']
-                                    in line
-                                    and whitelisted_domains[domain][
-                                        'what_to_ignore'
-                                    ]
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_domains
-                                    whitelisted_domains.pop(domain)
-                                    break
-
-                        if whitelisted_orgs:
-                            for org in list(whitelisted_orgs):
-                                if (
-                                    org in line
-                                    and whitelisted_orgs[org]['from'] in line
-                                    and whitelisted_orgs[org]['what_to_ignore']
-                                    in line
-                                ):
-                                    # remove that entry from whitelisted_domains
-                                    whitelisted_orgs.pop(org)
-                                    break
-
-                        line = whitelist.readline()
-                        continue
-                    # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
-                    line = line.replace('\n', '').replace(' ', '').split(',')
-                    try:
-                        type_, data, from_, what_to_ignore = (
-                            (line[0]).lower(),
-                            line[1],
-                            line[2],
-                            line[3],
-                        )
-                    except IndexError:
-                        # line is missing a column, ignore it.
-                        self.print(
-                            f'Line {line_number} in whitelist.conf is missing a column. Skipping.'
-                        )
-                        line = whitelist.readline()
-                        continue
-
-                    # Validate the type before processing
-                    try:
-                        if 'ip' in type_ and (
-                            validators.ip_address.ipv6(data)
-                            or validators.ip_address.ipv4(data)
-                        ):
-                            whitelisted_IPs[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
-                            }
-                        elif 'domain' in type_ and validators.domain(data):
-                            whitelisted_domains[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
-                            }
-                        elif 'mac' in type_ and validators.mac_address(data):
-                            whitelisted_mac[data] = {
-                                'from': from_,
-                                'what_to_ignore': what_to_ignore,
-                            }
-                        elif 'org' in type_:
-                            # organizations dicts look something like this:
-                            #  {'google': {'from':'dst',
-                            #               'what_to_ignore': 'alerts'
-                            #               'IPs': {'34.64.0.0/10': subnet}}
-                            try:
-                                # org already whitelisted, update info
-                                whitelisted_orgs[data]['from'] = from_
-                                whitelisted_orgs[data][
-                                    'what_to_ignore'
-                                ] = what_to_ignore
-                            except KeyError:
-                                # first time seeing this org
-                                whitelisted_orgs[data] = {
-                                    'from': from_,
-                                    'what_to_ignore': what_to_ignore,
-                                }
-
-                        else:
-                            self.print(f'{data} is not a valid {type_}.', 1, 0)
-                    except Exception:
-                        self.print(
-                            f'Line {line_number} in whitelist.conf is invalid. Skipping.'
-                        )
-        except FileNotFoundError:
-            self.print(
-                f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead"
-            )
-            if self.whitelist_path != 'whitelist.conf':
-                self.whitelist_path = 'whitelist.conf'
-                self.whitelist.read_whitelist()
-
-        # store everything in the cache db because we'll be needing this info in the evidenceProcess
-        __database__.set_whitelist('IPs', whitelisted_IPs)
-        __database__.set_whitelist('domains', whitelisted_domains)
-        __database__.set_whitelist('organizations', whitelisted_orgs)
-        __database__.set_whitelist('mac', whitelisted_mac)
-
-        return line_number
 
     def load_org_asn(self, org) -> list:
         """
@@ -2362,6 +2222,11 @@ class ProfilerProcess(multiprocessing.Process):
                         proto='ARP',
                         uid=uid,
                     )
+                else:
+                    return False
+                # if the flow type matched any of the ifs above,
+                # mark this profile as modified
+                __database__.markProfileTWAsModified(profileid, twid, '')
 
             def store_features_going_in(profileid, twid, starttime):
                 """
@@ -2438,6 +2303,7 @@ class ProfilerProcess(multiprocessing.Process):
                         label=self.label,
                     )
                     # No dns check going in. Probably ok.
+                    __database__.markProfileTWAsModified(profileid, twid, '')
 
             ##########################################
             # 5th. Store the data according to the paremeters
