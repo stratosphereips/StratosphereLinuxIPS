@@ -329,7 +329,6 @@ class UpdateFileManager:
         Called when the file doesn't have an e-tag
         :param response: the output of a request done with requests library
         """
-        #todo this value changes on every query!!
         return response.headers.get('Last-Modified', False)
 
     def __check_if_update(self, file_to_download: str):
