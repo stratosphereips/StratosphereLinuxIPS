@@ -406,6 +406,7 @@ class UpdateFileManager:
                     __database__.set_TI_file_info(
                         file_name_to_download, malicious_file_info
                     )
+                    self.loaded_ti_files += 1
                     return False
 
             except Exception as inst:
