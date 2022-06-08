@@ -1454,5 +1454,6 @@ class UpdateFileManager:
                 pass
 
             self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+            self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False

@@ -39,7 +39,7 @@ class UpdateManager(Module, multiprocessing.Process):
         )
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(
-            self.update_period, self.update_TI_files
+            self.update_period, self.update_ti_files
         )
         self.timeout = 0
 
@@ -79,11 +79,6 @@ class UpdateManager(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def update_TI_files(self):
-        """
-        Update malicious files
-        """
-        self.update_manager.update()
 
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
@@ -92,27 +87,21 @@ class UpdateManager(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
-    async def update_ti_files(self, outputqueue, config, redis_port):
+    async def update_ti_files(self):
         """
         Update TI files and store them in database before slips starts
         """
-        update_manager = UpdateFileManager(outputqueue, config, redis_port)
         # create_task is used to run update() function concurrently instead of serially
-        update_finished = asyncio.create_task(update_manager.update())
-
+        update_finished = asyncio.create_task(self.update_manager.update())
         # wait for UpdateFileManager to finish before starting all the modules
         await update_finished
 
     def run(self):
         utils.drop_root_privs()
         try:
+            asyncio.run(self.update_ti_files())
             # Starting timer to update files
             self.timer_manager.start()
-            asyncio.run(
-                self.update_ti_files(
-                    self.outputqueue, self.config, self.redis_port
-                )
-            )
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
