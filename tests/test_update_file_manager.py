@@ -35,7 +35,7 @@ def test_getting_header_fields(outputQueue, file, etag):
     update_manager = create_update_manager_instance(outputQueue)
     response = update_manager.download_file(file)
     assert response != False
-    assert update_manager.get_e_tag_from_web(response) == etag
+    assert update_manager.get_e_tag(response) == etag
 
 
 @pytest.mark.parametrize(
@@ -64,7 +64,7 @@ def test_download_malicious_file(outputQueue, database, url):
     # modify old e-tag of this file and store it in the database
     response = update_manager.download_file(url)
     assert response != False
-    old_etag = update_manager.get_e_tag_from_web(response)
+    old_etag = update_manager.get_e_tag(response)
     old_etag = '*' + old_etag[1:]
     database.set_TI_file_info(url.split('/')[-1], {'e-tag': old_etag})
     # we call this function to set the new self.new_e_tag
@@ -88,7 +88,7 @@ def test_download_malicious_file2(outputQueue, database, url):
     # setup old e-tag to be the current e-tag
     response = update_manager.download_file(url)
     assert response != False
-    old_etag = update_manager.get_e_tag_from_web(response)
+    old_etag = update_manager.get_e_tag(response)
     database.set_TI_file_info(url.split('/')[-1], {'e-tag': old_etag})
     assert update_manager._UpdateFileManager__check_if_update(url) == False
 
