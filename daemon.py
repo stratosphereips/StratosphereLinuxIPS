@@ -246,19 +246,9 @@ class Daemon():
         """Stop the daemon"""
 
         # Kill the damon (aka slips.py)
-        # sending SIGTERM/SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
+        # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
-        # so we won't use signals
-        reporter = os.path.join(self.slips.zeek_folder, 'reporter.log')
-
-        try:
-            open(reporter, 'r').close()
-        except FileNotFoundError:
-            open(reporter, 'w').close()
-
-        with open(reporter, 'a') as f:
-            f.write('Daemon received a termination signal\n')
-
+        os.kill(self.pid, signal.SIGTERM)
         self.delete_pidfile()
 
     def restart(self):
