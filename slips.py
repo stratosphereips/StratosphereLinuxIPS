@@ -1429,7 +1429,13 @@ class Main:
                     f"Disabled Modules: {to_ignore}", 1, 0
                 )
 
+
             # self.start_gui_process()
+            # call shutdown_gracefully on sigint, and sigterm
+            def sig_handler(sig, frame):
+                self.shutdown_gracefully()
+            # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
+            signal.signal(signal.SIGTERM, sig_handler)
 
             do_logs = self.read_configuration(
                 self.config, 'parameters', 'create_log_files'
