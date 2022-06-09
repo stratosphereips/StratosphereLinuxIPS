@@ -155,15 +155,16 @@ class Daemon():
     def delete_pidfile(self):
         """Deletes the pidfile to mark the daemon as closed"""
 
-        self.print('Deleting pidfile...')
-
+        # print('Deleting pidfile...')
+        # dont write logs when stopping the daemon,
+        # because we don't know the output dir
         if os.path.exists(self.pidfile):
             os.remove(self.pidfile)
-            self.print('pidfile deleted.')
-        else:
-            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
-            # if an error occured it will be written in logsfile
-            self.print('Either Daemon stopped normally or an error occurred.')
+            # print('pidfile deleted.')
+        # else:
+        #     # print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+        #     # if an error occured it will be written in logsfile
+        #     # print('Either Daemon stopped normally or an error occurred.')
 
 
     def daemonize(self):
