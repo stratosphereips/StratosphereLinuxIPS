@@ -126,9 +126,14 @@ class Daemon():
                     os.mkdir(output_dir)
                 except FileExistsError:
                     pass
-                # append the path to each logfile
+                # see if we have write permission to that dir or not
+                tmpfile = os.path.join(output_dir, 'tmp')
+                open(tmpfile, 'w').close()
+                os.remove(tmpfile)
+
+                # we have permission, append the path to each logfile
                 self.prepare_std_streams(output_dir)
-                # we have permission, set it as the defaultoutput dir
+                #  set it as the default output dir
                 self.slips.args.output = output_dir
             except PermissionError:
                 self.prepare_std_streams(self.slips.args.output)
