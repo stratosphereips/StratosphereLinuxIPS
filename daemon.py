@@ -245,11 +245,13 @@ class Daemon():
     def stop(self):
         """Stop the daemon"""
 
+        # this file has to be deleted first because sigterm will terminate slips
+        self.delete_pidfile()
         # Kill the damon (aka slips.py)
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
         os.kill(self.pid, signal.SIGTERM)
-        self.delete_pidfile()
+
 
     def restart(self):
         """Restart the daemon"""
