@@ -61,21 +61,22 @@ class Main:
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.used_redis_servers = 'used_redis_servers.txt'
+        # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
-            # in testing mode we manally set the following params
             self.parse_arguments()
             # set self.config
             self.read_conf_file()
             self.check_given_flags()
-            # Check the type of input
-            self.input_type, self.input_information, self.line_type = self.check_input_type()
-            # If we need zeek (bro), test if we can run it.
-            if self.check_zeek_or_bro():
-                self.prepare_zeek_scripts()
-            self.prepare_output_dir()
-            # this is the zeek dir slips will be using
-            self.zeek_folder = f'./zeek_files_{self.input_information}/'
+            if not self.args.stopdaemon:
+                # Check the type of input
+                self.input_type, self.input_information, self.line_type = self.check_input_type()
+                # If we need zeek (bro), test if we can run it.
+                if self.check_zeek_or_bro():
+                    self.prepare_zeek_scripts()
+                self.prepare_output_dir()
+                # this is the zeek dir slips will be using
+                self.zeek_folder = f'./zeek_files_{self.input_information}/'
 
 
     def read_configuration(self, config, section, name):
@@ -1166,7 +1167,7 @@ class Main:
     def check_given_flags(self):
         """
         check the flags that don't reuiqre starting slips
-        for ex: clear db, clear blocking, killling all servers etc.
+        for ex: clear db, clear blocking, killling all servers, stopping the daemon, etc.
         """
         if (self.args.verbose and int(self.args.verbose) > 3) or (
             self.args.debug and int(self.args.debug) > 3
@@ -1189,6 +1190,7 @@ class Main:
         if self.args.killall:
             self.close_open_redis_servers()
             self.terminate_slips()
+
 
         if self.args.clearblocking:
             if os.geteuid() != 0:
@@ -1676,7 +1678,7 @@ if __name__ == '__main__':
         # -S is provided
         daemon = Daemon(slips)
         if not daemon.pid:
-            # pidfile /etc/slips/pidfile doesn't exist
+            # pidfile doesn't exist
             print(
                 f"Trying to stop Slips daemon.\n"
                 f"Daemon is not running."
@@ -1684,7 +1686,7 @@ if __name__ == '__main__':
         else:
             daemon.stop()
             # it takes about 5 seconds for the stop_slips msg to arrive in the channel, so give slips time to stop
-            time.sleep(5)
+            time.sleep(3)
             print('Daemon stopped.')
 
     elif slips.args.restartdaemon:
