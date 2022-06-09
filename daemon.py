@@ -32,7 +32,11 @@ class Daemon():
 
         # to use read_configurations defined in Main
         self.slips = slips
-        self.read_configuration()
+        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
+        self.pidfile_dir = '/var/lock'
+        self.pidfile = os.path.join(self.pidfile_dir, 'slips.lock')
+        if not self.slips.args.stopdaemon:
+            self.read_configuration()
         # Get the pid from pidfile
         try:
             with open(self.pidfile, 'r') as pidfile:
@@ -106,9 +110,7 @@ class Daemon():
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = 'errors.log'
 
-        # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
-        self.pidfile_dir = '/etc/slips/'
-        self.pidfile = os.path.join(self.pidfile_dir, 'pidfile')
+
 
         # we don't use it anyway
         self.stdin = '/dev/null'
@@ -237,8 +239,6 @@ class Daemon():
 
     def stop(self):
         """Stop the daemon"""
-
-
 
         # Kill the damon (aka slips.py)
         # sending SIGTERM/SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
