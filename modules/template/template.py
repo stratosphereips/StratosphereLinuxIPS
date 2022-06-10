@@ -28,7 +28,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Template module'
     authors = ['Template Author']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         # your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -67,13 +67,14 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         # Main loop function
         while True:
             try:
@@ -87,7 +88,7 @@ class Module(Module, multiprocessing.Process):
                     # Example of printing the number of profiles in the
                     # Database every second
                     data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data),3,0)
+                    self.print('Amount of profiles: {}'.format(data), 3, 0)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

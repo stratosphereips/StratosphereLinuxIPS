@@ -24,7 +24,7 @@ copyright = '2021, Stratosphere Laboratory'
 author = 'Stratosphere Laboratory'
 
 # The full version, including alpha/beta/rc tags
-release = '0.8.5'
+release = '0.9.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -49,7 +49,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-#html_theme = 'alabaster'
+# html_theme = 'alabaster'
 html_theme = 'sphinx_rtd_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -66,12 +66,15 @@ source_suffix = {
 master_doc = 'index'
 # app setup hook
 def setup(app):
-    app.add_config_value('recommonmark_config', {
-        #'url_resolver': lambda url: github_doc_root + url,
-        'auto_toc_tree_section': 'Slips',
-        'enable_math': False,
-        'enable_inline_math': False,
-        'enable_eval_rst': True,
-    }, True)
+    app.add_config_value(
+        'recommonmark_config',
+        {
+            #'url_resolver': lambda url: github_doc_root + url,
+            'auto_toc_tree_section': 'Slips',
+            'enable_math': False,
+            'enable_inline_math': False,
+            'enable_eval_rst': True,
+        },
+        True,
+    )
     app.add_transform(AutoStructify)
-                                     

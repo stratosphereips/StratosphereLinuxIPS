@@ -79,11 +79,6 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>threat intelligence</td>
-    <td>checks if each IP is in a list of malicious IPs</td>
-    <td>✅</td>
-  </tr>
-  <tr>
     <td>timeline</td>
     <td>creates a timeline of what happened in the network based on all the flows and type of data available</td>
     <td>✅</td>
@@ -215,7 +210,7 @@ PortScanType2, Password_Guessing, MaliciousFlow,
 SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
  Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
-MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, 
+MaliciousDownloadedFile, DGA, MaliciousSSLCert, YoungDomain, MultipleSSHVersions
 DNS-ARPA-Scan, SMTPLoginBruteforce, BadSMTPLogin, 
 IncompatibleUserAgent, ICMP-Timestamp-Scan, ICMP-AddressScan, ICMP-AddressMaskScan
 

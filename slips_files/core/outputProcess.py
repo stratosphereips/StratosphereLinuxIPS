@@ -26,14 +26,28 @@ import os
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
-    """ A class process to output everything we need. Manages all the output """
-    def __init__(self, inputqueue, verbose, debug, config, stdout=''):
+    """A class process to output everything we need. Manages all the output"""
+
+    def __init__(
+        self,
+        inputqueue,
+        verbose,
+        debug,
+        config,
+        redis_port,
+        stdout='',
+        stderr='output/errors.log',
+        slips_logfile='output/slips.log'
+    ):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        # create the file and clear it
-        self.errors_logfile = 'output/errors.log'
-        self.create_errors_log()
+        ####### create the log files
+        self.errors_logfile = stderr
+        self.slips_logfile = slips_logfile
+        self.create_logfile(self.errors_logfile)
+        self.create_logfile(self.slips_logfile)
+        #######
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
@@ -42,25 +56,46 @@ class OutputProcess(multiprocessing.Process):
         if stdout != '':
             self.change_stdout(stdout)
         if self.verbose > 2:
-            print(f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}')
+            print(
+                f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
+            )
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
 
-    def create_errors_log(self):
-        if '-o' in sys.argv:
-            output_dir = sys.argv[sys.argv.index('-o')+1]
-            # add / to the end of output dir if not there
-            output_dir = output_dir if output_dir.endswith('/') else f'{output_dir}/'
-            self.errors_logfile = self.errors_logfile.replace('output/', output_dir)
 
-        open(self.errors_logfile, 'w').close()
+    def log_branch_info(self, logfile):
         branch_info = utils.get_branch_info()
-        if branch_info != False:
+        if branch_info:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
-            with open(self.errors_logfile, 'w') as f:
+            with open(logfile, 'a') as f:
                 f.write(f'Using {branch} - {commit} - {now}\n\n')
+
+    def create_logfile(self, path):
+        """
+        creates slips.log and errors.log if they don't exist
+        """
+        try:
+            open(path, 'a').close()
+        except FileNotFoundError:
+            os.mkdir(os.path.dirname(path))
+            open(path, 'w').close()
+
+        self.log_branch_info(path)
+
+
+    def log_line(self, sender, msg):
+        """
+        Log error line to slips.log
+        """
+        # don't log in daemon mode, all printed
+        # lines are redirected to slips.log by default
+        if "-D" in sys.argv:
+            return
+        with open(self.slips_logfile, 'a') as slips_logfile:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            slips_logfile.write(f'{date_time} {sender}{msg}\n')
 
     def change_stdout(self, file):
         # io.TextIOWrapper creates a file object of this file
@@ -107,37 +142,59 @@ class OutputProcess(multiprocessing.Process):
                 print('Error in the level sent to the Output Process')
             except KeyError:
                 level = '00'
-                print('The level passed to OutputProcess was wrongly formated.')
+                print(
+                    'The level passed to OutputProcess was wrongly formated.'
+                )
             except ValueError as inst:
                 # We probably received some text instead of an int()
-                print('Error receiving a text to output. Check that you are sending the format of the msg correctly: level|msg')
+                print(
+                    'Error receiving a text to output. Check that you are sending the format of the msg correctly: level|msg'
+                )
                 print(inst)
                 sys.exit(-1)
             try:
                 sender = f"[{line.split('|')[1]}] "
             except KeyError:
                 sender = ''
-                print('The sender passed to OutputProcess was wrongly formated.')
+                print(
+                    'The sender passed to OutputProcess was wrongly formated.'
+                )
                 sys.exit(-1)
             try:
                 # If there are more | inside the msg, we don't care, just print them
                 msg = ''.join(line.split('|')[2:])
             except KeyError:
                 msg = ''
-                print('The message passed to OutputProcess was wrongly formated.')
+                print(
+                    'The message passed to OutputProcess was wrongly formated.'
+                )
                 sys.exit(-1)
             return (level, sender, msg)
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            print(f'\tProblem with process line in OutputProcess() line {exception_line}', 0, 1)
+            print(
+                f'\tProblem with process line in OutputProcess() line '
+                f'{exception_line}', 0, 1,
+            )
             print(type(inst), 0, 1)
             print(inst.args, 0, 1)
             print(inst, 0, 1)
             sys.exit(1)
 
+    def log_error(self, sender, msg):
+        """
+        Log error line to errors.log
+        """
+        with open(self.errors_logfile, 'a') as errors_logfile:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            errors_logfile.write(f'{date_time} {sender}{msg}\n')
+
     def output_line(self, line):
-        """ Get a line of text and output it correctly """
+        """
+        Extract the level, sender and msg from line and format it and
+        print
+        """
         (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
         # if verbosity level is 3 make it red
@@ -145,12 +202,22 @@ class OutputProcess(multiprocessing.Process):
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
-        if verbose_level > 0 and verbose_level <= 3 and verbose_level <= self.verbose:
+        if (
+                verbose_level > 0
+                and verbose_level <= 3
+                and verbose_level <= self.verbose
+        ):
+            self.log_line(sender, msg)
             if 'Start' in msg:
                 print(f'{msg}')
                 return
             print(f'{sender}{msg}')
-        elif debug_level > 0 and debug_level <= 3 and debug_level <= self.debug:
+        elif (
+                debug_level > 0
+                and debug_level <= 3
+                and debug_level <= self.debug
+        ):
+            self.log_line(sender, msg)
             if 'Start' in msg:
                 print(f'{msg}')
                 return
@@ -160,14 +227,15 @@ class OutputProcess(multiprocessing.Process):
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
         # make sure thee msg is an error. debug_level==1 is the one printing errors
         if debug_level == 1:
+            self.log_line(sender, msg)
             # it's an error. we should log it
-            with open(self.errors_logfile, 'a') as errors_logfile:
-                errors_logfile.write(f'{sender}{msg}\n')
+            self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
+        utils.drop_root_privs()
         while True:
             try:
                 line = self.queue.get()
@@ -191,7 +259,11 @@ class OutputProcess(multiprocessing.Process):
                 return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                print(f'\tProblem with OutputProcess() line {exception_line}', 0, 1)
+                print(
+                    f'\tProblem with OutputProcess() line {exception_line}',
+                    0,
+                    1,
+                )
                 print(type(inst), 0, 1)
                 print(inst.args, 0, 1)
                 print(inst, 0, 1)

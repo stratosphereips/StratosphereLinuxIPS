@@ -15,12 +15,13 @@ import queue
 import ipaddress
 import validators
 
+
 class Module(Module, multiprocessing.Process):
     name = 'CESNET'
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -29,10 +30,10 @@ class Module(Module, multiprocessing.Process):
         # your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.read_configuration()
         self.c1 = __database__.subscribe('new_alert')
-        self.timeout = 0.0000001
+        self.timeout = 0
         self.stop_module = False
 
     def print(self, text, verbose=1, debug=0):
@@ -53,25 +54,33 @@ class Module(Module, multiprocessing.Process):
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """ Read importing/exporting preferences from slips.conf """
+        """Read importing/exporting preferences from slips.conf"""
 
         self.send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
 
-        self.receive_from_warden = self.config.get('CESNET', 'receive_alerts').lower()
+        self.receive_from_warden = self.config.get(
+            'CESNET', 'receive_alerts'
+        ).lower()
         if 'yes' in self.receive_from_warden:
             # how often should we get alerts from the server?
             try:
-                self.poll_delay = int(self.config.get('CESNET', 'receive_delay'))
+                self.poll_delay = int(
+                    self.config.get('CESNET', 'receive_delay')
+                )
             except ValueError:
                 # By default push every 1 day
                 self.poll_delay = 86400
 
-        self.configuration_file = self.config.get('CESNET', 'configuration_file')
+        self.configuration_file = self.config.get(
+            'CESNET', 'configuration_file'
+        )
         if not os.path.exists(self.configuration_file):
-            self.print(f"Can't find warden.conf at {self.configuration_file}. Stopping module.")
+            self.print(
+                f"Can't find warden.conf at {self.configuration_file}. Stopping module."
+            )
             self.stop_module = True
 
     def remove_private_ips(self, evidence_in_IDEA: dict):
@@ -88,7 +97,7 @@ class Module(Module, multiprocessing.Process):
 
             # evidence_in_IDEA['Source'] may contain multiple dicts
             for dict_ in alert_field:
-                for ip_version in ('IP4','IP6'):
+                for ip_version in ('IP4', 'IP6'):
                     try:
                         # get the ip
                         ip = dict_[ip_version][0]
@@ -96,10 +105,16 @@ class Module(Module, multiprocessing.Process):
                         # incorrect version
                         continue
 
-                    if ip_version == 'IP4' and (validators.ipv4(ip) and ipaddress.IPv4Address(ip).is_private):
+                    if ip_version == 'IP4' and (
+                        validators.ipv4(ip)
+                        and ipaddress.IPv4Address(ip).is_private
+                    ):
                         # private ipv4
                         evidence_in_IDEA[type_].remove(dict_)
-                    elif validators.ipv6(ip) and ipaddress.IPv6Address(ip).is_private:
+                    elif (
+                        validators.ipv6(ip)
+                        and ipaddress.IPv6Address(ip).is_private
+                    ):
                         # private ipv6
                         evidence_in_IDEA[type_].remove(dict_)
 
@@ -124,7 +139,7 @@ class Module(Module, multiprocessing.Process):
         # give evidenceProcess enough time to store all evidence IDs in the database
         time.sleep(3)
         # get all the evidence causing this alert
-        evidence_IDs:list = __database__.get_evidence_causing_alert(alert_ID)
+        evidence_IDs: list = __database__.get_evidence_causing_alert(alert_ID)
         if not evidence_IDs:
             # something went wrong while getting the list of evidence
             return False
@@ -167,63 +182,82 @@ class Module(Module, multiprocessing.Process):
                 conn_count,
                 source_target_tag,
                 port,
-                proto)
+                proto,
+            )
 
             # remove private ips from the alert
-            evidence_in_IDEA =  self.remove_private_ips(evidence_in_IDEA)
+            evidence_in_IDEA = self.remove_private_ips(evidence_in_IDEA)
 
             # make sure we still have an IoC in th alert, a valid domain/mac/public ip
             if not self.is_valid_alert(evidence_in_IDEA):
                 continue
 
-
             # add Node info to the alert
-            evidence_in_IDEA.update({"Node": self.node_info})
+            evidence_in_IDEA.update({'Node': self.node_info})
 
             # Add test to the categories because we're still in probation mode
             evidence_in_IDEA['Category'].append('Test')
-            evidence_in_IDEA.update({"Category": evidence_in_IDEA["Category"]})
+            evidence_in_IDEA.update({'Category': evidence_in_IDEA['Category']})
 
             alerts_to_export.append(evidence_in_IDEA)
 
         # [2] Upload to warden server
-        self.print(f"Uploading {len(alerts_to_export)} events to warden server.")
+        self.print(
+            f'Uploading {len(alerts_to_export)} events to warden server.'
+        )
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
         q = queue.Queue()
-        self.sender_thread = threading.Thread(target=wclient.sendEvents, args=[alerts_to_export, q])
+        self.sender_thread = threading.Thread(
+            target=wclient.sendEvents, args=[alerts_to_export, q]
+        )
         self.sender_thread.start()
         self.sender_thread.join()
         result = q.get()
 
         try:
             # no errors
-            self.print(f'Done uploading {result["saved"]} events to warden server.\n')
+            self.print(
+                f'Done uploading {result["saved"]} events to warden server.\n'
+            )
         except KeyError:
             self.print(result, 0, 1)
-
 
     def import_alerts(self, wclient):
         events_to_get = 100
 
-        cat = ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information',
-         'Fraud.Scam', 'Information', 'Fraud.Scam']
+        cat = [
+            'Availability',
+            'Abusive.Spam',
+            'Attempt.Login',
+            'Attempt',
+            'Information',
+            'Fraud.Scam',
+            'Information',
+            'Fraud.Scam',
+        ]
 
         # cat = ['Abusive.Spam']
         nocat = []
 
-        #tag = ['Log', 'Data','Flow', 'Datagram']
+        # tag = ['Log', 'Data','Flow', 'Datagram']
         tag = []
         notag = []
 
-        #group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
+        # group = ['cz.tul.ward.kippo','cz.vsb.buldog.kippo', 'cz.zcu.civ.afrodita','cz.vutbr.net.bee.hpscan']
         group = []
         nogroup = []
 
-        self.print(f"Getting {events_to_get} events from warden server.")
-        events = wclient.getEvents(count=events_to_get, cat=cat, nocat=nocat,
-                                tag=tag, notag=notag, group=group,
-                                nogroup=nogroup)
+        self.print(f'Getting {events_to_get} events from warden server.')
+        events = wclient.getEvents(
+            count=events_to_get,
+            cat=cat,
+            nocat=nocat,
+            tag=tag,
+            notag=notag,
+            group=group,
+            nogroup=nogroup,
+        )
 
         if len(events) == 0:
             self.print(f'Error getting event from warden server.')
@@ -231,28 +265,30 @@ class Module(Module, multiprocessing.Process):
 
         # now that we received from warden server,
         # store the received IPs, description, category and node in the db
-        src_ips = {} #todo is the srcip always the offender? can it be the victim?
+        src_ips = (
+            {}
+        )   # todo is the srcip always the offender? can it be the victim?
         for event in events:
             # extract event details
-            srcips = event.get('Source',[])
-            description = event.get('Description','')
-            category = event.get('Category',[])
+            srcips = event.get('Source', [])
+            description = event.get('Description', '')
+            category = event.get('Category', [])
 
             # get the source of this IoC
-            node = event.get('Node',[{}])
+            node = event.get('Node', [{}])
             # node is an array of dicts
             if node == []:
                 # we don't know the source of this info, skip it
                 continue
             # use the node that has a software name defined
-            node_name = node[0].get('Name','')
-            software = node[0].get('SW',[False])[0]
+            node_name = node[0].get('Name', '')
+            software = node[0].get('SW', [False])[0]
             if not software:
                 # first node doesn't have a software
                 # use the second one
                 try:
-                    node_name = node[1].get('Name','')
-                    software = node[1].get('SW',[None])[0]
+                    node_name = node[1].get('Name', '')
+                    software = node[1].get('SW', [None])[0]
                 except IndexError:
                     # there's no second node
                     pass
@@ -264,7 +300,7 @@ class Module(Module, multiprocessing.Process):
                     'description': description,
                     'source': f'{node_name}, software: {software}',
                     'threat_level': 'medium',
-                    'tags': category[0]
+                    'tags': category[0],
                 }
                 # srcip is a dict, for example
 
@@ -276,13 +312,12 @@ class Module(Module, multiprocessing.Process):
                 else:
                     srcip = srcip['IP'][0]
 
-                src_ips.update({
-                    srcip: json.dumps(event_info)
-                })
+                src_ips.update({srcip: json.dumps(event_info)})
 
         __database__.add_ips_to_IoC(src_ips)
 
     def run(self):
+        utils.drop_root_privs()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return False
@@ -300,11 +335,9 @@ class Module(Module, multiprocessing.Process):
         # info = wclient.getInfo()
         # self.print(info, 0, 1)
 
-        self.node_info = [{
-            "Name": wclient.name,
-            "Type": ["IPS"],
-            "SW": ['Slips']
-        }]
+        self.node_info = [
+            {'Name': wclient.name, 'Type': ['IPS'], 'SW': ['Slips']}
+        ]
 
         while True:
             try:
@@ -323,12 +356,12 @@ class Module(Module, multiprocessing.Process):
                         __database__.set_last_warden_poll_time(now)
 
                 # in case of an interface or a file, push every time we get an alert
-                if (utils.is_msg_intended_for(message, 'new_alert')
-                        and 'yes' in self.send_to_warden):
+                if (
+                    utils.is_msg_intended_for(message, 'new_alert')
+                    and 'yes' in self.send_to_warden
+                ):
                     alert_ID = message['data']
                     self.export_evidence(wclient, alert_ID)
-
-
 
             except KeyboardInterrupt:
                 # Confirm that the module is done processing
@@ -342,6 +375,3 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
                 return True
-
-
-

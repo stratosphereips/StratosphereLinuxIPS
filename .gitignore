@@ -15,6 +15,9 @@ api_key_secret
 # Ignore the secret slack bot token of exporting_alerts module
 slack_bot_token_secret
 
+# Ignore daemon output files
+daemon/
+
 # Ignore the results folders
 2019-
 2020-
@@ -148,3 +151,13 @@ modules/CESNET/warden.conf
 
 # For RisqIQ credentinals
 credentials
+
+
+# ignore logs from pigeon
+pigeon_logs
+
+# ignore trustdb
+trustdb.db
+
+# ignore running redis servers logs
+used_redis_servers.txt

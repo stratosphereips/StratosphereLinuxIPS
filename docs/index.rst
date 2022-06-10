@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.8.5
+Slips v0.9.1
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
@@ -47,7 +47,9 @@ This documentation gives an overview how Slips works, how to use it and how to h
    flowalerts
    training
    exporting
+   P2P
    slips_in_action
    contributing
+   create_new_module
 
 

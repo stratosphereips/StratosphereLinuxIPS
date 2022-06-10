@@ -159,20 +159,22 @@ Before pushing, run the unit tests and integration tests by:
 1- Make sure you're in slips main dir (the one with kalipso.sh)
 
 
-2- Run all tests ```python3 tests/run_all_tests.py``` 
+2- Run all tests ```./tests/run_all_tests.sh``` 
 
+Slips supports the -P flag to run redis on your port of choice. this flag is only used for
+testing and integration tests so that slips can keep track of the ports it opened while testing and close them later.
 
 ### Adding your own unit tests
 
 Slips uses ```pytest``` as the main testing framework, You can add your own unit tests by:
 
-1- create a file called ```test_module_name.py``` in the ```tests``` dir
+1- create a file called ```test_module_name.py``` in the ```tests/``` dir
 
 
 2- every function should start with ```test_```
 
 
-3- go to the main slips dir and run ```python3 tests/run_all_tests.py``` and every test file in the ```tests/``` dir will run
+3- go to the main slips dir and run ```./tests/run_all_tests.sh``` and every test file in the ```tests/``` dir will run
 
 ### Getting in touch
 

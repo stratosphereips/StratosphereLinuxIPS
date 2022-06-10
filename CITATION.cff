@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: >-
+  Slips, behavioral machine learning-based Python IPS
+message: 'If you use this software, please cite it as below.'
+type: software
+authors:
+  - given-names: Sebastian
+    family-names: Garcia
+    email: garciseb@fel.cvut.cz
+    affiliation: >-
+      Stratosphere Laboratory, AIC, FEL, Czech
+      Technical University in Prague
+    orcid: 'https://orcid.org/0000-0001-6238-9910'
+  - given-names: Alya
+    family-names: Gomaa
+    email: alyaggomaa@gmail.com
+    affiliation: >-
+      Stratosphere Laboratory, AIC, FEL, Czech
+      Technical University in Prague
+    orcid: ''
+  - given-names: Kamila
+    family-names: Babayeva
+    email: kamifai14@gmail.com
+    affiliation: >-
+      Stratosphere Laboratory, AIC, FEL, Czech
+      Technical University in Prague
+    orcid: ''

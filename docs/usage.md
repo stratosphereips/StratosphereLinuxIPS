@@ -8,6 +8,7 @@ Slips can read the packets directly from the **network interface** of the host m
 - Argus flows (CSV file separated by commas or TABs) 
 - Zeek/Bro flows from a Zeek folder with log files
 - Nfdump flows from a binary nfdump file
+- Text flows from stdin in zeek, argus or suricata form
 
 It's recommended to use PCAPs.
 
@@ -45,40 +46,118 @@ tr:nth-child(even) {
 <table>
 	<tr>
 		<th>File/interface</th>
-		<th>Slips Argument</th>
+		<th>Argument</th>
 		<th>Example command</th>
 	</tr>
 	<tr>
 		<td>Network interface (*)</td>
 		<td>-i</td>
-		<td>./slips.py -c slips.conf -i en0</td>
+		<td>./slips.py -i en0</td>
 	</tr>
 	<tr>
 		<td>pcap</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.pcap</td>
+		<td>./slips.py -f test.pcap</td>
 	</tr>
 	<tr>
 		<td>Argus binetflow</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.binetflow</td>
+		<td>./slips.py -f test.binetflow</td>
 	</tr>
 	<tr>
 		<td>Zeek/Bro folder/log</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f zeek_files</td>
+		<td>./slips.py -f zeek_files</td>
 	</tr>
 	<tr>
 		<td>Nfdump flow</td>
 		<td>-f</td>
-		<td>./slips.py -c slips.conf -f test.nfdump </td>
+		<td>./slips.py -f test.nfdump </td>
 	</tr>
+    <tr>
+		<td>stdin</td>
+		<td>-f</td>
+		<td>./slips.py -f zeek </td>
+	</tr>    
+
 </table>
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
+There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models
+separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
 
-There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
+## Daemonized vs interactive mode
+
+Slips has 2 modes, interactive and daemonized.
+
+**Daemonized** : means , output, logs and alerts are written in files.
+
+In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
+```logsfile``` files specified in ```slips.conf``` 
+
+by default, these are the paths used
+
+stdout = /var/log/slips/slips.log
+stderr = /var/log/slips/error.log
+logsfile = /var/log/slips/slips.log
+
+NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```, 
+creat /var/log/slips as root and slips will use it by default.
+
+If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
+
+NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
+ instead of the otput_dir specified in slips.conf 
+
+
+
+This is the not the default mode, to use it, run slips with -D
+
+
+```./slips.py -i wlp3s0 -D```
+
+To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
+
+To restart the daemon run slips with ```-R```, for example ```./slips.py -R```
+
+Only one instance of the daemon can be running at a time.
+
+**Interactive** : For viewing output, logs and alerts in a terminal, usually used for developers and debugging.
+ 
+This is the default mode, It doesn't require any flags.
+
+Output files are stored in ```output/``` dir, By default you don't need root to run slips, 
+but if you changed the default output files to files placed in a dir owned by root, you will need to run Slips using sudo. 
+
+## Running Several slips instances
+
+You can run several instances of slips at the same time, and the output of each instance will be stored in
+```output/filename_timestamp/```  directory. 
+
+Each instance of Slips will connect to redis server on a randomly generated port.
+
+However, all instance share 1 cached redis database on redis://localhost:6379 DB 0, to store the IoCs taken from TI files.
+
+Both redis servers, the main sever and the cache server are opened automatically by Slips.
+
+When running ./kalipso.sh, you will be prompted with the following
+
+    To close all unused redis servers, run slips with --killall
+    You have 3 open redis servers, Choose which one to use [1,2,3 etc..] 
+    [1] wlp3s0 - port 55879
+    [2] dataset/hide-and-seek-short.pcap - port 59324
+
+You can type 1 or 2 to view the corresponding file or interface in kalipso.
+
+Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
+
+```./slips.py --killall```
+
+NOTICE: if you run more than one instance of Slips on the same file or the same interface, 
+Slips will generate a new directory with the name of the file and the new timestamp inside the ```output/``` dir
+
+
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips' analysis and detected malicious behaviour can be analyzed as following:
@@ -116,6 +195,8 @@ Slips uses redis to store analysis information. you can save your analysis for l
 ```./slips.py -f dataset/hide-and-seek-short.pcap -s```
 
 Your .rdb saved database will be stored in ```redis_backups/```.
+
+Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
 
 You can load it again using ```-d```, For example:
 
@@ -226,7 +307,28 @@ Slips Support displaying popup notifications whenever there's an alert.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
 
-This feature is supported in Linux and mac and not supported in docker.
+This feature is supported in Linux and it requires root privileges.
+
+This feature is supported in MaOS without root privileges.
+
+This feature is not supported in Docker
+
+## Slips permissions
+
+Slips doesn't need root permissions unless you
+
+1. use the blocking module ( with -p )
+2. use slips notifications
+3. are saving the database ( with -d )
+
+If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
+
+```
+setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+```
+
+Even when Slips is run using sudo, it drops root privileges  in modules that don't need them.
+
 
 ## Modifying the configuration file
 
@@ -244,8 +346,10 @@ Each IP address that appears in the network traffic of the input is represented 
 
 Slips needs to know your home network to be able to use specific zeek scripts. 
 
-If ```home_network``` is not defined, Slips uses all ranges ```'92.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
+If ```home_network``` is not defined, Slips uses all ranges ```'192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8``` as your local network.
 
+
+When the ```home_network``` parameter is set, slips creates profiles only for ips inside the home network, check the analysis direction below.
 
 **Analysis Direction**
 
@@ -312,7 +416,9 @@ To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
 2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
 3. Running Slips with ```verbose``` and ```debug``` flags
-4. Using errors.log
+4. Using errors.log and running.log
+
+#### Running Slips with -l flag.
 
 When logging is enabled, Slips will create a directory with the current date and 
 create 3 summary files for each IP/profile it encounters.
@@ -323,15 +429,19 @@ You can also change how often Slips creates log files using the ```log_report_ti
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-You can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes.
+DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space, Slips deletes all zeek log files after 1 day by default. this is called zeek rotation and is enabled by default.
+
+You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf```
+
+But you can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes. this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops. so this doesn't include deleted zeek logs.
 
 Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/```
-
 
 DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slips is done by enabling
  ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
 it deletes large log files periodically (like arp.log).
 
+####  Running Slips with verbose and debug flags
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
@@ -387,12 +497,44 @@ Below is a table showing each level of both.
 </tbody>
 </table>
 
-Slips also logs all errors to output/errors.log, whether you're using -e or not.
-errors.log is cleared on every startup on Slips.
+#### Using errors.log and running.log
+
+Slips also logs all errors to output/errors.log (interactive mode), and /var/log/slips/error.log (daemonized mode)
+whether you're using -e or not.
+See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode)
+for more information about the 2 modes
+
+General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of
+interactive mode
+
+## Reading Input from stdin
+
+Slips supports reading input flows in text format from stdin in interactive mode.
+
+Supported flow from stdin are zeek conn.log files (json form), suricata and argus.
+
+For example you can run slips using:
+
+```./slips.py -f zeek```
+
+or
+
+```./slips.py -f suricata```
+
+and you once you see the following line:
+
+```[InputProcess] Receiving flows from stdin.```
+
+you can start giving slips flows in you desired format.
+
+All zeek lines taken from stdin should be in json form and are treated as conn.log lines.
+
+This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
 ## Plug in a zeek script
 
-Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file name in ```zeek-scripts/__load__.zeek```.
+Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file
+name in ```zeek-scripts/__load__.zeek```.
 
 For example, if you want to add a zeek script called ```arp.zeek``` you should add it to ```__load__.zeek``` like this:
 

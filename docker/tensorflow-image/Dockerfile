@@ -23,19 +23,20 @@ RUN apt update && apt install -y --no-install-recommends \
     redis-server \
     zeek \
     python3-pip \
-	python3-certifi \
-	python3-dev \
+    python3-certifi \
+    python3-dev \
     build-essential \
-	file \
-	lsof \
-	net-tools \
-	iptables \
-	iproute2 \
+    file \
+    lsof \
+    net-tools \
+    iptables \
+    iproute2 \
     python3-tzlocal \
-	nfdump \
-	tshark \
+    nfdump \
+    tshark \
     git \
     whois \
+    net-tools \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara
@@ -67,6 +68,13 @@ RUN pip3 install --ignore-installed tensorflow==2.4.1
 # Download and unpack Slips.
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 RUN cd StratosphereLinuxIPS && chmod 774 slips.py
+
+
+
+# Upgrade pip3 and install Slips requirements
+RUN pip3 install --upgrade pip
+RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -

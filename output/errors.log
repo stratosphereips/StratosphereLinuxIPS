@@ -1,7 +1,0 @@
-Using develop - 3d1672567bf70e547a6bb76e4415c06b29ac1956 - 2022-04-15 11:42:24.459196
-
-[main] Starting modules
-[rnn-cc-detection] Problem on the run() line 131
-[rnn-cc-detection] <class 'AttributeError'>
-[rnn-cc-detection] ("'str' object has no attribute 'decode'",)
-[rnn-cc-detection] 'str' object has no attribute 'decode'

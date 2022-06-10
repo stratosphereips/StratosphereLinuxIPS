@@ -11,87 +11,139 @@ import requests
 import datetime
 import sys
 import asyncio
+from datetime import datetime
 
 class UpdateFileManager:
-
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         self.outputqueue = outputqueue
         self.config = config
         # For now, read the malicious IPs from here
         self.name = 'update_manager'
-        self.new_update_time = float('-inf')
         # Start the database
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
+        self.new_update_time = float('-inf')
         # Read the conf
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
+        self.today = time.time()
+        # don't store iocs older than 1 week
+        self.interval = 604800
+        self.slips_logfile = __database__.get_stdfile("stdout")
 
     def read_configuration(self):
-        """ Read the configuration file for what we need """
+        """Read the configuration file for what we need"""
         try:
             # update period
-            self.update_period = self.config.get('threatintelligence', 'malicious_data_update_period')
+            self.update_period = self.config.get(
+                'threatintelligence', 'malicious_data_update_period'
+            )
             self.update_period = float(self.update_period)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400 # 1 day
+            self.update_period = 86400   # 1 day
         try:
             # Read the path to where to store and read the malicious files
-            self.path_to_threat_intelligence_data = self.config.get('threatintelligence', 'download_path_for_remote_threat_intelligence')
-            self.path_to_threat_intelligence_data = self.sanitize(self.path_to_threat_intelligence_data)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+            self.path_to_threat_intelligence_data = self.config.get(
+                'threatintelligence',
+                'download_path_for_remote_threat_intelligence',
+            )
+            self.path_to_threat_intelligence_data = self.sanitize(
+                self.path_to_threat_intelligence_data
+            )
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = 'modules/threat_intelligence/remote_data_files/'
+            self.path_to_threat_intelligence_data = (
+                'modules/threat_intelligence/remote_data_files/'
+            )
         if not os.path.exists(self.path_to_threat_intelligence_data):
             os.mkdir(self.path_to_threat_intelligence_data)
 
         try:
             # Read the list of URLs to download. Convert to list
-            self.ti_feed_tuples = self.config.get('threatintelligence', 'ti_files').split('\n')
+            self.ti_feed_tuples = self.config.get(
+                'threatintelligence', 'ti_files'
+            ).split('\n')
             self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.url_feeds = {}
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feed_tuples = self.config.get('threatintelligence', 'ja3_feeds').split('\n')
+            self.ja3_feed_tuples = self.config.get(
+                'threatintelligence', 'ja3_feeds'
+            ).split('\n')
             self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ja3_feeds = {}
 
         try:
             # Read the list of ja3 feeds to download. Convert to list
-            self.ssl_feed_tuples = self.config.get('threatintelligence', 'ssl_feeds').split('\n')
+            self.ssl_feed_tuples = self.config.get(
+                'threatintelligence', 'ssl_feeds'
+            ).split('\n')
             self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ssl_feeds = {}
 
         try:
             # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get('threatintelligence', 'RiskIQ_credentials_path')
-            with open(RiskIQ_credentials_path,'r') as f:
-                self.riskiq_email = f.readline().replace('\n','')
-                self.riskiq_key = f.readline().replace('\n','')
+            RiskIQ_credentials_path = self.config.get(
+                'threatintelligence', 'RiskIQ_credentials_path'
+            )
+            with open(RiskIQ_credentials_path, 'r') as f:
+                self.riskiq_email = f.readline().replace('\n', '')
+                self.riskiq_key = f.readline().replace('\n', '')
                 if len(self.riskiq_key) != 64:
                     raise NameError
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError, FileNotFoundError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+            FileNotFoundError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_email = None
             self.riskiq_key = None
 
         try:
             # riskiq update period
-            self.riskiq_update_period = self.config.get('threatintelligence', 'update_period')
+            self.riskiq_update_period = self.config.get(
+                'threatintelligence', 'update_period'
+            )
             self.riskiq_update_period = float(self.riskiq_update_period)
-        except (configparser.NoOptionError, configparser.NoSectionError, NameError):
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+        ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            self.riskiq_update_period = 604800 # 1 week
+            self.riskiq_update_period = 604800   # 1 week
 
     def get_feed_properties(self, feeds):
         """
@@ -106,8 +158,8 @@ class UpdateFileManager:
                 continue
 
             url, threat_level, tags = line.split(', ')
-            tags = tags.replace('tags=','')
-            threat_level = threat_level.replace('threat_level=','').strip()
+            tags = tags.replace('tags=', '')
+            threat_level = threat_level.replace('threat_level=', '').strip()
 
             # remove commented lines from the cache db
             if url.startswith(';'):
@@ -119,14 +171,21 @@ class UpdateFileManager:
                 continue
 
             # make sure threat level is a valid value
-            if threat_level.lower() not in ('info', 'low', 'medium', 'high', 'critical'):
+            if threat_level.lower() not in (
+                'info',
+                'low',
+                'medium',
+                'high',
+                'critical',
+            ):
                 # not a valid threat_level
-                self.print(f"Invalid threat level found in slips.conf: {threat_level} "
-                           f"for TI feed: {url}. Using 'low' instead.", 0,1)
+                self.print(
+                    f'Invalid threat level found in slips.conf: {threat_level} '
+                    f"for TI feed: {url}. Using 'low' instead.", 0, 1,
+                )
                 threat_level = 'low'
 
-            url_feeds[url] =  {'threat_level': threat_level,
-                               'tags':tags[:30]}
+            url_feeds[url] = {'threat_level': threat_level, 'tags': tags[:30]}
         return url_feeds
 
     def print(self, text, verbose=1, debug=0):
@@ -147,9 +206,21 @@ class UpdateFileManager:
         """
 
         levels = f'{verbose}{debug}'
-        self.outputqueue.put(f"{levels}|{self.name}|{text}")
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def read_ports_info(self, ports_info_filepath):
+    def log(self, text):
+        """
+        Logs the text to slips.log
+        """
+        try:
+            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            with open(self.slips_logfile, 'a') as f:
+                f.write(f'{date_time} [{self.name}] {text}\n')
+        except FileNotFoundError:
+            open(self.slips_logfile, 'w').close()
+            self.log(text)
+
+    def read_ports_info(self, ports_info_filepath) -> int:
         """
         Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
         and store it in the db
@@ -159,13 +230,14 @@ class UpdateFileManager:
         # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
 
-        with open(ports_info_filepath,'r') as f:
+        with open(ports_info_filepath, 'r') as f:
             line_number = 0
             while True:
                 line = f.readline()
-                line_number +=1
+                line_number += 1
                 # reached the end of file
-                if not line: break
+                if not line:
+                    break
                 # skip the header and the comments at the begining
                 if line.startswith('#') or line.startswith('"Organization"'):
                     continue
@@ -173,14 +245,20 @@ class UpdateFileManager:
                 try:
                     organization, ip = line[0], line[1]
                     portproto = f'{line[2]}/{line[3].lower().strip()}'
-                    __database__.set_organization_of_port(organization, ip, portproto)
+                    __database__.set_organization_of_port(
+                        organization, ip, portproto
+                    )
+
                 except IndexError:
-                    self.print(f"Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.",0,1)
+                    self.print(
+                        f'Invalid line: {line} line number: {line_number} in {ports_info_filepath}. Skipping.', 0, 1,
+                    )
                     continue
+        return line_number
 
     def update_local_file(self, file_path) -> bool:
         """
-        Returns True if update was sucessfull
+        Returns True if update was successful
         """
         try:
             # each file is updated differently
@@ -194,10 +272,15 @@ class UpdateFileManager:
                         port = line.split(',')[1]
                         proto = line.split(',')[2]
                         # descr = line.split(',')[3]
-                        __database__.set_port_info(f'{str(port)}/{proto}', name)
+                        __database__.set_port_info(
+                            f'{str(port)}/{proto}', name
+                        )
+                # mark this file as read so that flowalerts
+                # can start generating unknown ports alerts
+                __database__.mark_known_ports_as_read()
 
             # Store the new hash of file in the database
-            file_info = { 'hash': self.new_hash }
+            file_info = {'hash': self.new_hash}
             __database__.set_TI_file_info(file_path, file_info)
             return True
 
@@ -267,12 +350,16 @@ class UpdateFileManager:
         try:
             last_update = data['time']
             last_update = float(last_update)
-        except (TypeError,KeyError):
+        except (TypeError, KeyError):
             last_update = float('-inf')
 
         now = time.time()
 
-        update_period = self.riskiq_update_period if 'risk' in file_to_download else self.update_period
+        update_period = (
+            self.riskiq_update_period
+            if 'risk' in file_to_download
+            else self.update_period
+        )
 
         # we have 2 types of remote files, JA3 feeds and TI feeds
         ################### Checking JA3 feeds ######################
@@ -288,21 +375,20 @@ class UpdateFileManager:
                 # response will be used to get e-tag, and if the file was updated
                 # the same response will be used to update the content in our db
                 response = self.download_file(file_to_download)
+                if not response:
+                    return False
 
                 # Get what files are stored in cache db and their E-TAG to compare with current files
                 data = __database__.get_TI_file_info(file_name_to_download)
                 old_e_tag = data.get('e-tag', '')
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
-                if not response:
-                    return False
-
                 new_e_tag = self.get_e_tag_from_web(response)
                 if not new_e_tag:
                     # use last modified instead
                     last_modified = self.get_last_modified(response)
                     if not last_modified:
-                        self.print(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
+                        self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
                         return False
                     # use last modified date instead of e-tag
                     new_e_tag = last_modified
@@ -315,17 +401,24 @@ class UpdateFileManager:
 
                 else:
                     # old_e_tag == new_e_tag
-                    self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
+                    # self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
-                    malicious_file_info = {'e-tag': new_e_tag, 'time': self.new_update_time}
-                    __database__.set_TI_file_info(file_name_to_download, malicious_file_info)
+                    malicious_file_info = {
+                        'e-tag': new_e_tag,
+                        'time': self.new_update_time,
+                    }
+                    __database__.set_TI_file_info(
+                        file_name_to_download, malicious_file_info
+                    )
                     return False
 
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on update_TI_file() line {exception_line}', 0, 1)
+                self.print(
+                    f'Problem on update_TI_file() line {exception_line}', 0, 1
+                )
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
@@ -357,7 +450,6 @@ class UpdateFileManager:
         with open(full_path, 'w') as f:
             f.write(response.text)
 
-
     def parse_ssl_feed(self, url, full_path):
         """
         Read all ssl fingerprints in full_path and store the info in our db
@@ -372,7 +464,7 @@ class UpdateFileManager:
             description_column = None
             while True:
                 line = ssl_feed.readline()
-                if line.startswith('# Listingdate') :
+                if line.startswith('# Listingdate'):
                     # looks like the line that contains column names, search where is the description column
                     for column in line.split(','):
                         # Listingreason is the description column in  abuse.ch Suricata SSL Fingerprint Blacklist
@@ -387,8 +479,8 @@ class UpdateFileManager:
             # Store the current position of the TI file
             current_file_position = ssl_feed.tell()
             if ',' in line:
-                data = line.replace("\n","").replace("\"","").split(",")
-                amount_of_columns = len(line.split(","))
+                data = line.replace('\n', '').replace('"', '').split(',')
+                amount_of_columns = len(line.split(','))
 
             if description_column is None:
                 # assume it's the last column
@@ -409,7 +501,9 @@ class UpdateFileManager:
 
             if sha1_column is None:
                 # can't find a column that contains an ioc
-                self.print(f'Error while reading the ssl file {full_path}. Could not find a column with sha1 info', 0, 1)
+                self.print(
+                    f'Error while reading the ssl file {full_path}. Could not find a column with sha1 info', 0, 1,
+                )
                 return False
 
             # Now that we read the first line, go back so we can process it
@@ -420,7 +514,8 @@ class UpdateFileManager:
                 # 2022-02-06 07:58:29,6cec09bcb575352785d313c7e978f26bfbd528ab,AsyncRAT C&C
 
                 # skip comment lines
-                if line.startswith('#'): continue
+                if line.startswith('#'):
+                    continue
 
                 # Separate the lines like CSV, either by commas or tabs
                 # In the new format the ip is in the second position.
@@ -428,14 +523,26 @@ class UpdateFileManager:
 
                 # get the hash to store in our db
                 if ',' in line:
-                    sha1 = line.replace("\n", "").replace("\"", "").split(",")[sha1_column].strip()
+                    sha1 = (
+                        line.replace('\n', '')
+                        .replace('"', '')
+                        .split(',')[sha1_column]
+                        .strip()
+                    )
 
                 # get the description of this ssl to store in our db
                 try:
                     separator = ',' if ',' in line else '\t'
-                    description = line.replace("\n", "").replace("\"", "").split(separator)[description_column].strip()
+                    description = (
+                        line.replace('\n', '')
+                        .replace('"', '')
+                        .split(separator)[description_column]
+                        .strip()
+                    )
                 except IndexError:
-                    self.print(f'IndexError Description column: {description_column}. Line: {line}')
+                    self.print(
+                        f'IndexError Description column: {description_column}. Line: {line}'
+                    )
 
                 # self.print('\tRead Data {}: {}'.format(sha1, description))
 
@@ -443,11 +550,20 @@ class UpdateFileManager:
 
                 if len(sha1) == 40:
                     # Store the sha1 in our local dict
-                    malicious_ssl_certs[sha1] = json.dumps({'description': description, 'source':filename,
-                                                          'threat_level': self.ssl_feeds[url]['threat_level'],
-                                                          'tags': self.ssl_feeds[url]['tags']})
+                    malicious_ssl_certs[sha1] = json.dumps(
+                        {
+                            'description': description,
+                            'source': filename,
+                            'threat_level': self.ssl_feeds[url][
+                                'threat_level'
+                            ],
+                            'tags': self.ssl_feeds[url]['tags'],
+                        }
+                    )
                 else:
-                    self.print(f'The data {data} is not valid. It was found in {filename}.', 3, 3)
+                    self.log(
+                        f'The data {data} is not valid. It was found in {filename}.', 3, 0,
+                    )
                     continue
         # Add all loaded malicious sha1 to the database
         __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
@@ -456,7 +572,6 @@ class UpdateFileManager:
     async def update_TI_file(self, link_to_download: str, response) -> bool:
         """
         Update remote TI files and JA3 feeds by downloading and parsing them
-
         :param response: the output of a request done with requests library
         """
         try:
@@ -472,41 +587,61 @@ class UpdateFileManager:
 
             # ja3 files and ti_files are parsed differently, check which file is this
             # is it ja3 feed?
-            if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(link_to_download, full_path):
-                self.print(f"Error parsing JA3 feed {link_to_download}. Updating was aborted.", 0, 1)
+            if link_to_download in self.ja3_feeds and not self.parse_ja3_feed(
+                link_to_download, full_path
+            ):
+                self.print(
+                    f'Error parsing JA3 feed {link_to_download}. Updating '
+                    f'was aborted.', 0, 1,
+                )
                 return False
 
             # is it a ti_file? load updated IPs/domains to the database
-            elif link_to_download in self.url_feeds \
-                    and not self.parse_ti_feed(link_to_download, full_path):
-                self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
+            elif link_to_download in self.url_feeds and not self.parse_ti_feed(
+                link_to_download, full_path
+            ):
+                self.print(
+                    f'Error parsing feed {link_to_download}. Updating was '
+                    f'aborted.', 0, 1,
+                )
                 return False
-            elif link_to_download in self.ssl_feeds \
-                    and not self.parse_ssl_feed(link_to_download, full_path):
-                self.print(f"Error parsing feed {link_to_download}. Updating was aborted.", 0, 1)
+            elif (
+                    link_to_download in self.ssl_feeds
+                    and not self.parse_ssl_feed(link_to_download, full_path)
+            ):
+                self.print(
+                    f'Error parsing feed {link_to_download}. Updating was '
+                    f'aborted.', 0, 1,
+                )
                 return False
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
-            file_info = {'e-tag': self.new_e_tag, 'time': self.new_update_time}
+            file_info = {
+                'e-tag': self.new_e_tag,
+                'time': self.new_update_time
+            }
             __database__.set_TI_file_info(file_name_to_download, file_info)
 
-            self.print(f'Successfully updated remote file {link_to_download}')
+            self.log(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
 
-            # done parsing the file, delte it from disk
+            # done parsing the file, delete it from disk
             os.remove(full_path)
 
             return True
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on update_TI_file() line {exception_line}', 0, 1)
+            self.print(
+                f'Problem on update_TI_file() line {exception_line}', 0, 1
+            )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            return False
 
     def update_riskiq_feed(self):
-        """ Get and parse RiskIQ feed """
+        """Get and parse RiskIQ feed"""
         try:
             base_url = 'https://api.riskiq.net/pt'
             path = '/v2/articles/indicators'
@@ -515,28 +650,39 @@ class UpdateFileManager:
             today = datetime.date.today()
             days_ago = datetime.timedelta(7)
             a_week_ago = today - days_ago
-            data = {'startDateInclusive': a_week_ago.strftime("%Y-%m-%d"),
-                    'endDateExclusive': today.strftime("%Y-%m-%d")}
+            data = {
+                'startDateInclusive': a_week_ago.strftime('%Y-%m-%d'),
+                'endDateExclusive': today.strftime('%Y-%m-%d'),
+            }
             # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
-            response = requests.get(url, auth=auth ,json=data).json()
+            response = requests.get(url, auth=auth, json=data).json()
             # extract domains only from the response
             try:
                 response = response['indicators']
                 for indicator in response:
                     # each indicator is a dict
                     malicious_domains_dict = {}
-                    if indicator.get('type','') == 'domain':
+                    if indicator.get('type', '') == 'domain':
                         domain = indicator['value']
-                        malicious_domains_dict[domain] = json.dumps({'description': 'malicious domain detected by RiskIQ', 'source':url})
+                        malicious_domains_dict[domain] = json.dumps(
+                            {
+                                'description': 'malicious domain detected by RiskIQ',
+                                'source': url,
+                            }
+                        )
                         __database__.add_domains_to_IoC(malicious_domains_dict)
             except KeyError:
-                self.print(f'RiskIQ returned: {response["message"]}. Update Cancelled.')
+                self.print(
+                    f'RiskIQ returned: {response["message"]}. Update Cancelled.', 0, 1,
+                )
                 return False
 
             # update the timestamp in the db
             malicious_file_info = {'time': time.time()}
-            __database__.set_TI_file_info('riskiq_domains', malicious_file_info)
+            __database__.set_TI_file_info(
+                'riskiq_domains', malicious_file_info
+            )
             return True
         except Exception as e:
             self.print('An error occurred while updating RiskIQ feed.', 0, 1)
@@ -552,7 +698,7 @@ class UpdateFileManager:
         for ip_data in all_data.items():
             ip = ip_data[0]
             data = json.loads(ip_data[1])
-            if data["source"] == file:
+            if data['source'] == file:
                 old_data.append(ip)
         if old_data:
             __database__.delete_ips_from_IoC_ips(old_data)
@@ -566,16 +712,16 @@ class UpdateFileManager:
         for domain_data in all_data.items():
             domain = domain_data[0]
             data = json.loads(domain_data[1])
-            if data["source"] == file:
+            if data['source'] == file:
                 old_data.append(domain)
         if old_data:
             __database__.delete_domains_from_IoC_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
-        '''
+        """
         Delete old IPs of the source from the database.
         :param data_file: the name of source to delete old IPs from.
-        '''
+        """
         # Only read the files with .txt or .csv
         self.__delete_old_source_IPs(data_file)
         self.__delete_old_source_Domains(data_file)
@@ -595,12 +741,14 @@ class UpdateFileManager:
                 description_column = None
                 while True:
                     line = ja3_feed.readline()
-                    if line.startswith('# ja3_md5') :
+                    if line.startswith('# ja3_md5'):
                         # looks like the line that contains column names, search where is the description column
                         for column in line.split(','):
                             # Listingreason is the description column in  abuse.ch Suricata JA3 Fingerprint Blacklist
                             if 'Listingreason' in column.lower():
-                                description_column = line.split(',').index(column)
+                                description_column = line.split(',').index(
+                                    column
+                                )
                     if not line.startswith('#'):
                         # break while statement if it is not a comment (i.e. does not startwith #) or a header line
                         break
@@ -610,8 +758,8 @@ class UpdateFileManager:
                 # Store the current position of the TI file
                 current_file_position = ja3_feed.tell()
                 if ',' in line:
-                    data = line.replace("\n","").replace("\"","").split(",")
-                    amount_of_columns = len(line.split(","))
+                    data = line.replace('\n', '').replace('"', '').split(',')
+                    amount_of_columns = len(line.split(','))
 
                 if description_column is None:
                     # assume it's the last column
@@ -632,7 +780,10 @@ class UpdateFileManager:
 
                 if ja3_column is None:
                     # can't find a column that contains an ioc
-                    self.print(f'Error while reading the ja3 file {ja3_feed_path}. Could not find a column with JA3 info', 1, 1)
+                    self.print(
+                        f'Error while reading the ja3 file {ja3_feed_path}. '
+                        f'Could not find a column with JA3 info', 1, 1
+                    )
                     return False
 
                 # Now that we read the first line, go back so we can process it
@@ -643,7 +794,8 @@ class UpdateFileManager:
                     # 8f52d1ce303fb4a6515836aec3cc16b1,2017-07-15 19:05:11,2019-07-27 20:00:57,TrickBot
 
                     # skip comment lines
-                    if line.startswith('#'): continue
+                    if line.startswith('#'):
+                        continue
 
                     # Separate the lines like CSV, either by commas or tabs
                     # In the new format the ip is in the second position.
@@ -651,16 +803,35 @@ class UpdateFileManager:
 
                     # get the ja3 to store in our db
                     if ',' in line:
-                        ja3 = line.replace("\n", "").replace("\"", "").split(",")[ja3_column].strip()
+                        ja3 = (
+                            line.replace('\n', '')
+                            .replace('"', '')
+                            .split(',')[ja3_column]
+                            .strip()
+                        )
 
                     # get the description of this ja3 to store in our db
                     try:
                         if ',' in line:
-                            description = line.replace("\n", "").replace("\"", "").split(",")[description_column].strip()
+                            description = (
+                                line.replace('\n', '')
+                                .replace('"', '')
+                                .split(',')[description_column]
+                                .strip()
+                            )
                         else:
-                            description = line.replace("\n", "").replace("\"", "").split("\t")[description_column].strip()
+                            description = (
+                                line.replace('\n', '')
+                                .replace('"', '')
+                                .split('\t')[description_column]
+                                .strip()
+                            )
                     except IndexError:
-                        self.print(f'IndexError Description column: {description_column}. Line: {line}')
+                        self.print(
+                            f'IndexError Description column: {description_column}. Line: {line}',
+                            0,
+                            1,
+                        )
 
                     # self.print('\tRead Data {}: {}'.format(ja3, description))
 
@@ -669,11 +840,20 @@ class UpdateFileManager:
                     # Check if the data is a valid IPv4, IPv6 or domain
                     if len(ja3) == 32:
                         # Store the ja3 in our local dict
-                        malicious_ja3_dict[ja3] = json.dumps({'description': description, 'source':filename,
-                                                              'threat_level': self.ja3_feeds[url]['threat_level'],
-                                                              'tags': self.ja3_feeds[url]['tags'] })
+                        malicious_ja3_dict[ja3] = json.dumps(
+                            {
+                                'description': description,
+                                'source': filename,
+                                'threat_level': self.ja3_feeds[url][
+                                    'threat_level'
+                                ],
+                                'tags': self.ja3_feeds[url]['tags'],
+                            }
+                        )
                     else:
-                        self.print(f'The data {data} is not valid. It was found in {filename}.', 3, 3)
+                        self.print(
+                            f'The data {data} is not valid. It was found in {filename}.', 3, 3,
+                        )
                         continue
 
             # Add all loaded malicious ja3 to the database
@@ -689,7 +869,7 @@ class UpdateFileManager:
             return False
 
     def detect_data_type(self, data):
-        """ Detects if incoming data is ipv4, ipv6, domain or ip range """
+        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
 
         data = data.strip()
         try:
@@ -718,65 +898,63 @@ class UpdateFileManager:
         # some ti files have / at the end of domains, remove it
         if data.endswith('/'):
             data = data[:-1]
-        domain =  data
-        if domain.startswith('http://'): data= data[7:]
-        if domain.startswith('https://'): data= data[8:]
+        domain = data
+        if domain.startswith('http://'):
+            data = data[7:]
+        if domain.startswith('https://'):
+            data = data[8:]
         if validators.domain(data):
             return 'domain'
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
-        # to support nsec/full-results-2019-05-15.json
-        tags = self.url_feeds[link_to_download]["tags"]
+        # to support
+        tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
-
-        filename= ti_file_path.split('/')[-1]
-        malicious_ips_dict = {}
+        filename = ti_file_path.split('/')[-1]
         malicious_domains_dict = {}
+        pattern = "%Y-%m-%dT%H:%M:%S"
         with open(ti_file_path) as feed:
-            self.print('Reading next lines in the file {} for IoC'.format(ti_file_path), 3, 0)
+            self.print(
+                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
+            )
             try:
                 file = json.loads(feed.read())
             except json.decoder.JSONDecodeError:
                 # not a json file??
                 return False
 
-            for description,iocs in file.items():
-                # iocs is a list of dicts
-                for ioc in iocs:
-                    # ioc is a dict with keys 'IP', 'ports', 'domains'
-                    # process IPs
-                    ip = ioc.get('IP','')
-                    # verify its a valid ip
-                    try:
-                        ip_address = ipaddress.IPv4Address(ip.strip())
-                    except ipaddress.AddressValueError:
-                        # Is it ipv6?
-                        try:
-                            ip_address = ipaddress.IPv6Address(ip.strip())
-                        except ipaddress.AddressValueError:
-                            # not a valid IP
-                            continue
-                    malicious_ips_dict[ip] = json.dumps({{'description': description,
-                                                        'source': filename,
-                                                        'threat_level':threat_level,
-                                                        'tags':tags }})
-                    # process domains
-                    domains = ioc.get('domains',[])
-                    for domain in domains:
-                        if validators.domain(domain.strip()):
-                            # this is a valid domain
-                            malicious_domains_dict[domain] = json.dumps({{'description': description,
-                                                        'source': filename,
-                                                        'threat_level':threat_level,
-                                                        'tags':tags }})
-            # Add all loaded malicious ips to the database
-            __database__.add_ips_to_IoC(malicious_ips_dict)
+            for ioc in file:
+                date = ioc['InsertDate']
+                epoch_date = int(
+                    time.mktime(
+                        time.strptime(
+                            date,
+                            pattern
+                        )
+                    )
+                )
+                diff = self.today - epoch_date
+                if diff > self.interval:
+                    continue
+                domain = ioc['DomainAddress']
+                if not validators.domain(domain):
+                    continue
+                malicious_domains_dict[domain] = json.dumps(
+                    {
+                        'description': '',
+                        'source': filename,
+                        'threat_level': threat_level,
+                        'tags': tags,
+                    }
+                )
             # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
-    def parse_ti_feed(self, link_to_download, malicious_data_path: str) -> bool:
+    def parse_ti_feed(
+            self, link_to_download, malicious_data_path: str
+    ) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
@@ -796,10 +974,15 @@ class UpdateFileManager:
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
             with open(malicious_data_path) as feed:
-                self.print('Reading next lines in the file {} for IoC'.format(malicious_data_path), 3, 0)
+                self.print(
+                    f'Reading next lines in the file {malicious_data_path} '
+                    f'for IoC', 3, 0,
+                )
                 # to support nsec/full-results-2019-05-15.json
                 if 'json' in malicious_data_path:
-                    self.parse_json_ti_feed(link_to_download, malicious_data_path)
+                    self.parse_json_ti_feed(
+                        link_to_download, malicious_data_path
+                    )
                     return True
 
                 # Remove comments and find the description column if possible
@@ -809,7 +992,16 @@ class UpdateFileManager:
                 # either a not supported ioc type or a header line etc.
                 # make sure the header keywords are lowercase because
                 # we convert lines to lowercase when comparing
-                header_keywords = ('type', 'first_seen_utc', 'ip_v4','"domain"','#"type"','#fields', "number", "atom_type")
+                header_keywords = (
+                    'type',
+                    'first_seen_utc',
+                    'ip_v4',
+                    '"domain"',
+                    '#"type"',
+                    '#fields',
+                    'number',
+                    'atom_type',
+                )
                 ignored_IoCs = ('email', 'url', 'file_hash', 'file')
 
                 while True:
@@ -821,16 +1013,26 @@ class UpdateFileManager:
                         if line.startswith(keyword):
                             # looks like the column names, search where is the description column
                             for column in line.split(','):
-                                if column.lower().startswith('desc') \
-                                        or 'malware' in column \
-                                        or 'tags_str' in column \
-                                        or 'collect' in column:
-                                    description_column = line.split(',').index(column)
+                                if (
+                                    column.lower().startswith('desc')
+                                    or 'malware' in column
+                                    or 'tags_str' in column
+                                    or 'collect' in column
+                                ):
+                                    description_column = line.split(',').index(
+                                        column
+                                    )
                                     break
 
                     # make sure the next line is not a header, a comment or an unsupported IoC type
                     process_line = True
-                    if line.startswith('#') or line.startswith(';') or line.isspace() or len(line) < 3: continue
+                    if (
+                        line.startswith('#')
+                        or line.startswith(';')
+                        or line.isspace()
+                        or len(line) < 3
+                    ):
+                        continue
                     for keyword in header_keywords + ignored_IoCs:
                         if keyword in line.lower():
                             # we should ignore this line
@@ -843,7 +1045,7 @@ class UpdateFileManager:
                 # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
                 current_file_position = feed.tell()
-                line = line.replace("\n","").replace("\"","")
+                line = line.replace('\n', '').replace('"', '')
 
                 # Separate the lines like CSV, either by commas or tabs
                 separators = ('#', ',', ';', '\t')
@@ -855,8 +1057,10 @@ class UpdateFileManager:
                             # the valid line
                             new_line = line.split('Z,')[0]
                             # replace every ',' from the description
-                            description = line.split('Z,',1)[1].replace(', ', "")
-                            line = new_line + "," + description
+                            description = line.split('Z,', 1)[1].replace(
+                                ', ', ''
+                            )
+                            line = new_line + ',' + description
 
                         # get a list of every field in the line e.g [ioc, description, date]
                         line_fields = line.split(separator)
@@ -866,18 +1070,18 @@ class UpdateFileManager:
                     # no separator of the above was found
                     if '0.0.0.0 ' in line:
                         # anudeepND/blacklist file
-                        line_fields = [line[line.index(' ')+1:].replace("\n","")]
+                        line_fields = [
+                            line[line.index(' ') + 1 :].replace('\n', '')
+                        ]
                         amount_of_columns = 1
                     else:
                         separator = '\t'
                         line_fields = line.split(separator)
                         amount_of_columns = len(line_fields)
 
-
-
                 if description_column is None:
-                        # assume it's the last column
-                        description_column = amount_of_columns - 1
+                    # assume it's the last column
+                    description_column = amount_of_columns - 1
 
                 data_column = None
                 # Search the first column that is an IPv4, IPv6 or domain
@@ -889,11 +1093,14 @@ class UpdateFileManager:
                         data_column = column_idx
                         break
                 # don't use if not data_column, it may be 0
-                if data_column==None:
+                if data_column == None:
                     # Some unknown string and we cant detect the type of it
                     # can't find a column that contains an ioc
-                    self.print(f'Error while reading the TI file {malicious_data_path}.'
-                               f' Could not find a column with an IP or domain', 0, 1)
+                    self.print(
+                        f'Error while reading the TI file {malicious_data_path}.'
+                        f' Could not find a column with an IP or domain',
+                        0, 1,
+                    )
                     return False
                 # Now that we read the first line, go back so we can process it
                 feed.seek(current_file_position)
@@ -914,8 +1121,8 @@ class UpdateFileManager:
                         # the valid line
                         new_line = line.split('Z,')[0]
                         # replace every ',' from the description
-                        description = line.split('Z,',1)[1].replace(', ', "")
-                        line = new_line + "," + description
+                        description = line.split('Z,', 1)[1].replace(', ', '')
+                        line = new_line + ',' + description
 
                     # skip unsupported IoC types
                     process_line = True
@@ -926,131 +1133,228 @@ class UpdateFileManager:
                     if not process_line:
                         continue
 
-
-                    line = line.replace("\n", "").replace("\"", "")
+                    line = line.replace('\n', '').replace('"', '')
 
                     if '0.0.0.0 ' in line:
                         # anudeepND/blacklist file
-                        data = line[line.index(' ')+1:].replace("\n","")
+                        data = line[line.index(' ') + 1 :].replace('\n', '')
                     else:
                         line_fields = line.split(separator)
                         # get the ioc
                         data = line_fields[data_column].strip()
 
-
                     # some ti files have new lines in the middle of the file, ignore them
-                    if len(data) < 3: continue
+                    if len(data) < 3:
+                        continue
 
                     # get the description of this line
                     try:
                         description = line_fields[description_column].strip()
                     except (IndexError, UnboundLocalError):
                         description = ''
-                        self.print(f'IndexError Description column: {description_column}. Line: {line} in {malicious_data_path}',0,1)
+                        self.print(
+                            f'IndexError Description column: '
+                            f'{description_column}. Line: {line} in '
+                            f'{malicious_data_path}', 0, 1,
+                        )
                         return False
 
-                    self.print('\tRead Data {}: {}'.format(data, description), 3, 0)
+                    self.print(
+                        '\tRead Data {}: {}'.format(data, description), 3, 0
+                    )
 
                     data_file_name = malicious_data_path.split('/')[-1]
 
                     # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
                     data_type = self.detect_data_type(data)
                     if data_type == None:
-                        self.print('The data {} is not valid. It was found in {}.'.format(data, malicious_data_path), 0, 1)
+                        self.print(
+                            'The data {} is not valid. It was found in {}.'.format(
+                                data, malicious_data_path
+                            ), 0, 1,
+                        )
                         continue
                     if data_type == 'domain':
                         try:
                             # we already have info about this domain?
-                            old_domain_info = json.loads(malicious_domains_dict[str(data)] )
+                            old_domain_info = json.loads(
+                                malicious_domains_dict[str(data)]
+                            )
                             # if the domain appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
-                            if data_file_name in old_domain_info['source']: continue
+                            if data_file_name in old_domain_info['source']:
+                                continue
                             # append the new blacklist name to the current one
                             source = f'{old_domain_info["source"]}, {data_file_name}'
                             # append the new tag to the current tag
                             tags = f'{old_domain_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                             # the new threat_level is the maximum threat_level
-                            threat_level = str(max(float(old_domain_info['threat_level']), float(self.url_feeds[link_to_download]['threat_level'])))
+                            threat_level = str(
+                                max(
+                                    float(old_domain_info['threat_level']),
+                                    float(
+                                        self.url_feeds[link_to_download][
+                                            'threat_level'
+                                        ]
+                                    ),
+                                )
+                            )
                             # Store the ip in our local dict
-                            malicious_domains_dict[str(data)] = json.dumps({'description': old_domain_info['description'],
-                                                                            'source':source,
-                                                                            'threat_level':threat_level,
-                                                                            'tags':tags })
+                            malicious_domains_dict[str(data)] = json.dumps(
+                                {
+                                    'description': old_domain_info[
+                                        'description'
+                                    ],
+                                    'source': source,
+                                    'threat_level': threat_level,
+                                    'tags': tags,
+                                }
+                            )
                         except KeyError:
                             # We don't have info about this domain, Store the ip in our local dict
-                            malicious_domains_dict[str(data)] = json.dumps({'description': description,
-                                                                                  'source':data_file_name,
-                                                                                  'threat_level':self.url_feeds[link_to_download]['threat_level'],
-                                                                                'tags': self.url_feeds[link_to_download]['tags']})
+                            malicious_domains_dict[str(data)] = json.dumps(
+                                {
+                                    'description': description,
+                                    'source': data_file_name,
+                                    'threat_level': self.url_feeds[
+                                        link_to_download
+                                    ]['threat_level'],
+                                    'tags': self.url_feeds[link_to_download][
+                                        'tags'
+                                    ],
+                                }
+                            )
                     elif data_type == 'ip':
                         # make sure we're not blacklisting a private ip
                         ip_obj = ipaddress.ip_address(data)
-                        if (ip_obj.is_private
-                                or ip_obj.is_multicast
-                                or ip_obj.is_link_local):
+                        if (
+                            ip_obj.is_private
+                            or ip_obj.is_multicast
+                            or ip_obj.is_link_local
+                        ):
                             continue
-
                         try:
                             # we already have info about this ip?
-                            old_ip_info = json.loads(malicious_ips_dict[str(data)])
+                            old_ip_info = json.loads(
+                                malicious_ips_dict[str(data)]
+                            )
                             # if the IP appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
-                            if data_file_name in old_ip_info['source']: continue
+                            if data_file_name in old_ip_info['source']:
+                                continue
                             # append the new blacklist name to the current one
-                            source = f'{old_ip_info["source"]}, {data_file_name}'
+                            source = (
+                                f'{old_ip_info["source"]}, {data_file_name}'
+                            )
                             # append the new tag to the old tag
                             tags = f'{old_ip_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                             # the new threat_level is the max of the 2
-                            threat_level = str(max(int(old_ip_info['threat_level']),
-                                                   int(self.url_feeds[link_to_download]['threat_level'])))
-                            malicious_ips_dict[str(data)] = json.dumps({'description': old_ip_info['description'],
-                                                                        'source':source,
-                                                                        'threat_level':threat_level,
-                                                                        'tags': tags})
+                            threat_level = str(
+                                max(
+                                    int(old_ip_info['threat_level']),
+                                    int(
+                                        self.url_feeds[link_to_download][
+                                            'threat_level'
+                                        ]
+                                    ),
+                                )
+                            )
+                            malicious_ips_dict[str(data)] = json.dumps(
+                                {
+                                    'description': old_ip_info['description'],
+                                    'source': source,
+                                    'threat_level': threat_level,
+                                    'tags': tags,
+                                }
+                            )
                             # print(f'Dulicate ip {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
-
                         except KeyError:
+                            threat_level = self.url_feeds[link_to_download][
+                                'threat_level'
+                            ]
                             # We don't have info about this IP, Store the ip in our local dict
-                            malicious_ips_dict[str(data)] = json.dumps({'description': description,
-                                                                        'source':data_file_name,
-                                                                        'threat_level':self.url_feeds[link_to_download]['threat_level'],
-                                                                        'tags': self.url_feeds[link_to_download]['tags']})
+                            malicious_ips_dict[str(data)] = json.dumps(
+                                {
+                                    'description': description,
+                                    'source': data_file_name,
+                                    'threat_level': threat_level,
+                                    'tags': self.url_feeds[link_to_download][
+                                        'tags'
+                                    ],
+                                }
+                            )
+                            # set the score and confidence of this ip = the same as the ones given in slips.conf
+                            # todo for now the confidence is 1
+                            __database__.set_score_confidence(
+                                data, threat_level, 1
+                            )
+
                     elif data_type == 'ip_range':
                         # make sure we're not blacklisting a private or multicast ip range
                         # get network address from range
-                        net_addr = data[:data.index('/')]
+                        net_addr = data[: data.index('/')]
                         ip_obj = ipaddress.ip_address(net_addr)
-                        if (ip_obj.is_multicast
-                                or ip_obj.is_private
-                                or ip_obj.is_link_local
-                                or net_addr in utils.home_networks):
+                        if (
+                            ip_obj.is_multicast
+                            or ip_obj.is_private
+                            or ip_obj.is_link_local
+                            or net_addr in utils.home_networks
+                        ):
                             continue
 
                         try:
                             # we already have info about this range?
-                            old_range_info = json.loads(malicious_ip_ranges[data])
+                            old_range_info = json.loads(
+                                malicious_ip_ranges[data]
+                            )
                             # if the Range appeared twice in the same blacklist, don't add the blacklist name twice
                             # or calculate the max threat_level
-                            if data_file_name in old_range_info['source']: continue
+                            if data_file_name in old_range_info['source']:
+                                continue
                             # append the new blacklist name to the current one
-                            source = f'{old_range_info["source"]}, {data_file_name}'
+                            source = (
+                                f'{old_range_info["source"]}, {data_file_name}'
+                            )
                             # append the new tag to the old tag
                             tags = f'{old_range_info["tags"]}, {self.url_feeds[link_to_download]["tags"]}'
                             # the new threat_level is the max of the 2
-                            threat_level = str(max(int(old_range_info['threat_level']),
-                                                   int(self.url_feeds[link_to_download]['threat_level'])))
-                            malicious_ips_dict[str(data)] = json.dumps({'description': old_range_info['description'],
-                                                                        'source':source,
-                                                                        'threat_level':threat_level,
-                                                                        'tags': tags})
-                            # print(f'Dulicate up range {data} found in sources: {source} old threat_level: {ip_info["threat_level"]}
+                            threat_level = str(
+                                max(
+                                    int(old_range_info['threat_level']),
+                                    int(
+                                        self.url_feeds[link_to_download][
+                                            'threat_level'
+                                        ]
+                                    ),
+                                )
+                            )
+                            malicious_ips_dict[str(data)] = json.dumps(
+                                {
+                                    'description': old_range_info[
+                                        'description'
+                                    ],
+                                    'source': source,
+                                    'threat_level': threat_level,
+                                    'tags': tags,
+                                }
+                            )
+                            # print(f'Duplicate up range {data} found in
+                            # sources: {source} old threat_level: {ip_info["threat_level"]}
 
                         except KeyError:
                             # We don't have info about this range, Store the ip in our local dict
-                            malicious_ip_ranges[data] = json.dumps({'description': description,
-                                                                    'source':data_file_name,
-                                                                    'threat_level':self.url_feeds[link_to_download]['threat_level'],
-                                                                    'tags': self.url_feeds[link_to_download]['tags']})
+                            malicious_ip_ranges[data] = json.dumps(
+                                {
+                                    'description': description,
+                                    'source': data_file_name,
+                                    'threat_level': self.url_feeds[
+                                        link_to_download
+                                    ]['threat_level'],
+                                    'tags': self.url_feeds[link_to_download][
+                                        'tags'
+                                    ],
+                                }
+                            )
             # Add all loaded malicious ips to the database
             __database__.add_ips_to_IoC(malicious_ips_dict)
             # Add all loaded malicious domains to the database
@@ -1060,7 +1364,10 @@ class UpdateFileManager:
 
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem while updating {link_to_download} line {exception_line}', 0, 1)
+            self.print(
+                f'Problem while updating {link_to_download} line '
+                f'{exception_line}', 0, 1,
+            )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
@@ -1075,67 +1382,83 @@ class UpdateFileManager:
             self.update_period = float(self.update_period)
         except (TypeError, ValueError):
             # User does not want to update the malicious IP list.
-            self.print('Not Updating the remote file of maliciuos IPs and domains because the user did not configure an update time.', 0, 1)
+            self.print(
+                'Not Updating the remote file of maliciuos IPs and domains'
+                ' because the user did not configure an update time.', 0, 1,
+            )
             return False
-
-        if self.update_period <= 0:
-            # User does not want to update the malicious IP list.
-            self.print('Not Updating the remote file of malicious IPs and domains because the update period is <= 0.', 0, 1)
-            return False
-
-        self.print('Checking if we need to download TI files.')
-        # we update different types of files
-        # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-
-        ############### Update remote TI files ################
-        # Check if the remote file is newer than our own
-        # For each file that we should update
-        files_to_download_dics = {}
-        files_to_download_dics.update(self.url_feeds)
-        files_to_download_dics.update(self.ja3_feeds)
-        files_to_download_dics.update(self.ssl_feeds)
-        for file_to_download in files_to_download_dics.keys():
-            file_to_download = file_to_download.strip()
-            file_to_download = self.sanitize(file_to_download)
-
-            response = self.__check_if_update(file_to_download)
-            if not response:
-                # failed to get the response, either a server problem
-                # or the the file is up to date so the response isn't needed
-                # either way __check_if_update handles the error printing
-                continue
-
-            self.print(f'Updating the remote file {file_to_download}', 1, 0)
-            # every function call to update_TI_file is now running concurrently instead of serially
-            # so when a server's taking a while to give us the TI feed, we proceed
-            # to download to next file instead of being idle
-            task = asyncio.create_task(self.update_TI_file(file_to_download, response))
-
-        # wait for all TI files to update
         try:
-            await task
-        except UnboundLocalError:
-            # in case all our files are updated, we don't have task defined, skip
-            pass
-        self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+            if self.update_period <= 0:
+                # User does not want to update the malicious IP list.
+                self.print(
+                    'Not Updating the remote file of malicious IPs and domains '
+                    'because the update period is <= 0.', 0, 1,
+                )
+                return False
 
+            self.log('Checking if we need to download TI files.')
+            # we update different types of files
+            # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
+            ############### Update slips local files ################
+            for file in os.listdir('slips_files/ports_info'):
+                file = os.path.join('slips_files/ports_info', file)
+                if self.__check_if_update_local_file(file):
+                    if not self.update_local_file(file):
+                        # update failed
+                        self.print(
+                            f'An error occurred while updating {file}. Updating '
+                            f'was aborted.', 0, 1,
+                        )
+            ############### Update remote TI files ################
+            # Check if the remote file is newer than our own
+            # For each file that we should update`
+            files_to_download_dics = {}
+            files_to_download_dics.update(self.url_feeds)
+            files_to_download_dics.update(self.ja3_feeds)
+            files_to_download_dics.update(self.ssl_feeds)
 
-        ############### Update RiskIQ domains ################
-        # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
-        # check if we have a username and api key and a week has passed since we last updated
-        if self.riskiq_email and self.riskiq_key and self.__check_if_update('riskiq_domains'):
-            self.print(f'Updating RiskIQ domains', 1, 0)
-            if self.update_riskiq_feed():
-                self.print('Successfully updated RiskIQ domains.', 1, 0)
-            else:
-                self.print(f'An error occurred while updating RiskIQ domains. Updating was aborted.', 0, 1)
+            for file_to_download in files_to_download_dics.keys():
+                file_to_download = file_to_download.strip()
+                file_to_download = self.sanitize(file_to_download)
 
-        ############### Update slips local files ################
-        for file in os.listdir('slips_files/ports_info'):
-            file = os.path.join('slips_files/ports_info', file)
-            if self.__check_if_update_local_file(file):
-                if not self.update_local_file(file):
-                    # update failed
-                    self.print(f'An error occurred while updating {file}. Updating was aborted.', 0, 1)
-        time.sleep(0.5)
-        print('-'*27)
+                response = self.__check_if_update(file_to_download)
+                if not response:
+                    # failed to get the response, either a server problem
+                    # or the the file is up to date so the response isn't needed
+                    # either way __check_if_update handles the error printing
+                    continue
+
+                self.log(
+                    f'Downloading the remote file {file_to_download}'
+                )
+                # every function call to update_TI_file is now running concurrently instead of serially
+                # so when a server's taking a while to give us the TI feed, we proceed
+                # to download the next file instead of being idle
+                task = asyncio.create_task(
+                    self.update_TI_file(file_to_download, response)
+                )
+
+            ############### Update RiskIQ domains ################
+            # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
+            # check if we have a username and api key and a week has passed since we last updated
+            if (
+                self.riskiq_email
+                and self.riskiq_key
+                and self.__check_if_update('riskiq_domains')
+            ):
+                self.log(f'Updating RiskIQ domains')
+                if self.update_riskiq_feed():
+                    self.log('Successfully updated RiskIQ domains.')
+                else:
+                    self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
+
+            # wait for all TI files to update
+            try:
+                await task
+            except UnboundLocalError:
+                # in case all our files are updated, we don't have task defined, skip
+                pass
+
+            self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+        except KeyboardInterrupt:
+            return False

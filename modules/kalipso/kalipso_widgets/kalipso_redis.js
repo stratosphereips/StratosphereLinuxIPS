@@ -1,28 +1,33 @@
 class Redis{
-    constructor(redis){
+    constructor(redis, redis_port){
         this.redis = redis
         this.tree_redisClient = undefined
-        this.client = undefined
         this.BlockedIPsTWs = undefined
+        this.redis_port = redis_port
     }
 
     /*Create all the client to the Redis database.*/
     createClient(){
-        this.tree_keys = this.redis.createClient()
-  		this.BlockedIPsTWs = this.redis.createClient()
-        this.client = this.redis.createClient()
-        this.timeline_data = this.redis.createClient()
-        this.evidence_data = this.redis.createClient()
-        this.ipInfo_data = this.redis.createClient({'db':1})
-        this.outTuples_data = this.redis.createClient()
-        this.inTuples_data = this.redis.createClient()
-        this.tcp_data_est = this.redis.createClient()
-        this.udp_data_est = this.redis.createClient()
-        this.tcp_data_notest = this.redis.createClient()
-        this.udp_data_notest = this.redis.createClient()
-        this.redis_resolved_dns = this.redis.createClient()
-        this.all_profile_evidences = this.redis.createClient()
-        this.tw_starttime = this.redis.createClient()
+        var redis_config = {
+            host: "127.0.0.1",
+            port: this.redis_port
+            };
+        this.tree_keys = this.redis.createClient(redis_config)
+  		this.BlockedIPsTWs = this.redis.createClient(redis_config)
+        this.client = this.redis.createClient(redis_config)
+        this.timeline_data = this.redis.createClient(redis_config)
+        this.evidence_data = this.redis.createClient(redis_config)
+        this.ipInfo_data = this.redis.createClient() // use the default db 0 port 6379 for cache
+        this.outTuples_data = this.redis.createClient(redis_config)
+        this.inTuples_data = this.redis.createClient(redis_config)
+        this.tcp_data_est = this.redis.createClient(redis_config)
+        this.udp_data_est = this.redis.createClient(redis_config)
+        this.tcp_data_notest = this.redis.createClient(redis_config)
+        this.udp_data_notest = this.redis.createClient(redis_config)
+        this.redis_resolved_dns = this.redis.createClient(redis_config)
+        this.all_profile_evidences = this.redis.createClient(redis_config)
+        this.tw_starttime = this.redis.createClient(redis_config)
+        this.redis_client = this.redis.createClient(redis_config)
   	}
 
     /*Get all the keys from the database.*/
@@ -151,6 +156,16 @@ class Redis{
         return new Promise(
                (resolve,reject)=>{this.all_profile_evidences.hgetall("evidenceprofile_"+ip, (err,reply)=>{
                    if(err){console.log("Error in getAllProfileEvidences in kalipso_redis.js. Error: ",err); reject(err);}
+                   else{resolve(reply);}
+               })}
+        )
+    }
+
+    /*Get all slips processes PIDs.*/
+    getPIDs(){
+        return new Promise(
+               (resolve,reject)=>{this.redis_client.hgetall("PIDs", (err,reply)=>{
+                   if(err){console.log("Error in getPIDs in kalipso_redis.js. Error: ",err); reject(err);}
                    else{resolve(reply);}
                })}
         )
