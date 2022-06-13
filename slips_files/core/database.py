@@ -96,7 +96,6 @@ class Database(object):
 
             # retry_on_timeout=True after the command times out, it will be retried once,
             # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-
             self.r = redis.StrictRedis(
                 host='localhost',
                 port=port,
@@ -118,10 +117,10 @@ class Database(object):
                 decode_responses=True,
                 health_check_interval=30,
             )  # password='password')
-
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
+            time.sleep(1)
             self.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
