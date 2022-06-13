@@ -457,7 +457,9 @@ class Database(object):
             # outside of home_network when this param is given
             return False
         if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
-            user_agent = json.loads(user_agent)
+            # user agents may be OpenSSH_8.6 , no need to deserialize them
+            if '{' in user_agent:
+                user_agent = json.loads(user_agent)
             return user_agent
 
     def mark_profile_as_dhcp(self, profileid):
@@ -1108,9 +1110,7 @@ class Database(object):
             self.print(
                 'add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(
                     role, type_host_key, str(ip_as_obj), profileid, twid
-                ),
-                3,
-                0,
+                ), 3, 0,
             )
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
@@ -1133,14 +1133,12 @@ class Database(object):
                 data[str(ip_as_obj)] += 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
-            except (TypeError, KeyError) as e:
+            except (TypeError, KeyError):
                 # There was no previous data stored in the DB
                 self.print(
                     'add_ips(): First time for addr {}. Count as 1'.format(
                         str(ip_as_obj)
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 data[str(ip_as_obj)] = 1
                 # Convet the dictionary to json
@@ -1170,9 +1168,7 @@ class Database(object):
                 self.print(
                     'add_ips(): Adding for dst port {}. PRE Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 # We had this port
                 # We need to add all the data
@@ -1191,9 +1187,7 @@ class Database(object):
                 self.print(
                     'add_ips() Adding for dst port {}. POST Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             except KeyError:
                 # First time for this flow
@@ -1209,9 +1203,7 @@ class Database(object):
                 self.print(
                     'add_ips() First time for dst port {}. Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 prev_data[str(ip_as_obj)] = innerdata
             ###########
@@ -1224,8 +1216,6 @@ class Database(object):
             )
             # Store this data in the profile hash
             self.r.hset(profileid + self.separator + twid, key_name, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno

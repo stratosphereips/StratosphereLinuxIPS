@@ -1517,16 +1517,13 @@ class Main:
                         time.sleep(10)
                         hostIP = self.recognize_host_ip()
 
-            # As the main program, keep checking if we should stop slips or not
-            # This is not easy since we need to be sure all the modules are stopped
-            # Each interval of checking is every 5 seconds
+            # Check every 5 secs if we should stop slips or not
             check_time_sleep = 5
             # In each interval we check if there has been any modifications to the database by any module.
             # If not, wait this amount of intervals and then stop slips.
             # We choose 6 to wait 30 seconds.
             limit_minimum_intervals_to_wait = 4
             minimum_intervals_to_wait = limit_minimum_intervals_to_wait
-            fieldseparator = __database__.getFieldSeparator()
             slips_internal_time = 0
             try:
                 while True:
@@ -1538,7 +1535,7 @@ class Main:
                     ):
                         self.shutdown_gracefully()
 
-                    # Sleep some time to do rutine checks
+                    # Sleep some time to do routine checks
                     time.sleep(check_time_sleep)
                     slips_internal_time = (
                         float(__database__.getSlipsInternalTime()) + 1
@@ -1591,14 +1588,12 @@ class Main:
                                 hostIP = self.recognize_host_ip()
                                 if hostIP:
                                     __database__.set_host_ip(hostIP)
-                                minimum_intervals_to_wait = (
-                                    limit_minimum_intervals_to_wait
-                                )
+                                minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
                             minimum_intervals_to_wait -= 1
                         else:
-                            minimum_intervals_to_wait = (
-                                limit_minimum_intervals_to_wait
-                            )
+                            minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
 
                     # Running Slips in the file.
                     # If there were no modified TW in the last timewindow time,
