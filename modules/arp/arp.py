@@ -291,6 +291,12 @@ class Module(Module, multiprocessing.Process):
 
         # get the original IP of the src mac from the database
         original_IP = __database__.get_IP_of_MAC(src_mac)
+        if original_IP == None:
+            return
+
+        # original_IP is a serialized list
+        original_IP = json.loads(original_IP)[0]
+
         # is this saddr trying to tell everyone that this it owns this src_mac
         # even though we know this src_mac is associated with another IP (original_IP)?
         if saddr != original_IP:
