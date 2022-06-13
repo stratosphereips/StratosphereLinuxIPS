@@ -80,6 +80,55 @@ class Database(object):
         if self.running_in_docker:
             self.sudo = ''
 
+
+    def get_redis_server_PID(self, slips_mode, redis_port):
+        """
+        :param slips_mode: daemonized or interactive
+        get the PID of the redis server started on the given redis_port
+        retrns the pid
+        """
+        # log the pid of the redis server using this port
+        redis_pid = 'Not found'
+        # On modern systems, the netstat utility comes pre-installed,
+        # this can be done using psutil but it needs root on macos
+        command = f'netstat -peanut'
+        # Iterate over all running process
+        if slips_mode == 'daemonized':
+            # A pty is a pseudo-terminal - it's a software implementation that appears to
+            # the attached program like a terminal, but instead of communicating
+            # directly with a "real" terminal, it transfers the input and output to another program.
+            master, slave = pty.openpty()
+            # connect the slave to the pty, and transfer from slave to master
+            subprocess.Popen(
+                command,
+                shell=True,
+                stdin=subprocess.PIPE,
+                stdout=slave,
+                stderr=slave,
+                close_fds=True,
+            )
+            # connect the master to slips
+            cmd_output = os.fdopen(master)
+        else:
+            command = f'netstat -peanut'
+            result = subprocess.run(command.split(), capture_output=True)
+            # Get command output
+            cmd_output = result.stdout.decode('utf-8').splitlines()
+
+        for line in cmd_output:
+            if f':{redis_port}' in line and 'redis-server' in line:
+                line = re.split(r'\s{2,}', line)
+                # get the substring that has the pid
+                try:
+                    redis_pid = line[-1]
+                    _ = redis_pid.index('/')
+                except ValueError:
+                    redis_pid = line[-2]
+                redis_pid = redis_pid.split('/')[0]
+                break
+        return redis_pid
+
+
     def connect_to_redis_server(self, port: str):
         """Connects to the given port and Sets r and rcache"""
         try:
