@@ -32,7 +32,6 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
-import pty
 import json
 import pkgutil
 import inspect
@@ -1196,8 +1195,6 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
-
             # Also check if the user blocks on interface, does not make sense to block on files
             if (
                 self.args.interface
@@ -1271,6 +1268,8 @@ class Main:
                 redis_port = int(self.args.port)
             else:
                 redis_port = self.generate_random_redis_port()
+
+            __database__.set_slips_mode(self.mode)
 
             # Output thread. This thread should be created first because it handles
             # the output of the rest of the threads.

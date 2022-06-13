@@ -1,4 +1,5 @@
 import os
+import signal
 import redis
 import time
 import json
@@ -10,6 +11,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
+import pty
 import platform
 import re
 import ast
@@ -174,8 +176,24 @@ class Database(object):
             self.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
-            # unable to connect to this port, try another one
+            # unable to connect to this port
+            # sometimes we open the server but we have trouble connecting,
+            # so we need to close it
+            self.close_redis_server(port)
             return False
+
+    def set_slips_mode(self, slips_mode):
+        """
+        function to store the current mode (daemonized/interactive)
+        in the db
+        """
+        self.r.set("mode", slips_mode)
+
+    def close_redis_server(self, redis_port):
+        slips_mode = self.r.get("mode")
+        server_pid = self.get_redis_server_PID(slips_mode, redis_port)
+        if server_pid != 'Not found':
+            os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
         """
