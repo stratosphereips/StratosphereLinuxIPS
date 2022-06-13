@@ -120,6 +120,7 @@ class Database(object):
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
+            # fix  ConnectionRefused error by giving redis time to open
             time.sleep(1)
             self.r.client_list()
             return True

@@ -640,6 +640,7 @@ class Main:
 
             # clear the server opened on this port
             try:
+                #todo this function connects to the server even if it was already killed!!
                 if connected := __database__.connect_to_redis_server(port):
                     __database__.r.flushall()
                     __database__.r.script_flush()
@@ -715,7 +716,6 @@ class Main:
             os.makedirs(self.args.output)
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
-
 
     def parse_arguments(self):
         # Parse the parameters
@@ -888,16 +888,17 @@ class Main:
 
         return self.config
 
-    def log_redis_server_PID(self, redis_port):
+    def get_redis_server_PID(self, redis_port):
         """
         get the PID of the redis server started on the given redis_port
-        and logs it in used_redis_servers.txt
+        retrns the pid
         """
         # log the pid of the redis server using this port
         redis_pid = 'Not found'
         # On modern systems, the netstat utility comes pre-installed,
         # this can be done using psutil but it needs root on macos
         command = f'netstat -peanut'
+        # Iterate over all running process
         if self.mode == 'daemonized':
             # A pty is a pseudo-terminal - it's a software implementation that appears to
             # the attached program like a terminal, but instead of communicating
@@ -931,7 +932,9 @@ class Main:
                     redis_pid = line[-2]
                 redis_pid = redis_pid.split('/')[0]
                 break
-        # log redis-server pid
+        return redis_pid
+
+    def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(self.used_redis_servers, 'a') as f:
             f.write(
@@ -1375,7 +1378,8 @@ class Main:
 
             # now that we have successfully connected to the db,
             # log the PID of the started redis-server
-            self.log_redis_server_PID(redis_port)
+            redis_pid = self.get_redis_server_PID(redis_port)
+            self.log_redis_server_PID(redis_port, redis_pid)
             self.print(
                 f'Using redis server on port: {redis_port}', 1, 0
             )
