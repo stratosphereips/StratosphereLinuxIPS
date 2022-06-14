@@ -50,7 +50,7 @@ title="Slips in action.">
 
 
 
-# Features
+# Modules
 
 Slips is written in Python and is highly modular. Each module is designed to perform a specific detection in the network traffic. The complete documentation of Slips internal architecture and instructions how to implement a new module are available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
