@@ -1269,7 +1269,6 @@ class Main:
             else:
                 redis_port = self.generate_random_redis_port()
 
-            __database__.set_slips_mode(self.mode)
 
             # Output thread. This thread should be created first because it handles
             # the output of the rest of the threads.
@@ -1312,6 +1311,8 @@ class Main:
             )
             # this process starts the db
             output_process.start()
+            __database__.set_slips_mode(self.mode)
+
 
             if self.args.save:
                 __database__.enable_redis_snapshots()

@@ -61,7 +61,6 @@ def test_check_incompatible_user_agent(outputQueue, database):
     tests get_user_agent_info and check_incompatible_user_agent
     """
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    # set the mac vendor
     safari_ua = (
         'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
         'AppleWebKit/605.1.15 (KHTML, like Gecko) '

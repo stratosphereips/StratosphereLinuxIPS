@@ -356,7 +356,7 @@ class Module(Module, multiprocessing.Process):
         :param user_agent: UA of the current flow
         :param cached_ua: UA of this profile from the db
         """
-        if not cached_ua or not user_agent or type(user_agent) != dict:
+        if not cached_ua or not user_agent:
             return False
 
         os_type = cached_ua['os_type']
