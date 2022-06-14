@@ -32,7 +32,6 @@ import shutil
 from datetime import datetime
 import socket
 import warnings
-import pty
 import json
 import pkgutil
 import inspect
@@ -640,6 +639,7 @@ class Main:
 
             # clear the server opened on this port
             try:
+                #todo this function connects to the server even if it was already killed!!
                 if connected := __database__.connect_to_redis_server(port):
                     __database__.r.flushall()
                     __database__.r.script_flush()
@@ -715,7 +715,6 @@ class Main:
             os.makedirs(self.args.output)
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
-
 
     def parse_arguments(self):
         # Parse the parameters
@@ -888,50 +887,7 @@ class Main:
 
         return self.config
 
-    def log_redis_server_PID(self, redis_port):
-        """
-        get the PID of the redis server started on the given redis_port
-        and logs it in used_redis_servers.txt
-        """
-        # log the pid of the redis server using this port
-        redis_pid = 'Not found'
-        # On modern systems, the netstat utility comes pre-installed,
-        # this can be done using psutil but it needs root on macos
-        command = f'netstat -peanut'
-        if self.mode == 'daemonized':
-            # A pty is a pseudo-terminal - it's a software implementation that appears to
-            # the attached program like a terminal, but instead of communicating
-            # directly with a "real" terminal, it transfers the input and output to another program.
-            master, slave = pty.openpty()
-            # connect the slave to the pty, and transfer from slave to master
-            subprocess.Popen(
-                command,
-                shell=True,
-                stdin=subprocess.PIPE,
-                stdout=slave,
-                stderr=slave,
-                close_fds=True,
-            )
-            # connect the master to slips
-            cmd_output = os.fdopen(master)
-        else:
-            command = f'netstat -peanut'
-            result = subprocess.run(command.split(), capture_output=True)
-            # Get command output
-            cmd_output = result.stdout.decode('utf-8').splitlines()
-
-        for line in cmd_output:
-            if f':{redis_port}' in line and 'redis-server' in line:
-                line = re.split(r'\s{2,}', line)
-                # get the substring that has the pid
-                try:
-                    redis_pid = line[-1]
-                    _ = redis_pid.index('/')
-                except ValueError:
-                    redis_pid = line[-2]
-                redis_pid = redis_pid.split('/')[0]
-                break
-        # log redis-server pid
+    def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(self.used_redis_servers, 'a') as f:
             f.write(
@@ -1239,8 +1195,6 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
-
             # Also check if the user blocks on interface, does not make sense to block on files
             if (
                 self.args.interface
@@ -1315,6 +1269,7 @@ class Main:
             else:
                 redis_port = self.generate_random_redis_port()
 
+
             # Output thread. This thread should be created first because it handles
             # the output of the rest of the threads.
             # Create the queue
@@ -1356,6 +1311,8 @@ class Main:
             )
             # this process starts the db
             output_process.start()
+            __database__.set_slips_mode(self.mode)
+
 
             if self.args.save:
                 __database__.enable_redis_snapshots()
@@ -1375,7 +1332,8 @@ class Main:
 
             # now that we have successfully connected to the db,
             # log the PID of the started redis-server
-            self.log_redis_server_PID(redis_port)
+            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+            self.log_redis_server_PID(redis_port, redis_pid)
             self.print(
                 f'Using redis server on port: {redis_port}', 1, 0
             )
@@ -1560,16 +1518,13 @@ class Main:
                         time.sleep(10)
                         hostIP = self.recognize_host_ip()
 
-            # As the main program, keep checking if we should stop slips or not
-            # This is not easy since we need to be sure all the modules are stopped
-            # Each interval of checking is every 5 seconds
+            # Check every 5 secs if we should stop slips or not
             check_time_sleep = 5
             # In each interval we check if there has been any modifications to the database by any module.
             # If not, wait this amount of intervals and then stop slips.
             # We choose 6 to wait 30 seconds.
             limit_minimum_intervals_to_wait = 4
             minimum_intervals_to_wait = limit_minimum_intervals_to_wait
-            fieldseparator = __database__.getFieldSeparator()
             slips_internal_time = 0
             try:
                 while True:
@@ -1581,7 +1536,7 @@ class Main:
                     ):
                         self.shutdown_gracefully()
 
-                    # Sleep some time to do rutine checks
+                    # Sleep some time to do routine checks
                     time.sleep(check_time_sleep)
                     slips_internal_time = (
                         float(__database__.getSlipsInternalTime()) + 1
@@ -1634,14 +1589,12 @@ class Main:
                                 hostIP = self.recognize_host_ip()
                                 if hostIP:
                                     __database__.set_host_ip(hostIP)
-                                minimum_intervals_to_wait = (
-                                    limit_minimum_intervals_to_wait
-                                )
+                                minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
                             minimum_intervals_to_wait -= 1
                         else:
-                            minimum_intervals_to_wait = (
-                                limit_minimum_intervals_to_wait
-                            )
+                            minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+
 
                     # Running Slips in the file.
                     # If there were no modified TW in the last timewindow time,

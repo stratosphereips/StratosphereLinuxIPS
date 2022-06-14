@@ -151,17 +151,12 @@ daddr = flow['daddr']
 
 Now we need to check if both of them are private.
 
-Remember, we don't want to set evidence on connections from/to the default gateway.
-
-we'll do so by using the ipadddress library and the ```get_default_gateway``` function from out database.
 
 ```python
 import ipaddress
 srcip_obj = ipaddress.ip_address(saddr)
 dstip_obj = ipaddress.ip_address(daddr)
-gateway_conn = (daddr == __database__.get_default_gateway() 
-                or saddr == __database__.get_default_gateway())
-if srcip_obj.is_private and dstip_obj.is_private and not gateway_conn:
+if srcip_obj.is_private and dstip_obj.is_private:
     #TODO
     pass
 ```
@@ -360,8 +355,7 @@ class Module(Module, multiprocessing.Process):
                     daddr = flow['daddr']
                     srcip_obj = ipaddress.ip_address(saddr)
                     dstip_obj = ipaddress.ip_address(daddr)
-                    gateway_conn = daddr == __database__.get_default_gateway() or saddr == __database__.get_default_gateway()
-                    if srcip_obj.is_private and dstip_obj.is_private and not gateway_conn:
+                    if srcip_obj.is_private and dstip_obj.is_private:
                         # on a scale of 0 to 1, how confident you are of this evidence
                         confidence = 0.8
                         # how dangerous is this evidence? info, low, medium, high, critical?
