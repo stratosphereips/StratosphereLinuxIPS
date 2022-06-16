@@ -45,12 +45,11 @@ class OutputProcess(multiprocessing.Process):
         ####### create the log files
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.create_logfile(self.errors_logfile)
-        self.create_logfile(self.slips_logfile)
-        #######
         self.name = 'OutputProcess'
         self.queue = inputqueue
         self.config = config
+        self.create_logfile(self.errors_logfile)
+        self.create_logfile(self.slips_logfile)
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
@@ -175,11 +174,11 @@ class OutputProcess(multiprocessing.Process):
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
-                f'{exception_line}', 0, 1,
+                f'{exception_line}'
             )
-            print(type(inst), 0, 1)
-            print(inst.args, 0, 1)
-            print(inst, 0, 1)
+            print(type(inst))
+            print(inst.args)
+            print(inst)
             sys.exit(1)
 
     def log_error(self, sender, msg):
@@ -235,7 +234,8 @@ class OutputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run(self):
-        utils.drop_root_privs()
+
+
         while True:
             try:
                 line = self.queue.get()
@@ -261,10 +261,8 @@ class OutputProcess(multiprocessing.Process):
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',
-                    0,
-                    1,
                 )
-                print(type(inst), 0, 1)
-                print(inst.args, 0, 1)
-                print(inst, 0, 1)
+                print(type(inst))
+                print(inst.args)
+                print(inst)
                 return True
