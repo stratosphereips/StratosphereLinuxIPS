@@ -869,6 +869,32 @@ http://ipinfo.io/json -> For getting your public IP
 https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
 
 
+## Ensembling
+
+
+Ensembling in Slips is done by the Evidence Process.
+
+Every time the evidence process gets a new evidence from the detection modules, it retrieves all the past evidence by this 
+the source IP, in the current timewindow from the datbase.
+
+Then, Slips uses the following equation to 
+get the score of each evidence
+
+threat_level = threat_level * confidence
+
+Slips accumulates the threat level of all evidenc, then, it checks if the accumulated threat
+level reached a certain threshold or not.
+
+If the accumulated threat level reached the threashold, Slips generates and alert.
+If not, slips waits for the next evidence, accumulates threat levels, and checks again until the threshold is reached.
+
+
+The threshold Slips uses is determined by the ```evidence_detection_threshold``` key in slips.conf, 
+by default its 0.1 attacks per minute
+
+This threshold means minimum confirmed attacks per minute needed to generate an alert
+
+
 ## Zeek Scripts
 
 Slips is shipped with it's own custom zeek scripts to be able to extend zeek functionality and 
