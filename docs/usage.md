@@ -135,7 +135,7 @@ but if you changed the default output files to files placed in a dir owned by ro
 You can run several instances of slips at the same time, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory. 
 
-Each instance of Slips will connect to redis server on a randomly generated port.
+Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
 
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 0, to store the IoCs taken from TI files.
 

@@ -158,7 +158,7 @@ class Main:
         try:
             while True:
                 # generate a random unused port
-                port = random.randint(32768, 65535)
+                port = random.randint(32768, 32850)
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
@@ -1020,7 +1020,7 @@ class Main:
             print(f'Error loading the database {self.args.db}.')
         else:
             print(
-                f'{self.args.db} loaded successfully. Run ./kalipso.sh'
+                f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
             )
         self.terminate_slips()
 
