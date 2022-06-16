@@ -632,7 +632,7 @@ class Main:
             self.terminate_slips()
 
     def close_open_redis_servers(self):
-        """Function to warn about unused open redis-servers"""
+        """Function to close unused open redis-servers"""
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
             self.get_open_servers_PIDs()
@@ -642,10 +642,16 @@ class Main:
             sys.exit(-1)
             return
 
+        failed_to_close = 0
         for pid, port in self.open_servers_PIDs.items():
-            if pid == 'Not Found':
+            try:
+                pid = int(pid)
+            except ValueError:
                 # The server was killed before logging its PID
+                # the pid of it is 'not found'
+                failed_to_close += 1
                 continue
+
 
             # clear the server opened on this port
             try:
@@ -661,11 +667,11 @@ class Main:
             # it returns 1 if the process used_redis_servers.txtexited
             try:
                 # check if the process is still running
-                while os.kill(int(pid), 0) != 1:
+                while os.kill(pid, 0) != 1:
                     # sigterm is 9
-                    os.kill(int(pid), 9)
+                    os.kill(pid, 9)
             except (ProcessLookupError, PermissionError):
-                # process already exited, sometimes this exception is raised
+                # ProcessLookupError: process already exited, sometimes this exception is raised
                 # but the process is still running, keep trying to kill it
                 # PermissionError happens when the user tries to close redis-servers
                 # opened by root while he's not root,
@@ -673,7 +679,8 @@ class Main:
                 # opened without root while he's root
                 continue
 
-        print(f'Killed {len(self.open_servers_PIDs.keys())} Redis Servers.')
+        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
+        print(f'Killed {killed_servers} Redis Servers.')
         os.remove(self.used_redis_servers)
         sys.exit(-1)
 
