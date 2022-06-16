@@ -90,11 +90,14 @@ class OutputProcess(multiprocessing.Process):
         """
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
-        if "-D" in sys.argv:
+        if "-D" in sys.argv and 'update'.lower() not in sender:
+            # if the sender is the update manager, always log
             return
+
         with open(self.slips_logfile, 'a') as slips_logfile:
             date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
             slips_logfile.write(f'{date_time} {sender}{msg}\n')
+
 
     def change_stdout(self, file):
         # io.TextIOWrapper creates a file object of this file
@@ -189,45 +192,36 @@ class OutputProcess(multiprocessing.Process):
             date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
             errors_logfile.write(f'{date_time} {sender}{msg}\n')
 
-    def output_line(self, line):
+    def output_line(self, level, sender, msg):
         """
-        Extract the level, sender and msg from line and format it and
-        print
+        Print depending on the debug and verbose levels
         """
-        (level, sender, msg) = self.process_line(line)
+        # (level, sender, msg) = self.process_line(line)
         verbose_level, debug_level = int(level[0]), int(level[1])
         # if verbosity level is 3 make it red
         if debug_level == 3:
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
+
+
         if (
-                verbose_level > 0
-                and verbose_level <= 3
-                and verbose_level <= self.verbose
+            verbose_level > 0 and verbose_level <= 3
+            and verbose_level <= self.verbose
+        ) or \
+        (
+            debug_level > 0 and debug_level <= 3
+            and debug_level <= self.debug
         ):
-            self.log_line(sender, msg)
             if 'Start' in msg:
                 print(f'{msg}')
                 return
             print(f'{sender}{msg}')
-        elif (
-                debug_level > 0
-                and debug_level <= 3
-                and debug_level <= self.debug
-        ):
             self.log_line(sender, msg)
-            if 'Start' in msg:
-                print(f'{msg}')
-                return
-            # For now print DEBUG, then we can use colors or something
-            print(f'{sender}{msg}')
 
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
-        # make sure thee msg is an error. debug_level==1 is the one printing errors
+        # make sure the msg is an error. debug_level==1 is the one printing errors
         if debug_level == 1:
-            self.log_line(sender, msg)
-            # it's an error. we should log it
             self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
@@ -241,12 +235,21 @@ class OutputProcess(multiprocessing.Process):
                 line = self.queue.get()
                 if line == 'quiet':
                     self.quiet = True
-                elif 'stop_process' in line:
+                elif 'stop_process' in line or line == 'stop':
                     self.shutdown_gracefully()
                     return True
-                elif line != 'stop':
-                    if not self.quiet:
-                        self.output_line(line)
+                elif not self.quiet:
+                    # output to terminal and logs or logs only?
+
+                    if 'log-only' in line:
+                        line = line.replace('log-only', '')
+                        (level, sender, msg) = self.process_line(line)
+                        self.log_line(sender, msg)
+                    else:
+                        (level, sender, msg) = self.process_line(line)
+                        # output to terminal
+                        self.output_line(level, sender, msg)
+
                 else:
                     # Here we should still print the lines coming in
                     # the input for a while after receiving a 'stop'. We don't know how to do it.
