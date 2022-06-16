@@ -1019,9 +1019,19 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}.')
         else:
+            redis_port = 6379
+            self.input_information = self.args.db
+            __database__.connect_to_redis_server(redis_port)
+            __database__.enable_redis_snapshots()
+            #todo see why the dumps.rdb isn't loaded in 6379
+            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+            self.log_redis_server_PID(redis_port, redis_pid)
+
             print(
                 f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
             )
+            __database__.disable_redis_snapshots()
+
         self.terminate_slips()
 
     def get_input_file_type(self, input_information):

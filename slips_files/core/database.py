@@ -3686,7 +3686,7 @@ class Database(object):
 
     def load(self, backup_file: str) -> bool:
         """
-        Load the db from disk
+        Load the db from disk to the db on port 6379
         backup_file should be the full path of the .rdb
         """
         # Set sudo according to environment
