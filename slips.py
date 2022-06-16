@@ -508,7 +508,7 @@ class Main:
             # save redis database if '-s' is specified
             if self.args.save:
                 # Create a new dir to store backups
-                backups_dir = self.get_cwd() + 'redis_backups' + '/'
+                backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
                 try:
                     os.mkdir(backups_dir)
                 except FileExistsError:
@@ -528,7 +528,8 @@ class Main:
                     # it's a zeek dir
                     pass
                 # Give the exact path to save(), this is where our saved .rdb backup will be
-                __database__.save(backups_dir + self.input_information)
+                rdb_filepath = os.path.join(backups_dir, self.input_information)
+                __database__.save(rdb_filepath)
                 # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
                 print(
                     '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
