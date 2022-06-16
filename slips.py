@@ -612,21 +612,24 @@ class Main:
         Returns the dict of PIDs and ports of the redis unused servers started by slips
         """
         self.open_servers_PIDs = {}
+        try:
+            with open(self.used_redis_servers, 'r') as f:
+                for line in f.read().splitlines():
+                    # skip comments
+                    if (
+                        line.startswith('#')
+                        or line.startswith('Date')
+                        or len(line) < 3
+                    ):
+                        continue
+                    line = re.split(r'\s{2,}', line)
 
-        with open(self.used_redis_servers, 'r') as f:
-            for line in f.read().splitlines():
-                # skip comments
-                if (
-                    line.startswith('#')
-                    or line.startswith('Date')
-                    or len(line) < 3
-                ):
-                    continue
-                line = re.split(r'\s{2,}', line)
-
-                pid, port = line[-1], line[-2]
-                self.open_servers_PIDs[pid] = port
-        return self.open_servers_PIDs
+                    pid, port = line[-1], line[-2]
+                    self.open_servers_PIDs[pid] = port
+            return self.open_servers_PIDs
+        except FileNotFoundError:
+            print(f"Error: {self.used_redis_servers} is not found. Can't kill open servers. Stopping.")
+            self.terminate_slips()
 
     def close_open_redis_servers(self):
         """Function to warn about unused open redis-servers"""
@@ -655,7 +658,7 @@ class Main:
                 continue
 
             # signal 0 is to check if the process is still running or not
-            # it returns 1 if the process exited
+            # it returns 1 if the process used_redis_servers.txtexited
             try:
                 # check if the process is still running
                 while os.kill(int(pid), 0) != 1:
@@ -671,13 +674,7 @@ class Main:
                 continue
 
         print(f'Killed {len(self.open_servers_PIDs.keys())} Redis Servers.')
-        # delete the closed redis servers from used_redis_servers.txt
-        with open(self.used_redis_servers, 'w') as f:
-            f.write(
-                '# This file contains a list of used redis ports.\n'
-                '# Once a server is killed, it will be removed from this file.\n'
-                'Date                   File or interface                   Used port       Server PID\n'
-            )
+        os.remove(self.used_redis_servers)
         sys.exit(-1)
 
     def is_debugger_active(self) -> bool:
@@ -897,6 +894,14 @@ class Main:
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with open(self.used_redis_servers, 'a') as f:
+            # add the header lines if the file is newly created
+            if f.tell() == 0:
+                f.write(
+                    '# This file contains a list of used redis ports.\n'
+                    '# Once a server is killed, it will be removed from this file.\n'
+                    'Date                   File or interface                   Used port       Server PID\n'
+                )
+
             f.write(
                 f'{now: <16}    {self.input_information: <35}    {redis_port: <6}        {redis_pid}\n'
             )
