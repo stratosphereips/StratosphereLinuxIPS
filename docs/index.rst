@@ -45,6 +45,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    architecture
    detection_modules
    flowalerts
+   features
    training
    exporting
    P2P
