@@ -3668,13 +3668,17 @@ class Database(object):
         # this path is only accessible by root
         self.r.save()
         # if you're not root, this will return False even if the path exists
-        if platform.system() == 'Linux':
-            redis_db_path = '/var/lib/redis/dump.rdb'
-        else:
-            redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
+        # if platform.system() == 'Linux':
+        #     redis_db_path = '/var/lib/redis/dump.rdb'
+        # else:
+            # redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
+
+        # Saves to dump.rdb in the cwd
+        redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
-            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
+            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb' \
+                      f' && {self.sudo} rm dump.rdb'
             os.system(command)
             print(f'[Main] Database saved to {backup_file}.rdb')
             return True
