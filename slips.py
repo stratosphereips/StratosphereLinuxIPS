@@ -1017,7 +1017,7 @@ class Main:
         from slips_files.core.database import __database__
         __database__.start(self.config, 6379)
         if not __database__.load(self.args.db):
-            print(f'Error loading the database {self.args.db}.')
+            print(f'Error loading the database {self.args.db}')
         else:
             redis_port = 6379
             self.input_information = self.args.db

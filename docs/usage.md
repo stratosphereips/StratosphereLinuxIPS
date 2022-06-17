@@ -190,7 +190,9 @@ Now you can run
 
 ## Saving the database
 
-Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, for example
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, 
+
+For example:
 
 ```./slips.py -f dataset/hide-and-seek-short.pcap -s```
 
@@ -202,7 +204,7 @@ You can load it again using ```-d```, For example:
 
 ```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
 
-And then use ```./kalipso``` to view the loaded database.
+And then use ```./kalipso``` and select the entry on port 6379 to view the loaded database.
 
 This feature isn't supported in docker due to problems with redis in docker.
 
@@ -216,7 +218,7 @@ can't write to dump.rdb.
 
 Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you 
 don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and 
-the saved database will contain all analysed flows.
+the saved database will contain all analyzed flows.
 
 
 ## Whitelisting
