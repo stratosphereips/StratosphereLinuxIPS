@@ -3689,19 +3689,11 @@ class Database(object):
         Load the db from disk to the db on port 6379
         backup_file should be the full path of the .rdb
         """
-        # Set sudo according to environment
-        # Locate the default path of redis dump.rdb
-        command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
-        redis_dir = subprocess.getoutput(command)
-        if 'dir /var/lib/redis' in redis_dir:
-            redis_dir = '/var/lib/redis'
-        else:
-            # Get the exact path without spaces
-            redis_dir = redis_dir[redis_dir.index(' ') + 1 :]
-
+        # do not use self.print here! the outputqueue isn't initialized yet
         if not os.path.exists(backup_file):
-            self.print("{} doesn't exist.".format(backup_file))
+            print("{} doesn't exist.".format(backup_file))
             return False
+
 
         # Check if valid .rdb file
         command = 'file ' + backup_file
@@ -3710,10 +3702,23 @@ class Database(object):
         file_type = result.stdout.decode('utf-8')
         # Check if valid redis database
         if not 'Redis' in file_type:
-            self.print(
+            print(
                 '{} is not a valid redis database file.'.format(backup_file)
             )
             return False
+
+
+        # Locate the default path of redis dump.rdb
+        if platform.system() == 'Darwin':
+            redis_dir = '/opt/homebrew/var/db/redis'
+        else:
+            command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
+            redis_dir = subprocess.getoutput(command)
+            if 'dir /var/lib/redis' in redis_dir:
+                redis_dir = '/var/lib/redis'
+            else:
+                # Get the exact path without spaces
+                redis_dir = redis_dir[redis_dir.index(' ') + 1:]
 
         # All modules throw redis.exceptions.ConnectionError when we stop
         # the redis-server so we need to close all channels first
@@ -3733,7 +3738,7 @@ class Database(object):
             return True
         except:
             self.print(
-                f'Error loading the database {backup_file} to {redis_dir}.'
+                f'Error loading the database {backup_file} to {redis_dir}'
             )
             return False
 
