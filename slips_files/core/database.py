@@ -1,4 +1,5 @@
 import os
+import signal
 import redis
 import time
 import json
@@ -10,6 +11,7 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
+import pty
 import platform
 import re
 import ast
@@ -80,6 +82,55 @@ class Database(object):
         if self.running_in_docker:
             self.sudo = ''
 
+
+    def get_redis_server_PID(self, slips_mode, redis_port):
+        """
+        :param slips_mode: daemonized or interactive
+        get the PID of the redis server started on the given redis_port
+        retrns the pid
+        """
+        # log the pid of the redis server using this port
+        redis_pid = 'Not found'
+        # On modern systems, the netstat utility comes pre-installed,
+        # this can be done using psutil but it needs root on macos
+        command = f'netstat -peanut'
+        # Iterate over all running process
+        if slips_mode == 'daemonized':
+            # A pty is a pseudo-terminal - it's a software implementation that appears to
+            # the attached program like a terminal, but instead of communicating
+            # directly with a "real" terminal, it transfers the input and output to another program.
+            master, slave = pty.openpty()
+            # connect the slave to the pty, and transfer from slave to master
+            subprocess.Popen(
+                command,
+                shell=True,
+                stdin=subprocess.PIPE,
+                stdout=slave,
+                stderr=slave,
+                close_fds=True,
+            )
+            # connect the master to slips
+            cmd_output = os.fdopen(master)
+        else:
+            command = f'netstat -peanut'
+            result = subprocess.run(command.split(), capture_output=True)
+            # Get command output
+            cmd_output = result.stdout.decode('utf-8').splitlines()
+
+        for line in cmd_output:
+            if f':{redis_port}' in line and 'redis-server' in line:
+                line = re.split(r'\s{2,}', line)
+                # get the substring that has the pid
+                try:
+                    redis_pid = line[-1]
+                    _ = redis_pid.index('/')
+                except ValueError:
+                    redis_pid = line[-2]
+                redis_pid = redis_pid.split('/')[0]
+                break
+        return redis_pid
+
+
     def connect_to_redis_server(self, port: str):
         """Connects to the given port and Sets r and rcache"""
         try:
@@ -96,7 +147,6 @@ class Database(object):
 
             # retry_on_timeout=True after the command times out, it will be retried once,
             # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-
             self.r = redis.StrictRedis(
                 host='localhost',
                 port=port,
@@ -118,15 +168,32 @@ class Database(object):
                 decode_responses=True,
                 health_check_interval=30,
             )  # password='password')
-
             # the connection to redis is only established
             # when you try to execute a command on the server.
             # so make sure it's established first
+            # fix  ConnectionRefused error by giving redis time to open
+            time.sleep(1)
             self.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
-            # unable to connect to this port, try another one
+            # unable to connect to this port
+            # sometimes we open the server but we have trouble connecting,
+            # so we need to close it
+            self.close_redis_server(port)
             return False
+
+    def set_slips_mode(self, slips_mode):
+        """
+        function to store the current mode (daemonized/interactive)
+        in the db
+        """
+        self.r.set("mode", slips_mode)
+
+    def close_redis_server(self, redis_port):
+        slips_mode = self.r.get("mode")
+        server_pid = self.get_redis_server_PID(slips_mode, redis_port)
+        if server_pid != 'Not found':
+            os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
         """
@@ -390,7 +457,9 @@ class Database(object):
             # outside of home_network when this param is given
             return False
         if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
-            user_agent = json.loads(user_agent)
+            # user agents may be OpenSSH_8.6 , no need to deserialize them
+            if '{' in user_agent:
+                user_agent = json.loads(user_agent)
             return user_agent
 
     def mark_profile_as_dhcp(self, profileid):
@@ -1041,9 +1110,7 @@ class Database(object):
             self.print(
                 'add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(
                     role, type_host_key, str(ip_as_obj), profileid, twid
-                ),
-                3,
-                0,
+                ), 3, 0,
             )
             # Get the hash of the timewindow
             hash_id = profileid + self.separator + twid
@@ -1066,14 +1133,12 @@ class Database(object):
                 data[str(ip_as_obj)] += 1
                 # Convet the dictionary to json
                 data = json.dumps(data)
-            except (TypeError, KeyError) as e:
+            except (TypeError, KeyError):
                 # There was no previous data stored in the DB
                 self.print(
                     'add_ips(): First time for addr {}. Count as 1'.format(
                         str(ip_as_obj)
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 data[str(ip_as_obj)] = 1
                 # Convet the dictionary to json
@@ -1103,9 +1168,7 @@ class Database(object):
                 self.print(
                     'add_ips(): Adding for dst port {}. PRE Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 # We had this port
                 # We need to add all the data
@@ -1124,9 +1187,7 @@ class Database(object):
                 self.print(
                     'add_ips() Adding for dst port {}. POST Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             except KeyError:
                 # First time for this flow
@@ -1142,9 +1203,7 @@ class Database(object):
                 self.print(
                     'add_ips() First time for dst port {}. Data: {}'.format(
                         dport, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 prev_data[str(ip_as_obj)] = innerdata
             ###########
@@ -1157,8 +1216,6 @@ class Database(object):
             )
             # Store this data in the profile hash
             self.r.hset(profileid + self.separator + twid, key_name, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
             return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
