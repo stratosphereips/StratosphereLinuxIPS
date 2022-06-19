@@ -81,6 +81,8 @@ class Database(object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
 
 
     def get_redis_server_PID(self, slips_mode, redis_port):
@@ -179,7 +181,8 @@ class Database(object):
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
-            self.close_redis_server(port)
+            # todo how do we make sure it's not used by another instance!!
+            # self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -302,7 +305,6 @@ class Database(object):
             print(f"[DB] Can't connect to redis on port {redis_port}")
 
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -336,6 +338,13 @@ class Database(object):
         if start_time := self.r.get('slips_start_time'):
             start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
             return start_time
+
+    def set_input_metadata(self, info:dict):
+        """
+        sets name, size, analysis dates in the db
+        """
+        for info, val in info.items():
+            self.r.hset('analysis', info, val)
 
     def setOutputQueue(self, outputqueue):
         """Set the output queue"""
@@ -2469,6 +2478,10 @@ class Database(object):
         to_send['flow'] = flow
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
+        # set the pcap/file stime in the analysis key
+        if self.first_flow:
+            self.first_flow = False
+            self.set_input_metadata({'file_start': stime})
         self.publish('new_flow', to_send)
         return True
 
