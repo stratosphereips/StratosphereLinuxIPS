@@ -97,8 +97,18 @@ let profiles = function () {
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
+            { data: 'dns_resolution' },
+            { data: 'daddr' },
             { data: 'preposition' },
-            { data: 'daddr' }
+            { data: 'dport/proto' },
+            { data: 'state' },
+            { data: 'warning' },
+            { data: 'Sent' },
+            { data: 'Recv' },
+            { data: 'Tot' },
+            { data: 'Duration' },
+            { data: 'critical warning' },
+            { data: 'info' }
         ]
     });
 
