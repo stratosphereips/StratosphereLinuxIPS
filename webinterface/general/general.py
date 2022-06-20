@@ -8,7 +8,7 @@ general= Blueprint('general', __name__,  static_folder='static',static_url_path=
 # Connection to Slips redis database
 config = ""
 __database__ = redis.StrictRedis(host='localhost',
-                                 port=52290,
+                                 port=32774,
                                  db=0,
                                  charset="utf-8",
                                  socket_keepalive=True,

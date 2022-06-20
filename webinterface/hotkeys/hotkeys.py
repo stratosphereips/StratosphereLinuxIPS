@@ -10,7 +10,7 @@ hotkeys = Blueprint('hotkeys', __name__, static_folder='static', static_url_path
 config = ""
 
 __database__ = redis.StrictRedis(host='localhost',
-                                 port=6379,
+                                 port=32774,
                                  db=0,
                                  charset="utf-8",
                                  socket_keepalive=True,
