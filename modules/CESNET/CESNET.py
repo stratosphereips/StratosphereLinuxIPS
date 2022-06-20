@@ -131,21 +131,21 @@ class Module(Module, multiprocessing.Process):
         """
         return 'Source' in evidence_in_IDEA or 'Target' in evidence_in_IDEA
 
-    def export_evidence(self, wclient, alert_ID):
+    def export_evidence(self, profileid, twid, wclient, alert_ID):
         """
         Exports all evidence causing the given alert to warden server
-        :param alert_ID: alert to export to warden server
+        :param alert_ID: ID of alert to export to warden server
+            for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
         # give evidenceProcess enough time to store all evidence IDs in the database
         time.sleep(3)
         # get all the evidence causing this alert
-        evidence_IDs: list = __database__.get_evidence_causing_alert(alert_ID)
+        evidence_IDs: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
         if not evidence_IDs:
             # something went wrong while getting the list of evidence
             return False
 
         profile, srcip, twid, ID = alert_ID.split('_')
-        profileid = f'{profile}_{srcip}'
 
         # this will contain alerts in IDEA format ready to be exported
         alerts_to_export = []
@@ -316,6 +316,10 @@ class Module(Module, multiprocessing.Process):
 
         __database__.add_ips_to_IoC(src_ips)
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def run(self):
         utils.drop_root_privs()
         # Stop module if the configuration file is invalid or not found
@@ -360,8 +364,12 @@ class Module(Module, multiprocessing.Process):
                     utils.is_msg_intended_for(message, 'new_alert')
                     and 'yes' in self.send_to_warden
                 ):
+                    # alert_ID is profile_10.0.2.15_timewindow1_919fea8e-47ba-489f-a882-2c1d8fcf2b8f for example
                     alert_ID = message['data']
-                    self.export_evidence(wclient, alert_ID)
+                    alert_list = alert_ID.split('_')
+                    profileid = f'{alert_list[0]}_{alert_list[1]}'
+                    twid, uuid = alert_list[-2], alert_list[-1]
+                    self.export_evidence(profileid, twid, wclient, alert_ID)
 
             except KeyboardInterrupt:
                 # Confirm that the module is done processing
