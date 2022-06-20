@@ -1,59 +1,87 @@
-<!doctype html>
-<html>
+{% extends "layout.html" %}
+{% block head %}
+  {{super()}}
+{% endblock %}
 
-  <head>
-      {% block head %}
-      <link href="{{url_for('static', filename='bootstrap/css/bootstrap.min.css')}}" rel="stylesheet">
-      <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='DataTables-1.11.5/css/dataTables.bootstrap5.min.css')}}"/>
-      {% endblock %}
-  </head>
+{% block common %}
+<div class="row justify-content-center" style="margin-bottom: 15px">
 
-  <body>
-    <div class="container-fluid">
-       <div class="row justify-content-center" style="margin-bottom: 15px">
-           <div class="col-auto d-flex shadow justify-content-center text-center" style="border-right: 1px solid rgb(216, 216, 216);">
-               <a class="navbar-brand"><h4>SLIPS V1.2.0</h4></a>
-           </div>
+    <div class="col-auto d-flex shadow justify-content-center text-center" style="border-right: 1px solid rgb(216, 216, 216);">
+        <a class="navbar-brand"><h4>SLIPS V1.2.0</h4></a>
+    </div>
 
-           <div class="col-5 shadow justify-content-center" style="padding-left:10px;padding-right:10px;border-right: 1px solid rgb(216, 216, 216);">
-               <dl style="  column-count:2">
-                   <dd>
-                       <b>Size: </b><span id="fileSize">19.757825 MB</span>
-                   </dd>
-                   <dd>
-                       <b>Name: </b><span id="fileName">20220223trafficanalyspca.pcap</span>
-                   </dd>
-                   <dd>
-                       <b>Duration: </b><span id="fileDuration">152d0bce67e314fac720d9e650f07f7e</span>
-                   </dd>
-                   <dd>
-                       <b>SomethinMore: </b><span id="metaPcapMd5">SomeValue</span>
-                   </dd>
-               </dl>
-             </div>
-         </div>
+    <div class="col-5 shadow justify-content-center" style="padding-left:10px;padding-right:10px;border-right: 1px solid rgb(216, 216, 216);">
+        <dl style="  column-count:2">
+            <dd>
+                <b>Size: </b><span id="fileSize">19.757825 MB</span>
+            </dd>
+            <dd>
+                <b>Name: </b><span id="fileName">20220223trafficanalyspca.pcap</span>
+            </dd>
+            <dd>
+                <b>Duration: </b><span id="fileDuration">152d0bce67e314fac720d9e650f07f7e</span>
+            </dd>
+            <dd>
+                <b>SomethinMore: </b><span id="metaPcapMd5">SomeValue</span>
+            </dd>
+        </dl>
+    </div>
+</div>
 
-        <div class="row">
-            <ul class="nav nav-tabs">
-                <li class="nav-item">
-                    <a class="nav-link" id="one" href="/">Hotkeys</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link"  id="two" href="/general">General</a>
-                </li>
-            </ul>
+{% endblock %}
+
+{% block content %}
+        <div class="col-md-2">
+            <style type="text/css">
+            .table_block {
+            border-radius: 15px;
+            border-style: solid;}
+            </style>
+
+            <table id="profiles" style="width:100%" class="table table_block">
+                <thead>
+                <tr>
+                <th></th>
+                <th> Profiles </th>
+                </tr>
+                </thead>
+            </table>
         </div>
 
-    </div>
-    {% block content %}
-    {% endblock %}
-  </body>
 
-  {% block scripts %}
-  <script src="{{url_for('static', filename='jQuery-3.6.0/jquery-3.6.0.min.js')}}"></script>
-  <script src= "{{url_for('static', filename='bootstrap/js/bootstrap.min.js')}}"></script>
-  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/jquery.dataTables.min.js')}}"></script>
-  <script type="text/javascript" charset="utf8" src="{{url_for('static', filename='DataTables-1.11.5/js/dataTables.bootstrap5.min.js')}}"></script>
-  {% endblock %}
+        <div class="col-md-10">
+            <div class="row">
+                <ul  class="nav nav-tabs">
+                    <li class="active">
+                        <a href="#hotkeys1" data-toggle="tab">Hotkeys</a>
+                    </li>
 
-</html>
+                    <li>
+                        <a href="#general" data-toggle="tab">General</a>
+                    </li>
+		        </ul>
+            </div>
+
+            <div class="row">
+                <div class="tab-content">
+
+                   <div id="hotkeys1" class="tab-pane active">
+                       {% include 'hotkeys.html' %}
+                    </div>
+
+                    <div id="general" class="tab-pane">
+                       {% include 'general.html' %}
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+{% endblock %}
+
+{% block scripts %}
+  {{super()}}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
+  <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='base.js')}}"></script>
+{% endblock %}
+
