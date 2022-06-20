@@ -326,6 +326,7 @@ class Module(Module, multiprocessing.Process):
                     alt_activity = {
                         'Query': alt_flow['query'],
                         'Answers': answer,
+                        'critical warning':'',
                     }
                 elif alt_flow['type'] == 'http':
                     http_data_all = {
