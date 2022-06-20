@@ -1,62 +1,17 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block head %}
 {{super()}}
   <link rel="stylesheet" type="text/css" href="{{url_for('hotkeys.static', filename='css/style.css')}}"/>
 {% endblock %}
 
 {% block content %}
-    <div class="row">
-      <div class="col-2">
-        <style type="text/css">
-          .table_block {
-            border-radius: 15px;
-            border-style: solid;}
-        </style>
-
-        <table id="profiles" class="table table_block">
-          <thead>
-            <tr>
-              <th></th>
-              <th> Profiles </th>
-            </tr>
-          </thead>
-        </table>
-      </div>
-
-      <!--        <div class = "col col-md-8">-->
-      <!--            <table id="alerts" class="table table-striped">-->
-      <!--              <thead>-->
-      <!--                <tr>-->
-      <!--                  <th>timestamp</th>-->
-      <!--                  <th>profileid</th>-->
-      <!--                  <th>twid</th>-->
-      <!--                  <th>detected_ip</th>-->
-      <!--                  <th>detection_module</th>-->
-      <!--                  <th>detection_info</th>-->
-      <!--                  <th>description</th>-->
-      <!--                </tr>-->
-      <!--              </thead>-->
-      <!--              <tfoot>-->
-      <!--              <tr>-->
-      <!--                  <th>timestamp</th>-->
-      <!--                  <th>profileid</th>-->
-      <!--                  <th>twid</th>-->
-      <!--                  <th>detected_ip</th>-->
-      <!--                  <th>detection_module</th>-->
-      <!--                  <th>detection_info</th>-->
-      <!--                  <th>description</th>-->
-      <!--                </tr>-->
-      <!--              </tfoot>-->
-      <!--          </table>-->
-      <!--        </div>-->
-
-      <div class="col-md-10">
         <style type="text/css">
           .table_block {
             border-radius: 15px;
             border-style: solid;
           }
         </style>
+
         <table id="ipinfo" class="table table_block">
           <thead>
             <tr>
@@ -79,7 +34,7 @@
           </form>
         </nav>
 
-        
+
         <div id="timeline">
           <table id="table_timeline" class="table table-striped">
             <thead>
@@ -216,9 +171,6 @@
             </tfoot>
           </table>
         </div>
-      </div>
-    </div>
-
 {% endblock %}
 
 {% block scripts %}
