@@ -155,8 +155,8 @@ class Database(object):
                 db=0,
                 charset='utf-8',
                 socket_keepalive=True,
-                retry_on_timeout=True,
                 decode_responses=True,
+                retry_on_timeout=True,
                 health_check_interval=20,
             )  # password='password')
             # port 6379 db 0 is cache, delete it using -cc flag
@@ -181,8 +181,8 @@ class Database(object):
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
-            # todo how do we make sure it's not used by another instance!!
-            # self.close_redis_server(port)
+            # if the port is used for another instance, slips.py is going to detect it
+            self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
