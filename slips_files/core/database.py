@@ -61,6 +61,7 @@ class Database(object):
         'new_MAC',
         'new_smtp',
         'new_blame',
+        'new_alert',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
@@ -1662,24 +1663,32 @@ class Database(object):
         """Return the field separator"""
         return self.separator
 
-    def set_evidence_causing_alert(self, alert_ID, evidence_IDs: list):
+    def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
-        When we have a bunch of evidence causing an alert, we assiciate all evidence IDs with the alert ID in our database
+        When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
+         database
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
         evidence_IDs = json.dumps(evidence_IDs)
-        self.r.hset('alerts', alert_ID, evidence_IDs)
+        alert = {alert_ID: evidence_IDs}
+        alert = json.dumps(alert)
+        self.r.hset(profileid + self.separator + twid, 'alerts', alert)
 
-    def get_evidence_causing_alert(self, alert_ID) -> list:
+        # self.r.hset('alerts', alert_ID, evidence_IDs)
+
+    def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
         Returns all the IDs of evidence causing this alert
+        :param alert_ID: ID of alert to export to warden server
+        for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        evidence_IDs = self.r.hget('alerts', alert_ID)
-        if evidence_IDs:
-            return json.loads(evidence_IDs)
-        else:
-            return False
+        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        if alerts:
+            alerts = json.loads(alerts)
+            evidence = alerts.get(alert_ID, False)
+            return evidence
+        return False
 
     def get_evidence_by_ID(self, profileid, twid, ID):
 
@@ -3484,9 +3493,7 @@ class Database(object):
                 self.print(
                     'Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(
                         key, profileid, twid, data
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 # Convert the dictionary to json
                 portdata = json.loads(data)
@@ -3495,9 +3502,7 @@ class Database(object):
                 self.print(
                     'There is no data for Key: {}. Profile {} TW {}'.format(
                         key, profileid, twid
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             return value
         except Exception as inst:
