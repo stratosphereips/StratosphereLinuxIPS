@@ -81,6 +81,8 @@ class Database(object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
 
 
     def get_redis_server_PID(self, slips_mode, redis_port):
@@ -179,7 +181,8 @@ class Database(object):
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
-            self.close_redis_server(port)
+            # todo how do we make sure it's not used by another instance!!
+            # self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -302,7 +305,6 @@ class Database(object):
             print(f"[DB] Can't connect to redis on port {redis_port}")
 
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -336,6 +338,13 @@ class Database(object):
         if start_time := self.r.get('slips_start_time'):
             start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
             return start_time
+
+    def set_input_metadata(self, info:dict):
+        """
+        sets name, size, analysis dates in the db
+        """
+        for info, val in info.items():
+            self.r.hset('analysis', info, val)
 
     def setOutputQueue(self, outputqueue):
         """Set the output queue"""
@@ -2460,6 +2469,10 @@ class Database(object):
         to_send['flow'] = flow
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
+        # set the pcap/file stime in the analysis key
+        if self.first_flow:
+            self.first_flow = False
+            self.set_input_metadata({'file_start': stime})
         self.publish('new_flow', to_send)
         return True
 
@@ -3668,13 +3681,17 @@ class Database(object):
         # this path is only accessible by root
         self.r.save()
         # if you're not root, this will return False even if the path exists
-        if platform.system() == 'Linux':
-            redis_db_path = '/var/lib/redis/dump.rdb'
-        else:
-            redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
+        # if platform.system() == 'Linux':
+        #     redis_db_path = '/var/lib/redis/dump.rdb'
+        # else:
+            # redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
+
+        # Saves to dump.rdb in the cwd
+        redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
-            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
+            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb' \
+                      f' && {self.sudo} rm dump.rdb'
             os.system(command)
             print(f'[Main] Database saved to {backup_file}.rdb')
             return True
@@ -3686,22 +3703,14 @@ class Database(object):
 
     def load(self, backup_file: str) -> bool:
         """
-        Load the db from disk
+        Load the db from disk to the db on port 6379
         backup_file should be the full path of the .rdb
         """
-        # Set sudo according to environment
-        # Locate the default path of redis dump.rdb
-        command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
-        redis_dir = subprocess.getoutput(command)
-        if 'dir /var/lib/redis' in redis_dir:
-            redis_dir = '/var/lib/redis'
-        else:
-            # Get the exact path without spaces
-            redis_dir = redis_dir[redis_dir.index(' ') + 1 :]
-
+        # do not use self.print here! the outputqueue isn't initialized yet
         if not os.path.exists(backup_file):
-            self.print("{} doesn't exist.".format(backup_file))
+            print("{} doesn't exist.".format(backup_file))
             return False
+
 
         # Check if valid .rdb file
         command = 'file ' + backup_file
@@ -3710,10 +3719,23 @@ class Database(object):
         file_type = result.stdout.decode('utf-8')
         # Check if valid redis database
         if not 'Redis' in file_type:
-            self.print(
+            print(
                 '{} is not a valid redis database file.'.format(backup_file)
             )
             return False
+
+
+        # Locate the default path of redis dump.rdb
+        if platform.system() == 'Darwin':
+            redis_dir = '/opt/homebrew/var/db/redis'
+        else:
+            command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
+            redis_dir = subprocess.getoutput(command)
+            if 'dir /var/lib/redis' in redis_dir:
+                redis_dir = '/var/lib/redis'
+            else:
+                # Get the exact path without spaces
+                redis_dir = redis_dir[redis_dir.index(' ') + 1:]
 
         # All modules throw redis.exceptions.ConnectionError when we stop
         # the redis-server so we need to close all channels first
@@ -3733,7 +3755,7 @@ class Database(object):
             return True
         except:
             self.print(
-                f'Error loading the database {backup_file} to {redis_dir}.'
+                f'Error loading the database {backup_file} to {redis_dir}'
             )
             return False
 

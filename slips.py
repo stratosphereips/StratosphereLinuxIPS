@@ -17,7 +17,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
-from modules.update_manager.update_file_manager import UpdateFileManager
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
@@ -44,6 +43,7 @@ import random
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
+from multiprocessing import Queue
 
 version = '0.9.1'
 
@@ -158,7 +158,7 @@ class Main:
         try:
             while True:
                 # generate a random unused port
-                port = random.randint(32768, 65535)
+                port = random.randint(32768, 32850)
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
@@ -321,7 +321,7 @@ class Main:
         # Several combinations of outputs should be able to be used
         if self.args.gui:
             # Create the curses thread
-            guiProcessQueue = multiprocessing.Queue()
+            guiProcessQueue = Queue()
             guiProcessThread = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
                 self.args.debug, self.config
@@ -372,6 +372,12 @@ class Main:
         try:
             print('\n' + '-' * 27)
             print('Stopping Slips')
+
+            # set analysis end date
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            __database__.set_input_metadata({'analysis_end': now})
+
+
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
 
@@ -508,7 +514,7 @@ class Main:
             # save redis database if '-s' is specified
             if self.args.save:
                 # Create a new dir to store backups
-                backups_dir = self.get_cwd() + 'redis_backups' + '/'
+                backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
                 try:
                     os.mkdir(backups_dir)
                 except FileExistsError:
@@ -528,7 +534,8 @@ class Main:
                     # it's a zeek dir
                     pass
                 # Give the exact path to save(), this is where our saved .rdb backup will be
-                __database__.save(backups_dir + self.input_information)
+                rdb_filepath = os.path.join(backups_dir, self.input_information)
+                __database__.save(rdb_filepath)
                 # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
                 print(
                     '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
@@ -1016,11 +1023,21 @@ class Main:
         from slips_files.core.database import __database__
         __database__.start(self.config, 6379)
         if not __database__.load(self.args.db):
-            print(f'Error loading the database {self.args.db}.')
+            print(f'Error loading the database {self.args.db}')
         else:
+            redis_port = 6379
+            self.input_information = self.args.db
+            __database__.connect_to_redis_server(redis_port)
+            __database__.enable_redis_snapshots()
+            #todo see why the dumps.rdb isn't loaded in 6379
+            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+            self.log_redis_server_PID(redis_port, redis_pid)
+
             print(
-                f'{self.args.db} loaded successfully. Run ./kalipso.sh'
+                f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
             )
+            __database__.disable_redis_snapshots()
+
         self.terminate_slips()
 
     def get_input_file_type(self, input_information):
@@ -1178,6 +1195,30 @@ class Main:
                 print("Can't use -s and -b together")
                 self.terminate_slips()
 
+    def set_input_metadata(self):
+        """
+        save info about name, size, analysis start date in the db
+        """
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        info = {
+            'name': self.input_information,
+            'analysis_start': now,
+
+        }
+
+        size_in_mb = '-'
+        if not isinstance(self.args.filepath, bool) and os.path.exists(self.args.filepath):
+            size = os.stat(self.args.filepath).st_size
+            size_in_mb = float(size) / (1024 * 1024)
+            size_in_mb = format(float(size_in_mb), '.2f')
+
+        info.update({
+            'size_in_MB': size_in_mb,
+        })
+        # analysis end date will be set in shutdowngracefully
+        # file(pcap,netflow, etc.) start date will be set in
+        __database__.set_input_metadata(info)
+
 
     def start(self):
         """Main Slips Function"""
@@ -1312,7 +1353,7 @@ class Main:
             # this process starts the db
             output_process.start()
             __database__.set_slips_mode(self.mode)
-
+            self.set_input_metadata()
 
             if self.args.save:
                 __database__.enable_redis_snapshots()
