@@ -96,6 +96,25 @@ def profile_tws():
         'draw': request.args.get('draw', type=int)
     }
 
+@hotkeys.route('/dstIP')
+def setDstIPflow():
+
+    dst_ips = json.loads(__database__.hget('profile_192.168.2.16_timewindow1', 'DstIPs'))
+    data = []
+    id = 0
+    for ip, port in dst_ips.items():
+        data.append({"ip": ip, "flow": port})
+        id = id + 1
+
+    data_length = id
+    total_filtered = id
+
+    return {
+        'data': data,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }
 
 @hotkeys.route('/outtuples/<profile>/<timewindow>')
 def set_outtuples(profile, timewindow):
