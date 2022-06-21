@@ -116,6 +116,25 @@ def setDstIPflow():
         'draw': request.args.get('draw', type=int)
     }
 
+@hotkeys.route('/DstPortsClientUDPNotEstablished')
+def setDstPortClientUDPNotEstablished():
+
+    dst_ips = json.loads(__database__.hget('profile_192.168.2.16_timewindow1', 'DstPortsClientUDPNotEstablished'))
+    data = []
+    id = 0
+    for port, info in dst_ips.items():
+        data.append({"port": port, "info": info})
+        id = id + 1
+
+    data_length = id
+    total_filtered = id
+
+    return {
+        'data': data,
+        'recordsFiltered': total_filtered,
+        'recordsTotal': data_length,
+        'draw': request.args.get('draw', type=int)
+    }
 @hotkeys.route('/outtuples/<profile>/<timewindow>')
 def set_outtuples(profile, timewindow):
     """
