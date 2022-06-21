@@ -7,7 +7,7 @@
     let active_hotkey_table = null
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
-        "bDestroy": true,
+        'dom': 'Rlfrtip',
         columns: [
             { data: 'ts' },
             { data: 'dur' },
@@ -29,6 +29,7 @@
 
     let timeline = $('#table_timeline').DataTable({
         "bDestroy": true,
+                'dom': 'Rlfrtip',
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
@@ -49,6 +50,7 @@
 
     let outtuples = $('#table_outtuples').DataTable({
         "bDestroy": true,
+        'dom': 'Rlfrtip',
         columns: [
             { data: 'tuple' },
             { data: 'string' },
@@ -60,6 +62,7 @@
 
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
+        'dom': 'Rlfrtip',
         columns: [
             { data: 'profileid' },
             { data: 'twid'},
