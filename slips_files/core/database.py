@@ -1850,20 +1850,17 @@ class Database(object):
                 count += 1
         return count
 
-    def deleteEvidence(self, profileid, twid, description: str):
+    def deleteEvidence(self, profileid, twid, evidence_ID: str):
         """
         Delete evidence from the database
-        :param description: the description of the evidence
         """
-
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-
         # Delete the key regardless of whether it is in the dictionary
-        current_evidence.pop(description, None)
+        current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
 
         self.r.hset(
