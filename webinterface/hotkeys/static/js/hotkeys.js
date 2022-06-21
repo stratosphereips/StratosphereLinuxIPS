@@ -173,3 +173,36 @@ let hotkey_hook = {
     }
 }
 
+
+// BAR CHART EXAMPLE
+//const headers = {
+//    headers: {'Content-Type': 'application/json'}
+//}
+//fetch("/hotkeys/dstIP", {
+//        method: "GET",
+//        headers: headers
+//        }).then(response => response.json())
+//        .then(data => {
+//                        const x = data['data'].map(function(d){ return d['ip']})
+//                        const y = data['data'].map(function(d){ return d['flow']})
+//                        const chart_data = {
+//                            labels: x,
+//                            datasets: [{
+//                            label: 'Monthly Sales',
+//                            backgroundColor: 'rgb(255, 99, 132)',
+//                            borderColor: 'rgb(255, 99, 132)',
+//                            data: y,
+//                            }]
+//                        };
+//                        const config = {
+//                            type: 'bar',
+//                            data: chart_data,
+//                            options: {}
+//                        };
+//                        const monthlySales = new Chart(
+//                            document.getElementById('barchart'),
+//                            config
+//                        );
+//
+//                    });
+
