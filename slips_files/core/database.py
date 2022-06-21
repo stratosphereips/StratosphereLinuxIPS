@@ -1806,11 +1806,11 @@ class Database(object):
 
         evidence_to_send = json.dumps(evidence_to_send)
         # This is done to ignore repetition of the same evidence sent.
-        if description not in current_evidence.keys():
+        if evidence_ID not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        # update our current evidence for this profileid and twid. now the description is used as the key
-        current_evidence.update({description: evidence_to_send})
+        # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
+        current_evidence.update({evidence_ID: evidence_to_send})
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
@@ -1853,7 +1853,7 @@ class Database(object):
     def deleteEvidence(self, profileid, twid, description: str):
         """
         Delete evidence from the database
-        :param description: teh description of the evidence
+        :param description: the description of the evidence
         """
 
         current_evidence = self.getEvidenceForTW(profileid, twid)
