@@ -28,55 +28,30 @@
     </div>
 </div>
 
+<div class="row">
+    <ul  class="nav nav-tabs">
+        <li class="active">
+            <a href="#hotkeys1" data-toggle="tab">Hotkeys</a>
+        </li>
+
+        <li>
+            <a href="#general" data-toggle="tab">General</a>
+        </li>
+    </ul>
+</div>
 {% endblock %}
 
 {% block content %}
-        <div class="col-md-2">
-            <style type="text/css">
-            .table_block {
-            border-radius: 15px;
-            border-style: solid;}
-            </style>
+    <div class="tab-content">
 
-            <table id="profiles" style="width:100%" class="table table_block">
-                <thead>
-                <tr>
-                <th></th>
-                <th> Profiles </th>
-                </tr>
-                </thead>
-            </table>
+       <div id="hotkeys1" class="tab-pane active">
+           {% include 'hotkeys.html' %}
         </div>
 
-
-        <div class="col-md-10">
-            <div class="row">
-                <ul  class="nav nav-tabs">
-                    <li class="active">
-                        <a href="#hotkeys1" data-toggle="tab">Hotkeys</a>
-                    </li>
-
-                    <li>
-                        <a href="#general" data-toggle="tab">General</a>
-                    </li>
-		        </ul>
-            </div>
-
-            <div class="row">
-                <div class="tab-content">
-
-                   <div id="hotkeys1" class="tab-pane active">
-                       {% include 'hotkeys.html' %}
-                    </div>
-
-                    <div id="general" class="tab-pane">
-                       {% include 'general.html' %}
-                    </div>
-                </div>
-
-            </div>
-
+        <div id="general" class="tab-pane">
+           {% include 'general.html' %}
         </div>
+    </div>
 {% endblock %}
 
 {% block scripts %}

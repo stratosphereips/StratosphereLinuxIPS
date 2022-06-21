@@ -5,171 +5,189 @@
 {% endblock %}
 
 {% block content %}
-        <style type="text/css">
-          .table_block {
+        <div class="col-md-2">
+            <style type="text/css">
+            .table_block {
             border-radius: 15px;
-            border-style: solid;
-          }
-        </style>
+            border-style: solid;}
+            </style>
 
-        <table id="ipinfo" class="table table_block">
-          <thead>
-            <tr>
-              <th>IP</th>
-              <th>geocountry</th>
-              <th>reverse_dns</th>
-              <th>asnorg</th>
-            </tr>
-          </thead>
-        </table>
-
-        <nav class="navbar navbar-light bg-light">
-          <form class="form-inline">
-            <div id="buttons">
-              <button class="btn btn-outline-primary active" type="button" id="button_timeline">timeline</button>
-              <button class="btn btn-outline-warning" type="button" id="button_timeline_flows">flows</button>
-              <button class="btn btn-outline-danger" type="button" id="button_outtuples">outtuples</button>
-              <button class="btn btn-outline-info" type="button" id="button_alerts">alerts</button>
-            </div>
-          </form>
-        </nav>
-
-
-        <div id="timeline">
-          <table id="table_timeline" class="table table-striped">
-            <thead>
-              <tr>
-                <th>timestamp</th>
-                <th>dport_name</th>
-                <th>dns_resolution</th>
-                <th>daddr</th>
-                <th>preposition</th>
-                <th>dport/proto</th>
-                <th>state</th>
-                <th>warning</th>
-                <th>Sent</th>
-                <th>Recv</th>
-                <th>Tot</th>
-                <th>Duration</th>
-                <th>critical warning</th>
-                <th>info</th>
-              </tr>
-            </thead>
-            <tfoot>
-              <tr>
-                <th>timestamp</th>
-                <th>dport_name</th>
-                <th>dns_resolution</th>
-                <th>daddr</th>
-                <th>preposition</th>
-                <th>dport/proto</th>
-                <th>state</th>
-                <th>warning</th>
-                <th>Sent</th>
-                <th>Recv</th>
-                <th>Tot</th>
-                <th>Duration</th>
-                <th>critical warning</th>
-                <th>info</th>
-              </tr>
-            </tfoot>
-          </table>
+            <table id="profiles" style="width:100%" class="table table_block">
+                <thead>
+                <tr>
+                <th></th>
+                <th> Profiles </th>
+                </tr>
+                </thead>
+            </table>
         </div>
-        <div id="alerts" style="display:none;">
-          <table id="table_alerts" class="table table-striped">
-            <thead>
-              <tr>
-                <th>profileid</th>
-                <th>twid</th>
-                <th>type_detection</th>
-                <th>detection_info</th>
-                <th>type_evidence</th>
-                <th>description</th>
-                <th>stime</th>
-                <th>uid</th>
-                <th>confidence</th>
-                <th>threat_level</th>
-                <th>category</th>
-              </tr>
-            </thead>
-            <tfoot>
-              <tr>
-                <th>profileid</th>
-                <th>twid</th>
-                <th>type_detection</th>
-                <th>detection_info</th>
-                <th>type_evidence</th>
-                <th>description</th>
-                <th>stime</th>
-                <th>uid</th>
-                <th>confidence</th>
-                <th>threat_level</th>
-                <th>category</th>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <div class="col-md-10">
+          <style type="text/css">
+            .table_block {
+              border-radius: 15px;
+              border-style: solid;
+            }
+          </style>
 
-        <div id="timeline_flows" style="display:none;">
-          <table id="table_timeline_flows" class="table table-striped">
+          <table id="ipinfo" class="table table_block">
             <thead>
               <tr>
-                <th>timestamp</th>
-                <th>dur</th>
-                <th>saddr</th>
-                <th>sport</th>
-                <th>daddr</th>
-                <th>dport</th>
-                <th>proto</th>
-                <th>origstate</th>
-                <th>state</th>
-                <th>pkts</th>
-                <th>allbytes</th>
-                <th>spkts</th>
-                <th>sbytes</th>
+                <th>IP</th>
+                <th>geocountry</th>
+                <th>reverse_dns</th>
+                <th>asnorg</th>
               </tr>
             </thead>
-            <tfoot>
-              <tr>
-                <th>timestamp</th>
-                <th>dur</th>
-                <th>saddr</th>
-                <th>sport</th>
-                <th>daddr</th>
-                <th>dport</th>
-                <th>proto</th>
-                <th>origstate</th>
-                <th>state</th>
-                <th>pkts</th>
-                <th>allbytes</th>
-                <th>spkts</th>
-                <th>sbytes</th>
-              </tr>
-            </tfoot>
           </table>
-        </div>
 
-        <div id="outtuples" style="display:none;">
-          <table id="table_outtuples" class="table table-striped">
-            <thead>
-              <tr>
-                <th>OutTuple</th>
-                <th>Behaviour</th>
-                <th>Country</th>
-                <th>Reverse DNS</th>
-                <th>ASN</th>
-              </tr>
-            </thead>
-            <tfoot>
-              <tr>
-                <th>OutTuple</th>
-                <th>Behaviour</th>
-                <th>Country</th>
-                <th>Reverse DNS</th>
-                <th>ASN</th>
-              </tr>
-            </tfoot>
-          </table>
+          <nav class="navbar navbar-light bg-light">
+            <form class="form-inline">
+              <div id="buttons">
+                <button class="btn btn-outline-primary active" type="button" id="button_timeline">timeline</button>
+                <button class="btn btn-outline-warning" type="button" id="button_timeline_flows">flows</button>
+                <button class="btn btn-outline-danger" type="button" id="button_outtuples">outtuples</button>
+                <button class="btn btn-outline-info" type="button" id="button_alerts">alerts</button>
+              </div>
+            </form>
+          </nav>
+
+
+          <div id="timeline">
+            <table id="table_timeline" class="table table-striped">
+              <thead>
+                <tr>
+                  <th>timestamp</th>
+                  <th>dport_name</th>
+                  <th>dns_resolution</th>
+                  <th>daddr</th>
+                  <th>preposition</th>
+                  <th>dport/proto</th>
+                  <th>state</th>
+                  <th>warning</th>
+                  <th>Sent</th>
+                  <th>Recv</th>
+                  <th>Tot</th>
+                  <th>Duration</th>
+                  <th>critical warning</th>
+                  <th>info</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr>
+                  <th>timestamp</th>
+                  <th>dport_name</th>
+                  <th>dns_resolution</th>
+                  <th>daddr</th>
+                  <th>preposition</th>
+                  <th>dport/proto</th>
+                  <th>state</th>
+                  <th>warning</th>
+                  <th>Sent</th>
+                  <th>Recv</th>
+                  <th>Tot</th>
+                  <th>Duration</th>
+                  <th>critical warning</th>
+                  <th>info</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div id="alerts" style="display:none;">
+            <table id="table_alerts" class="table table-striped">
+              <thead>
+                <tr>
+                  <th>profileid</th>
+                  <th>twid</th>
+                  <th>type_detection</th>
+                  <th>detection_info</th>
+                  <th>type_evidence</th>
+                  <th>description</th>
+                  <th>stime</th>
+                  <th>uid</th>
+                  <th>confidence</th>
+                  <th>threat_level</th>
+                  <th>category</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr>
+                  <th>profileid</th>
+                  <th>twid</th>
+                  <th>type_detection</th>
+                  <th>detection_info</th>
+                  <th>type_evidence</th>
+                  <th>description</th>
+                  <th>stime</th>
+                  <th>uid</th>
+                  <th>confidence</th>
+                  <th>threat_level</th>
+                  <th>category</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div id="timeline_flows" style="display:none;">
+            <table id="table_timeline_flows" class="table table-striped">
+              <thead>
+                <tr>
+                  <th>timestamp</th>
+                  <th>dur</th>
+                  <th>saddr</th>
+                  <th>sport</th>
+                  <th>daddr</th>
+                  <th>dport</th>
+                  <th>proto</th>
+                  <th>origstate</th>
+                  <th>state</th>
+                  <th>pkts</th>
+                  <th>allbytes</th>
+                  <th>spkts</th>
+                  <th>sbytes</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr>
+                  <th>timestamp</th>
+                  <th>dur</th>
+                  <th>saddr</th>
+                  <th>sport</th>
+                  <th>daddr</th>
+                  <th>dport</th>
+                  <th>proto</th>
+                  <th>origstate</th>
+                  <th>state</th>
+                  <th>pkts</th>
+                  <th>allbytes</th>
+                  <th>spkts</th>
+                  <th>sbytes</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <div id="outtuples" style="display:none;">
+            <table id="table_outtuples" class="table table-striped">
+              <thead>
+                <tr>
+                  <th>OutTuple</th>
+                  <th>Behaviour</th>
+                  <th>Country</th>
+                  <th>Reverse DNS</th>
+                  <th>ASN</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr>
+                  <th>OutTuple</th>
+                  <th>Behaviour</th>
+                  <th>Country</th>
+                  <th>Reverse DNS</th>
+                  <th>ASN</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
 
 <!-- BAR CHART EXAMPLE -->
