@@ -1207,7 +1207,7 @@ class Main:
         }
 
         size_in_mb = '-'
-        if not isinstance(self.args.filepath, bool) and os.path.exists(self.args.filepath):
+        if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
             size = os.stat(self.args.filepath).st_size
             size_in_mb = float(size) / (1024 * 1024)
             size_in_mb = format(float(size_in_mb), '.2f')
