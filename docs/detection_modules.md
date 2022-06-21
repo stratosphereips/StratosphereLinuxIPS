@@ -442,7 +442,7 @@ is also for IP B (ARP cache attack)
 
 ## CESNET sharing Module
 
-This module is responsibe for importing and exporting alerts from and to warden server
+This module is responsible for importing and exporting alerts from and to warden server
 
 Refer to the [exporting section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/exporting.html) 
 for detailed instructions on CESNET exporting and the format of the configuration files.
@@ -450,14 +450,14 @@ for detailed instructions on CESNET exporting and the format of the configuratio
 To enable the importing alerts from warden servers,
 set ```receive_alerts```  to ```yes``` in slips.conf  
 
-Slips imports 100 alerts from warden servers each day, and automatically stores the aleerts in our database
+Slips imports 100 alerts from warden servers each day, and automatically stores the IoCs in our database
 
 
 Time to wait before receiving alerts from warden server is 1 day by default, you can change this
 by chaning the ```receive_delay``` in ```slips.conf```
 
 
-These are the categories we import:
+These are the categories Slips imports:
 ['Availability', 'Abusive.Spam','Attempt.Login', 'Attempt', 'Information', 'Fraud.Scam', 'Information', 'Fraud.Scam']
 
 ## HTTP Analyzer Module

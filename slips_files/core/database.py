@@ -61,6 +61,7 @@ class Database(object):
         'new_MAC',
         'new_smtp',
         'new_blame',
+        'new_alert',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
@@ -155,8 +156,8 @@ class Database(object):
                 db=0,
                 charset='utf-8',
                 socket_keepalive=True,
-                retry_on_timeout=True,
                 decode_responses=True,
+                retry_on_timeout=True,
                 health_check_interval=20,
             )  # password='password')
             # port 6379 db 0 is cache, delete it using -cc flag
@@ -181,8 +182,8 @@ class Database(object):
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
-            # todo how do we make sure it's not used by another instance!!
-            # self.close_redis_server(port)
+            # if the port is used for another instance, slips.py is going to detect it
+            self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -1662,24 +1663,32 @@ class Database(object):
         """Return the field separator"""
         return self.separator
 
-    def set_evidence_causing_alert(self, alert_ID, evidence_IDs: list):
+    def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
-        When we have a bunch of evidence causing an alert, we assiciate all evidence IDs with the alert ID in our database
+        When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
+         database
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
         evidence_IDs = json.dumps(evidence_IDs)
-        self.r.hset('alerts', alert_ID, evidence_IDs)
+        alert = {alert_ID: evidence_IDs}
+        alert = json.dumps(alert)
+        self.r.hset(profileid + self.separator + twid, 'alerts', alert)
 
-    def get_evidence_causing_alert(self, alert_ID) -> list:
+        # self.r.hset('alerts', alert_ID, evidence_IDs)
+
+    def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
         Returns all the IDs of evidence causing this alert
+        :param alert_ID: ID of alert to export to warden server
+        for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        evidence_IDs = self.r.hget('alerts', alert_ID)
-        if evidence_IDs:
-            return json.loads(evidence_IDs)
-        else:
-            return False
+        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        if alerts:
+            alerts = json.loads(alerts)
+            evidence = alerts.get(alert_ID, False)
+            return evidence
+        return False
 
     def get_evidence_by_ID(self, profileid, twid, ID):
 
@@ -1797,11 +1806,11 @@ class Database(object):
 
         evidence_to_send = json.dumps(evidence_to_send)
         # This is done to ignore repetition of the same evidence sent.
-        if description not in current_evidence.keys():
+        if evidence_ID not in current_evidence.keys():
             self.publish('evidence_added', evidence_to_send)
 
-        # update our current evidence for this profileid and twid. now the description is used as the key
-        current_evidence.update({description: evidence_to_send})
+        # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
+        current_evidence.update({evidence_ID: evidence_to_send})
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
@@ -1841,20 +1850,17 @@ class Database(object):
                 count += 1
         return count
 
-    def deleteEvidence(self, profileid, twid, description: str):
+    def deleteEvidence(self, profileid, twid, evidence_ID: str):
         """
         Delete evidence from the database
-        :param description: teh description of the evidence
         """
-
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
-
         # Delete the key regardless of whether it is in the dictionary
-        current_evidence.pop(description, None)
+        current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
 
         self.r.hset(
@@ -3484,9 +3490,7 @@ class Database(object):
                 self.print(
                     'Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(
                         key, profileid, twid, data
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
                 # Convert the dictionary to json
                 portdata = json.loads(data)
@@ -3495,9 +3499,7 @@ class Database(object):
                 self.print(
                     'There is no data for Key: {}. Profile {} TW {}'.format(
                         key, profileid, twid
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             return value
         except Exception as inst:

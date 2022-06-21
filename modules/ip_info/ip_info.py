@@ -367,7 +367,7 @@ class Module(Module, multiprocessing.Process):
                     # connection limit exceeded
                     # todo should we do something about this?
                     return False
-                except whois.exceptions.WhoisCommandFailed:
+                except (whois.exceptions.WhoisCommandFailed, whois.exceptions.WhoisQuotaExceeded):
                     # timeout while performing 'whois' command
                     return False
                 except KeyError:
