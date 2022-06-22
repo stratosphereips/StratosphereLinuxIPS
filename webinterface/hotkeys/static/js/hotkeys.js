@@ -158,23 +158,26 @@ profile.onclick_ips();
         document.getElementById(active_hotkey_name).style.display = "block"
     }
 
+    function update_hotkey(){
         switch (active_hotkey_name) {
             case 'timeline':
                 active_hotkey_table = timeline
+                update_table()
                 break;
             case 'timeline_flows':
                 active_hotkey_table = timeline_flows
+                update_table()
                 break;
             case 'outtuples':
                 active_hotkey_table = outtuples
+                update_table()
                 break;
             case 'alerts':
                 active_hotkey_table = alerts
+                update_table()
+                break;
                 break;
         }
-        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
-        active_hotkey_table.ajax.url(link).load();
-        document.getElementById(active_hotkey_name).style.display = "block"
     }
 
     return {
@@ -184,8 +187,8 @@ profile.onclick_ips();
             timewindow = tw;
         },
 
-        update_table_hook: function(){
-            update_table()
+        update_hook: function(){
+            update_hotkey()
         },
 
         onclick_buttons: function () {
@@ -197,7 +200,7 @@ profile.onclick_ips();
                 if (active_hotkey_name != last_active_hotkey_name) {
                     hide_hotkey();
                 }
-               update_table()
+               update_hotkey()
             });
         },
 
@@ -243,7 +246,7 @@ hotkeys.onclick_timeline_flows_daddr();
 let hotkey_hook = {
     'initialize_profile_timewindow': function (profile, timewindow) {
         hotkeys.set_profile_timewindow(profile, timewindow);
-        hotkeys.update_table_hook();
+        hotkeys.update_hook();
     }
 }
 
