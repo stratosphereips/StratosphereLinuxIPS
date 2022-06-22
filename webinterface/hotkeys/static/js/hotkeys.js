@@ -147,6 +147,56 @@ profile.onclick_ips();
         ]
     });
 
+    // BAR CHART EXAMPLE
+    const headers = {
+        headers: {'Content-Type': 'application/json'}
+    }
+
+    function fetch_data(){
+        fetch("/hotkeys/dstIP", {
+            method: "GET",
+            headers: headers
+            }).then(response => response.json())
+            .then(data => { return data; });
+    }
+
+    let dstIP = function(){
+        fetch("/hotkeys/dstIP", {
+            method: "GET",
+            headers: headers
+            }).then(response => response.json())
+            .then(data => {
+                   const x = data['data'].map(function(d){ return d['ip']})
+        const y = data['data'].map(function(d){ return d['flow']})
+        const chart_data = {
+            labels: x,
+            datasets: [{
+            label: 'Flows',
+            backgroundColor: 'rgb(255, 99, 132)',
+            borderColor: 'rgb(255, 99, 132)',
+            data: y,
+            }]
+        };
+        const config = {
+            type: 'horizontalBar',
+            data: chart_data,
+            options: {  legend: { display: false },
+                        title: {
+                        display: true,
+                        text: 'Amount of flows per Destination IP'
+                        },
+                        maintainAspectRatio: false
+                    }
+        };
+        new Chart(document.getElementById("barchart"), config);
+        document.getElementById(active_hotkey_name).style.display = "block"
+
+
+    });
+    }
+
+
+
     function hide_hotkey() {
         document.getElementById(last_active_hotkey_name).style.display = "none"
         last_active_hotkey_name = active_hotkey_name;
@@ -176,6 +226,8 @@ profile.onclick_ips();
                 active_hotkey_table = alerts
                 update_table()
                 break;
+            case 'dstIP':
+                dstIP()
                 break;
         }
     }
@@ -250,36 +302,4 @@ let hotkey_hook = {
     }
 }
 
-
-// BAR CHART EXAMPLE
-//const headers = {
-//    headers: {'Content-Type': 'application/json'}
-//}
-//fetch("/hotkeys/dstIP", {
-//        method: "GET",
-//        headers: headers
-//        }).then(response => response.json())
-//        .then(data => {
-//                        const x = data['data'].map(function(d){ return d['ip']})
-//                        const y = data['data'].map(function(d){ return d['flow']})
-//                        const chart_data = {
-//                            labels: x,
-//                            datasets: [{
-//                            label: 'Monthly Sales',
-//                            backgroundColor: 'rgb(255, 99, 132)',
-//                            borderColor: 'rgb(255, 99, 132)',
-//                            data: y,
-//                            }]
-//                        };
-//                        const config = {
-//                            type: 'bar',
-//                            data: chart_data,
-//                            options: {}
-//                        };
-//                        const monthlySales = new Chart(
-//                            document.getElementById('barchart'),
-//                            config
-//                        );
-//
-//                    });
 
