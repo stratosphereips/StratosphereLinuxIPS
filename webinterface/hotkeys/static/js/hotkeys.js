@@ -57,7 +57,7 @@ let profiles = function () {
         onclick_ips: function () {
             $('#profiles ').on('click', 'tbody td.r', function () {
                 let data = profiles_table.row($(this).parents('tr')).data();
-                let url = '/info/' + data.profile
+                let url = '/hotkeys/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
         }
