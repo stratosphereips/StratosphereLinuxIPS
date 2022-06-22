@@ -1,10 +1,10 @@
-const headers = {
+const headers2 = {
     headers: {'Content-Type': 'application/json'}
 }
 
 fetch("/info", {
         method: "GET",
-        headers: headers
+        headers: headers2
         }).then(response => response.json())
         .then(data => {
                         document.getElementById("fileName").textContent=data['name'];
