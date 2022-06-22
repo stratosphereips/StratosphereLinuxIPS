@@ -46,6 +46,7 @@
                 <button class="btn btn-outline-primary active" type="button" id="button_timeline">timeline</button>
                 <button class="btn btn-outline-warning" type="button" id="button_timeline_flows">flows</button>
                 <button class="btn btn-outline-danger" type="button" id="button_outtuples">outtuples</button>
+                <button class="btn btn-outline-info" type="button" id="button_dstIP">dstIP</button>
                 <button class="btn btn-outline-info" type="button" id="button_alerts">alerts</button>
               </div>
             </form>
@@ -188,17 +189,24 @@
               </tfoot>
             </table>
           </div>
-        </div>
 
-<!-- BAR CHART EXAMPLE -->
-<!--        <canvas id="barchart" height="250"></canvas>-->
+  <!-- BAR CHART EXAMPLE -->
+    <div id="dstIP" style="display:none;">
+      <div id="scrollContainer">
+        <div id="chartContainer">
+              <canvas id="barchart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
 {% endblock %}
 
 {% block scripts %}
 {{super()}}
 <!-- BAR CHART LIBRARY -->
-<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.js"></script>-->
+ <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/jeffreydwalter/ColReorderWithResize@9ce30c640e394282c9e0df5787d54e5887bc8ecc/ColReorderWithResize.js"></script>
   <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('hotkeys.static', filename='js/hotkeys.js')}}"></script>
 {% endblock %}
