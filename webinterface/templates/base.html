@@ -1,6 +1,7 @@
 {% extends "layout.html" %}
 {% block head %}
-  {{super()}}
+    {{super()}}
+    <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='base.css')}}"/>
 {% endblock %}
 
 {% block common %}
