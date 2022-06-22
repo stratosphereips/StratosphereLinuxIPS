@@ -30,6 +30,7 @@ def create_inputProcess_instance(
     # override the self.print function to avoid broken pipes
     inputProcess.print = do_nothing
     inputProcess.stop_queues = do_nothing
+    inputProcess.testing = True
     return inputProcess
 
 

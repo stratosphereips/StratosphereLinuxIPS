@@ -514,7 +514,7 @@ class Main:
             # save redis database if '-s' is specified
             if self.args.save:
                 # Create a new dir to store backups
-                backups_dir = self.get_cwd() + 'redis_backups' + '/'
+                backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
                 try:
                     os.mkdir(backups_dir)
                 except FileExistsError:
@@ -534,7 +534,8 @@ class Main:
                     # it's a zeek dir
                     pass
                 # Give the exact path to save(), this is where our saved .rdb backup will be
-                __database__.save(backups_dir + self.input_information)
+                rdb_filepath = os.path.join(backups_dir, self.input_information)
+                __database__.save(rdb_filepath)
                 # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
                 print(
                     '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
@@ -1022,11 +1023,21 @@ class Main:
         from slips_files.core.database import __database__
         __database__.start(self.config, 6379)
         if not __database__.load(self.args.db):
-            print(f'Error loading the database {self.args.db}.')
+            print(f'Error loading the database {self.args.db}')
         else:
+            redis_port = 6379
+            self.input_information = self.args.db
+            __database__.connect_to_redis_server(redis_port)
+            __database__.enable_redis_snapshots()
+            #todo see why the dumps.rdb isn't loaded in 6379
+            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+            self.log_redis_server_PID(redis_port, redis_pid)
+
             print(
-                f'{self.args.db} loaded successfully. Run ./kalipso.sh'
+                f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
             )
+            __database__.disable_redis_snapshots()
+
         self.terminate_slips()
 
     def get_input_file_type(self, input_information):
@@ -1196,7 +1207,7 @@ class Main:
         }
 
         size_in_mb = '-'
-        if not isinstance(self.args.filepath, bool) and os.path.exists(self.args.filepath):
+        if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
             size = os.stat(self.args.filepath).st_size
             size_in_mb = float(size) / (1024 * 1024)
             size_in_mb = format(float(size_in_mb), '.2f')

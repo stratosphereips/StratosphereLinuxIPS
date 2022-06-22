@@ -197,13 +197,12 @@ class Module(Module, multiprocessing.Process):
                         'Recv': allbytes - sbytes,
                         'Tot': allbytes_human,
                         'Duration': dur,
+                        'info' : '',
                         'critical warning': critical_warning_dport_name
                     }
 
 
                 else:
-                    dns_resolution = ''
-
                     # Check if the connection sent anything!
                     if not allbytes:
                         warning_empty = 'Empty!'
@@ -224,12 +223,19 @@ class Module(Module, multiprocessing.Process):
                     if not dns_resolution:
                         dns_resolution = '????'
                     activity = {
-                        'timestamp': timestamp_human, 'dport_name': dport_name,
-                        'preposition': 'to', 'dns_resolution': dns_resolution,
-                        'daddr': daddr, 'dport/proto': f'{str(dport)}/{proto}',
-                        'state': state.lower(), 'warning': warning_empty,
-                        'Sent': sbytes, 'Recv': allbytes - sbytes,
-                        'Tot': allbytes_human, 'Duration': dur,
+                        'timestamp': timestamp_human,
+                        'dport_name': dport_name,
+                        'preposition': 'to',
+                        'dns_resolution': dns_resolution,
+                        'daddr': daddr,
+                        'dport/proto': f'{str(dport)}/{proto}',
+                        'state': state.lower(),
+                        'warning': warning_empty,
+                        'Sent': sbytes,
+                        'Recv': allbytes - sbytes,
+                        'Tot': allbytes_human,
+                        'Duration': dur,
+                        'info': '',
                         'critical warning': critical_warning_dport_name
                     }
 
@@ -326,6 +332,8 @@ class Module(Module, multiprocessing.Process):
                     alt_activity = {
                         'Query': alt_flow['query'],
                         'Answers': answer,
+                        'info': '',
+                        'critical warning':'',
                     }
                 elif alt_flow['type'] == 'http':
                     http_data_all = {

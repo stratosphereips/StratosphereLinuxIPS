@@ -37,6 +37,7 @@ RUN apt update && apt install -y --no-install-recommends \
     git \
     whois \
     net-tools \
+    vim \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara

@@ -74,6 +74,8 @@ class InputProcess(multiprocessing.Process):
             self.packet_filter = "'" + packet_filter + "'"
         self.event_handler = None
         self.event_observer = None
+        # set to true in unit tests
+        self.testing = False
         # number of lines read
         self.lines = 0
         # these are the files that slips doesn't read
@@ -190,6 +192,7 @@ class InputProcess(multiprocessing.Process):
                         continue
                     line['data'] = nfdump_line
                     self.profilerqueue.put(line)
+                    if self.testing: break
 
             return lines
         except KeyboardInterrupt:
@@ -297,6 +300,7 @@ class InputProcess(multiprocessing.Process):
                             # this ts doesnt repr a float value, ignore it
                             pass
 
+
                 ###################################################################################
                 # Out of the for that check each Zeek file one by one
                 # self.print('Cached lines: {}'.format(str(cache_lines)))
@@ -375,14 +379,13 @@ class InputProcess(multiprocessing.Process):
                     __database__.add_zeek_file(
                         f'{self.given_path}/{file_name_without_extension}'
                     )
-
+                if self.testing: break
             # We want to stop bro if no new line is coming.
             self.bro_timeout = 1
             lines = self.read_zeek_files()
             self.print(
-                f'\nWe read everything from the folder. No more input. Stopping input process. Sent {lines} lines',
-                2,
-                0,
+                f'\nWe read everything from the folder.'
+                f' No more input. Stopping input process. Sent {lines} lines', 2, 0,
             )
             self.stop_queues()
             return True
@@ -443,7 +446,7 @@ class InputProcess(multiprocessing.Process):
                     if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
-
+                    if self.testing: break
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -461,6 +464,7 @@ class InputProcess(multiprocessing.Process):
                     if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
+                    if self.testing: break
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -469,9 +473,7 @@ class InputProcess(multiprocessing.Process):
     def handle_zeek_log_file(self):
         try:
             try:
-                file_name_without_extension = self.given_path[
-                                              : self.given_path.index('.log')
-                                              ]
+                file_name_without_extension = self.given_path[: self.given_path.index('.log')]
             except IndexError:
                 # filename doesn't have an extension, probably not a conn.log
                 return False

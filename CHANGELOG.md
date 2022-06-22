@@ -1,3 +1,7 @@
+-0.9.2
+* Slips
+- Fix saving the database in MacOS and Linux
+
 -0.9.1
 * Slips
 

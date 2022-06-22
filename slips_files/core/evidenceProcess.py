@@ -846,16 +846,16 @@ class EvidenceProcess(multiprocessing.Process):
                     port = data.get('port', False)
                     proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
-
+                    evidence_ID = data.get('ID', False)
                     # Ignore alert if IP is whitelisted
                     flow = __database__.get_flow(profileid, twid, uid)
                     if flow and self.whitelist.is_whitelisted_evidence(
                         srcip, detection_info, type_detection, description
                     ):
-                        # Modules add evidence to the db before reaching this point, so
-                        # remove evidence from db so it will be completely ignored
+                        # Modules add evidence to the db before reaching this point, now
+                        # remove evidence from db so it could be completely ignored
                         __database__.deleteEvidence(
-                            profileid, twid, description
+                            profileid, twid, evidence_ID
                         )
                         continue
 
@@ -1000,7 +1000,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
                                 # todo we can just publish in new_alert, do we need to save it in the db??
-                                __database__.set_evidence_causing_alert(
+                                __database__.set_evidence_causing_alert( profileid, twid,
                                     alert_ID, IDs_causing_an_alert
                                 )
                                 __database__.publish('new_alert', alert_ID)

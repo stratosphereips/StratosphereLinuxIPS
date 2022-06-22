@@ -210,15 +210,9 @@ class UpdateFileManager:
 
     def log(self, text):
         """
-        Logs the text to slips.log
+        sends the text to output process to log it to slips.log without outputting to the terminal
         """
-        try:
-            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
-            with open(self.slips_logfile, 'a') as f:
-                f.write(f'{date_time} [{self.name}] {text}\n')
-        except FileNotFoundError:
-            open(self.slips_logfile, 'w').close()
-            self.log(text)
+        self.outputqueue.put(f'01|{self.name}|{text}log-only')
 
     def read_ports_info(self, ports_info_filepath) -> int:
         """
