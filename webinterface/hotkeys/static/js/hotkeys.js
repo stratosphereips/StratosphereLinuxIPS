@@ -153,6 +153,11 @@ profile.onclick_ips();
     }
 
     function update_table(){
+        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+        active_hotkey_table.ajax.url(link).load();
+        document.getElementById(active_hotkey_name).style.display = "block"
+    }
+
         switch (active_hotkey_name) {
             case 'timeline':
                 active_hotkey_table = timeline
