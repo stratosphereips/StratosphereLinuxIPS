@@ -1,7 +1,6 @@
 #!/bin/bash
-cd modules/kalipso
 echo "To close all unused redis servers, run slips with --killall"
-file="../../used_redis_servers.txt"
+file="used_redis_servers.txt"
 # Declare a string array
 declare -a open_redis_servers=()
 declare -a ports=()
@@ -50,4 +49,4 @@ fi
 
 # run webinterface
 cd webinterface
-flask run
+python3 app.py -p ${port_to_use}
