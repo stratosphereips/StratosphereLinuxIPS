@@ -160,39 +160,54 @@ profile.onclick_ips();
             .then(data => { return data; });
     }
 
+    let dstIPChart = new Chart(document.getElementById("barchart"), {type: 'horizontalBar', data: {}, options: {
+                                legend: { display: false },
+                                title: {
+                                display: true,
+                                text: 'Amount of flows per Destination IP'
+                                },
+                                maintainAspectRatio: false,
+                                responsive: true,
+                                scales: {
+                                    xAxes: [{
+                                    ticks: {
+                                        beginAtZero: true
+                                    }
+                                    }]
+                                }
+                                }
+                                });
+
+    function addData(chart, labels, dataset) {
+        chart.data.labels = labels;
+        chart.data.datasets[0] = dataset
+        chart.update();
+    }
+
+    function addOptions(chart, options) {
+        chart.options = options;
+        chart.update();
+    }
+
     let dstIP = function(){
-        fetch("/hotkeys/dstIP", {
+        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+        fetch(link, {
             method: "GET",
             headers: headers
             }).then(response => response.json())
             .then(data => {
-                   const x = data['data'].map(function(d){ return d['ip']})
-        const y = data['data'].map(function(d){ return d['flow']})
-        const chart_data = {
-            labels: x,
-            datasets: [{
-            label: 'Flows',
-            backgroundColor: 'rgb(255, 99, 132)',
-            borderColor: 'rgb(255, 99, 132)',
-            data: y,
-            }]
-        };
-        const config = {
-            type: 'horizontalBar',
-            data: chart_data,
-            options: {  legend: { display: false },
-                        title: {
-                        display: true,
-                        text: 'Amount of flows per Destination IP'
-                        },
-                        maintainAspectRatio: false
-                    }
-        };
-        new Chart(document.getElementById("barchart"), config);
-        document.getElementById(active_hotkey_name).style.display = "block"
+                const labels = data['data'].map(function(d){ return d['ip']})
+                const y = data['data'].map(function(d){ return d['flow']})
+//                document.getElementById("barchart").height = y.length*20
 
-
-    });
+                addData(dstIPChart, labels, {
+                                            label: 'Flows',
+                                            backgroundColor: 'rgb(255, 99, 132)',
+                                            borderColor: 'rgb(255, 99, 132)',
+                                            data: y
+                                            })
+                document.getElementById(active_hotkey_name).style.display = "block"
+            });
     }
 
 
