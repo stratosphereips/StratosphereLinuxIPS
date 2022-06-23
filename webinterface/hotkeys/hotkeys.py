@@ -6,14 +6,13 @@ import json
 
 class Hotkeys(object):
 
-
     def __init__(self, database, cache):
         self.db = database
         self.cache = cache
         self.bp = Blueprint('hotkeys', __name__, static_folder='static', static_url_path='/hotkeys/static',
                             template_folder='templates')
 
-        #register routes
+        # Routes should be set explicity, because Flask process self parameter in function wrong.
         self.bp.add_url_rule("/", view_func=self.index)
         self.bp.add_url_rule("/profiles_tws", view_func=self.profile_tws)
         self.bp.add_url_rule("/info/<ip>", view_func=self.set_ip_info)
