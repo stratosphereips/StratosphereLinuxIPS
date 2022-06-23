@@ -4,7 +4,7 @@ import redis
 import json
 
 
-class Hotkeys(object):
+class Hotkeys:
 
     def __init__(self, database, cache):
         self.db = database
