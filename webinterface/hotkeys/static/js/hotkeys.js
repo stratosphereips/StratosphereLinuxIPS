@@ -160,23 +160,23 @@ profile.onclick_ips();
             .then(data => { return data; });
     }
 
-    let dstIPChart = new Chart(document.getElementById("barchart"), {type: 'horizontalBar', data: {}, options: {
-                                legend: { display: false },
-                                title: {
-                                display: true,
-                                text: 'Amount of flows per Destination IP'
-                                },
-                                maintainAspectRatio: false,
-                                responsive: true,
-                                scales: {
-                                    xAxes: [{
-                                    ticks: {
-                                        beginAtZero: true
-                                    }
-                                    }]
-                                }
-                                }
-                                });
+//    let dstIPChart = new Chart(document.getElementById("barchart"), {type: 'horizontalBar', data: {}, options: {
+//                                legend: { display: false },
+//                                title: {
+//                                display: true,
+//                                text: 'Amount of flows per Destination IP'
+//                                },
+//                                maintainAspectRatio: false,
+//                                responsive: true,
+//                                scales: {
+//                                    xAxes: [{
+//                                    ticks: {
+//                                        beginAtZero: true
+//                                    }
+//                                    }]
+//                                }
+//                                }
+//                                });
 
     function addData(chart, labels, dataset) {
         chart.data.labels = labels;
@@ -197,63 +197,60 @@ profile.onclick_ips();
             }).then(response => response.json())
             .then(data => {
                 const labels = data['data'].map(function(d){ return d['ip']})
-                const y = data['data'].map(function(d){ return d['flow']})
+                const barGraphData = data['data'].map(function(d){ return d['flow']})
+                const data_set = data['data'].map(function(d){ return [d['ip'],d['flow']]})
+var chart = Highcharts.chart('container', {
+    chart: {
+        type: 'bar',
+        marginLeft: 150,
 
-                addData(dstIPChart, labels, {
-                                            label: 'Flows',
-                                            backgroundColor: 'rgb(255, 99, 132)',
-                                            borderColor: 'rgb(255, 99, 132)',
-                                            data: y
-                                            })
-                document.getElementById(active_hotkey_name).style.display = "block"
-            });
+    },
+    title: {
+        text: 'Amount of flows per dstIP'
+    },
+    xAxis: {
+        type: 'category',
+        title: {
+            text: null
+        },
+        min: 0,
+        max: 4,
+        scrollbar: {
+            enabled: true
+        },
+        tickLength: 0
+    },
+    yAxis: {
+        min: 0,
+        max: 20,
+        title: {
+            text: 'Flows',
+            align: 'high'
+        }
+    },
+    plotOptions: {
+        bar: {
+            dataLabels: {
+                enabled: true
+            }
+        }
+    },
+    legend: {
+        enabled: false
+    },
+    credits: {
+        enabled: false
+    },
+    
+    series: [{
+        name: 'Flows',
+        data: data_set
+    }]
+});
+});
+
+    document.getElementById(active_hotkey_name).style.display = "block"
     }
-
-
-//    let dstIP = function(){
-//        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
-//        fetch(link, {
-//            method: "GET",
-//            headers: headers
-//            }).then(response => response.json())
-//            .then(data => {
-//                            const labels = data['data'].map(function(d){ return d['ip']})
-//                const barGraphData = data['data'].map(function(d){ return d['flow']})
-//            //Create a variable to contain your data series
-////                var barGraphData = [144.0, 176.0, 135.6, 200, 524, 35, 75, 12, 35];
-//                //Call the chart as a variable
-//                var barGraph = Highcharts.chart('container', {
-//                  chart: {
-//                    type: 'bar',
-//                    //Set the margins
-//                    marginTop: 85,
-//                    marginBottom: 80,
-//                    // Dynamic Chart Height = Data Series x desired bar height + (top margin + bottom margin)
-//                    height: barGraphData.length * 75 + 165,
-//                  },
-//                  title: {
-//                    text: 'Chart with Dynamic Height'
-//                  },
-//                  subtitle: {
-//                    text: 'Add or substract data points in the variable to see the chart accommodate the number of bars'
-//                  },
-//                  xAxis: {
-//                    categories: labels
-//                  },
-//                  series: [{
-//                    //Call the data series variable from above
-//                    data: barGraphData,
-//                  }],
-//                  plotOptions: {
-//                    bar: {
-//                      dataLabels: {
-//                        enabled: true,
-//                      }
-//                    }
-//                  }
-//                });
-//            });
-//    }
 
     function hide_hotkey() {
         document.getElementById(last_active_hotkey_name).style.display = "none"
