@@ -160,10 +160,12 @@ profile.onclick_ips();
         chart.update();
     }
 
-    const headers = {
+
+
+    let dstIP = function(){
+        const headers = {
         headers: {'Content-Type': 'application/json'}
     }
-    let dstIP = function(){
         let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
         fetch(link, {
             method: "GET",
