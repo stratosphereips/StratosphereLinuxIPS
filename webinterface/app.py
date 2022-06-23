@@ -1,32 +1,10 @@
 from flask import Flask, render_template, request
 from hotkeys.hotkeys import Hotkeys
-from general.general import general
+from general.general import General
 from argparse import ArgumentParser
 import redis
 
 app = Flask(__name__)
-
-__database__ = redis.StrictRedis(host='localhost',
-                                 port=32785,
-                                 db=0,
-                                 charset="utf-8",
-                                 socket_keepalive=True,
-                                 retry_on_timeout=True,
-                                 decode_responses=True,
-                                 health_check_interval=30)
-
-__cache__ = redis.StrictRedis(host='localhost',
-                                 port=6379,
-                                 db=1,
-                                 charset="utf-8",
-                                 socket_keepalive=True,
-                                 retry_on_timeout=True,
-                                 decode_responses=True,
-                                 health_check_interval=30)
-
-hotkey = Hotkeys(__database__, __cache__)
-app.register_blueprint(hotkey.bp, url_prefix="/hotkeys")
-app.register_blueprint(general, url_prefix="/general")
 
 @app.route('/')
 def index():
@@ -46,4 +24,28 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.p
 
-    app.run()
+    __database__ = redis.StrictRedis(host='localhost',
+                                     port=port,
+                                     db=0,
+                                     charset="utf-8",
+                                     socket_keepalive=True,
+                                     retry_on_timeout=True,
+                                     decode_responses=True,
+                                     health_check_interval=30)
+
+    __cache__ = redis.StrictRedis(host='localhost',
+                                  port=6379,
+                                  db=1,
+                                  charset="utf-8",
+                                  socket_keepalive=True,
+                                  retry_on_timeout=True,
+                                  decode_responses=True,
+                                  health_check_interval=30)
+
+    hotkeys = Hotkeys(__database__, __cache__)
+    app.register_blueprint(hotkeys.bp, url_prefix="/hotkeys")
+
+    general = General(__database__, __cache__)
+    app.register_blueprint(general.bp, url_prefix="/general")
+
+    app.run(host="0.0.0.0")
