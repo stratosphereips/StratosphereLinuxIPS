@@ -361,3 +361,30 @@ let hotkey_hook = {
 }
 
 
+    function filterFunction() {
+let chartDom = document.getElementById("container");
+let chart = Highcharts.charts[Highcharts.attr(chartDom, 'data-highcharts-chart')]
+console.log(chart.series[0])
+let input = document.getElementById('myInput'),
+            points = chart.series[0].points.options,
+            filteredPoint = points.filter(point => point.category == input.value);
+
+      if (filteredPoint.length) {
+        let newData = [];
+        for (let i in data) {
+          newData.push(null)
+        }
+
+        newData[filteredPoint[0].index] = filteredPoint[0].y
+            newData.push(null) //--- extra null as a workaround for bug
+
+        chart.series[0].update({
+          data: newData
+        })
+      } else {
+        chart.series[0].update({
+          data: data
+        })
+      }
+      }
+
