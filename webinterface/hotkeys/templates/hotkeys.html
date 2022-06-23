@@ -2,6 +2,10 @@
 {% block head %}
 {{super()}}
   <link rel="stylesheet" type="text/css" href="{{url_for('hotkeys.static', filename='css/style.css')}}"/>
+<script src="https://code.highcharts.com/stock/highstock.js"></script>
+<script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+<script src="https://code.highcharts.com/stock/modules/accessibility.js"></script>
+
 {% endblock %}
 
 {% block content %}
@@ -191,24 +195,22 @@
           </div>
 
 <!--  &lt;!&ndash; BAR CHART EXAMPLE &ndash;&gt;-->
-    <div id="dstIP" style="display:none;">
-      <div id="scrollContainer">
-        <div id="chartContainer">
-              <canvas id="barchart"></canvas>
-        </div>
-      </div>
-    </div>
-  </div>
+<!--    <div id="dstIP" style="display:none;">-->
+<!--      <div id="scrollContainer">-->
+<!--        <div id="chartContainer">-->
+<!--              <canvas id="barchart"></canvas>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </div>-->
+<!--  </div>-->
 
-<!--<div id="dstIP" style="display:none;">-->
-<!--  <figure class="highcharts-figure">-->
-<!--      <div id="container"></div>-->
-<!--      <p class="highcharts-description">-->
-<!--          Chart showing stacked horizontal bars. This type of visualization is-->
-<!--          great for comparing data that accumulates up to a sum.-->
-<!--      </p>-->
-<!--  </figure>-->
-<!--</div>-->
+<div id="dstIP" style="display:none;">
+<figure class="highcharts-figure">
+  <div id="container" style="height: 400px; margin: 0 auto"></div>
+  <input type="text" id="myInput" onkeyup="filterFunction()" placeholder="Filter by month.."/>
+</figure>
+</div>
+</div>
 
 {% endblock %}
 
@@ -218,9 +220,4 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.2/Chart.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/jeffreydwalter/ColReorderWithResize@9ce30c640e394282c9e0df5787d54e5887bc8ecc/ColReorderWithResize.js"></script>
   <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('hotkeys.static', filename='js/hotkeys.js')}}"></script>
-  <script src="https://code.highcharts.com/highcharts.js"></script>
-  <script src="https://code.highcharts.com/modules/exporting.js"></script>
-  <script src="https://code.highcharts.com/modules/export-data.js"></script>
-  <script src="https://code.highcharts.com/modules/accessibility.js"></script>
-
 {% endblock %}
