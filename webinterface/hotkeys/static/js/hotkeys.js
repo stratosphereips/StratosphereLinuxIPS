@@ -147,36 +147,7 @@ profile.onclick_ips();
         ]
     });
 
-    // BAR CHART EXAMPLE
-    const headers = {
-        headers: {'Content-Type': 'application/json'}
-    }
 
-    function fetch_data(){
-        fetch("/hotkeys/dstIP", {
-            method: "GET",
-            headers: headers
-            }).then(response => response.json())
-            .then(data => { return data; });
-    }
-
-//    let dstIPChart = new Chart(document.getElementById("barchart"), {type: 'horizontalBar', data: {}, options: {
-//                                legend: { display: false },
-//                                title: {
-//                                display: true,
-//                                text: 'Amount of flows per Destination IP'
-//                                },
-//                                maintainAspectRatio: false,
-//                                responsive: true,
-//                                scales: {
-//                                    xAxes: [{
-//                                    ticks: {
-//                                        beginAtZero: true
-//                                    }
-//                                    }]
-//                                }
-//                                }
-//                                });
 
     function addData(chart, labels, dataset) {
         chart.data.labels = labels;
@@ -241,7 +212,7 @@ var chart = Highcharts.chart('container', {
     credits: {
         enabled: false
     },
-    
+
     series: [{
         name: 'Flows',
         data: data_set
