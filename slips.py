@@ -622,8 +622,7 @@ class Main:
                         or len(line) < 3
                     ):
                         continue
-                    line = re.split(r'\s{2,}', line)
-
+                    line = line.split(',')
                     pid, port = line[-1], line[-2]
                     self.open_servers_PIDs[pid] = port
             return self.open_servers_PIDs
@@ -906,13 +905,12 @@ class Main:
                 f.write(
                     '# This file contains a list of used redis ports.\n'
                     '# Once a server is killed, it will be removed from this file.\n'
-                    'Date                   File or interface                   Used port'
-                    '       Server PID       Output Zeek Dir                   Save the DB\n'
+                    'Date,File or interface,Used port,Server PID,Output Zeek Dir,Is Daemon,Save the DB\n'
                 )
 
             f.write(
-                f'{now: <16}    {self.input_information: <35}    {redis_port: <6}'
-                f'        {redis_pid: <10}       {self.zeek_folder: <30}   {self.args.save} \n'
+                f'{now},{self.input_information},{redis_port},'
+                f'{redis_pid},{self.zeek_folder},{bool(self.args.daemon)},{self.args.save}\n'
             )
 
     def set_mode(self, mode, daemon=''):
