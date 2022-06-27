@@ -59,7 +59,7 @@ class Main:
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
-        self.used_redis_servers = 'used_redis_servers.txt'
+        self.used_redis_servers = 'running_slips_info.txt'
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
