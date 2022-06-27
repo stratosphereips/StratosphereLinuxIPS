@@ -160,4 +160,4 @@ pigeon_logs
 trustdb.db
 
 # ignore running redis servers logs
-used_redis_servers.txt
+running_slips_info.txt
