@@ -899,11 +899,13 @@ class Main:
                 f.write(
                     '# This file contains a list of used redis ports.\n'
                     '# Once a server is killed, it will be removed from this file.\n'
-                    'Date                   File or interface                   Used port       Server PID\n'
+                    'Date                   File or interface                   Used port'
+                    '       Server PID       Output Zeek Dir                   Save the DB\n'
                 )
 
             f.write(
-                f'{now: <16}    {self.input_information: <35}    {redis_port: <6}        {redis_pid}\n'
+                f'{now: <16}    {self.input_information: <35}    {redis_port: <6}'
+                f'        {redis_pid: <10}       {self.zeek_folder: <30}   {self.args.save} \n'
             )
 
     def set_mode(self, mode, daemon=''):
