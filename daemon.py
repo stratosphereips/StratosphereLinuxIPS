@@ -291,7 +291,6 @@ class Daemon():
             return
         pid, port, zeek_folder, output_dir, save_the_db = info
         self.prepare_std_streams(output_dir)
-        #todo save the db
         __database__.start(self.config, port)
         self.slips.c1 = __database__.subscribe('finished_modules')
         self.slips.shutdown_gracefully()
