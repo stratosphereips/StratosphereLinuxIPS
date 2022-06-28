@@ -369,7 +369,8 @@ class Main:
         """
 
         try:
-            print('\n' + '-' * 27)
+            if not self.args.stopdaemon:
+                print('\n' + '-' * 27)
             print('Stopping Slips')
 
             # set analysis end date
@@ -383,8 +384,12 @@ class Main:
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
+
             # we don't want to kill this process
-            PIDs.pop('slips.py')
+            try:
+                PIDs.pop('slips.py')
+            except KeyError:
+                pass
             slips_processes = len(list(PIDs.keys()))
 
             # Send manual stops to the processes not using channels
@@ -626,10 +631,8 @@ class Main:
                     self.open_servers_PIDs[pid] = port
             return self.open_servers_PIDs
         except FileNotFoundError:
-            print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
-            self.terminate_slips()
-
-
+            # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
+            return {}
 
     def close_open_redis_servers(self):
         """Function to close unused open redis-servers"""
