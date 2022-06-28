@@ -35,8 +35,9 @@ class Daemon():
         # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
         self.pidfile_dir = '/var/lock'
         self.pidfile = os.path.join(self.pidfile_dir, 'slips.lock')
+        self.read_configuration()
         if not self.slips.args.stopdaemon:
-            self.read_configuration()
+            self.prepare_output_dir()
         # Get the pid from pidfile
         try:
             with open(self.pidfile, 'r') as pidfile:
@@ -109,12 +110,11 @@ class Daemon():
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.stderr = 'errors.log'
-
-
-
         # we don't use it anyway
         self.stdin = '/dev/null'
 
+
+    def prepare_output_dir(self):
         if '-o' in sys.argv:
             self.prepare_std_streams(self.slips.args.output)
 
@@ -155,16 +155,16 @@ class Daemon():
     def delete_pidfile(self):
         """Deletes the pidfile to mark the daemon as closed"""
 
-        # print('Deleting pidfile...')
+        self.print('Deleting pidfile...')
         # dont write logs when stopping the daemon,
         # because we don't know the output dir
         if os.path.exists(self.pidfile):
             os.remove(self.pidfile)
-            # print('pidfile deleted.')
-        # else:
-        #     # print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
-        #     # if an error occured it will be written in logsfile
-        #     # print('Either Daemon stopped normally or an error occurred.')
+            self.print('pidfile deleted.')
+        else:
+            self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
+            # if an error happened it will be written in logsfile
+            self.print('Either Daemon stopped normally or an error occurred.')
 
 
     def daemonize(self):
@@ -243,8 +243,39 @@ class Daemon():
         # start slips normally
         self.slips.start()
 
+    def get_last_opened_daemon_info(self):
+        """
+        get information about the last opened slips daemon from running_slips_info.txt
+        """
+        try:
+            with open(self.slips.running_logfile, 'r') as f:
+                # read the lines in reverse order to get the last opened daemon
+                for line in f.read().splitlines()[::-1]:
+                    # skip comments
+                    if (
+                        line.startswith('#')
+                        or line.startswith('Date')
+                        or len(line) < 3
+                    ):
+                        continue
+                    line = line.split(',')
+                    is_daemon = bool(line[6])
+                    if not is_daemon:
+                        continue
+                    pid, port, zeek_folder, output_dir, save_the_db = line[3], line[2], line[4], line[5], line[-1]
+                    return (pid, port, zeek_folder, output_dir, save_the_db)
+        except FileNotFoundError:
+            # file removed after daemon started
+            return False
+
     def stop(self):
         """Stop the daemon"""
+
+        info = self.get_last_opened_daemon_info()
+        if info:
+            pid, port, zeek_folder, output_dir, save_the_db = info
+            self.prepare_std_streams(output_dir)
+            #todo save the db
 
         # this file has to be deleted first because sigterm will terminate slips
         self.delete_pidfile()
@@ -256,7 +287,6 @@ class Daemon():
         except ProcessLookupError:
             # daemon was killed manually
             pass
-
 
     def restart(self):
         """Restart the daemon"""
