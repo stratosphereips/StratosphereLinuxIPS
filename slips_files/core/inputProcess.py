@@ -499,6 +499,11 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
+    def get_zeek_PID(self, bro_parameter) -> int:
+        command = f"ps aux | grep '{self.zeek_or_bro} -C {bro_parameter}'"
+        pid = subprocess.getoutput(command).splitlines()[0].split()[1]
+        return int(pid)
+
     def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
 
@@ -569,7 +574,8 @@ class InputProcess(multiprocessing.Process):
             os.system(command)
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
-
+            PID = self.get_zeek_PID(bro_parameter)
+            __database__.store_process_PID('Zeek', PID)
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
