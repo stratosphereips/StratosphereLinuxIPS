@@ -59,7 +59,7 @@ class Main:
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
-        self.used_redis_servers = 'running_slips_info.txt'
+        self.running_logfile = 'running_slips_info.txt'
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
@@ -600,13 +600,13 @@ class Main:
         except KeyboardInterrupt:
             return False
 
-    def get_open_servers_PIDs(self) -> dict:
+    def get_running_slips_info(self) -> dict:
         """
         Returns the dict of PIDs and ports of the redis unused servers started by slips
         """
         self.open_servers_PIDs = {}
         try:
-            with open(self.used_redis_servers, 'r') as f:
+            with open(self.running_logfile, 'r') as f:
                 for line in f.read().splitlines():
                     # skip comments
                     if (
@@ -616,18 +616,20 @@ class Main:
                     ):
                         continue
                     line = line.split(',')
-                    pid, port = line[-1], line[-2]
+                    # Output Zeek Dir,Is Daemon,Save the DB
+                    pid, port, self.zeek_folder, self.args.save = line[3], line[2], line[4],line[-1]
                     self.open_servers_PIDs[pid] = port
+
             return self.open_servers_PIDs
         except FileNotFoundError:
-            print(f"Error: {self.used_redis_servers} is not found. Can't kill open servers. Stopping.")
+            print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
             self.terminate_slips()
 
     def close_open_redis_servers(self):
         """Function to close unused open redis-servers"""
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
-            self.get_open_servers_PIDs()
+            self.get_running_slips_info()
 
         if len(self.open_servers_PIDs) == 0:
             print('No unused open servers to kill.')
@@ -673,7 +675,7 @@ class Main:
 
         killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
         print(f'Killed {killed_servers} Redis Servers.')
-        os.remove(self.used_redis_servers)
+        os.remove(self.running_logfile)
         sys.exit(-1)
 
     def is_debugger_active(self) -> bool:
@@ -892,7 +894,7 @@ class Main:
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.used_redis_servers, 'a') as f:
+        with open(self.running_logfile, 'a') as f:
             # add the header lines if the file is newly created
             if f.tell() == 0:
                 f.write(
@@ -1308,6 +1310,13 @@ class Main:
                 stderr = os.path.join(self.args.output, 'errors.log')
                 slips_logfile = os.path.join(self.args.output, 'slips.log')
 
+            # warn about unused open redis servers
+            open_servers = len(self.get_running_slips_info())
+            if open_servers > 1:
+                self.print(
+                    f'Warning: You have {open_servers} redis servers running. '
+                    f'Run Slips with --killall to stop them.'
+                )
 
 
             # Create the output thread and start it
@@ -1502,13 +1511,7 @@ class Main:
                 'InputProcess', int(inputProcess.pid)
             )
 
-            # warn about unused open redis servers
-            open_servers = len(self.get_open_servers_PIDs())
-            if open_servers > 1:
-                self.print(
-                    f'Warning: You have {open_servers} redis servers running. '
-                    f'Run Slips with --killall to stop them.'
-                )
+
 
             self.enable_metadata = self.read_configuration(
                 self.config, 'parameters', 'metadata_dir'
