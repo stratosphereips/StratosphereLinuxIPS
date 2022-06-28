@@ -77,7 +77,6 @@ class Main:
                 # this is the zeek dir slips will be using
                 self.zeek_folder = f'./zeek_files_{self.input_information}/'
 
-
     def read_configuration(self, config, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
         try:
@@ -600,7 +599,7 @@ class Main:
         except KeyboardInterrupt:
             return False
 
-    def get_running_slips_info(self) -> dict:
+    def get_open_redis_servers(self) -> dict:
         """
         Returns the dict of PIDs and ports of the redis unused servers started by slips
         """
@@ -616,20 +615,20 @@ class Main:
                     ):
                         continue
                     line = line.split(',')
-                    # Output Zeek Dir,Is Daemon,Save the DB
-                    pid, port, self.zeek_folder, self.args.save = line[3], line[2], line[4],line[-1]
+                    pid, port = line[3], line[2]
                     self.open_servers_PIDs[pid] = port
-
             return self.open_servers_PIDs
         except FileNotFoundError:
             print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
             self.terminate_slips()
 
+
+
     def close_open_redis_servers(self):
         """Function to close unused open redis-servers"""
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
-            self.get_running_slips_info()
+            self.get_open_redis_servers()
 
         if len(self.open_servers_PIDs) == 0:
             print('No unused open servers to kill.')
@@ -900,12 +899,14 @@ class Main:
                 f.write(
                     '# This file contains a list of used redis ports.\n'
                     '# Once a server is killed, it will be removed from this file.\n'
-                    'Date,File or interface,Used port,Server PID,Output Zeek Dir,Is Daemon,Save the DB\n'
+                    'Date, File or interface, Used port, Server PID,'
+                    ' Output Zeek Dir, Logs Dir, Is Daemon, Save the DB\n'
                 )
 
             f.write(
                 f'{now},{self.input_information},{redis_port},'
-                f'{redis_pid},{self.zeek_folder},{bool(self.args.daemon)},{self.args.save}\n'
+                f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                f'{bool(self.args.daemon)},{self.args.save}\n'
             )
 
     def set_mode(self, mode, daemon=''):
@@ -1310,13 +1311,6 @@ class Main:
                 stderr = os.path.join(self.args.output, 'errors.log')
                 slips_logfile = os.path.join(self.args.output, 'slips.log')
 
-            # warn about unused open redis servers
-            open_servers = len(self.get_running_slips_info())
-            if open_servers > 1:
-                self.print(
-                    f'Warning: You have {open_servers} redis servers running. '
-                    f'Run Slips with --killall to stop them.'
-                )
 
 
             # Create the output thread and start it
@@ -1511,7 +1505,13 @@ class Main:
                 'InputProcess', int(inputProcess.pid)
             )
 
-
+            # warn about unused open redis servers
+            open_servers = len(self.get_open_redis_servers())
+            if open_servers > 1:
+                self.print(
+                    f'Warning: You have {open_servers} redis servers running. '
+                    f'Run Slips with --killall to stop them.'
+                )
 
             self.enable_metadata = self.read_configuration(
                 self.config, 'parameters', 'metadata_dir'
