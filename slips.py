@@ -157,7 +157,7 @@ class Main:
         try:
             while True:
                 # generate a random unused port
-                port = random.randint(32768, 65535)
+                port = random.randint(32768, 32849)
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
@@ -369,7 +369,8 @@ class Main:
         """
 
         try:
-            print('\n' + '-' * 27)
+            if not self.args.stopdaemon:
+                print('\n' + '-' * 27)
             print('Stopping Slips')
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
@@ -377,8 +378,12 @@ class Main:
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
+
             # we don't want to kill this process
-            PIDs.pop('slips.py')
+            try:
+                PIDs.pop('slips.py')
+            except KeyError:
+                pass
             slips_processes = len(list(PIDs.keys()))
 
             # Send manual stops to the processes not using channels
@@ -619,10 +624,8 @@ class Main:
                     self.open_servers_PIDs[pid] = port
             return self.open_servers_PIDs
         except FileNotFoundError:
-            print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
-            self.terminate_slips()
-
-
+            # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
+            return {}
 
     def close_open_redis_servers(self):
         """Function to close unused open redis-servers"""

@@ -266,27 +266,36 @@ class Daemon():
                     return (pid, port, zeek_folder, output_dir, save_the_db)
         except FileNotFoundError:
             # file removed after daemon started
+            self.print(f"Warning: {self.slips.running_logfile} is not found. Can't get daemon info."
+                       f" Slips won't be completely killed.")
             return False
 
-    def stop(self):
-        """Stop the daemon"""
-
-        info = self.get_last_opened_daemon_info()
-        if info:
-            pid, port, zeek_folder, output_dir, save_the_db = info
-            self.prepare_std_streams(output_dir)
-            #todo save the db
-
-        # this file has to be deleted first because sigterm will terminate slips
-        self.delete_pidfile()
-        # Kill the damon (aka slips.py)
+    def killdaemon(self):
+        """ Kill the damon process only (aka slips.py) """
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
         try:
+            # note since we can't get daemon info, not all slips processes will be killed
             os.kill(self.pid, signal.SIGTERM)
         except ProcessLookupError:
             # daemon was killed manually
             pass
+
+    def stop(self):
+        """Stop the daemon"""
+        # this file has to be deleted first because sigterm will terminate slips
+        self.delete_pidfile()
+        self.killdaemon()
+        info = self.get_last_opened_daemon_info()
+        if not info:
+            return
+        pid, port, zeek_folder, output_dir, save_the_db = info
+        self.prepare_std_streams(output_dir)
+        #todo save the db
+        __database__.start(self.config, port)
+        self.slips.c1 = __database__.subscribe('finished_modules')
+        self.slips.shutdown_gracefully()
+
 
     def restart(self):
         """Restart the daemon"""
