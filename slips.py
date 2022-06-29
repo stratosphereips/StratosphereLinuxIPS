@@ -158,6 +158,11 @@ class Main:
             while True:
                 # generate a random unused port
                 port = random.randint(32768, 32850)
+                # 6379 is for the cache db,
+                # the cache db shouldn't be closed when using -k
+                # so this is to avoid storing the port in used_redis_server.txt
+                if port == 6379:
+                    continue
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
