@@ -17,18 +17,10 @@ let profiles = function () {
         "rowId": 'id',
         columns: [
             {
-                "className": 'dt-control',
-                "orderable": false,
-                "data": null,
-                "defaultContent": ''
-            },
-            {
                 data: 'profile',
                 "className": 'r'
             }
-
-        ],
-        "order": [[1, 'asc']]
+        ]
     });
     return {
         onclick_tws: function () {
@@ -42,7 +34,7 @@ let profiles = function () {
                 return open_string + data + close_string;
             }
 
-            $('#profiles').on('click', 'tbody td.dt-control', function () {
+            $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
                 let row = profiles_table.row(tr);
                 if (row.child.isShown()) {
