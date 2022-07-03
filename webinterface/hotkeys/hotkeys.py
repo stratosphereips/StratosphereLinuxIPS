@@ -1,7 +1,7 @@
 from flask import Blueprint
 from flask import Flask, render_template, request
-import redis
 import json
+from collections import defaultdict
 
 
 class Hotkeys:
@@ -56,13 +56,35 @@ class Hotkeys:
         '''
         Set profiles and their timewindows data into the tree.
         '''
+
+        # Fetch blocked
+        blockedProfileTWs = self.db.smembers('BlockedProfTW')
+        dict_blockedProfileTWs = defaultdict(list)
+
+        for blocked in blockedProfileTWs:
+            profile_word, blocked_ip, blocked_tw = blocked.split("_")
+            dict_blockedProfileTWs[blocked_ip].append(blocked_tw)
+
+        # Fetch profiles
         profiles = self.db.smembers('profiles')
         data = []
         id = 0
         for profileid in profiles:
+            profile_word, profile_ip = profileid.split("_")
             tws = self.db.zrange("tws" + profileid, 0, -1)
-            data.append({"id": str(id), "profile": profileid.split("_")[1], "tws": tws})
+            dict_tws = {}
+            blocked_profile = False
+
+            for tw in tws:
+                dict_tws[tw] = False
+
+            if profile_ip in dict_blockedProfileTWs.keys():
+                for blocked_tw in dict_blockedProfileTWs[profile_ip]:
+                    dict_tws[blocked_tw] = True
+                blocked_profile = True
+            data.append({"id": str(id), "profile": profile_ip, "tws": dict_tws, "blocked": blocked_profile})
             id = id + 1
+
         # start = request.args.get('start', type=int)
         # length = request.args.get('length', type=int)
         data_length = id
