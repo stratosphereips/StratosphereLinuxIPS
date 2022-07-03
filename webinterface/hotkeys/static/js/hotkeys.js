@@ -35,8 +35,15 @@ let profiles = function () {
                 const open_string = '<table class="table table-striped">'
                 const close_string = '</table>'
                 let data = ""
-                profile_tws.tws.forEach(item => {
-                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ')">' + '<td>' + item + '</td>' + '</tr>';
+                Object.entries(profile_tws.tws).forEach(([item, value]) => {
+                let colored_item = ""
+                    if(value){
+                       colored_item = '<td style="background-color:#FF8989">' + item + '</td>'
+                    }
+                    else{
+                       colored_item = '<td style="background-color:#FFFFFF">' + item + '</td>'
+                    }
+                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ')">' + colored_item + '</tr>';
                 })
                 return open_string + data + close_string;
             }
