@@ -83,6 +83,7 @@ profile.onclick_ips();
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         'dom': 'Rlfrtip',
+        scrollX: true,
         columns: [
             { data: 'ts' },
             { data: 'dur' },
@@ -104,7 +105,8 @@ profile.onclick_ips();
 
     let timeline = $('#table_timeline').DataTable({
         "bDestroy": true,
-                'dom': 'Rlfrtip',
+        'dom': 'Rlfrtip',
+        scrollX: true,
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
@@ -126,6 +128,7 @@ profile.onclick_ips();
     let outtuples = $('#table_outtuples').DataTable({
         "bDestroy": true,
         'dom': 'Rlfrtip',
+        scrollX: true,
         columns: [
             { data: 'tuple' },
             { data: 'string' },
@@ -138,6 +141,7 @@ profile.onclick_ips();
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
         'dom': 'Rlfrtip',
+        scrollX: true,
         columns: [
             { data: 'profileid' },
             { data: 'twid'},
