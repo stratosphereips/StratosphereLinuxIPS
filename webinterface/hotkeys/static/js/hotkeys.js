@@ -20,7 +20,14 @@ let profiles = function () {
                 data: 'profile',
                 "className": 'r'
             }
-        ]
+        ],
+        "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+            switch(aData['blocked']){
+                case true:
+                    $('td', nRow).css('background-color', '#FF8989')
+                    break;
+            }
+    }
     });
     return {
         onclick_tws: function () {
