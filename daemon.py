@@ -275,7 +275,6 @@ class Daemon():
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
         try:
-            # note since we can't get daemon info, not all slips processes will be killed
             os.kill(self.pid, signal.SIGTERM)
         except ProcessLookupError:
             # daemon was killed manually

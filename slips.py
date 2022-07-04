@@ -385,7 +385,6 @@ class Main:
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
-
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
@@ -418,93 +417,96 @@ class Main:
             # give slips enough time to close all modules - make sure all modules aren't considered 'busy' when slips stops
             max_loops = 430
             # loop until all loaded modules are finished
-            try:
-                while (
-                    len(finished_modules) < slips_processes and max_loops != 0
-                ):
-                    # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-                    try:
-                        message = self.c1.get_message(timeout=0.01)
-                    except NameError:
-                        # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                        message = {
-                            'data': 'dummy_value_not_stopprocess',
-                            'channel': 'finished_modules',
-                        }
+            if not self.args.stopdaemon:
+                # in the case of -S, slips doesn't even start the modules,
+                # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
+                try:
+                    while (
+                        len(finished_modules) < slips_processes and max_loops != 0
+                    ):
+                        # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+                        try:
+                            message = self.c1.get_message(timeout=0.01)
+                        except NameError:
+                            # Sometimes the c1 variable does not exist yet. So just force the shutdown
+                            message = {
+                                'data': 'dummy_value_not_stopprocess',
+                                'channel': 'finished_modules',
+                            }
 
-                    if message and message['data'] == 'stop_process':
-                        continue
-                    if utils.is_msg_intended_for(message, 'finished_modules'):
-                        # all modules must reply with their names in this channel after
-                        # receiving the stop_process msg
-                        # to confirm that all processing is done and we can safely exit now
-                        module_name = message['data']
-
-                        if module_name not in finished_modules:
-                            finished_modules.append(module_name)
-                            try:
-                                # remove module from the list of opened pids
-                                PIDs.pop(module_name)
-                            except KeyError:
-                                # reaching this block means a module that belongs to slips
-                                # is publishing in  finished_modules
-                                # but slips doesn't know of it's PID!!
-                                print(
-                                    f'[Main] Module{module_name} just published in '
-                                    f"finished_modules channel and Slips doesn't know about it's PID!",
-                                )
-                                # pass insead of continue because
-                                # this module is finished and we need to print that it has stopped
-                                pass
-                            modules_left = len(list(PIDs.keys()))
-                            # to vertically align them when printing
-                            module_name = module_name + ' ' * (
-                                20 - len(module_name)
-                            )
-                            print(
-                                f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
-                            )
-                    max_loops -= 1
-                    # after reaching the max_loops and before killing the modules that aren't finished,
-                    # make sure we're not in the middle of processing
-                    if len(PIDs) > 0 and max_loops < 2:
-                        if not warning_printed:
-                            # some modules publish in finished_modules channel before slips.py starts listening,
-                            # but they finished gracefully.
-                            # remove already stopped modules from PIDs dict
-                            for module, pid in PIDs.items():
-                                try:
-                                    # signal 0 is used to check if the pid exists
-                                    os.kill(int(pid), 0)
-                                except ProcessLookupError:
-                                    # pid doesn't exist because module already stopped
-                                    finished_modules.append(module)
-
-                            # exclude the module that are already stopped from the pending modules
-                            pending_modules = [
-                                module
-                                for module in list(PIDs.keys())
-                                if module not in finished_modules
-                            ]
-                            if len(pending_modules) > 0:
-                                print(
-                                    f'\n[Main] The following modules are busy working on your data.'
-                                    f'\n\n{pending_modules}\n\n'
-                                    'You can wait for them to finish, or you can press CTRL-C again to force-kill.\n'
-                                )
-                                warning_printed = True
-                        # -P flag is only used in integration tests,
-                        # so we don't care about the modules finishing their job when testing
-                        # instead, kill them
-                        if not self.args.port:
-                            # delay killing unstopped modules
-                            max_loops += 1
+                        if message and message['data'] == 'stop_process':
                             continue
-            except KeyboardInterrupt:
-                # either the user wants to kill the remaining modules (pressed ctrl +c again)
-                # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
-                # pass to kill the remaining modules
-                pass
+                        if utils.is_msg_intended_for(message, 'finished_modules'):
+                            # all modules must reply with their names in this channel after
+                            # receiving the stop_process msg
+                            # to confirm that all processing is done and we can safely exit now
+                            module_name = message['data']
+
+                            if module_name not in finished_modules:
+                                finished_modules.append(module_name)
+                                try:
+                                    # remove module from the list of opened pids
+                                    PIDs.pop(module_name)
+                                except KeyError:
+                                    # reaching this block means a module that belongs to slips
+                                    # is publishing in  finished_modules
+                                    # but slips doesn't know of it's PID!!
+                                    print(
+                                        f'[Main] Module{module_name} just published in '
+                                        f"finished_modules channel and Slips doesn't know about it's PID!",
+                                    )
+                                    # pass insead of continue because
+                                    # this module is finished and we need to print that it has stopped
+                                    pass
+                                modules_left = len(list(PIDs.keys()))
+                                # to vertically align them when printing
+                                module_name = module_name + ' ' * (
+                                    20 - len(module_name)
+                                )
+                                print(
+                                    f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
+                                )
+                        max_loops -= 1
+                        # after reaching the max_loops and before killing the modules that aren't finished,
+                        # make sure we're not in the middle of processing
+                        if len(PIDs) > 0 and max_loops < 2:
+                            if not warning_printed:
+                                # some modules publish in finished_modules channel before slips.py starts listening,
+                                # but they finished gracefully.
+                                # remove already stopped modules from PIDs dict
+                                for module, pid in PIDs.items():
+                                    try:
+                                        # signal 0 is used to check if the pid exists
+                                        os.kill(int(pid), 0)
+                                    except ProcessLookupError:
+                                        # pid doesn't exist because module already stopped
+                                        finished_modules.append(module)
+
+                                # exclude the module that are already stopped from the pending modules
+                                pending_modules = [
+                                    module
+                                    for module in list(PIDs.keys())
+                                    if module not in finished_modules
+                                ]
+                                if len(pending_modules) > 0:
+                                    print(
+                                        f'\n[Main] The following modules are busy working on your data.'
+                                        f'\n\n{pending_modules}\n\n'
+                                        'You can wait for them to finish, or you can press CTRL-C again to force-kill.\n'
+                                    )
+                                    warning_printed = True
+                            # -P flag is only used in integration tests,
+                            # so we don't care about the modules finishing their job when testing
+                            # instead, kill them
+                            if not self.args.port:
+                                # delay killing unstopped modules
+                                max_loops += 1
+                                continue
+                except KeyboardInterrupt:
+                    # either the user wants to kill the remaining modules (pressed ctrl +c again)
+                    # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
+                    # pass to kill the remaining modules
+                    pass
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
