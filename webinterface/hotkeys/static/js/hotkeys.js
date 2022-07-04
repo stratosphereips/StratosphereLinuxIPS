@@ -1,3 +1,7 @@
+
+const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 col-xs-12'fl>>" +
+           "<'row'<'col-sm-12'Rtr>>" +
+           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
 /*
 Set profile and timewindow table.
 Functions:
@@ -82,7 +86,10 @@ profile.onclick_ips();
     let active_hotkey_table = null
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
-        'dom': 'Rlfrtip',
+        dom: custom_dom,
+        buttons: [
+            'colvis'
+        ],
         scrollX: true,
         columns: [
             { data: 'ts' },
@@ -105,7 +112,10 @@ profile.onclick_ips();
 
     let timeline = $('#table_timeline').DataTable({
         "bDestroy": true,
-        'dom': 'Rlfrtip',
+        dom: custom_dom,
+        buttons: [
+            'colvis'
+        ],
         scrollX: true,
         columns: [
             { data: 'timestamp' },
@@ -127,7 +137,10 @@ profile.onclick_ips();
 
     let outtuples = $('#table_outtuples').DataTable({
         "bDestroy": true,
-        'dom': 'Rlfrtip',
+        dom: custom_dom,
+        buttons: [
+            'colvis'
+        ],
         scrollX: true,
         columns: [
             { data: 'tuple' },
@@ -140,7 +153,7 @@ profile.onclick_ips();
 
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
-        'dom': 'Rlfrtip',
+        dom: custom_dom,
         scrollX: true,
         columns: [
             { data: 'profileid' },
