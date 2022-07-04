@@ -2,10 +2,9 @@
 {% block head %}
 {{super()}}
   <link rel="stylesheet" type="text/css" href="{{url_for('hotkeys.static', filename='css/style.css')}}"/>
-<script src="https://code.highcharts.com/stock/highstock.js"></script>
-<script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
-<script src="https://code.highcharts.com/stock/modules/accessibility.js"></script>
-
+  <script src="https://code.highcharts.com/stock/highstock.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/exporting.js"></script>
+  <script src="https://code.highcharts.com/stock/modules/accessibility.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -97,7 +96,7 @@
             </table>
           </div>
           <div id="alerts" style="display:none;">
-            <table id="table_alerts" class="table table-striped display nowrap" style="width:100%">
+            <table id="table_alerts" class="table table-striped display  nowrap" style="width:100%">
               <thead>
                 <tr>
                   <th>profileid</th>
@@ -132,7 +131,7 @@
           </div>
 
           <div id="timeline_flows" style="display:none;">
-            <table id="table_timeline_flows" class="table table-striped display nowrap" style="width:100%">
+            <table id="table_timeline_flows" class="table table-striped display  nowrap" style="width:100%">
               <thead>
                 <tr>
                   <th>timestamp</th>
@@ -171,7 +170,7 @@
           </div>
 
           <div id="outtuples" style="display:none;">
-            <table id="table_outtuples" class="table table-striped display nowrap" style="width:100%">
+            <table id="table_outtuples" class="table table-striped display  nowrap" style="width:100%">
               <thead>
                 <tr>
                   <th>OutTuple</th>
