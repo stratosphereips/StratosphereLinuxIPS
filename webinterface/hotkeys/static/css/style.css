@@ -8,3 +8,10 @@ table tr th:nth-child(3):hover
 #table_timeline_flows tr td:nth-child(5):hover,
 table tr th:nth-child(5):hover
 {cursor:pointer;}
+
+.dataTables_wrapper .dataTables_filter{
+    float: left;
+}
+.dataTables_wrapper .dataTables_length{
+    float: right;
+}
