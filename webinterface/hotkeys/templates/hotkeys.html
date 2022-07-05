@@ -23,6 +23,7 @@
                 </thead>
             </table>
         </div>
+
         <div class="col-md-10">
           <style type="text/css">
             .table_block {
@@ -48,6 +49,7 @@
                 <button class="btn btn-outline-primary active" type="button" id="button_timeline">timeline</button>
                 <button class="btn btn-outline-warning" type="button" id="button_timeline_flows">flows</button>
                 <button class="btn btn-outline-danger" type="button" id="button_outtuples">outtuples</button>
+                <button class="btn btn-outline-success" type="button" id="button_intuples">intuples</button>
                 <button class="btn btn-outline-info" type="button" id="button_dstIP">dstIP</button>
                 <button class="btn btn-outline-info" type="button" id="button_alerts">alerts</button>
               </div>
@@ -183,6 +185,30 @@
               <tfoot>
                 <tr>
                   <th>OutTuple</th>
+                  <th>Behaviour</th>
+                  <th>Country</th>
+                  <th>Reverse DNS</th>
+                  <th>ASN</th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+
+          <div id="intuples" style="display:none;">
+            <table id="table_intuples" class="table table-striped display  nowrap" style="width:100%">
+              <thead>
+                <tr>
+                  <th>InTuple</th>
+                  <th>Behaviour</th>
+                  <th>Country</th>
+                  <th>Reverse DNS</th>
+                  <th>ASN</th>
+                </tr>
+              </thead>
+              <tfoot>
+                <tr>
+                  <th>InTuple</th>
                   <th>Behaviour</th>
                   <th>Country</th>
                   <th>Reverse DNS</th>
