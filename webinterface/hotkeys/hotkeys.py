@@ -19,6 +19,7 @@ class Hotkeys:
         self.bp.add_url_rule("/dstIP/<profile>/<timewindow>", view_func=self.setDstIPflow)
         self.bp.add_url_rule("/outtuples/<profile>/<timewindow>", view_func=self.set_outtuples)
         self.bp.add_url_rule("/DstPortsClientUDPNotEstablished", view_func=self.setDstPortClientUDPNotEstablished)
+        self.bp.add_url_rule("/intuples/<profile>/<timewindow>", view_func=self.set_intuples)
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
 
@@ -140,34 +141,28 @@ class Hotkeys:
         """
         outtuples = self.db.hget(profile + '_' + timewindow, 'OutTuples')
         outtuples = json.loads(outtuples)
+    def set_intuples(self, profile, timewindow):
+        """
+        Set intuples of a chosen profile and timewindow.
+        :param profile: active profile
+        :param timewindow: active timewindow
+        :return: (tuple, string, ip_info)
+        """
         data = []
-        for key, value in outtuples.items():
-            ip, port, protocol = key.split("-")
-            ip_info = self.get_ip_info(ip)
-            outtuple_dict = dict()
-            outtuple_dict.update({'tuple': key, 'string': value[0]})
-            outtuple_dict.update(ip_info)
-            data.append(outtuple_dict)
+        intuples = self.db.hget(profile + '_' + timewindow, 'InTuples')
+        if intuples:
+            intuples = json.loads(intuples)
+            for key, value in intuples.items():
+                ip, port, protocol = key.split("-")
+                ip_info = self.get_ip_info(ip)
 
-        data_length = len(outtuples)
-        total_filtered = len(outtuples)
-        search = request.args.get('search[value]')
-        # search
-        if search:
-            data = [element for element in data if element['dport_name'].lower() == search.lower()]
-            total_filtered = len(data)
-        # pagination
-        start = request.args.get('start', type=int)
-        length = request.args.get('length', type=int)
-        data_page = []
-        if start and length:
-            data_page = outtuples[start:(start + length)]
+                outtuple_dict = dict()
+                outtuple_dict.update({'tuple': key, 'string': value[0]})
+                outtuple_dict.update(ip_info)
+                data.append(outtuple_dict)
 
         return {
-            'data': data_page if data_page else data,
-            'recordsFiltered': total_filtered,
-            'recordsTotal': data_length,
-            'draw': request.args.get('draw', type=int)
+            'data': data
         }
 
     def set_timeline_flows(self, profile, timewindow):
