@@ -151,6 +151,22 @@ profile.onclick_ips();
         ]
     });
 
+    let intuples = $('#table_intuples').DataTable({
+        "bDestroy": true,
+        dom: custom_dom,
+        buttons: [
+            'colvis'
+        ],
+        scrollX: true,
+        columns: [
+            { data: 'tuple' },
+            { data: 'string' },
+            { data: 'geocountry' },
+            { data: 'reverse_dns' },
+            { data: 'asnorg' }
+        ]
+    });
+
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
         dom: custom_dom,
@@ -274,6 +290,10 @@ var chart = Highcharts.chart('container', {
                 break;
             case 'outtuples':
                 active_hotkey_table = outtuples
+                update_table()
+                break;
+            case 'intuples':
+                active_hotkey_table = intuples
                 update_table()
                 break;
             case 'alerts':
