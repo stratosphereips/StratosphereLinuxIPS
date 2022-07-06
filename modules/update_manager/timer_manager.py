@@ -1,6 +1,5 @@
-import time
 from threading import Timer
-
+import asyncio
 
 class InfiniteTimer:
     """
@@ -8,33 +7,33 @@ class InfiniteTimer:
     """
 
     def __init__(self, seconds, target):
-        self._should_continue = False
-        self.is_running = False
+        self.timer_running = False
+        self.target_running = False
         self.seconds = seconds
         self.target = target
         self.thread = None
 
     def _handle_target(self):
-        self.is_running = True
-        self.target()
-        self.is_running = False
+        self.target_running = True
+        asyncio.run(self.target())
+        self.target_running = False
         self._start_timer()
 
     def _start_timer(self):
         if (
-            self._should_continue
+            self.timer_running
         ):   # Code could have been running when cancel was called.
             self.thread = Timer(self.seconds, self._handle_target)
             self.thread.start()
 
     def start(self):
-        if not self._should_continue and not self.is_running:
-            self._should_continue = True
+        if not self.timer_running and not self.target_running:
+            self.timer_running = True
             self._start_timer()
 
     def cancel(self):
         if self.thread is not None:
-            self._should_continue = (
+            self.timer_running = (
                 False  # Just in case thread is running and cancel fails.
             )
             self.thread.cancel()

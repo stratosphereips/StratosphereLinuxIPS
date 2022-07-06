@@ -288,7 +288,7 @@ class Database(object):
                     'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
                 )
 
-                if self.deletePrevdb:
+                if self.deletePrevdb and not '-S' in sys.argv:
                     self.r.flushdb()
 
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots

@@ -377,7 +377,7 @@ class UpdateFileManager:
                 old_e_tag = data.get('e-tag', '')
                 # Check now if E-TAG of file in github is same as downloaded
                 # file here.
-                new_e_tag = self.get_e_tag_from_web(response)
+                new_e_tag = self.get_e_tag(response)
                 if not new_e_tag:
                     # use last modified instead
                     last_modified = self.get_last_modified(response)
@@ -390,7 +390,6 @@ class UpdateFileManager:
                 if old_e_tag != new_e_tag:
                     # Our TI file is old. Download the new one.
                     # we'll be storing this e-tag in our database
-                    self.new_e_tag = new_e_tag
                     return response
 
                 else:
@@ -406,6 +405,7 @@ class UpdateFileManager:
                     __database__.set_TI_file_info(
                         file_name_to_download, malicious_file_info
                     )
+                    self.loaded_ti_files += 1
                     return False
 
             except Exception as inst:
@@ -421,7 +421,7 @@ class UpdateFileManager:
             self.loaded_ti_files += 1
         return False
 
-    def get_e_tag_from_web(self, response):
+    def get_e_tag(self, response):
         """
         :param response: the output of a request done with requests library
         """
@@ -610,8 +610,9 @@ class UpdateFileManager:
                 return False
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
+            new_e_tag = self.get_e_tag(response)
             file_info = {
-                'e-tag': self.new_e_tag,
+                'e-tag': new_e_tag,
                 'time': self.new_update_time
             }
             __database__.set_TI_file_info(file_name_to_download, file_info)
@@ -1454,5 +1455,6 @@ class UpdateFileManager:
                 pass
 
             self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+            self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False

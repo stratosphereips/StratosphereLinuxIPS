@@ -197,9 +197,12 @@ def test_setEvidence(outputQueue):
     assert added_evidence2 == added_evidence
 
     added_evidence = json.loads(added_evidence)
-    current_evidence_key = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
+    description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     #  note that added_evidence may have evidence from other unit tests
-    assert current_evidence_key in added_evidence.keys()
+    evidence_uid =  next(iter(added_evidence))
+    evidence_details = json.loads(added_evidence[evidence_uid])
+    assert 'description' in evidence_details
+    assert evidence_details['description'] == description
 
 
 def test_deleteEvidence(outputQueue):
