@@ -1,29 +1,16 @@
-{% extends "layout.html" %}
-{% block head %}
-  {{super()}}
-  <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/style.css')}}"/>
-{% endblock %}
 
-{% block content %}
-    <div class="col-2">
-      <style type="text/css">
-        .table_block {
-          border-radius: 15px;
-          border-style: solid;}
-      </style>
+<div class="col-2">
+  <style type="text/css">
+    .table_block {
+      border-radius: 15px;
+      border-style: solid;}
+  </style>
 
-      <table id="general_blockedProfilesTWs" class="table table_block">
-        <thead>
-          <tr>
-            <th> BlockedProfilesTW </th>
-          </tr>
-        </thead>
-      </table>
-    </div>
-
-{% endblock %}
-
-{% block scripts %}
-  {{super()}}
-  <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('general.static', filename='js/general.js')}}"></script>
-{% endblock %}
+  <table id="general_blockedProfilesTWs" class="table table_block">
+    <thead>
+      <tr>
+        <th> BlockedProfilesTW </th>
+      </tr>
+    </thead>
+  </table>
+</div>
