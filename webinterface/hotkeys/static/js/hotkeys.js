@@ -87,9 +87,7 @@ profile.onclick_ips();
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         dom: custom_dom,
-        buttons: [
-            'colvis'
-        ],
+        buttons: ['colvis'],
         scrollX: true,
         columns: [
             { data: 'ts' },
@@ -113,9 +111,7 @@ profile.onclick_ips();
     let timeline = $('#table_timeline').DataTable({
         "bDestroy": true,
         dom: custom_dom,
-        buttons: [
-            'colvis'
-        ],
+        buttons: ['colvis'],
         scrollX: true,
         columns: [
             { data: 'timestamp' },
@@ -138,9 +134,7 @@ profile.onclick_ips();
     let outtuples = $('#table_outtuples').DataTable({
         "bDestroy": true,
         dom: custom_dom,
-        buttons: [
-            'colvis'
-        ],
+        buttons: ['colvis'],
         scrollX: true,
         columns: [
             { data: 'tuple' },
@@ -154,9 +148,7 @@ profile.onclick_ips();
     let intuples = $('#table_intuples').DataTable({
         "bDestroy": true,
         dom: custom_dom,
-        buttons: [
-            'colvis'
-        ],
+        buttons: ['colvis'],
         scrollX: true,
         columns: [
             { data: 'tuple' },
