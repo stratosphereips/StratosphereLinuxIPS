@@ -304,6 +304,7 @@ var chart = Highcharts.chart('container', {
         set_profile_timewindow: function (pr, tw) {
             profile = pr;
             timewindow = tw;
+            document.getElementById("active_profile_tw").innerText = "Selected: " + pr + " " + tw;
         },
 
         update_hook: function(){
