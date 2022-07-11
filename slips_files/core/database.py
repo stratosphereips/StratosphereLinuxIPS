@@ -496,8 +496,11 @@ class Database(object):
         """
         return self.r.hget('MAC', MAC)
 
-    def set_ipv6_of_profile(self, profileid, ip):
-        self.r.hmset(profileid, {'IPv6': json.dumps([ip])})
+    def set_ipv6_of_profile(self, profileid, ip: list):
+
+        ipv6 = {
+            'IPv6': json.dumps(ip)}
+        self.r.hmset(profileid, ipv6)
 
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
@@ -542,42 +545,42 @@ class Database(object):
             # we already have the incoming ip associated with this mac in the db
             if incoming_ip in cached_ips:
                 return False
+
+            cached_ips = set(cached_ips)
             # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
-                self.set_ipv6_of_profile(f'profile_{found_ip}', incoming_ip)
-                # add the incoming ipv6 to the list of ips that belong to this mac
-                cached_ips.append(incoming_ip)
-                cached_ips = json.dumps(cached_ips)
-                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
-
+                self.set_ipv6_of_profile(f'profile_{found_ip}', [incoming_ip])
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
-                self.set_ipv6_of_profile(profileid, found_ip)
+                self.set_ipv6_of_profile(profileid, [found_ip])
                 self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
-
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
+                # If 2 IPV6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
-                # add this ipv6 to the list of ipv6 of the incoming ip
-
-                ipv6 = self.r.hmget(profileid, 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    ipv6 = json.loads(ipv6)
-                    ipv6.append(incoming_ip)
-                    ipv6 = json.dumps(ipv6)
-                self.set_ipv6_of_profile(profileid, ipv6)
-
-                # add this ipv6 to the list of ipv6 of the found ip
-                ipv6 = self.r.hmget(f'profile_{found_ip}', 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    ipv6 = json.dumps([incoming_ip])
+                # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
+                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
+                if not ipv6:
+                    ipv6 = [found_ip]
                 else:
                     # found a list of ipv6 in the db
-                    ipv6 = json.loads(ipv6)
-                    ipv6.append(incoming_ip)
-                    ipv6 = json.dumps(ipv6)
+                    ipv6: set = set(json.loads(ipv6))
+                    ipv6.add(found_ip)
+                    ipv6 = list(ipv6)
+                self.set_ipv6_of_profile(profileid, ipv6)
 
+
+                # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
+                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
+                if not ipv6:
+                    ipv6 = [incoming_ip]
+                else:
+                    # found a list of ipv6 in the db
+                    ipv6: set = set(json.loads(ipv6))
+                    ipv6.add(incoming_ip)
+                    #convert to list
+                    ipv6 = list(ipv6)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
 
             else:
@@ -585,6 +588,13 @@ class Database(object):
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
+
+
+            # add the incoming ip to the list of ips that belong to this mac
+            cached_ips.add(incoming_ip)
+            cached_ips = json.dumps(list(cached_ips))
+            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
