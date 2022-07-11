@@ -3245,7 +3245,7 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db = self.get_dns_resolution(answer)
+                ip_info_from_db = self.get_reverse_dns(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
@@ -3303,7 +3303,7 @@ class Database(object):
         """
         self.r.hset("DomainsResolved", query, json.dumps(ips_to_add))
 
-    def get_dns_resolution(self, ip):
+    def get_reverse_dns(self, ip):
         """
         Get DNS name of the IP, a list
         returns a dict with {ts: .. ,

@@ -326,7 +326,7 @@ class Module(Module, multiprocessing.Process):
         if other_ip:
             other_ip = json.loads(other_ip)[0]
         # get the domain of this ip
-        dns_resolution = __database__.get_dns_resolution(daddr)
+        dns_resolution = __database__.get_reverse_dns(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
@@ -492,7 +492,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
-        answers_dict = __database__.get_dns_resolution(daddr)
+        answers_dict = __database__.get_reverse_dns(daddr)
         if not answers_dict:
             # self.print(f'No DNS resolution in {answers_dict}')
             # There is no DNS resolution, but it can be that Slips is
@@ -540,7 +540,7 @@ class Module(Module, multiprocessing.Process):
                 except ValueError:
                     pass
 
-    def check_dns_resolution_without_connection(
+    def check_dns_without_connection(
             self, domain, answers, timestamp, profileid, twid, uid
     ):
         """
@@ -616,7 +616,7 @@ class Module(Module, multiprocessing.Process):
             params = [domain, answers, timestamp, profileid, twid, uid]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}. time {datetime.datetime.now()}')
             timer = TimerThread(
-                15, self.check_dns_resolution_without_connection, params
+                15, self.check_dns_without_connection, params
             )
             timer.start()
         else:
@@ -1424,7 +1424,7 @@ class Module(Module, multiprocessing.Process):
 
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
-                        self.check_dns_resolution_without_connection(
+                        self.check_dns_without_connection(
                             domain, answers, stime, profileid, twid, uid
                         )
                     if rcode_name:
