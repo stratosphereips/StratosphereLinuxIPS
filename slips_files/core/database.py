@@ -3216,9 +3216,9 @@ class Database(object):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
-        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        2- For each domain, store the ip
-        stored in DomainsInfo
+           in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        2- For each CNAME, store the ip
+
         :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
@@ -3271,11 +3271,17 @@ class Database(object):
                     'resolved-by': resolved_by,
                 }
                 ip_info = json.dumps(ip_info)
-                # we store ALL dns resolutions seen since starting slips in DNSresolution
+                # we store ALL dns resolutions seen since starting slips
+                # store with the IP as the key
                 self.r.hset('DNSresolution', answer, ip_info)
+                # store with the domain as the key:
+                self.r.hset('ResolvedDomains', domains[0], answer)
                 # these ips will be associated with the query in our db
                 ips_to_add.append(answer)
 
+            #  For each CNAME in the answer
+            # store it in DomainsInfo in the cache db (used for kalipso)
+            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
             if ips_to_add:
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
@@ -3289,6 +3295,13 @@ class Database(object):
                     pass
 
                 self.setInfoForDomains(query, domaindata, mode='add')
+                self.set_domain_resolution(query, ips_to_add)
+
+    def set_domain_resolution(self, query, ips_to_add):
+        """
+        stores all the resolved domains with their ips in the db
+        """
+        self.r.hset("DomainsResolved", query, json.dumps(ips_to_add))
 
     def get_dns_resolution(self, ip):
         """
