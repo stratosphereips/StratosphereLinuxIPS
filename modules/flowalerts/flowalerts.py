@@ -540,6 +540,20 @@ class Module(Module, multiprocessing.Process):
                 except ValueError:
                     pass
 
+    def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
+        """
+        check if any ip of the given CNAMEs is contacted
+        """
+        for CNAME in answers:
+            if not validators.domain(CNAME):
+                # it's an ip
+                continue
+            ips = __database__.get_domain_resolution(CNAME)
+            for ip in ips:
+                if ip in contacted_ips:
+                    return True
+        return False
+
     def check_dns_without_connection(
             self, domain, answers, timestamp, profileid, twid, uid
     ):
@@ -547,7 +561,6 @@ class Module(Module, multiprocessing.Process):
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-        # Ignore some domains because its is ok if they do DNS without a connection
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
@@ -604,6 +617,11 @@ class Module(Module, multiprocessing.Process):
             if ip in contacted_ips:
                 # this dns resolution has a connection. We can exit
                 return False
+
+        # Check if there was a connection to any of the CNAMEs
+        if self.is_CNAME_contacted(answers, contacted_ips):
+            # this is not a DNS without resolution
+            return False
 
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
