@@ -3297,11 +3297,20 @@ class Database(object):
                 self.setInfoForDomains(query, domaindata, mode='add')
                 self.set_domain_resolution(query, ips_to_add)
 
-    def set_domain_resolution(self, query, ips_to_add):
+    def set_domain_resolution(self, domain, ips):
         """
         stores all the resolved domains with their ips in the db
         """
-        self.r.hset("DomainsResolved", query, json.dumps(ips_to_add))
+        self.r.hset("DomainsResolved", domain, json.dumps(ips))
+
+    def get_domain_resolution(self, domain):
+        """
+        Returns the IPs resolved by this domain
+        """
+        ips = self.r.hget("DomainsResolved", domain)
+        if not ips:
+            return []
+        return json.loads(ips)
 
     def get_reverse_dns(self, ip):
         """
