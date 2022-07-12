@@ -224,7 +224,7 @@ class EvidenceProcess(multiprocessing.Process):
         :return : string with a correct evidence displacement
         """
         evidence_string = ''
-        dns_resolution_detection_info = __database__.get_dns_resolution(
+        dns_resolution_detection_info = __database__.get_reverse_dns(
             detection_info
         )
         dns_resolution_detection_info = dns_resolution_detection_info.get(
@@ -233,7 +233,7 @@ class EvidenceProcess(multiprocessing.Process):
         dns_resolution_detection_info = dns_resolution_detection_info[
                                         :3] if dns_resolution_detection_info else ''
 
-        dns_resolution_ip = __database__.get_dns_resolution(ip)
+        dns_resolution_ip = __database__.get_reverse_dns(ip)
         dns_resolution_ip = dns_resolution_ip.get('domains', [])
         if len(dns_resolution_ip) >= 1:
             dns_resolution_ip = dns_resolution_ip[0]
@@ -345,7 +345,7 @@ class EvidenceProcess(multiprocessing.Process):
             pass
         try:
             # self.print(f"DNS of src IP {self.column_values['saddr']}: {__database__.get_dns_resolution(self.column_values['saddr'])}")
-            src_dns_domains = __database__.get_dns_resolution(flow['saddr'])
+            src_dns_domains = __database__.get_reverse_dns(flow['saddr'])
             src_dns_domains = src_dns_domains.get('domains', [])
 
             domains_to_check_src.extend(iter(src_dns_domains))

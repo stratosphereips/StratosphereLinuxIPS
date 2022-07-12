@@ -89,7 +89,7 @@ class Whitelist:
 
             try:
                 # self.print(f"DNS of dst IP {column_values['daddr']}: {__database__.get_dns_resolution(column_values['daddr'])}")
-                dst_dns_domains = __database__.get_dns_resolution(
+                dst_dns_domains = __database__.get_reverse_dns(
                     column_values['daddr']
                 )
                 dst_dns_domains = dst_dns_domains.get('domains', [])
@@ -553,7 +553,7 @@ class Whitelist:
             pass
         try:
             # self.print(f"DNS of src IP {column_values['saddr']}: {__database__.get_dns_resolution(column_values['saddr'])}")
-            src_dns_domains = __database__.get_dns_resolution(
+            src_dns_domains = __database__.get_reverse_dns(
                 column_values['saddr']
             )
             src_dns_domains = src_dns_domains.get('domains', [])

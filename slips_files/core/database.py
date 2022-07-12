@@ -3226,9 +3226,9 @@ class Database(object):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
-        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        2- For each domain, store the ip
-        stored in DomainsInfo
+           in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        2- For each CNAME, store the ip
+
         :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
@@ -3255,7 +3255,7 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db = self.get_dns_resolution(answer)
+                ip_info_from_db = self.get_reverse_dns(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
@@ -3281,11 +3281,17 @@ class Database(object):
                     'resolved-by': resolved_by,
                 }
                 ip_info = json.dumps(ip_info)
-                # we store ALL dns resolutions seen since starting slips in DNSresolution
+                # we store ALL dns resolutions seen since starting slips
+                # store with the IP as the key
                 self.r.hset('DNSresolution', answer, ip_info)
+                # store with the domain as the key:
+                self.r.hset('ResolvedDomains', domains[0], answer)
                 # these ips will be associated with the query in our db
                 ips_to_add.append(answer)
 
+            #  For each CNAME in the answer
+            # store it in DomainsInfo in the cache db (used for kalipso)
+            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
             if ips_to_add:
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
@@ -3299,8 +3305,24 @@ class Database(object):
                     pass
 
                 self.setInfoForDomains(query, domaindata, mode='add')
+                self.set_domain_resolution(query, ips_to_add)
 
-    def get_dns_resolution(self, ip):
+    def set_domain_resolution(self, domain, ips):
+        """
+        stores all the resolved domains with their ips in the db
+        """
+        self.r.hset("DomainsResolved", domain, json.dumps(ips))
+
+    def get_domain_resolution(self, domain):
+        """
+        Returns the IPs resolved by this domain
+        """
+        ips = self.r.hget("DomainsResolved", domain)
+        if not ips:
+            return []
+        return json.loads(ips)
+
+    def get_reverse_dns(self, ip):
         """
         Get DNS name of the IP, a list
         returns a dict with {ts: .. ,
