@@ -151,7 +151,8 @@ class Main:
 
 
     def generate_random_redis_port(self):
-        """Keeps trying to connect to random generated ports until we're connected.
+        """
+        Keeps trying to connect to random generated ports until we're connected.
         returns the used port
         """
         try:
@@ -886,6 +887,13 @@ class Main:
             help='Kill all unused redis servers',
         )
         parser.add_argument(
+            '-m',
+            '--multiinstance',
+            action='store_true',
+            required=False,
+            help='Run multiple instances of slips, don\'t overwrite the old one',
+        )
+        parser.add_argument(
             '-P',
             '--port',
             action='store',
@@ -910,6 +918,9 @@ class Main:
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # used in case we need to remove the line using 6379 from running logfile
+        tmpfile = 'tmp.txt'
         with open(self.running_logfile, 'a') as f:
             # add the header lines if the file is newly created
             if f.tell() == 0:
@@ -925,6 +936,24 @@ class Main:
                 f'{redis_pid},{self.zeek_folder},{self.args.output},'
                 f'{bool(self.args.daemon)},{self.args.save}\n'
             )
+
+        if redis_port == 6379:
+            redis_port = str(redis_port)
+            with open(self.running_logfile, 'r') as f:
+                with open(tmpfile, 'w') as tmp:
+                    all_lines = f.read().splitlines()
+                    # delete the line using that port because the info will be replaced
+                    for line in all_lines[:-1]:
+                        if redis_port not in line:
+                            tmp.write(f'{line}\n')
+                    # write the last line
+                    tmp.write(all_lines[-1]+'\n')
+            # replace file with original name
+            os.replace(tmpfile, self.running_logfile)
+
+
+
+
 
     def set_mode(self, mode, daemon=''):
         """
@@ -1244,12 +1273,10 @@ class Main:
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 
-
     def start(self):
         """Main Slips Function"""
         try:
             slips_version = f'Slips. Version {version}'
-            from slips_files.common.slips_utils import utils
 
             branch_info = utils.get_branch_info()
             if branch_info != False:
@@ -1332,9 +1359,10 @@ class Main:
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 redis_port = int(self.args.port)
-            else:
+            elif self.args.multiinstance:
                 redis_port = self.generate_random_redis_port()
-
+            else:
+                redis_port = 6379
 
             # Output thread. This thread should be created first because it handles
             # the output of the rest of the threads.
