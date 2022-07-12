@@ -301,4 +301,4 @@ def test_get_the_other_ip_version(database):
     database.set_ipv6_of_profile(profileid, ipv6)
     # the other ip version is ipv6
     other_ip = json.loads(database.get_the_other_ip_version(profileid))
-    assert other_ip[0] == ipv6
+    assert other_ip == ipv6

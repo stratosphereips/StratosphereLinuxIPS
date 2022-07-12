@@ -324,7 +324,7 @@ class Module(Module, multiprocessing.Process):
         # get the other ip version of this computer
         other_ip = __database__.get_the_other_ip_version(profileid)
         if other_ip:
-            other_ip = json.loads(other_ip)[0]
+            other_ip = json.loads(other_ip)
         # get the domain of this ip
         dns_resolution = __database__.get_reverse_dns(daddr)
 
