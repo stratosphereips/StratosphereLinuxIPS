@@ -1,3 +1,8 @@
+-0.9.3
+* Slips
+- Run multiple slips instances on demand using (-m), and use redis port 6379 by default.
+- Fix false positive 'DNS resolution without connection' alerts 
+
 -0.9.2
 * Slips
 - Fix saving the database in MacOS and Linux
