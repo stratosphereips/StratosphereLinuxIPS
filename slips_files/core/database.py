@@ -1680,12 +1680,54 @@ class Database(object):
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
-        evidence_IDs = json.dumps(evidence_IDs)
-        alert = {alert_ID: evidence_IDs}
+        alert = {
+            alert_ID: json.dumps(evidence_IDs)
+        }
         alert = json.dumps(alert)
         self.r.hset(profileid + self.separator + twid, 'alerts', alert)
 
-        # self.r.hset('alerts', alert_ID, evidence_IDs)
+        # the structure of alerts key is
+        # alerts {
+        #     profile_<ip>: {
+        #               twid1: {
+        #                   alert_ID1: [evidence_IDs],
+        #                   alert_ID2: [evidence_IDs]
+        #                  }
+        #             }
+        # }
+
+        profile_alerts = self.r.hget('alerts', profileid)
+        # alert ids look like this profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
+        alert_hash = alert_ID.split('_')[-1]
+        alert = {
+            twid: {
+                alert_hash: evidence_IDs
+            }
+        }
+        if not profile_alerts:
+            alert = json.dumps(alert)
+            self.r.hset('alerts', profileid, alert)
+            return
+
+        # the format of this dict is {twid1: {alert_hash: [evidence_IDs]},
+        #                              twid2: {alert_hash: [evidence_IDs]}}
+        profile_alerts:dict = json.loads(profile_alerts)
+
+        try:
+            # we already have a twid with alerts in this profile, update it
+            # the format of twid_alerts is {alert_hash: evidence_IDs}
+            twid_alerts: dict = profile_alerts[twid]
+            twid_alerts.update({
+                alert_hash: evidence_IDs
+            })
+            profile_alerts[twid] = twid_alerts
+        except KeyError:
+            # first time having an alert for this twid
+            profile_alerts.update(alert)
+
+        profile_alerts = json.dumps(profile_alerts)
+        self.r.hset('alerts', profileid, profile_alerts)
+
 
     def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
