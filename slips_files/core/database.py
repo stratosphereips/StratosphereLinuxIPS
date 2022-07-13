@@ -1387,6 +1387,7 @@ class Database(object):
             sbytes = columns['sbytes']
             pkts = columns['pkts']
             spkts = columns['spkts']
+            dpkts = columns['dpkts']
             state = columns['state']
             proto = columns['proto'].upper()
             daddr = columns['daddr']
