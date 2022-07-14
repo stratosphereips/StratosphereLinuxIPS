@@ -117,16 +117,16 @@ profile.onclick_ips();
             { data: 'timestamp' },
             { data: 'dport_name' },
             { data: 'dns_resolution' },
+            { data: 'preposition' },
             { data: 'daddr',
             "className": 'daddr'},
-            { data: 'preposition' },
             { data: 'dport/proto' },
             { data: 'state' },
-            { data: 'warning' },
             { data: 'Sent' },
             { data: 'Recv' },
             { data: 'Tot' },
             { data: 'Duration' },
+            { data: 'warning' },
             { data: 'critical warning' },
             { data: 'info' }
         ]
