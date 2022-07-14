@@ -180,17 +180,17 @@ profile.onclick_ips();
     });
 
 
-
-    function addData(chart, labels, dataset) {
-        chart.data.labels = labels;
-        chart.data.datasets[0] = dataset
-        chart.update();
-    }
-
-    function addOptions(chart, options) {
-        chart.options = options;
-        chart.update();
-    }
+// TODO: decide and fix chart
+//    function addData(chart, labels, dataset) {
+//        chart.data.labels = labels;
+//        chart.data.datasets[0] = dataset
+//        chart.update();
+//    }
+//
+//    function addOptions(chart, options) {
+//        chart.options = options;
+//        chart.update();
+//    }
 
 // TODO: decide and fix chart
 //
