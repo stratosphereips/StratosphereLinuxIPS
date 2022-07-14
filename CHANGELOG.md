@@ -1,6 +1,17 @@
+-0.9.3
+* Slips
+- Run multiple slips instances on demand using (-m), and use redis port 6379 by default.
+- Fix false positive 'DNS resolution without connection' alerts 
+
 -0.9.2
 * Slips
 - Fix saving the database in MacOS and Linux
+- Add a MacOS dockerfile to be able run Docker in MacOS
+- Fix problem updating TI files
+- Fix problem starting and stopping the Daemon
+- Fix false positive ARP MITM attacks
+- Fix problem stopping slips when using whitelists
+- Fix problem opening unused redis ports
 
 -0.9.1
 * Slips

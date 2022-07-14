@@ -45,7 +45,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.1'
+version = '0.9.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -59,7 +59,7 @@ class Main:
         self.name = 'Main'
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
-        self.used_redis_servers = 'used_redis_servers.txt'
+        self.running_logfile = 'running_slips_info.txt'
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
@@ -76,7 +76,6 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.zeek_folder = f'./zeek_files_{self.input_information}/'
-
 
     def read_configuration(self, config, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
@@ -152,13 +151,19 @@ class Main:
 
 
     def generate_random_redis_port(self):
-        """Keeps trying to connect to random generated ports until we're connected.
+        """
+        Keeps trying to connect to random generated ports until we're connected.
         returns the used port
         """
         try:
             while True:
                 # generate a random unused port
                 port = random.randint(32768, 32850)
+                # 6379 is for the cache db,
+                # the cache db shouldn't be closed when using -k
+                # so this is to avoid storing the port in used_redis_server.txt
+                if port == 6379:
+                    continue
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
@@ -370,7 +375,8 @@ class Main:
         """
 
         try:
-            print('\n' + '-' * 27)
+            if not self.args.stopdaemon:
+                print('\n' + '-' * 27)
             print('Stopping Slips')
 
             # set analysis end date
@@ -380,12 +386,15 @@ class Main:
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
-
             finished_modules = []
             # get dict of PIDs spawned by slips
             PIDs = __database__.get_PIDs()
+
             # we don't want to kill this process
-            PIDs.pop('slips.py')
+            try:
+                PIDs.pop('slips.py')
+            except KeyError:
+                pass
             slips_processes = len(list(PIDs.keys()))
 
             # Send manual stops to the processes not using channels
@@ -409,93 +418,96 @@ class Main:
             # give slips enough time to close all modules - make sure all modules aren't considered 'busy' when slips stops
             max_loops = 430
             # loop until all loaded modules are finished
-            try:
-                while (
-                    len(finished_modules) < slips_processes and max_loops != 0
-                ):
-                    # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
-                    try:
-                        message = self.c1.get_message(timeout=0.01)
-                    except NameError:
-                        # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                        message = {
-                            'data': 'dummy_value_not_stopprocess',
-                            'channel': 'finished_modules',
-                        }
+            if not self.args.stopdaemon:
+                # in the case of -S, slips doesn't even start the modules,
+                # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
+                try:
+                    while (
+                        len(finished_modules) < slips_processes and max_loops != 0
+                    ):
+                        # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
+                        try:
+                            message = self.c1.get_message(timeout=0.01)
+                        except NameError:
+                            # Sometimes the c1 variable does not exist yet. So just force the shutdown
+                            message = {
+                                'data': 'dummy_value_not_stopprocess',
+                                'channel': 'finished_modules',
+                            }
 
-                    if message and message['data'] == 'stop_process':
-                        continue
-                    if utils.is_msg_intended_for(message, 'finished_modules'):
-                        # all modules must reply with their names in this channel after
-                        # receiving the stop_process msg
-                        # to confirm that all processing is done and we can safely exit now
-                        module_name = message['data']
-
-                        if module_name not in finished_modules:
-                            finished_modules.append(module_name)
-                            try:
-                                # remove module from the list of opened pids
-                                PIDs.pop(module_name)
-                            except KeyError:
-                                # reaching this block means a module that belongs to slips
-                                # is publishing in  finished_modules
-                                # but slips doesn't know of it's PID!!
-                                print(
-                                    f'[Main] Module{module_name} just published in '
-                                    f"finished_modules channel and Slips doesn't know about it's PID!",
-                                )
-                                # pass insead of continue because
-                                # this module is finished and we need to print that it has stopped
-                                pass
-                            modules_left = len(list(PIDs.keys()))
-                            # to vertically align them when printing
-                            module_name = module_name + ' ' * (
-                                20 - len(module_name)
-                            )
-                            print(
-                                f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
-                            )
-                    max_loops -= 1
-                    # after reaching the max_loops and before killing the modules that aren't finished,
-                    # make sure we're not in the middle of processing
-                    if len(PIDs) > 0 and max_loops < 2:
-                        if not warning_printed:
-                            # some modules publish in finished_modules channel before slips.py starts listening,
-                            # but they finished gracefully.
-                            # remove already stopped modules from PIDs dict
-                            for module, pid in PIDs.items():
-                                try:
-                                    # signal 0 is used to check if the pid exists
-                                    os.kill(int(pid), 0)
-                                except ProcessLookupError:
-                                    # pid doesn't exist because module already stopped
-                                    finished_modules.append(module)
-
-                            # exclude the module that are already stopped from the pending modules
-                            pending_modules = [
-                                module
-                                for module in list(PIDs.keys())
-                                if module not in finished_modules
-                            ]
-                            if len(pending_modules) > 0:
-                                print(
-                                    f'\n[Main] The following modules are busy working on your data.'
-                                    f'\n\n{pending_modules}\n\n'
-                                    'You can wait for them to finish, or you can press CTRL-C again to force-kill.\n'
-                                )
-                                warning_printed = True
-                        # -P flag is only used in integration tests,
-                        # so we don't care about the modules finishing their job when testing
-                        # instead, kill them
-                        if not self.args.port:
-                            # delay killing unstopped modules
-                            max_loops += 1
+                        if message and message['data'] == 'stop_process':
                             continue
-            except KeyboardInterrupt:
-                # either the user wants to kill the remaining modules (pressed ctrl +c again)
-                # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
-                # pass to kill the remaining modules
-                pass
+                        if utils.is_msg_intended_for(message, 'finished_modules'):
+                            # all modules must reply with their names in this channel after
+                            # receiving the stop_process msg
+                            # to confirm that all processing is done and we can safely exit now
+                            module_name = message['data']
+
+                            if module_name not in finished_modules:
+                                finished_modules.append(module_name)
+                                try:
+                                    # remove module from the list of opened pids
+                                    PIDs.pop(module_name)
+                                except KeyError:
+                                    # reaching this block means a module that belongs to slips
+                                    # is publishing in  finished_modules
+                                    # but slips doesn't know of it's PID!!
+                                    print(
+                                        f'[Main] Module{module_name} just published in '
+                                        f"finished_modules channel and Slips doesn't know about it's PID!",
+                                    )
+                                    # pass insead of continue because
+                                    # this module is finished and we need to print that it has stopped
+                                    pass
+                                modules_left = len(list(PIDs.keys()))
+                                # to vertically align them when printing
+                                module_name = module_name + ' ' * (
+                                    20 - len(module_name)
+                                )
+                                print(
+                                    f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
+                                )
+                        max_loops -= 1
+                        # after reaching the max_loops and before killing the modules that aren't finished,
+                        # make sure we're not in the middle of processing
+                        if len(PIDs) > 0 and max_loops < 2:
+                            if not warning_printed:
+                                # some modules publish in finished_modules channel before slips.py starts listening,
+                                # but they finished gracefully.
+                                # remove already stopped modules from PIDs dict
+                                for module, pid in PIDs.items():
+                                    try:
+                                        # signal 0 is used to check if the pid exists
+                                        os.kill(int(pid), 0)
+                                    except ProcessLookupError:
+                                        # pid doesn't exist because module already stopped
+                                        finished_modules.append(module)
+
+                                # exclude the module that are already stopped from the pending modules
+                                pending_modules = [
+                                    module
+                                    for module in list(PIDs.keys())
+                                    if module not in finished_modules
+                                ]
+                                if len(pending_modules) > 0:
+                                    print(
+                                        f'\n[Main] The following modules are busy working on your data.'
+                                        f'\n\n{pending_modules}\n\n'
+                                        'You can wait for them to finish, or you can press CTRL-C again to force-kill.\n'
+                                    )
+                                    warning_printed = True
+                            # -P flag is only used in integration tests,
+                            # so we don't care about the modules finishing their job when testing
+                            # instead, kill them
+                            if not self.args.port:
+                                # delay killing unstopped modules
+                                max_loops += 1
+                                continue
+                except KeyboardInterrupt:
+                    # either the user wants to kill the remaining modules (pressed ctrl +c again)
+                    # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
+                    # pass to kill the remaining modules
+                    pass
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
@@ -607,42 +619,50 @@ class Main:
         except KeyboardInterrupt:
             return False
 
-    def get_open_servers_PIDs(self) -> dict:
+    def get_open_redis_servers(self) -> dict:
         """
         Returns the dict of PIDs and ports of the redis unused servers started by slips
         """
         self.open_servers_PIDs = {}
-
-        with open(self.used_redis_servers, 'r') as f:
-            for line in f.read().splitlines():
-                # skip comments
-                if (
-                    line.startswith('#')
-                    or line.startswith('Date')
-                    or len(line) < 3
-                ):
-                    continue
-                line = re.split(r'\s{2,}', line)
-
-                pid, port = line[-1], line[-2]
-                self.open_servers_PIDs[pid] = port
-        return self.open_servers_PIDs
+        try:
+            with open(self.running_logfile, 'r') as f:
+                for line in f.read().splitlines():
+                    # skip comments
+                    if (
+                        line.startswith('#')
+                        or line.startswith('Date')
+                        or len(line) < 3
+                    ):
+                        continue
+                    line = line.split(',')
+                    pid, port = line[3], line[2]
+                    self.open_servers_PIDs[pid] = port
+            return self.open_servers_PIDs
+        except FileNotFoundError:
+            # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
+            return {}
 
     def close_open_redis_servers(self):
-        """Function to warn about unused open redis-servers"""
+        """Function to close unused open redis-servers"""
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
-            self.get_open_servers_PIDs()
+            self.get_open_redis_servers()
 
         if len(self.open_servers_PIDs) == 0:
             print('No unused open servers to kill.')
             sys.exit(-1)
             return
 
+        failed_to_close = 0
         for pid, port in self.open_servers_PIDs.items():
-            if pid == 'Not Found':
+            try:
+                pid = int(pid)
+            except ValueError:
                 # The server was killed before logging its PID
+                # the pid of it is 'not found'
+                failed_to_close += 1
                 continue
+
 
             # clear the server opened on this port
             try:
@@ -655,14 +675,14 @@ class Main:
                 continue
 
             # signal 0 is to check if the process is still running or not
-            # it returns 1 if the process exited
+            # it returns 1 if the process used_redis_servers.txtexited
             try:
                 # check if the process is still running
-                while os.kill(int(pid), 0) != 1:
+                while os.kill(pid, 0) != 1:
                     # sigterm is 9
-                    os.kill(int(pid), 9)
+                    os.kill(pid, 9)
             except (ProcessLookupError, PermissionError):
-                # process already exited, sometimes this exception is raised
+                # ProcessLookupError: process already exited, sometimes this exception is raised
                 # but the process is still running, keep trying to kill it
                 # PermissionError happens when the user tries to close redis-servers
                 # opened by root while he's not root,
@@ -670,14 +690,9 @@ class Main:
                 # opened without root while he's root
                 continue
 
-        print(f'Killed {len(self.open_servers_PIDs.keys())} Redis Servers.')
-        # delete the closed redis servers from used_redis_servers.txt
-        with open(self.used_redis_servers, 'w') as f:
-            f.write(
-                '# This file contains a list of used redis ports.\n'
-                '# Once a server is killed, it will be removed from this file.\n'
-                'Date                   File or interface                   Used port       Server PID\n'
-            )
+        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
+        print(f'Killed {killed_servers} Redis Servers.')
+        os.remove(self.running_logfile)
         sys.exit(-1)
 
     def is_debugger_active(self) -> bool:
@@ -872,6 +887,13 @@ class Main:
             help='Kill all unused redis servers',
         )
         parser.add_argument(
+            '-m',
+            '--multiinstance',
+            action='store_true',
+            required=False,
+            help='Run multiple instances of slips, don\'t overwrite the old one',
+        )
+        parser.add_argument(
             '-P',
             '--port',
             action='store',
@@ -896,10 +918,42 @@ class Main:
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with open(self.used_redis_servers, 'a') as f:
+
+        # used in case we need to remove the line using 6379 from running logfile
+        tmpfile = 'tmp.txt'
+        with open(self.running_logfile, 'a') as f:
+            # add the header lines if the file is newly created
+            if f.tell() == 0:
+                f.write(
+                    '# This file contains a list of used redis ports.\n'
+                    '# Once a server is killed, it will be removed from this file.\n'
+                    'Date, File or interface, Used port, Server PID,'
+                    ' Output Zeek Dir, Logs Dir, Is Daemon, Save the DB\n'
+                )
+
             f.write(
-                f'{now: <16}    {self.input_information: <35}    {redis_port: <6}        {redis_pid}\n'
+                f'{now},{self.input_information},{redis_port},'
+                f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                f'{bool(self.args.daemon)},{self.args.save}\n'
             )
+
+        if redis_port == 6379:
+            redis_port = str(redis_port)
+            with open(self.running_logfile, 'r') as f:
+                with open(tmpfile, 'w') as tmp:
+                    all_lines = f.read().splitlines()
+                    # delete the line using that port because the info will be replaced
+                    for line in all_lines[:-1]:
+                        if redis_port not in line:
+                            tmp.write(f'{line}\n')
+                    # write the last line
+                    tmp.write(all_lines[-1]+'\n')
+            # replace file with original name
+            os.replace(tmpfile, self.running_logfile)
+
+
+
+
 
     def set_mode(self, mode, daemon=''):
         """
@@ -1219,12 +1273,10 @@ class Main:
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 
-
     def start(self):
         """Main Slips Function"""
         try:
             slips_version = f'Slips. Version {version}'
-            from slips_files.common.slips_utils import utils
 
             branch_info = utils.get_branch_info()
             if branch_info != False:
@@ -1307,9 +1359,10 @@ class Main:
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 redis_port = int(self.args.port)
-            else:
+            elif self.args.multiinstance:
                 redis_port = self.generate_random_redis_port()
-
+            else:
+                redis_port = 6379
 
             # Output thread. This thread should be created first because it handles
             # the output of the rest of the threads.
@@ -1532,7 +1585,7 @@ class Main:
             )
 
             # warn about unused open redis servers
-            open_servers = len(self.get_open_servers_PIDs())
+            open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
                 self.print(
                     f'Warning: You have {open_servers} redis servers running. '

@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.9.1
+Slips v0.9.2
 
 
 <h3 align="center"> 
@@ -43,14 +43,14 @@ Slips is a behavioral intrusion prevention system that uses machine learning to 
 network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to
 provide a good visualisation for the analyst. It can analyze network traffic in real time, network captures such as pcap
 files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and
-highlights suspicious behaviour that need the analyst attention.
+highlights suspicious behaviour that needs the analyst's attention.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px"
 title="Slips in action.">
 
 
 
-# Features
+# Modules
 
 Slips is written in Python and is highly modular. Each module is designed to perform a specific detection in the network traffic. The complete documentation of Slips internal architecture and instructions how to implement a new module are available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
 
@@ -134,7 +134,55 @@ To allow the Slips docker container to analyze and block the traffic in your Lin
 ```
 ### Build Slips from the Dockerfile
 
-To build a local docker image of Slips follow the next steps:
+You can build the Docker of Slips, but consider that different operating systems have different requirements. This is because tensorflow access the hardware directly and therfore docker not always can work well. For example in macos M1 computers the use of tensorflow from inside docker is still not supported. 
+
+The main limitation of running Slips in a Docker is that everytime the container is stopped, the redis database of cached data is deleted and you lose all your Threat Intelligence (TI) data and previous detections. This usually means that the next time your run Slips, it will start making detections without all the TI data until the data is downloaded again. The best options to solve these are: 1) Keep the container up between scans. 2) Start the redis DB from the host so Docker reuses it.
+
+#### Building a Docker For macos
+To build a Docker image of Slips for macos follow the next steps:
+
+```bash
+    # clone the Slips repository in your host computer
+    git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
+    
+    # access the Slips repository directory
+    cd StratosphereLinuxIPS/
+    
+    # build the docker image from the recommended Dockerfile
+    docker build --no-cache -t slips -f docker/macos-image/Dockerfile .
+```
+
+To use Slips with files alredy inside the docker you can do;
+    
+```
+    # run a new Slips container from the freshly built local image
+    docker run -it --rm --net=host --name slips slips
+    
+    # run Slips using the default configuration in one of the provided test datasets
+    ./slips.py -c slips.conf -f dataset/test3.binetflow
+```
+
+To use Slips with files shared with the host, run:
+```
+    # run a new Slips container from the freshly built local image
+    docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset slips
+
+    # Optionally put a new file
+    cp yourfile.pcap $(pwd)/datasets/
+    
+    # run Slips using the default configuration in one of the provided test datasets
+    ./slips.py -c slips.conf -f dataset/yourfile.pcap
+```
+
+To use Slips with packets from the host interface, run the following. BUT beware that the big limitation of using Docker in macos for interface capture is that until 2022/06/28 Docker for macos does not completely passes all packets to the container when run in mode --cap-add=NET_ADMIN.
+```
+    docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips slips
+```
+
+
+
+#### Building a Docker For Linux
+To build a Docker image of Slips for linux follow the next steps:
 
 ```bash
     # clone the Slips repository in your host computer

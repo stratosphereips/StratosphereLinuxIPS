@@ -288,7 +288,7 @@ class Database(object):
                     'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
                 )
 
-                if self.deletePrevdb:
+                if self.deletePrevdb and not '-S' in sys.argv:
                     self.r.flushdb()
 
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
@@ -496,8 +496,11 @@ class Database(object):
         """
         return self.r.hget('MAC', MAC)
 
-    def set_ipv6_of_profile(self, profileid, ip):
-        self.r.hmset(profileid, {'IPv6': json.dumps([ip])})
+    def set_ipv6_of_profile(self, profileid, ip: list):
+
+        ipv6 = {
+            'IPv6': json.dumps(ip)}
+        self.r.hmset(profileid, ipv6)
 
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
@@ -542,42 +545,42 @@ class Database(object):
             # we already have the incoming ip associated with this mac in the db
             if incoming_ip in cached_ips:
                 return False
+
+            cached_ips = set(cached_ips)
             # make sure 1 profile is ipv4 and the other is ipv6 (so we don't mess with MITM ARP detections)
             if validators.ipv6(incoming_ip) and validators.ipv4(found_ip):
                 # associate the ipv4 we found with the incoming ipv6 and vice versa
                 self.set_ipv4_of_profile(profileid, found_ip)
-                self.set_ipv6_of_profile(f'profile_{found_ip}', incoming_ip)
-                # add the incoming ipv6 to the list of ips that belong to this mac
-                cached_ips.append(incoming_ip)
-                cached_ips = json.dumps(cached_ips)
-                self.r.hset('MAC', MAC_info['MAC'], cached_ips)
-
+                self.set_ipv6_of_profile(f'profile_{found_ip}', [incoming_ip])
             elif validators.ipv6(found_ip) and validators.ipv4(incoming_ip):
                 # associate the ipv6 we found with the incoming ipv4 and vice versa
-                self.set_ipv6_of_profile(profileid, found_ip)
+                self.set_ipv6_of_profile(profileid, [found_ip])
                 self.set_ipv4_of_profile(f'profile_{found_ip}', incoming_ip)
-
             elif validators.ipv6(found_ip) and validators.ipv6(incoming_ip):
+                # If 2 IPV6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
-                # add this ipv6 to the list of ipv6 of the incoming ip
-
-                ipv6 = self.r.hmget(profileid, 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    ipv6 = json.loads(ipv6)
-                    ipv6.append(incoming_ip)
-                    ipv6 = json.dumps(ipv6)
-                self.set_ipv6_of_profile(profileid, ipv6)
-
-                # add this ipv6 to the list of ipv6 of the found ip
-                ipv6 = self.r.hmget(f'profile_{found_ip}', 'IPv6')
-                if not ipv6 or ipv6 == [None]:
-                    ipv6 = json.dumps([incoming_ip])
+                # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
+                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
+                if not ipv6:
+                    ipv6 = [found_ip]
                 else:
                     # found a list of ipv6 in the db
-                    ipv6 = json.loads(ipv6)
-                    ipv6.append(incoming_ip)
-                    ipv6 = json.dumps(ipv6)
+                    ipv6: set = set(json.loads(ipv6))
+                    ipv6.add(found_ip)
+                    ipv6 = list(ipv6)
+                self.set_ipv6_of_profile(profileid, ipv6)
 
+
+                # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
+                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
+                if not ipv6:
+                    ipv6 = [incoming_ip]
+                else:
+                    # found a list of ipv6 in the db
+                    ipv6: set = set(json.loads(ipv6))
+                    ipv6.add(incoming_ip)
+                    #convert to list
+                    ipv6 = list(ipv6)
                 self.set_ipv6_of_profile(f'profile_{found_ip}', ipv6)
 
             else:
@@ -585,6 +588,13 @@ class Database(object):
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
+
+
+            # add the incoming ip to the list of ips that belong to this mac
+            cached_ips.add(incoming_ip)
+            cached_ips = json.dumps(list(cached_ips))
+            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -1377,6 +1387,7 @@ class Database(object):
             sbytes = columns['sbytes']
             pkts = columns['pkts']
             spkts = columns['spkts']
+            dpkts = columns['dpkts']
             state = columns['state']
             proto = columns['proto'].upper()
             daddr = columns['daddr']
@@ -3225,9 +3236,9 @@ class Database(object):
         """
         Cache DNS answers
         1- For each ip in the answer, store the domain
-        stored in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        2- For each domain, store the ip
-        stored in DomainsInfo
+           in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
+        2- For each CNAME, store the ip
+
         :param srcip: ip that performed the dns query
         """
         # don't store queries ending with arpa as dns resolutions, they're reverse dns
@@ -3254,7 +3265,7 @@ class Database(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db = self.get_dns_resolution(answer)
+                ip_info_from_db = self.get_reverse_dns(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
@@ -3280,11 +3291,17 @@ class Database(object):
                     'resolved-by': resolved_by,
                 }
                 ip_info = json.dumps(ip_info)
-                # we store ALL dns resolutions seen since starting slips in DNSresolution
+                # we store ALL dns resolutions seen since starting slips
+                # store with the IP as the key
                 self.r.hset('DNSresolution', answer, ip_info)
+                # store with the domain as the key:
+                self.r.hset('ResolvedDomains', domains[0], answer)
                 # these ips will be associated with the query in our db
                 ips_to_add.append(answer)
 
+            #  For each CNAME in the answer
+            # store it in DomainsInfo in the cache db (used for kalipso)
+            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
             if ips_to_add:
                 domaindata = {}
                 domaindata['IPs'] = ips_to_add
@@ -3298,8 +3315,24 @@ class Database(object):
                     pass
 
                 self.setInfoForDomains(query, domaindata, mode='add')
+                self.set_domain_resolution(query, ips_to_add)
 
-    def get_dns_resolution(self, ip):
+    def set_domain_resolution(self, domain, ips):
+        """
+        stores all the resolved domains with their ips in the db
+        """
+        self.r.hset("DomainsResolved", domain, json.dumps(ips))
+
+    def get_domain_resolution(self, domain):
+        """
+        Returns the IPs resolved by this domain
+        """
+        ips = self.r.hget("DomainsResolved", domain)
+        if not ips:
+            return []
+        return json.loads(ips)
+
+    def get_reverse_dns(self, ip):
         """
         Get DNS name of the IP, a list
         returns a dict with {ts: .. ,
