@@ -192,73 +192,73 @@ profile.onclick_ips();
         chart.update();
     }
 
-
-
-    let dstIP = function(){
-        const headers = {
-        headers: {'Content-Type': 'application/json'}
-    }
-        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
-        fetch(link, {
-            method: "GET",
-            headers: headers
-            }).then(response => response.json())
-            .then(data => {
-                const labels = data['data'].map(function(d){ return d['ip']})
-                const barGraphData = data['data'].map(function(d){ return d['flow']})
-                const data_set = data['data'].map(function(d){ return [d['ip'],d['flow']]})
-var chart = Highcharts.chart('container', {
-    chart: {
-        type: 'bar',
-        marginLeft: 150,
-
-    },
-    title: {
-        text: 'Amount of flows per dstIP'
-    },
-    xAxis: {
-        type: 'category',
-        title: {
-            text: null
-        },
-        min: 0,
-        max: 4,
-        scrollbar: {
-            enabled: true
-        },
-        tickLength: 0
-    },
-    yAxis: {
-        min: 0,
-        max: 20,
-        title: {
-            text: 'Flows',
-            align: 'high'
-        }
-    },
-    plotOptions: {
-        bar: {
-            dataLabels: {
-                enabled: true
-            }
-        }
-    },
-    legend: {
-        enabled: false
-    },
-    credits: {
-        enabled: false
-    },
-
-    series: [{
-        name: 'Flows',
-        data: data_set
-    }]
-});
-});
-
-    document.getElementById(active_hotkey_name).style.display = "block"
-    }
+// TODO: decide and fix chart
+//
+//    let dstIP = function(){
+//        const headers = {
+//        headers: {'Content-Type': 'application/json'}
+//    }
+//        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+//        fetch(link, {
+//            method: "GET",
+//            headers: headers
+//            }).then(response => response.json())
+//            .then(data => {
+//                const labels = data['data'].map(function(d){ return d['ip']})
+//                const barGraphData = data['data'].map(function(d){ return d['flow']})
+//                const data_set = data['data'].map(function(d){ return [d['ip'],d['flow']]})
+//var chart = Highcharts.chart('container', {
+//    chart: {
+//        type: 'bar',
+//        marginLeft: 150,
+//
+//    },
+//    title: {
+//        text: 'Amount of flows per dstIP'
+//    },
+//    xAxis: {
+//        type: 'category',
+//        title: {
+//            text: null
+//        },
+//        min: 0,
+//        max: 4,
+//        scrollbar: {
+//            enabled: true
+//        },
+//        tickLength: 0
+//    },
+//    yAxis: {
+//        min: 0,
+//        max: 20,
+//        title: {
+//            text: 'Flows',
+//            align: 'high'
+//        }
+//    },
+//    plotOptions: {
+//        bar: {
+//            dataLabels: {
+//                enabled: true
+//            }
+//        }
+//    },
+//    legend: {
+//        enabled: false
+//    },
+//    credits: {
+//        enabled: false
+//    },
+//
+//    series: [{
+//        name: 'Flows',
+//        data: data_set
+//    }]
+//});
+//});
+//
+//    document.getElementById(active_hotkey_name).style.display = "block"
+//    }
 
     function hide_hotkey() {
         document.getElementById(last_active_hotkey_name).style.display = "none"
@@ -294,9 +294,10 @@ var chart = Highcharts.chart('container', {
                 active_hotkey_table = alerts
                 update_table()
                 break;
-            case 'dstIP':
-                dstIP()
-                break;
+                // TODO: decide and fix chart
+//            case 'dstIP':
+//                dstIP()
+//                break;
         }
     }
 
@@ -380,31 +381,31 @@ let hotkey_hook = {
     }
 }
 
-
-    function filterFunction() {
-let chartDom = document.getElementById("container");
-let chart = Highcharts.charts[Highcharts.attr(chartDom, 'data-highcharts-chart')]
-console.log(chart.series[0])
-let input = document.getElementById('myInput'),
-            points = chart.series[0].points.options,
-            filteredPoint = points.filter(point => point.category == input.value);
-
-      if (filteredPoint.length) {
-        let newData = [];
-        for (let i in data) {
-          newData.push(null)
-        }
-
-        newData[filteredPoint[0].index] = filteredPoint[0].y
-            newData.push(null) //--- extra null as a workaround for bug
-
-        chart.series[0].update({
-          data: newData
-        })
-      } else {
-        chart.series[0].update({
-          data: data
-        })
-      }
-      }
+// TODO: fix the chart filter
+//    function filterFunction() {
+//        let chartDom = document.getElementById("container");
+//        let chart = Highcharts.charts[Highcharts.attr(chartDom, 'data-highcharts-chart')]
+//        console.log(chart.series[0])
+//        let input = document.getElementById('myInput'),
+//                    points = chart.series[0].points.options,
+//                    filteredPoint = points.filter(point => point.category == input.value);
+//
+//              if (filteredPoint.length) {
+//                let newData = [];
+//                for (let i in data) {
+//                  newData.push(null)
+//                }
+//
+//                newData[filteredPoint[0].index] = filteredPoint[0].y
+//                    newData.push(null) //--- extra null as a workaround for bug
+//
+//                chart.series[0].update({
+//                  data: newData
+//                })
+//              } else {
+//                chart.series[0].update({
+//                  data: data
+//                })
+//              }
+//      }
 
