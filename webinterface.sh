@@ -12,9 +12,9 @@ do
      continue
     fi
 
-    # set , as delimiter
+    # set space as delimiter
     IFS=','
-    read -ra splitted_line <<< "$line"   # line is read into an array as tokens separated by ,
+    read -ra splitted_line <<< "$line"   # line is read into an array as tokens separated by space
 
     # add the used file to open_redis_servers array
     open_redis_servers[${#open_redis_servers[@]}]=${splitted_line[1]}
