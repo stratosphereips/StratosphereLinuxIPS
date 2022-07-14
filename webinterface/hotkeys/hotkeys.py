@@ -67,12 +67,14 @@ class Hotkeys:
         '''
 
         # Fetch blocked
-        blockedProfileTWs = self.db.smembers('BlockedProfTW')
         dict_blockedProfileTWs = defaultdict(list)
+        blockedProfileTWs = self.db.smembers('BlockedProfTW')
 
-        for blocked in blockedProfileTWs:
-            profile_word, blocked_ip, blocked_tw = blocked.split("_")
-            dict_blockedProfileTWs[blocked_ip].append(blocked_tw)
+
+        if blockedProfileTWs:
+            for blocked in blockedProfileTWs:
+                profile_word, blocked_ip, blocked_tw = blocked.split("_")
+                dict_blockedProfileTWs[blocked_ip].append(blocked_tw)
 
         # Fetch profiles
         profiles = self.db.smembers('profiles')
@@ -80,36 +82,25 @@ class Hotkeys:
         id = 0
         for profileid in profiles:
             profile_word, profile_ip = profileid.split("_")
-            tws = self.db.zrange("tws" + profileid, 0, -1)
-            dict_tws = {}
+            tws = self.db.zrange("tws" + profileid, 0, -1, withscores=True)
+            dict_tws = defaultdict(dict)
             blocked_profile = False
 
-            for tw in tws:
-                dict_tws[tw] = False
+            for tw_tuple in tws:
+                tw_n = tw_tuple[0]
+                tw_ts = tw_tuple[1]
+                dict_tws[tw_n]["orig_ts"] = tw_ts
+                tw_date = datetime.fromtimestamp(tw_ts).strftime('%Y/%m/%d %H:%M:%S')
+                dict_tws[tw_n]["date_ts"] = tw_date
+                dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
+                dict_tws[tw_n]["blocked"] = False
 
             if profile_ip in dict_blockedProfileTWs.keys():
                 for blocked_tw in dict_blockedProfileTWs[profile_ip]:
-                    dict_tws[blocked_tw] = True
+                    dict_tws[blocked_tw]["blocked"] = True
                 blocked_profile = True
+
             data.append({"id": str(id), "profile": profile_ip, "tws": dict_tws, "blocked": blocked_profile})
-            id = id + 1
-
-        return {
-            'data': data
-        }
-
-    def set_DstIPflow(self, profile, timewindow):
-        """
-        Set flows per each destination IP
-        :param profile: active profile
-        :param timewindow: active timewindow
-        :return: data with flows per ip
-        """
-        dst_ips = json.loads(self.db.hget(profile + '_' + timewindow, 'DstIPs'))
-        data = []
-        id = 0
-        for ip, port in dst_ips.items():
-            data.append({"ip": ip, "flow": port})
             id = id + 1
 
         return {
