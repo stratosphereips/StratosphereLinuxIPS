@@ -190,6 +190,7 @@ class Module(Module, multiprocessing.Process):
                         'preposition': 'from',
                         'dns_resolution': dns_resolution,
                         'saddr': saddr,
+                        'daddr':daddr,
                         'dport/proto': f'{str(dport)}/{proto}',
                         'state': state.lower(),
                         'warning': warning_empty,
