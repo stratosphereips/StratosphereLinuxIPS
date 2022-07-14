@@ -2,6 +2,7 @@ from flask import Blueprint
 from flask import Flask, render_template, request
 import json
 from collections import defaultdict
+from datetime import datetime
 
 
 class Hotkeys:
@@ -186,7 +187,15 @@ class Hotkeys:
         data = []
         timeline_flows = self.db.hgetall(profile + "_" + timewindow + "_flows")
         if timeline_flows:
-            data = [json.loads(value) for key, value in timeline_flows.items()]
+            for key, value in timeline_flows.items():
+                value = json.loads(value)
+
+                # convert timestamp to date
+                timestamp = value["ts"]
+                dt_obj = datetime.fromtimestamp(timestamp).strftime('%Y/%m/%d %H:%M:%S.%f')
+                value["ts"] = dt_obj
+
+                data.append(value)
 
         return {
             'data': data
