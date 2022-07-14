@@ -223,7 +223,11 @@ class Hotkeys:
         data = []
         timeline = self.db.zrange(profile + "_" + timewindow + "_timeline", 0, -1)
         if timeline:
-            data = [json.loads(line) for line in timeline]
+            for line in timeline:
+                if line["preposition"] == "from":
+                    temp = line["saddr"]
+                    line["daddr"] = temp
+            data.append(json.loads(line))
 
         return {
             'data': data
