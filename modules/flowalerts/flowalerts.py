@@ -324,9 +324,9 @@ class Module(Module, multiprocessing.Process):
         # get the other ip version of this computer
         other_ip = __database__.get_the_other_ip_version(profileid)
         if other_ip:
-            other_ip = json.loads(other_ip)[0]
+            other_ip = json.loads(other_ip)
         # get the domain of this ip
-        dns_resolution = __database__.get_dns_resolution(daddr)
+        dns_resolution = __database__.get_reverse_dns(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
@@ -492,7 +492,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2 minutes have passed
                 return False
 
-        answers_dict = __database__.get_dns_resolution(daddr)
+        answers_dict = __database__.get_reverse_dns(daddr)
         if not answers_dict:
             # self.print(f'No DNS resolution in {answers_dict}')
             # There is no DNS resolution, but it can be that Slips is
@@ -540,14 +540,27 @@ class Module(Module, multiprocessing.Process):
                 except ValueError:
                     pass
 
-    def check_dns_resolution_without_connection(
+    def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
+        """
+        check if any ip of the given CNAMEs is contacted
+        """
+        for CNAME in answers:
+            if not validators.domain(CNAME):
+                # it's an ip
+                continue
+            ips = __database__.get_domain_resolution(CNAME)
+            for ip in ips:
+                if ip in contacted_ips:
+                    return True
+        return False
+
+    def check_dns_without_connection(
             self, domain, answers, timestamp, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
         :param contacted_ips:  dict of ips used in a specific tw {ip: uid}
         """
-        # Ignore some domains because its is ok if they do DNS without a connection
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
@@ -605,6 +618,11 @@ class Module(Module, multiprocessing.Process):
                 # this dns resolution has a connection. We can exit
                 return False
 
+        # Check if there was a connection to any of the CNAMEs
+        if self.is_CNAME_contacted(answers, contacted_ips):
+            # this is not a DNS without resolution
+            return False
+
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
         # It can be that Slips is still reading it from the files. Lets check back in some time
@@ -616,7 +634,7 @@ class Module(Module, multiprocessing.Process):
             params = [domain, answers, timestamp, profileid, twid, uid]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}. time {datetime.datetime.now()}')
             timer = TimerThread(
-                15, self.check_dns_resolution_without_connection, params
+                15, self.check_dns_without_connection, params
             )
             timer.start()
         else:
@@ -1424,7 +1442,7 @@ class Module(Module, multiprocessing.Process):
 
                     # only check dns without connection if we have answers(we're sure the query is resolved)
                     if answers:
-                        self.check_dns_resolution_without_connection(
+                        self.check_dns_without_connection(
                             domain, answers, stime, profileid, twid, uid
                         )
                     if rcode_name:

@@ -97,7 +97,9 @@ It also has a list of ports that belong to a specific organization in ```slips_f
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS). 
 
-any port that isn't in the above 2 files is considered unknown to Slips.
+Any port that isn't in the above 2 files is considered unknown to Slips.
+
+Example of Spyware that uses custom ports are [hermit](https://www.lookout.com/blog/hermit-spyware-discovery) using ports 58442/TCP and 8442/TCP.
 
 ### Data exfiltration
 

@@ -117,7 +117,8 @@ profile.onclick_ips();
             { data: 'timestamp' },
             { data: 'dport_name' },
             { data: 'dns_resolution' },
-            { data: 'daddr' },
+            { data: 'daddr',
+            "className": 'daddr'},
             { data: 'preposition' },
             { data: 'dport/proto' },
             { data: 'state' },
@@ -338,6 +339,14 @@ var chart = Highcharts.chart('container', {
                 let url = '/hotkeys/info/' + data.daddr
                 ipinfo.ajax.url(url).load();
             })
+        },
+
+        onclick_timeline_daddr: function () {
+        $('#table_timeline ').on('click', 'tbody td.daddr', function () {
+                let data = timeline.row($(this).parents('tr')).data();
+                let url = '/hotkeys/info/' + data.daddr
+                ipinfo.ajax.url(url).load();
+            })
         }
     }
 }
@@ -361,6 +370,7 @@ let hotkeys = operate_hotkeys();
 hotkeys.onclick_buttons();
 hotkeys.onclick_timeline_flows_saddr();
 hotkeys.onclick_timeline_flows_daddr();
+hotkeys.onclick_timeline_daddr();
 
 
 let hotkey_hook = {

@@ -32,15 +32,16 @@ class Hotkeys:
         :param ip: active IP
         :return: all data about the IP in database
         """
-        ip_info = json.loads(self.cache.hget('IPsInfo', ip))
-
-        # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
-        geocountry = ip_info.get('geocountry', '-')
-        asn = ip_info.get('asn', '-')
-        asnorg = [asn.get('asnorg', '-') if isinstance(asn, dict) else '-']
-        reverse_dns = ip_info.get('reverse_dns', '-')
-
-        data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns}
+        data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-"}
+        ip_info = self.cache.hget('IPsInfo', ip)
+        if ip_info:
+            ip_info = json.loads(ip_info)
+            # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
+            geocountry = ip_info.get('geocountry', '-')
+            asn = ip_info.get('asn', '-')
+            asnorg = [asn.get('asnorg', '-') if isinstance(asn, dict) else '-']
+            reverse_dns = ip_info.get('reverse_dns', '-')
+            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns}
         return data
 
     def set_ip_info(self, ip):

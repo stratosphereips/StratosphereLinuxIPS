@@ -134,8 +134,6 @@ owned by root, you will need to run Slips using sudo or give the current user en
 slips can write to those files. 
 
 
-DISCLAIMER: Each instance of Slips will connect to redis server on a randomly generated port.
-In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
 
 For detailed information on how slips uses redis check the 
 [Running several slips instances section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#running-several-slips-instances)
@@ -143,14 +141,18 @@ For detailed information on how slips uses redis check the
 
 ## Running Several slips instances
 
-You can run several instances of slips at the same time, and the output of each instance will be stored in
+By default, Slips will assume you are running only 1 instance and will use the redis port 6379 on each run.
+
+You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory. 
 
 Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
 
+In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
+
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 1, to store the IoCs taken from TI files.
 
-Both redis servers, the main sever and the cache server are opened automatically by Slips.
+Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened automatically by Slips.
 
 When running ./kalipso.sh, you will be prompted with the following
 

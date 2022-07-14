@@ -46,7 +46,6 @@ elif [[ ${#open_redis_servers[@]} -gt 0 ]]; then
     # get the pid in this index
     port_to_use=${ports[index]}
 fi
-
 # run webinterface
 cd webinterface
 python3 app.py -p ${port_to_use}
