@@ -1,6 +1,6 @@
 #!/bin/bash
 echo "To close all unused redis servers, run slips with --killall"
-file="used_redis_servers.txt"
+file="running_slips_info.txt"
 # Declare a string array
 declare -a open_redis_servers=()
 declare -a ports=()
@@ -12,14 +12,14 @@ do
      continue
     fi
 
-    # set space as delimiter
-    IFS=' '
-    read -ra splitted_line <<< "$line"   # line is read into an array as tokens separated by space
+    # set , as delimiter
+    IFS=','
+    read -ra splitted_line <<< "$line"   # line is read into an array as tokens separated by ,
 
     # add the used file to open_redis_servers array
-    open_redis_servers[${#open_redis_servers[@]}]=${splitted_line[2]}
+    open_redis_servers[${#open_redis_servers[@]}]=${splitted_line[1]}
     # append the used port to  ports arr
-    ports[${#ports[@]}]=${splitted_line[-2]}
+    ports[${#ports[@]}]=${splitted_line[2]}
 done < "$file"
 
 
@@ -46,7 +46,6 @@ elif [[ ${#open_redis_servers[@]} -gt 0 ]]; then
     # get the pid in this index
     port_to_use=${ports[index]}
 fi
-
 # run webinterface
 cd webinterface
 python3 app.py -p ${port_to_use}
