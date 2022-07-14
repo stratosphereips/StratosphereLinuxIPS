@@ -40,14 +40,14 @@ let profiles = function () {
                 const close_string = '</table>'
                 let data = ""
                 Object.entries(profile_tws.tws).forEach(([item, value]) => {
-                let colored_item = ""
-                    if(value){
-                       colored_item = '<td style="background-color:#FF8989">' + item + '</td>'
+                    let colored_item = ""
+                    if(value["blocked"]){
+                       colored_item = '<td style="background-color:#FF8989">' + value["name"] + '</td>'
                     }
                     else{
-                       colored_item = '<td style="background-color:#FFFFFF">' + item + '</td>'
+                       colored_item = '<td style="background-color:#FFFFFF">' + value["name"] + '</td>'
                     }
-                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ')">' + colored_item + '</tr>';
+                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ',' +"'" + value["name"] +"'" +')">' + colored_item + '</tr>';
                 })
                 return open_string + data + close_string;
             }
@@ -303,10 +303,10 @@ profile.onclick_ips();
 
     return {
 
-        set_profile_timewindow: function (pr, tw) {
+        set_profile_timewindow: function (pr, tw, tw_name) {
             profile = pr;
             timewindow = tw;
-            document.getElementById("active_profile_tw").innerText = "Selected: " + pr + " " + tw;
+            document.getElementById("active_profile_tw").innerText = "Selected: " + pr + " " + tw_name;
         },
 
         update_hook: function(){
@@ -375,8 +375,8 @@ hotkeys.onclick_timeline_daddr();
 
 
 let hotkey_hook = {
-    'initialize_profile_timewindow': function (profile, timewindow) {
-        hotkeys.set_profile_timewindow(profile, timewindow);
+    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
+        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
         hotkeys.update_hook();
     }
 }
