@@ -846,6 +846,16 @@ class Whitelist:
                         pass
         return False
 
+    def remove_whitelisted_evidence(self, all_evidence):
+        # remove whitelisted evidence from the given evidence
+        tw_evidence = {}
+        for ID,evidence in all_evidence.items():
+            is_whitelisted = __database__.is_whitelisted_evidence(ID)
+            if is_whitelisted:
+                continue
+            tw_evidence[ID] = evidence
+        return tw_evidence
+
     def load_org_IPs(self, org) -> list:
         """
         Reads the specified org's info from slips_files/organizations_info and stores the info in the database

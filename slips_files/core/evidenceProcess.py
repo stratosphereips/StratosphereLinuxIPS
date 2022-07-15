@@ -32,6 +32,7 @@ from .whitelist import Whitelist
 import psutil
 import pwd
 import time
+import platform
 from git import Repo
 
 
@@ -851,6 +852,7 @@ class EvidenceProcess(multiprocessing.Process):
                     if flow and self.whitelist.is_whitelisted_evidence(
                         srcip, detection_info, type_detection, description
                     ):
+                        __database__.cache_whitelisted_evidence_ID(evidence_ID)
                         # Modules add evidence to the db before reaching this point, now
                         # remove evidence from db so it could be completely ignored
                         __database__.deleteEvidence(
@@ -927,6 +929,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # profiles for attackers
                     if tw_evidence:
                         tw_evidence = json.loads(tw_evidence)
+                        tw_evidence = self.whitelist.remove_whitelisted_evidence(tw_evidence)
 
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
@@ -937,7 +940,6 @@ class EvidenceProcess(multiprocessing.Process):
                         for evidence in tw_evidence.values():
                             # Deserialize evidence
                             evidence = json.loads(evidence)
-
                             type_detection = evidence.get('type_detection')
                             detection_info = evidence.get('detection_info')
                             type_evidence = evidence.get('type_evidence')
@@ -946,7 +948,6 @@ class EvidenceProcess(multiprocessing.Process):
                             description = evidence.get('description')
                             ID = evidence.get('ID')
                             IDs_causing_an_alert.append(ID)
-
                             # each threat level is a string, get the numerical value of it
                             try:
                                 threat_level = utils.threat_levels[
@@ -966,17 +967,13 @@ class EvidenceProcess(multiprocessing.Process):
                             self.print(
                                 '\t\tWeighted Threat Level: {}'.format(
                                     new_threat_level
-                                ),
-                                3,
-                                0,
+                                ),3,0,
                             )
                             accumulated_threat_level += new_threat_level
                             self.print(
                                 '\t\tAccumulated Threat Level: {}'.format(
                                     accumulated_threat_level
-                                ),
-                                3,
-                                0,
+                                ), 3, 0,
                             )
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
