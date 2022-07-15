@@ -1677,6 +1677,7 @@ class Database(object):
         """
         When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
          database
+        stores in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
@@ -1906,6 +1907,9 @@ class Database(object):
         """
         Delete evidence from the database
         """
+
+
+        # 1. delete veidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
@@ -1914,13 +1918,29 @@ class Database(object):
         # Delete the key regardless of whether it is in the dictionary
         current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
-
         self.r.hset(
             profileid + self.separator + twid,
             'Evidence',
             str(current_evidence_json),
         )
         self.r.hset('evidence' + profileid, twid, current_evidence_json)
+
+
+
+    def cache_whitelisted_evidence_ID(self, evidence_ID:str):
+        """
+        Keep track of whitelisted evidence IDs to avoid showing them in alerts later
+        """
+        # without this function, slips gets the stored evidence id from the db,
+        # before deleteEvidence is called, so we either keep track of whitelisted evidence ids
+        # or use time.sleep()
+        self.r.sadd('whitelisted_evidence', evidence_ID)
+
+    def is_whitelisted_evidence(self, evidence_ID):
+        """
+        Check if we have the evidence ID as whitelisted in the db to avoid showing it in alerts
+        """
+        return self.r.sismember('whitelisted_evidence', evidence_ID)
 
     def getEvidenceForTW(self, profileid, twid):
         """Get the evidence for this TW for this Profile"""
