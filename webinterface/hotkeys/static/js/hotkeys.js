@@ -12,7 +12,7 @@ let profiles = function () {
     let profiles_table = $('#profiles').DataTable({
         ajax: '/hotkeys/profiles_tws',
         serverSide: true,
-        "scrollY":  true,
+        "scrollY":  "75vh",
         "scrollCollapse": true,
         "paging": false,
         "bInfo": false,
