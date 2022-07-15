@@ -1815,12 +1815,6 @@ class Database(object):
 
         if not twid:
             twid = ''
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
-        current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
-            current_evidence = {}
 
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
@@ -1858,10 +1852,18 @@ class Database(object):
             evidence_to_send.update({'proto': proto})
 
         evidence_to_send = json.dumps(evidence_to_send)
-        # This is done to ignore repetition of the same evidence sent.
-        if evidence_ID not in current_evidence.keys():
-            self.publish('evidence_added', evidence_to_send)
 
+
+        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = {}
+
+        should_publish = False
+        if evidence_ID not in current_evidence.keys():
+            should_publish = True
         # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
         current_evidence.update({evidence_ID: evidence_to_send})
 
@@ -1872,6 +1874,11 @@ class Database(object):
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
         self.r.hset('evidence' + profileid, twid, current_evidence)
+
+        # This is done to ignore repetition of the same evidence sent.
+        # note that publishing HAS TO be done after updating the 'Evidence' keys
+        if should_publish:
+            self.publish('evidence_added', evidence_to_send)
 
         # an alert is generated for this profile,
         # change the score to = 1, and confidence = 1
@@ -1947,7 +1954,6 @@ class Database(object):
             # alert not added to the 'alerts' key yet!
             # this means that this evidence wasn't a part of an alert
             return
-
 
     def cache_whitelisted_evidence_ID(self, evidence_ID:str):
         """
