@@ -1907,8 +1907,6 @@ class Database(object):
         """
         Delete evidence from the database
         """
-
-
         # 1. delete veidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
@@ -1925,6 +1923,30 @@ class Database(object):
         )
         self.r.hset('evidence' + profileid, twid, current_evidence_json)
 
+        # 2. delete evidence from 'alerts' key
+        profile_alerts = self.r.hget('alerts', profileid)
+        if not profile_alerts:
+            return
+
+        profile_alerts:dict = json.loads(profile_alerts)
+        try:
+            # we already have a twid with alerts in this profile, update it
+            # the format of twid_alerts is {alert_hash: evidence_IDs}
+            twid_alerts: dict = profile_alerts[twid]
+            for alert_hash, evidence_IDs in twid_alerts.items():
+                if evidence_ID in evidence_IDs:
+                    IDs = evidence_IDs
+                    hash = alert_hash
+                break
+            else:
+                return
+            evidence_IDs = IDs.remove(evidence_ID)
+            alert_ID = f'{profileid}_{twid}_{hash}'
+            self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+        except KeyError:
+            # alert not added to the 'alerts' key yet!
+            # this means that this evidence wasn't a part of an alert
+            return
 
 
     def cache_whitelisted_evidence_ID(self, evidence_ID:str):
