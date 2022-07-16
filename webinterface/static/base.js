@@ -7,6 +7,7 @@ fetch("/info", {
         headers: headers2
         }).then(response => response.json())
         .then(data => {
+                        document.getElementById("slips_version").textContent="Slips "+data['slips_version'];
                         document.getElementById("fileName").textContent=data['name'];
                         document.getElementById("fileSize").textContent=data['size_in_MB'];
                         document.getElementById("analysisStart").textContent=data['analysis_start'];
