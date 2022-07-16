@@ -1255,6 +1255,7 @@ class Main:
         """
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         info = {
+            'slips_version': version,
             'name': self.input_information,
             'analysis_start': now,
 
