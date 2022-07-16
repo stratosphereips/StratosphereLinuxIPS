@@ -34,16 +34,26 @@ class Hotkeys:
         :param ip: active IP
         :return: all data about the IP in database
         """
-        data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-"}
+        data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-", "URL": "-", "down_file": "-", "ref_file": "-",
+                "com_file": "-"}
         ip_info = self.cache.hget('IPsInfo', ip)
         if ip_info:
             ip_info = json.loads(ip_info)
             # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
             geocountry = ip_info.get('geocountry', '-')
-            asn = ip_info.get('asn', '-')
-            asnorg = [asn.get('asnorg', '-') if isinstance(asn, dict) else '-']
+            asn = ip_info.get('asn', False)
+            asnorg = [asn.get('asnorg', '-') if asn else '-']
             reverse_dns = ip_info.get('reverse_dns', '-')
-            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns}
+            vt_scores = ip_info.get("VirusTotal", False)
+            url, down_file, ref_file, com_file = '-','-','-','-'
+            if vt_scores:
+                url = vt_scores.get("URL", "-")
+                down_file = vt_scores.get("down_file", "-")
+                ref_file = vt_scores.get("ref_file", "-")
+                com_file = vt_scores.get("com_file", "-")
+
+            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns, "URL": url, "down_file": down_file, "ref_file": ref_file,
+                "com_file": com_file}
         return data
 
     def set_ip_info(self, ip):
@@ -69,7 +79,6 @@ class Hotkeys:
         # Fetch blocked
         dict_blockedProfileTWs = defaultdict(list)
         blockedProfileTWs = self.db.smembers('BlockedProfTW')
-
 
         if blockedProfileTWs:
             for blocked in blockedProfileTWs:
