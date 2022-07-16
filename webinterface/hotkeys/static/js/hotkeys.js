@@ -366,11 +366,16 @@ let ipinfo = $('#ipinfo').DataTable({
     searching: false,
     "paging": false,
     "bInfo": false,
+    responsive: true,
     columns: [
         { data: 'ip' },
         { data: 'geocountry' },
         { data: 'reverse_dns' },
-        { data: 'asnorg' }
+        { data: 'asnorg' },
+        { data: 'URL' },
+        { data: 'down_file' },
+        { data: 'ref_file' },
+        { data: 'com_file' }
     ]
 });
 
