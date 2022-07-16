@@ -142,7 +142,11 @@ profile.onclick_ips();
             { data: 'string' },
             { data: 'geocountry' },
             { data: 'reverse_dns' },
-            { data: 'asnorg' }
+            { data: 'asnorg' },
+            { data: 'URL' },
+            { data: 'down_file' },
+            { data: 'ref_file' },
+            { data: 'com_file' }
         ]
     });
 
@@ -156,7 +160,11 @@ profile.onclick_ips();
             { data: 'string' },
             { data: 'geocountry' },
             { data: 'reverse_dns' },
-            { data: 'asnorg' }
+            { data: 'asnorg' },
+            { data: 'URL' },
+            { data: 'down_file' },
+            { data: 'ref_file' },
+            { data: 'com_file' }
         ]
     });
 
