@@ -490,3 +490,62 @@ __database__.publish('finished_modules', self.name)
 
 This is the module, responding to the stop_message, telling slips.py that it successfully finished processing and
 is terminating.
+
+### Troubleshooting
+Most errors occur when running the module inside SLIPS. These errors are hard to resolve, because warnings and debug messages may be hidden under extensive outputs from other modules.
+
+If the module does not start at all, make sure it is not disabled in the slips.conf file. If that is not the case, check that the \_\_init\_\_.py file is present in module directory, and read the outputs - if there were any errors (eg. import errors), they would prevent the module from starting. 
+
+
+In case that the module is started, but does not receive any messages from the channel, make sure that:
+
+	-The channel is properly subscribed to the module
+
+	-Messages are being sent trought the channels
+
+	-Other modules subscribed to the channel get the message
+
+	-Module is started in time (this should not be an issue in new SLIPS releases)
+
+### Testing
+
+
+Slips has 2 kinds of tests, unit tests and integration tests.
+
+integration tests are done by testing all files in our ```dataset/``` dir and 
+are done in ```tests/test_dataset.py```
+
+Before pushing, run the unit tests and integration tests by:
+
+
+1- Make sure you're in slips main dir (the one with kalipso.sh)
+
+
+2- Run all tests ```./tests/run_all_tests.sh``` 
+
+Slips supports the -P flag to run redis on your port of choice. this flag is only used for
+testing and integration tests so that slips can keep track of the ports it opened while testing and close them later.
+
+### Adding your own unit tests
+
+Slips uses ```pytest``` as the main testing framework, You can add your own unit tests by:
+
+1- create a file called ```test_module_name.py``` in the ```tests/``` dir
+
+
+2- every function should start with ```test_```
+
+
+3- go to the main slips dir and run ```./tests/run_all_tests.sh``` and every test file in the ```tests/``` dir will run
+
+### Getting in touch
+
+Feel free to join our [Discord server](https://discord.gg/zu5HwMFy5C) and ask questions, suggest new features or give us feedback.
+
+PRs and Issues are welcomed in our repo.
+
+### Conclusion
+
+Adding a new feature to SLIPS is an easy task. The template is ready for everyone to use and there is not much to learn about Slips to be able to write a module.
+
+If you wish to add a new module to the Slips repository, issue a pull request and wait for a review. 
