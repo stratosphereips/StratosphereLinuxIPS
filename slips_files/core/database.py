@@ -1933,6 +1933,11 @@ class Database(object):
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
         if not profile_alerts:
+            # this means that this evidence wasn't a part of an alert
+            # give redis time to the save the changes before calling this function again
+            # removing this sleep will cause this function to be called again before
+            # deleting the evidence ID from the evidence keys
+            time.sleep(0.5)
             return
 
         profile_alerts:dict = json.loads(profile_alerts)
