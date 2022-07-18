@@ -173,20 +173,26 @@ profile.onclick_ips();
         dom: custom_dom,
         scrollX: true,
         columns: [
-            { data: 'profileid' },
-            { data: 'twid'},
-            { data: 'type_detection' },
-            { data: 'detection_info'},
-            { data: 'type_evidence' },
-            { data: 'description'},
-            { data: 'stime'},
-            { data: 'uid' },
-            { data: 'confidence'},
-            { data: 'threat_level'},
-            { data: 'category' }
+            { data: 'alert' ,
+            "className":"r"},
+            { data: 'alert_description'}
         ]
     });
 
+    function format(d) {
+        let entry ='<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+        let exit = '</table>'
+        let head ="<thead> <tr> <th>id</th> <th>description</th> </tr>  </thead>"
+
+        let evidence_table = ""
+        Object.entries(d.evidence_list).forEach(([id, value]) => {
+            evidence_table += '<tr>' +
+                '<td>'+id+'</td>' +
+                '<td>' + value + '</td>' +
+                '</tr>'
+        })
+        return ( entry + head + evidence_table + exit);
+    }
 
 // TODO: decide and fix chart
 //    function addData(chart, labels, dataset) {
@@ -356,6 +362,23 @@ profile.onclick_ips();
                 let url = '/hotkeys/info/' + data.daddr
                 ipinfo.ajax.url(url).load();
             })
+        },
+
+        onclick_alerts: function () {
+            $('#table_alerts ').on('click', 'tbody td.r', function () {
+                var tr = $(this).closest('tr');
+                var row = alerts.row(tr);
+                if (row.child.isShown()) {
+                    // This row is already open - close it
+                    row.child.hide();
+                    tr.removeClass('shown');
+                } else {
+                    // Open this row
+                    console.log(row.data())
+                    row.child(format(row.data())).show();
+                    tr.addClass('shown');
+                }
+            });
         }
     }
 }
@@ -385,6 +408,7 @@ hotkeys.onclick_buttons();
 hotkeys.onclick_timeline_flows_saddr();
 hotkeys.onclick_timeline_flows_daddr();
 hotkeys.onclick_timeline_daddr();
+hotkeys.onclick_alerts();
 
 
 let hotkey_hook = {
