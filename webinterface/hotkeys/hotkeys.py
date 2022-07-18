@@ -24,6 +24,8 @@ class Hotkeys:
         # self.bp.add_url_rule("/DstPortsClientUDPNotEstablished", view_func=self.set_dstPortsClientUDPNotEstablished)
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
+        self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
+
 
     def index(self):
         return render_template('hotkeys.html', title='Slips')
@@ -225,8 +227,6 @@ class Hotkeys:
     def set_timeline(self, profile, timewindow):
         """
         Set timeline data of a chosen profile and timewindow
-        :param profile: active profile
-        :param timewindow: active timewindow
         :return: list of timeline as set initially in database
         """
         data = []
@@ -242,3 +242,28 @@ class Hotkeys:
         return {
             'data': data
         }
+
+    def set_alerts(self, profile, timewindow):
+        """
+        Set alerts for chosen profile and timewindow
+        """
+        print("here")
+        data = []
+        alerts = self.db.hget("alerts", profile)
+        if alerts:
+            alerts = json.loads(alerts)
+            alerts_tw = alerts[timewindow]
+            for alert_ID, evidence_ID_list in alerts_tw.items():
+
+                evidences = self.db.hget("evidence"+ profile, timewindow)
+                evidences= json.loads(evidences)
+                alert_description = evidences[alert_ID]
+                evidence_list = {}
+                for evidence_ID in evidence_ID_list:
+                    evidence_list[evidence_ID] = evidences[evidence_ID]
+                data.append({ "alert": alert_ID, "alert_description": alert_description, "evidence_list": evidence_list})
+        return {"data": data}
+
+
+
+
