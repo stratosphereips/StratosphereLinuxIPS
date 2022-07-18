@@ -929,7 +929,6 @@ class EvidenceProcess(multiprocessing.Process):
                     # profiles for attackers
                     if tw_evidence:
                         tw_evidence = json.loads(tw_evidence)
-                        tw_evidence = self.whitelist.remove_whitelisted_evidence(tw_evidence)
 
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile

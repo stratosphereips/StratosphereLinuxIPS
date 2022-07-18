@@ -1960,8 +1960,7 @@ class Database(object):
         Keep track of whitelisted evidence IDs to avoid showing them in alerts later
         """
         # without this function, slips gets the stored evidence id from the db,
-        # before deleteEvidence is called, so we either keep track of whitelisted evidence ids
-        # or use time.sleep()
+        # before deleteEvidence is called, so we need to keep track of whitelisted evidence ids
         self.r.sadd('whitelisted_evidence', evidence_ID)
 
     def is_whitelisted_evidence(self, evidence_ID):
@@ -1970,10 +1969,27 @@ class Database(object):
         """
         return self.r.sismember('whitelisted_evidence', evidence_ID)
 
+
+    def remove_whitelisted_evidence(self, all_evidence:str) -> str:
+        """
+        param all_evidence serialized json dict
+        returns a serialized json dict
+        """
+        # remove whitelisted evidence from the given evidence
+        all_evidence = json.loads(all_evidence)
+        tw_evidence = {}
+        for ID,evidence in all_evidence.items():
+            if self.is_whitelisted_evidence(ID):
+                continue
+            tw_evidence[ID] = evidence
+        return json.dumps(tw_evidence)
+
     def getEvidenceForTW(self, profileid, twid):
         """Get the evidence for this TW for this Profile"""
-        data = self.r.hget(profileid + self.separator + twid, 'Evidence')
-        return data
+        evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
+        if evidence:
+            evidence = self.remove_whitelisted_evidence(evidence)
+        return evidence
 
     def getEvidenceForProfileid(self, profileid):
         profile_evidence = {}
