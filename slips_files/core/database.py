@@ -1678,15 +1678,58 @@ class Database(object):
         """
         When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
          database
+        stores in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
-        evidence_IDs = json.dumps(evidence_IDs)
-        alert = {alert_ID: evidence_IDs}
+        alert = {
+            alert_ID: json.dumps(evidence_IDs)
+        }
         alert = json.dumps(alert)
         self.r.hset(profileid + self.separator + twid, 'alerts', alert)
 
-        # self.r.hset('alerts', alert_ID, evidence_IDs)
+        # the structure of alerts key is
+        # alerts {
+        #     profile_<ip>: {
+        #               twid1: {
+        #                   alert_ID1: [evidence_IDs],
+        #                   alert_ID2: [evidence_IDs]
+        #                  }
+        #             }
+        # }
+
+        profile_alerts = self.r.hget('alerts', profileid)
+        # alert ids look like this profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
+        alert_hash = alert_ID.split('_')[-1]
+        alert = {
+            twid: {
+                alert_hash: evidence_IDs
+            }
+        }
+        if not profile_alerts:
+            alert = json.dumps(alert)
+            self.r.hset('alerts', profileid, alert)
+            return
+
+        # the format of this dict is {twid1: {alert_hash: [evidence_IDs]},
+        #                              twid2: {alert_hash: [evidence_IDs]}}
+        profile_alerts:dict = json.loads(profile_alerts)
+
+        try:
+            # we already have a twid with alerts in this profile, update it
+            # the format of twid_alerts is {alert_hash: evidence_IDs}
+            twid_alerts: dict = profile_alerts[twid]
+            twid_alerts.update({
+                alert_hash: evidence_IDs
+            })
+            profile_alerts[twid] = twid_alerts
+        except KeyError:
+            # first time having an alert for this twid
+            profile_alerts.update(alert)
+
+        profile_alerts = json.dumps(profile_alerts)
+        self.r.hset('alerts', profileid, profile_alerts)
+
 
     def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
@@ -1773,12 +1816,6 @@ class Database(object):
 
         if not twid:
             twid = ''
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
-        current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
-            current_evidence = {}
 
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
@@ -1816,10 +1853,18 @@ class Database(object):
             evidence_to_send.update({'proto': proto})
 
         evidence_to_send = json.dumps(evidence_to_send)
-        # This is done to ignore repetition of the same evidence sent.
-        if evidence_ID not in current_evidence.keys():
-            self.publish('evidence_added', evidence_to_send)
 
+
+        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
+        current_evidence = self.getEvidenceForTW(profileid, twid)
+        if current_evidence:
+            current_evidence = json.loads(current_evidence)
+        else:
+            current_evidence = {}
+
+        should_publish = False
+        if evidence_ID not in current_evidence.keys():
+            should_publish = True
         # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
         current_evidence.update({evidence_ID: evidence_to_send})
 
@@ -1830,6 +1875,11 @@ class Database(object):
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
         self.r.hset('evidence' + profileid, twid, current_evidence)
+
+        # This is done to ignore repetition of the same evidence sent.
+        # note that publishing HAS TO be done after updating the 'Evidence' keys
+        if should_publish:
+            self.publish('evidence_added', evidence_to_send)
 
         # an alert is generated for this profile,
         # change the score to = 1, and confidence = 1
@@ -1874,6 +1924,7 @@ class Database(object):
         """
         Delete evidence from the database
         """
+        # 1. delete veidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
@@ -1882,7 +1933,6 @@ class Database(object):
         # Delete the key regardless of whether it is in the dictionary
         current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
-
         self.r.hset(
             profileid + self.separator + twid,
             'Evidence',
@@ -1890,10 +1940,71 @@ class Database(object):
         )
         self.r.hset('evidence' + profileid, twid, current_evidence_json)
 
+        # 2. delete evidence from 'alerts' key
+        profile_alerts = self.r.hget('alerts', profileid)
+        if not profile_alerts:
+            # this means that this evidence wasn't a part of an alert
+            # give redis time to the save the changes before calling this function again
+            # removing this sleep will cause this function to be called again before
+            # deleting the evidence ID from the evidence keys
+            time.sleep(0.5)
+            return
+
+        profile_alerts:dict = json.loads(profile_alerts)
+        try:
+            # we already have a twid with alerts in this profile, update it
+            # the format of twid_alerts is {alert_hash: evidence_IDs}
+            twid_alerts: dict = profile_alerts[twid]
+            for alert_hash, evidence_IDs in twid_alerts.items():
+                if evidence_ID in evidence_IDs:
+                    IDs = evidence_IDs
+                    hash = alert_hash
+                break
+            else:
+                return
+            evidence_IDs = IDs.remove(evidence_ID)
+            alert_ID = f'{profileid}_{twid}_{hash}'
+            self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+        except KeyError:
+            # alert not added to the 'alerts' key yet!
+            # this means that this evidence wasn't a part of an alert
+            return
+
+    def cache_whitelisted_evidence_ID(self, evidence_ID:str):
+        """
+        Keep track of whitelisted evidence IDs to avoid showing them in alerts later
+        """
+        # without this function, slips gets the stored evidence id from the db,
+        # before deleteEvidence is called, so we need to keep track of whitelisted evidence ids
+        self.r.sadd('whitelisted_evidence', evidence_ID)
+
+    def is_whitelisted_evidence(self, evidence_ID):
+        """
+        Check if we have the evidence ID as whitelisted in the db to avoid showing it in alerts
+        """
+        return self.r.sismember('whitelisted_evidence', evidence_ID)
+
+
+    def remove_whitelisted_evidence(self, all_evidence:str) -> str:
+        """
+        param all_evidence serialized json dict
+        returns a serialized json dict
+        """
+        # remove whitelisted evidence from the given evidence
+        all_evidence = json.loads(all_evidence)
+        tw_evidence = {}
+        for ID,evidence in all_evidence.items():
+            if self.is_whitelisted_evidence(ID):
+                continue
+            tw_evidence[ID] = evidence
+        return json.dumps(tw_evidence)
+
     def getEvidenceForTW(self, profileid, twid):
         """Get the evidence for this TW for this Profile"""
-        data = self.r.hget(profileid + self.separator + twid, 'Evidence')
-        return data
+        evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
+        if evidence:
+            evidence = self.remove_whitelisted_evidence(evidence)
+        return evidence
 
     def getEvidenceForProfileid(self, profileid):
         profile_evidence = {}

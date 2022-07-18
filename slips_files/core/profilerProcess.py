@@ -243,62 +243,6 @@ class ProfilerProcess(multiprocessing.Process):
         except (FileNotFoundError, IOError):
             return False
 
-    def load_org_IPs(self, org) -> list:
-        """
-        Reads the specified org's info from slips_files/organizations_info and stores the info in the database
-        if there's no file for this org, it get the IP ranges from asnlookup.com
-        org: 'google', 'facebook', 'twitter', etc...
-        returns a list of this organization's subnets
-        """
-        try:
-            # Each file is named after the organization's name
-            # Each line of the file containes an ip range, for example: 34.64.0.0/10
-            org_subnets = []
-            file = f'slips_files/organizations_info/{org}'
-            with open(file, 'r') as f:
-                while line := f.readline():
-                    # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
-                    try:
-                        # make sure this line is a valid network
-                        is_valid_line = ipaddress.ip_network(line)
-                        org_subnets.append(line)
-                    except ValueError:
-                        # not a valid line, ignore it
-                        pass
-            return org_subnets
-        except (FileNotFoundError, IOError):
-            # there's no slips_files/organizations_info/{org} for this org
-            org_subnets = []
-            # see if we can get asn about this org
-            try:
-                response = requests.get(
-                    'http://asnlookup.com/api/lookup?org='
-                    + org.replace('_', ' '),
-                    headers={'User-Agent': 'ASNLookup PY/Client'},
-                    timeout=10,
-                )
-            except requests.exceptions.ConnectionError:
-                # Connection reset by peer
-                return False
-            if ip_space := json.loads(response.text):
-                with open(f'slips_files/organizations_info/{org}', 'w') as f:
-                    for subnet in ip_space:
-                        # get ipv4 only
-                        if ':' not in subnet:
-                            try:
-                                # make sure this line is a valid network
-                                is_valid_line = ipaddress.ip_network(subnet)
-                                f.write(subnet + '\n')
-                                org_subnets.append(subnet)
-                            except ValueError:
-                                # not a valid line, ignore it
-                                continue
-                return org_subnets
-            else:
-                # can't get org IPs from asnlookup.com
-                return False
-
     def define_type(self, line):
         """
         Try to define very fast the type of input
