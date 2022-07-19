@@ -539,7 +539,14 @@ class Module(Module, multiprocessing.Process):
                     # ip_state will say if it is a srcip or if it was a dst_ip
                     ip_state = data.get('ip_state')
                     # self.print(ip)
-
+                    ip_obj = ipaddress.ip_address(ip)
+                    if (
+                            ip_obj.is_multicast
+                            or ip_obj.is_private
+                            or ip_obj.is_link_local
+                            or ip_obj.is_reserved
+                        ):
+                        continue
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
                     if ip and not self.is_outgoing_icmp_packet(
@@ -568,9 +575,7 @@ class Module(Module, multiprocessing.Process):
                         ip_ranges = __database__.get_malicious_ip_ranges()
                         try:
                             for range, info in ip_ranges.items():
-                                if ipaddress.ip_address(
-                                    ip
-                                ) in ipaddress.ip_network(range):
+                                if ip_obj in ipaddress.ip_network(range):
                                     # ip was found in one of the blacklisted ranges
                                     ip_info = json.loads(info)
                                     # Set the evidence on this detection
