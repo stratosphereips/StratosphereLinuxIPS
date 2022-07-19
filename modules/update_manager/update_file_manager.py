@@ -44,8 +44,7 @@ class UpdateFileManager:
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
-            NameError,
-        ):
+            NameError, TypeError, ValueError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400   # 1 day
         try:
@@ -1374,15 +1373,6 @@ class UpdateFileManager:
         Main function. It tries to update the TI files from a remote server
         """
         try:
-            self.update_period = float(self.update_period)
-        except (TypeError, ValueError):
-            # User does not want to update the malicious IP list.
-            self.print(
-                'Not Updating the remote file of maliciuos IPs and domains'
-                ' because the user did not configure an update time.', 0, 1,
-            )
-            return False
-        try:
             if self.update_period <= 0:
                 # User does not want to update the malicious IP list.
                 self.print(
@@ -1390,7 +1380,6 @@ class UpdateFileManager:
                     'because the update period is <= 0.', 0, 1,
                 )
                 return False
-
             self.log('Checking if we need to download TI files.')
             # we update different types of files
             # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
@@ -1407,12 +1396,12 @@ class UpdateFileManager:
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
-            files_to_download_dics = {}
-            files_to_download_dics.update(self.url_feeds)
-            files_to_download_dics.update(self.ja3_feeds)
-            files_to_download_dics.update(self.ssl_feeds)
+            files_to_download = {}
+            files_to_download.update(self.url_feeds)
+            files_to_download.update(self.ja3_feeds)
+            files_to_download.update(self.ssl_feeds)
 
-            for file_to_download in files_to_download_dics.keys():
+            for file_to_download in files_to_download.keys():
                 file_to_download = file_to_download.strip()
                 file_to_download = self.sanitize(file_to_download)
 
