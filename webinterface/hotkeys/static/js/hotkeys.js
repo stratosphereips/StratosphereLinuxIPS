@@ -369,12 +369,9 @@ profile.onclick_ips();
                 var tr = $(this).closest('tr');
                 var row = alerts.row(tr);
                 if (row.child.isShown()) {
-                    // This row is already open - close it
                     row.child.hide();
                     tr.removeClass('shown');
                 } else {
-                    // Open this row
-                    console.log(row.data())
                     row.child(format(row.data())).show();
                     tr.addClass('shown');
                 }
