@@ -41,7 +41,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timer_manager = InfiniteTimer(
             self.update_period, self.update_ti_files
         )
-        self.timeout = 0
+        self.timeout = 0.000001
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
