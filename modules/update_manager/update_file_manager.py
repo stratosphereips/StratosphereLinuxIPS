@@ -12,6 +12,7 @@ import datetime
 import sys
 import asyncio
 from datetime import datetime
+from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
     def __init__(self, outputqueue, config, redis_port):
@@ -31,7 +32,10 @@ class UpdateFileManager:
         self.today = time.time()
         # don't store iocs older than 1 week
         self.interval = 604800
+        self.whitelist = Whitelist(outputqueue, config)
         self.slips_logfile = __database__.get_stdfile("stdout")
+        self.org_info_path = 'slips_files/organizations_info/'
+
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -1368,6 +1372,10 @@ class UpdateFileManager:
             self.print(traceback.format_exc(), 0, 1)
             return False
 
+    def check_if_update_org(self, org, file):
+        if utils.get_hash_from_file(file) != __database__.get_TI_file_info(file).get('hash',''):
+            return True
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1393,6 +1401,36 @@ class UpdateFileManager:
                             f'An error occurred while updating {file}. Updating '
                             f'was aborted.', 0, 1,
                         )
+            supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+            )
+
+
+            for org in supported_orgs:
+                org_ips = os.join(self.org_info_path, org)
+                org_asn = os.join(self.org_info_path, f'{org}_asn')
+                org_domains = os.join(self.org_info_path, f'{org}_domains')
+                if self.check_if_update_org(org, org_ips):
+                    self.whitelist.load_org_IPs(org)
+
+                if self.check_if_update_org(org, org_domains):
+                    self.whitelist.load_org_domains(org)
+
+                if self.check_if_update_org(org, org_asn):
+                    self.whitelist.load_org_asn(org)
+
+                for file in (org_ips, org_domains, org_asn):
+                    info = {
+                        'hash': utils.get_hash_from_file(file),
+                        'time': time.time()
+                    }
+                    __database__.set_TI_file_info(file, json.loads(info))
+
+
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
