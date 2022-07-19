@@ -34,6 +34,32 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.timeout = 0
         self.__read_configuration()
+        self.get_malicious_ip_ranges()
+
+    def get_malicious_ip_ranges(self):
+        """
+        Cache the IoC IP ranges instead of retrieving them from the db
+        """
+        ip_ranges = __database__.get_malicious_ip_ranges()
+        self.cached_ipv6_ranges = {}
+        self.cached_ipv4_ranges = {}
+        for range in ip_ranges.keys():
+            if '.' in range:
+                first_octet = range.split('.')[0]
+                try:
+                    self.cached_ipv4_ranges[first_octet].append(range)
+                except KeyError:
+                    # first time seeing this octect
+                    self.cached_ipv4_ranges[first_octet] = [range]
+            else:
+                # ipv6 range
+                first_octet = range.split(':')[0]
+                try:
+                    self.cached_ipv6_ranges[first_octet].append(range)
+                except KeyError:
+                    # first time seeing this octect
+                    self.cached_ipv6_ranges[first_octet] = [range]
+
 
     def __read_configuration(self):
         """Read the configuration file for what we need"""
@@ -570,28 +596,30 @@ class Module(Module, multiprocessing.Process):
                                 twid,
                                 ip_state,
                             )
-
                         # check if this ip belongs to any of our blacklisted ranges
-                        ip_ranges = __database__.get_malicious_ip_ranges()
-                        try:
-                            for range, info in ip_ranges.items():
-                                if ip_obj in ipaddress.ip_network(range):
-                                    # ip was found in one of the blacklisted ranges
-                                    ip_info = json.loads(info)
-                                    # Set the evidence on this detection
-                                    self.set_evidence_malicious_ip(
-                                        ip,
-                                        uid,
-                                        timestamp,
-                                        ip_info,
-                                        profileid,
-                                        twid,
-                                        ip_state,
-                                    )
-                                    break
-                        except AttributeError:
-                            # we don't have ip_ranges in our db
-                            pass
+                        if validators.ipv4(ip):
+                            first_octet = ip.split('.')[0]
+                            ranges_starting_with_octet = self.cached_ipv4_ranges.get(first_octet, [])
+                        else:
+                            first_octet = ip.split(':')[0]
+                            ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
+
+                        for range in ranges_starting_with_octet:
+                            if ip_obj in ipaddress.ip_network(range):
+                                # ip was found in one of the blacklisted ranges
+                                ip_info = __database__.get_malicious_ip_ranges()[range]
+                                ip_info = json.loads(ip_info)
+                                # Set the evidence on this detection
+                                self.set_evidence_malicious_ip(
+                                    ip,
+                                    uid,
+                                    timestamp,
+                                    ip_info,
+                                    profileid,
+                                    twid,
+                                    ip_state,
+                                )
+                                break
                     else:
                         # We were not given an IP. Check if we were given a domain
 
