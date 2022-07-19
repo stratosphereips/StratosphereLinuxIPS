@@ -54,7 +54,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.read_configuration()
         # Read the whitelist
         # anything in this list will be ignored
-        self.whitelist.read_orgs_info()
+
         self.whitelist.read_whitelist()
         # Start the DB
         __database__.start(self.config, redis_port)

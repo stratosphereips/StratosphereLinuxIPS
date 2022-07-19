@@ -382,7 +382,14 @@ class Main:
             # set analysis end date
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             __database__.set_input_metadata({'analysis_end': now})
-
+            # add slips end date in the metadata dir
+            try:
+                if 'yes' in self.enable_metadata.lower():
+                    with open(self.info_path, 'a') as f:
+                        f.write(f'Slips end date: {now}\n')
+            except (NameError, AttributeError):
+                # slips is shut down before enable_metadata is read from slips.conf
+                pass
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
@@ -601,15 +608,7 @@ class Main:
 
             if delete_zeek_files:
                 shutil.rmtree('zeek_files')
-            # add slips end date in the metadata dir
-            try:
-                if 'yes' in self.enable_metadata.lower():
-                    with open(self.info_path, 'a') as f:
-                        now = datetime.now()
-                        f.write(f'Slips end date: {now}\n')
-            except (NameError, AttributeError):
-                # slips is shut down before enable_metadata is read from slips.conf
-                pass
+
             if self.mode == 'daemonized':
                 profilesLen = str(__database__.getProfilesLen())
                 print(f'Total Number of Profiles in DB: {profilesLen}.')

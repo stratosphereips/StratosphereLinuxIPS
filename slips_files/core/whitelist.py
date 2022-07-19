@@ -5,6 +5,7 @@ import ipaddress
 import validators
 import requests
 import re
+import os
 
 
 class Whitelist:
@@ -13,6 +14,8 @@ class Whitelist:
         self.outputqueue = outputqueue
         self.config = config
         self.read_configuration()
+        self.org_info_path = 'slips_files/organizations_info/'
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -455,87 +458,7 @@ class Whitelist:
 
         return line_number
 
-    def read_orgs_info(self):
-        """Function to read and store all the domains, ASN,
-        IPs we have about an org andd store in the db"""
 
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-        )
-
-        for org in supported_orgs:
-            # Store the IPs, domains and asn of this org in the db
-            org_subnets = self.load_org_IPs(org)
-            if org_subnets:
-                # Store the IPs of this org
-                __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')
-
-            org_domains = self.load_org_domains(org)
-            if org_domains:
-                __database__.set_org_info(
-                    org, json.dumps(org_domains), 'domains'
-                )
-
-            org_asn = self.load_org_asn(org)
-            if org_asn:
-                __database__.set_org_info(org, json.dumps(org_asn), 'asn')
-
-    def load_org_asn(self, org) -> list:
-        """
-        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
-        org: 'google', 'facebook', 'twitter', etc...
-        returns a list containing the org's asn
-        """
-        try:
-            # Each file is named after the organization's name followed by _asn
-            org_asn = []
-            file = f'slips_files/organizations_info/{org}_asn'
-            with open(file, 'r') as f:
-                line = f.readline()
-                while line:
-                    # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
-                    # Read all as upper
-                    org_asn.append(line.upper())
-                    line = f.readline()
-            return org_asn
-
-        except (FileNotFoundError, IOError):
-            # theres no slips_files/organizations_info/{org}_asn for this org
-            # see if the org has asn cached in our db
-            asn_cache = __database__.get_asn_cache()
-            org_asn = []
-            for asn in asn_cache:
-                if org in asn.lower():
-                    org_asn.append(org)
-            if org_asn != []:
-                return org_asn
-            return False
-
-    def load_org_domains(self, org) -> list:
-        """
-        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
-        org: 'google', 'facebook', 'twitter', etc...
-        returns a list containing the org's domains
-        """
-        try:
-            # Each file is named after the organization's name followed by _domains
-            domains = []
-            file = f'slips_files/organizations_info/{org}_domains'
-            with open(file, 'r') as f:
-                line = f.readline()
-                while line:
-                    # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
-                    domains.append(line.lower())
-                    line = f.readline()
-            return domains
-        except (FileNotFoundError, IOError):
-            return False
 
     def get_domains_of_flow(self, column_values):
         """Returns the domains of each ip (src and dst) that appeard in this flow"""
@@ -853,11 +776,11 @@ class Whitelist:
         org: 'google', 'facebook', 'twitter', etc...
         returns a list of this organization's subnets
         """
+        file = os.path.join(self.org_info_path, org)
         try:
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
             org_subnets = []
-            file = f'slips_files/organizations_info/{org}'
             with open(file, 'r') as f:
                 line = f.readline()
                 while line:
@@ -871,7 +794,6 @@ class Whitelist:
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
-            return org_subnets
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
             org_subnets = []
@@ -885,10 +807,11 @@ class Whitelist:
                 )
             except requests.exceptions.ConnectionError:
                 # Connection reset by peer
-                return False
+                org_subnets = False
+
             ip_space = json.loads(response.text)
             if ip_space:
-                with open(f'slips_files/organizations_info/{org}', 'w') as f:
+                with open(file, 'w') as f:
                     for subnet in ip_space:
                         # get ipv4 only
                         if ':' not in subnet:
@@ -900,7 +823,11 @@ class Whitelist:
                             except ValueError:
                                 # not a valid line, ignore it
                                 continue
-                return org_subnets
             else:
                 # can't get org IPs from asnlookup.com
-                return False
+                org_subnets = False
+
+        if org_subnets:
+            # Store the IPs of this org
+            __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')
+
