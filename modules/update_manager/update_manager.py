@@ -102,6 +102,9 @@ class UpdateManager(Module, multiprocessing.Process):
             asyncio.run(self.update_ti_files())
             # Starting timer to update files
             self.timer_manager.start()
+        except KeyboardInterrupt:
+            self.shutdown_gracefully()
+            return True
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
