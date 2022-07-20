@@ -102,7 +102,7 @@ class Module(Module, multiprocessing.Process):
         self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.timeout = 0
+        self.timeout = 0.00000001
         # flag to open json file only once
         self.is_json_file_opened = False
         self.json_file_handle = False

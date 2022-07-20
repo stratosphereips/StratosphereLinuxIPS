@@ -24,7 +24,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('new_http')
-        self.timeout = 0
+        self.timeout = 0.00000001
         self.connections_counter = {}
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware

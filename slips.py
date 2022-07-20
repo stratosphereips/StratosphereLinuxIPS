@@ -434,7 +434,7 @@ class Main:
                     ):
                         # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
                         try:
-                            message = self.c1.get_message(timeout=0.01)
+                            message = self.c1.get_message(timeout=0.00000001)
                         except NameError:
                             # Sometimes the c1 variable does not exist yet. So just force the shutdown
                             message = {

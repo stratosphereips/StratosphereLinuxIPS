@@ -27,7 +27,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0
+        self.timeout = 0.00000001
         self.read_configuration()
 
     def read_configuration(self):
