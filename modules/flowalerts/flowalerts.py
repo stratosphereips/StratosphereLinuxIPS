@@ -465,9 +465,20 @@ class Module(Module, multiprocessing.Process):
                 # remove from ram
                 org_domains = ''
 
+            # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
             org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
-            if ip in org_ips:
-                return True
+            if '.' in ip:
+                first_octet = ip.split('.')[0]
+                ip_obj = ipaddress.IPv4Address(ip)
+            elif ':' in ip:
+                first_octet = ip.split(':')[0]
+                ip_obj = ipaddress.IPv4Address(ip)
+            else:
+                return False
+            # organization IPs are sorted by first octet for faster search
+            for range in org_ips.get(first_octet, []):
+                if ip_obj in ipaddress.ip_network(range):
+                    return True
 
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
@@ -1007,7 +1018,8 @@ class Module(Module, multiprocessing.Process):
                         and appproto != 'dns'
                         and not self.is_ignored_ip(daddr)
                     ):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 30 minutes has passed
+                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+                        # until 30 minutes has passed
                         # after starting slips because the dns may have happened before starting slips
                         start_time = __database__.get_slips_start_time()
                         internal_time = float(
