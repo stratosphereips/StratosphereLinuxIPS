@@ -565,19 +565,19 @@ class Module(Module, multiprocessing.Process):
                     # ip_state will say if it is a srcip or if it was a dst_ip
                     ip_state = data.get('ip_state')
                     # self.print(ip)
-                    ip_obj = ipaddress.ip_address(ip)
-                    if (
-                            ip_obj.is_multicast
-                            or ip_obj.is_private
-                            or ip_obj.is_link_local
-                            or ip_obj.is_reserved
-                        ):
-                        continue
+
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if ip and not self.is_outgoing_icmp_packet(
-                        protocol, ip_state
-                    ):
+                    if ip :
+                        ip_obj = ipaddress.ip_address(ip)
+                        if (
+                                ip_obj.is_multicast
+                                or ip_obj.is_private
+                                or ip_obj.is_link_local
+                                or ip_obj.is_reserved
+                                or self.is_outgoing_icmp_packet(protocol, ip_state)
+                            ):
+                            continue
                         # Search for this IP in our database of IoC
                         ip_info = __database__.search_IP_in_IoC(ip)
                         # check if it's a blacklisted ip
@@ -665,7 +665,6 @@ class Module(Module, multiprocessing.Process):
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
-                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -673,4 +672,3 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
                 self.print(traceback.format_exc())
-                return True
