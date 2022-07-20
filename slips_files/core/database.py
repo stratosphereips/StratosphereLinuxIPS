@@ -2676,6 +2676,17 @@ class Database(object):
         if not server_name:
             return False
 
+        # We are giving only new server_name to the threat_intelligence module.
+        data_to_send = {
+            'server_name': server_name,
+            'profileid': str(profileid),
+            'twid': str(twid),
+            'stime': stime,
+            'uid': uid,
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+
         # Save new server name in the IPInfo. There might be several server_name per IP.
         ipdata = self.getIPData(str(daddr_as_obj))
         if ipdata:
@@ -2699,16 +2710,7 @@ class Database(object):
                             str(daddr_as_obj), {'SNI': sni_ipdata}
                         )
                         break
-        # We are giving only new server_name to the threat_intelligence module.
-        data_to_send = {
-            'server_name': server_name,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+
 
     def add_out_http(
         self,
