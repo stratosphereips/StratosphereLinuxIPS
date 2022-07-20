@@ -769,34 +769,93 @@ class Whitelist:
                         pass
         return False
 
-    def load_org_IPs(self, org) -> list:
+
+
+    def load_org_asn(self, org) -> list:
+        """
+        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's asn
+        """
+        try:
+            # Each file is named after the organization's name followed by _asn
+            org_asn = []
+            file = f'slips_files/organizations_info/{org}_asn'
+            with open(file, 'r') as f:
+                while line := f.readline():
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace('\n', '').strip()
+                    # Read all as upper
+                    org_asn.append(line.upper())
+            return org_asn
+
+        except (FileNotFoundError, IOError):
+            # theres no slips_files/organizations_info/{org}_asn for this org
+            # see if the org has asn cached in our db
+            asn_cache = __database__.get_asn_cache()
+            org_asn = []
+            for asn in asn_cache:
+                if org in asn.lower():
+                    org_asn.append(org)
+            if org_asn != []:
+                return org_asn
+            return False
+
+    def load_org_domains(self, org):
+        """
+        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
+        org: 'google', 'facebook', 'twitter', etc...
+        returns a list containing the org's domains
+        """
+        try:
+            # Each file is named after the organization's name followed by _domains
+            domains = []
+            file = f'slips_files/organizations_info/{org}_domains'
+            with open(file, 'r') as f:
+                while line := f.readline():
+                    # each line will be something like this: 34.64.0.0/10
+                    line = line.replace('\n', '').strip()
+                    domains.append(line.lower())
+            return domains
+        except (FileNotFoundError, IOError):
+            return False
+
+    def load_org_IPs(self, org):
         """
         Reads the specified org's info from slips_files/organizations_info and stores the info in the database
         if there's no file for this org, it get the IP ranges from asnlookup.com
         org: 'google', 'facebook', 'twitter', etc...
         returns a list of this organization's subnets
         """
-        file = os.path.join(self.org_info_path, org)
+        org_info_file = os.path.join(self.org_info_path, org)
         try:
             # Each file is named after the organization's name
             # Each line of the file containes an ip range, for example: 34.64.0.0/10
             org_subnets = []
-            with open(file, 'r') as f:
+            with open(org_info_file, 'r') as f:
                 line = f.readline()
                 while line:
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     try:
                         # make sure this line is a valid network
-                        is_valid_line = ipaddress.ip_network(line)
-                        org_subnets.append(line)
+                        ipaddress.ip_network(line)
+                        if '.' in line:
+                            first_octet = line.split('.')
+                        elif ':' in line:
+                            first_octet = line.split(':')
+                        try:
+                            org_subnets[first_octet].append(line)
+                        except KeyError:
+                            org_subnets[first_octet] = [line]
                     except ValueError:
                         # not a valid line, ignore it
                         pass
                     line = f.readline()
+
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
-            org_subnets = []
+            org_subnets = {}
             # see if we can get asn about this org
             try:
                 response = requests.get(
@@ -805,29 +864,35 @@ class Whitelist:
                     headers={'User-Agent': 'ASNLookup PY/Client'},
                     timeout=10,
                 )
-            except requests.exceptions.ConnectionError:
-                # Connection reset by peer
-                org_subnets = False
+                if response.status_code != 200:
+                    return
+                ip_space = json.loads(response.text)
+                if not ip_space:
+                    return
 
-            ip_space = json.loads(response.text)
-            if ip_space:
-                with open(file, 'w') as f:
+                with open(org_info_file, 'w') as f:
                     for subnet in ip_space:
                         # get ipv4 only
-                        if ':' not in subnet:
+                        if ':' not in subnet and '.' in subnet:
                             try:
                                 # make sure this line is a valid network
-                                is_valid_line = ipaddress.ip_network(subnet)
-                                f.write(subnet + '\n')
-                                org_subnets.append(subnet)
+                                ipaddress.ip_network(subnet)
                             except ValueError:
                                 # not a valid line, ignore it
                                 continue
-            else:
-                # can't get org IPs from asnlookup.com
-                org_subnets = False
 
-        if org_subnets:
-            # Store the IPs of this org
-            __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')
+                                f.write(subnet + '\n')
+                                first_octet = subnet.split('.')
+                                try:
+                                    org_subnets[first_octet].append(subnet)
+                                except KeyError:
+                                    org_subnets[first_octet] = [subnet]
+
+            except requests.exceptions.ConnectionError:
+                # Connection reset by peer
+                return
+
+        # Store the IPs of this org
+        __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')
+        return org_subnets
 

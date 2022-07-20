@@ -194,54 +194,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.label = 'unknown'
 
 
-    def load_org_asn(self, org) -> list:
-        """
-        Reads the specified org's asn from slips_files/organizations_info and stores the info in the database
-        org: 'google', 'facebook', 'twitter', etc...
-        returns a list containing the org's asn
-        """
-        try:
-            # Each file is named after the organization's name followed by _asn
-            org_asn = []
-            file = f'slips_files/organizations_info/{org}_asn'
-            with open(file, 'r') as f:
-                while line := f.readline():
-                    # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
-                    # Read all as upper
-                    org_asn.append(line.upper())
-            return org_asn
-
-        except (FileNotFoundError, IOError):
-            # theres no slips_files/organizations_info/{org}_asn for this org
-            # see if the org has asn cached in our db
-            asn_cache = __database__.get_asn_cache()
-            org_asn = []
-            for asn in asn_cache:
-                if org in asn.lower():
-                    org_asn.append(org)
-            if org_asn != []:
-                return org_asn
-            return False
-
-    def load_org_domains(self, org) -> list:
-        """
-        Reads the specified org's domains from slips_files/organizations_info and stores the info in the database
-        org: 'google', 'facebook', 'twitter', etc...
-        returns a list containing the org's domains
-        """
-        try:
-            # Each file is named after the organization's name followed by _domains
-            domains = []
-            file = f'slips_files/organizations_info/{org}_domains'
-            with open(file, 'r') as f:
-                while line := f.readline():
-                    # each line will be something like this: 34.64.0.0/10
-                    line = line.replace('\n', '').strip()
-                    domains.append(line.lower())
-            return domains
-        except (FileNotFoundError, IOError):
-            return False
 
     def define_type(self, line):
         """
