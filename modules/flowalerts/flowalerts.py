@@ -472,7 +472,7 @@ class Module(Module, multiprocessing.Process):
                 ip_obj = ipaddress.IPv4Address(ip)
             elif ':' in ip:
                 first_octet = ip.split(':')[0]
-                ip_obj = ipaddress.IPv4Address(ip)
+                ip_obj = ipaddress.IPv6Address(ip)
             else:
                 return False
             # organization IPs are sorted by first octet for faster search
@@ -906,7 +906,6 @@ class Module(Module, multiprocessing.Process):
                     flow = data['flow']
                     # Convert flow to a dict
                     flow = json.loads(flow)
-
                     # Convert the common fields to something that can
                     # be interpreted
                     uid = next(iter(flow))
@@ -926,7 +925,6 @@ class Module(Module, multiprocessing.Process):
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
-
                     # stime = flow_dict['ts']
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
