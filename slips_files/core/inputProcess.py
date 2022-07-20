@@ -684,7 +684,10 @@ class InputProcess(multiprocessing.Process):
                 )
                 return False
             self.shutdown_gracefully()
-            return True
+            # keep the module idle until slips.py kills it
+            # without this, the module exits but the pid will remain in memory as <defunct>
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return False
