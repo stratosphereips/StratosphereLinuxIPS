@@ -1373,7 +1373,8 @@ class UpdateFileManager:
             return False
 
     def check_if_update_org(self, org, file):
-        if utils.get_hash_from_file(file) != __database__.get_TI_file_info(file).get('hash',''):
+        cached_hash = __database__.get_TI_file_info(file).get('hash','')
+        if utils.get_hash_from_file(file) != cached_hash:
             return True
 
     async def update(self) -> bool:
@@ -1411,9 +1412,9 @@ class UpdateFileManager:
 
 
             for org in supported_orgs:
-                org_ips = os.join(self.org_info_path, org)
-                org_asn = os.join(self.org_info_path, f'{org}_asn')
-                org_domains = os.join(self.org_info_path, f'{org}_domains')
+                org_ips = os.path.join(self.org_info_path, org)
+                org_asn = os.path.join(self.org_info_path, f'{org}_asn')
+                org_domains = os.path.join(self.org_info_path, f'{org}_domains')
                 if self.check_if_update_org(org, org_ips):
                     self.whitelist.load_org_IPs(org)
 
@@ -1426,9 +1427,8 @@ class UpdateFileManager:
                 for file in (org_ips, org_domains, org_asn):
                     info = {
                         'hash': utils.get_hash_from_file(file),
-                        'time': time.time()
                     }
-                    __database__.set_TI_file_info(file, json.loads(info))
+                    __database__.set_TI_file_info(file, info)
 
 
             ############### Update remote TI files ################

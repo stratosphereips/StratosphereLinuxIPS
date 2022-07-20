@@ -780,14 +780,13 @@ class Whitelist:
         try:
             # Each file is named after the organization's name followed by _asn
             org_asn = []
-            file = f'slips_files/organizations_info/{org}_asn'
-            with open(file, 'r') as f:
+            asn_info_file = os.path.join(self.org_info_path, f'{org}_asn')
+            with open(asn_info_file, 'r') as f:
                 while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     # Read all as upper
                     org_asn.append(line.upper())
-            return org_asn
 
         except (FileNotFoundError, IOError):
             # theres no slips_files/organizations_info/{org}_asn for this org
@@ -797,9 +796,9 @@ class Whitelist:
             for asn in asn_cache:
                 if org in asn.lower():
                     org_asn.append(org)
-            if org_asn != []:
-                return org_asn
-            return False
+
+        __database__.set_org_info(org, json.dumps(org_asn), 'asn')
+        return org_asn
 
     def load_org_domains(self, org):
         """
@@ -808,17 +807,21 @@ class Whitelist:
         returns a list containing the org's domains
         """
         try:
-            # Each file is named after the organization's name followed by _domains
             domains = []
-            file = f'slips_files/organizations_info/{org}_domains'
-            with open(file, 'r') as f:
+            # Each file is named after the organization's name followed by _domains
+            domain_info_file = os.path.join(self.org_info_path, f'{org}_domains')
+            with open(domain_info_file, 'r') as f:
                 while line := f.readline():
                     # each line will be something like this: 34.64.0.0/10
                     line = line.replace('\n', '').strip()
                     domains.append(line.lower())
-            return domains
+                    # Store the IPs of this org
         except (FileNotFoundError, IOError):
             return False
+
+        __database__.set_org_info(org, json.dumps(domains), 'domains')
+        return domains
+
 
     def load_org_IPs(self, org):
         """
@@ -830,8 +833,8 @@ class Whitelist:
         org_info_file = os.path.join(self.org_info_path, org)
         try:
             # Each file is named after the organization's name
-            # Each line of the file containes an ip range, for example: 34.64.0.0/10
-            org_subnets = []
+            # Each line of the file contains an ip range, for example: 34.64.0.0/10
+            org_subnets = {}
             with open(org_info_file, 'r') as f:
                 line = f.readline()
                 while line:
@@ -840,17 +843,22 @@ class Whitelist:
                     try:
                         # make sure this line is a valid network
                         ipaddress.ip_network(line)
-                        if '.' in line:
-                            first_octet = line.split('.')
-                        elif ':' in line:
-                            first_octet = line.split(':')
-                        try:
-                            org_subnets[first_octet].append(line)
-                        except KeyError:
-                            org_subnets[first_octet] = [line]
                     except ValueError:
                         # not a valid line, ignore it
-                        pass
+                        continue
+
+                    if '.' in line:
+                        first_octet = line.split('.')[0]
+                    elif ':' in line:
+                        first_octet = line.split(':')[0]
+                    else:
+                        # not ipv4 or opv6
+                        continue
+                    try:
+                        org_subnets[first_octet].append(line)
+                    except KeyError:
+                        org_subnets[first_octet] = [line]
+
                     line = f.readline()
 
         except (FileNotFoundError, IOError):

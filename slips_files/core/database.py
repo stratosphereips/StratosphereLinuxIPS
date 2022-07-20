@@ -3704,6 +3704,7 @@ class Database(object):
         """
         Set/update time and/or e-tag for TI file
         :param file: a valid filename not a feed url
+        :param data: dict containing info about TI file
         """
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
