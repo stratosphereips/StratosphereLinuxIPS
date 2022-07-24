@@ -174,7 +174,10 @@ profile.onclick_ips();
         columns: [
             { data: 'alert' ,
             "className":"r"},
-            { data: 'alert_description'}
+            { data: 'profileid'},
+            { data: 'timewindow'},
+            { data: 'evidence_count'}
+
         ]
     });
 
