@@ -82,7 +82,7 @@ profile.onclick_ips();
     let timewindow = '';
     let active_hotkey_name = 'timeline';
     let last_active_hotkey_name = 'timeline';
-    let active_hotkey_table = null
+    let active_hotkey_table = null;
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         dom: custom_dom,
@@ -342,7 +342,7 @@ profile.onclick_ips();
         onclick_timeline_flows_saddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.saddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.saddr
+                let url = '/hotkeys/info/' + data.saddr;
                 ipinfo.ajax.url(url).load();
             })
         },
@@ -350,7 +350,7 @@ profile.onclick_ips();
         onclick_timeline_flows_daddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.daddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.daddr
+                let url = '/hotkeys/info/' + data.daddr;
                 ipinfo.ajax.url(url).load();
             })
         },
@@ -358,7 +358,7 @@ profile.onclick_ips();
         onclick_timeline_daddr: function () {
         $('#table_timeline ').on('click', 'tbody td.daddr', function () {
                 let data = timeline.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.daddr
+                let url = '/hotkeys/info/' + data.daddr;
                 ipinfo.ajax.url(url).load();
             })
         },
