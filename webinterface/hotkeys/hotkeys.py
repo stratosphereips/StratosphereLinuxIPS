@@ -271,23 +271,27 @@ class Hotkeys:
         """
         Set alerts for chosen profile and timewindow
         """
-        print("here")
         data = []
         alerts = self.db.hget("alerts", profile)
+
         if alerts:
             alerts = json.loads(alerts)
             alerts_tw = alerts[timewindow]
+            tws = self.get_all_tw_with_ts(profile)
             for alert_ID, evidence_ID_list in alerts_tw.items():
+                evidences = self.db.hget("evidence" + profile, timewindow)
+                evidences = json.loads(evidences)
 
-                evidences = self.db.hget("evidence"+ profile, timewindow)
-                evidences= json.loads(evidences)
-                alert_description = evidences[alert_ID]
+                evidence_count = len(evidence_ID_list)
+                alert_description = json.loads(evidences[alert_ID])
+                alert_timestamp = self.ts_to_date(alert_description["stime"], seconds=True)
+                profile_ip = profile.split("_")[1]
+                tw_name = tws[timewindow]["name"]
+
                 evidence_list = {}
                 for evidence_ID in evidence_ID_list:
                     evidence_list[evidence_ID] = evidences[evidence_ID]
-                data.append({ "alert": alert_ID, "alert_description": alert_description, "evidence_list": evidence_list})
+                    
+                data.append({"alert": alert_timestamp, "profileid": profile_ip, "timewindow": tw_name,
+                             "evidence_count": evidence_count, "evidence_list": evidence_list})
         return {"data": data}
-
-
-
-
