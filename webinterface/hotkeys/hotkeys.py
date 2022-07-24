@@ -26,6 +26,30 @@ class Hotkeys:
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
         self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
 
+    def ts_to_date(self, ts, seconds=False):
+        if seconds:
+            return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S.%f')
+        return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
+
+    def format_tw(self, profile, tw, seconds=False):
+        tw_tuple = self.db.zrange("tws" + profile, 0, -1, withscores=True)
+        tw_n = tw_tuple[0]
+        tw_ts = tw_tuple[1]
+        tw_date = self.ts_to_date(tw_ts)
+        return "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
+
+    def get_all_tw_with_ts(self, profileid):
+        tws = self.db.zrange("tws" + profileid, 0, -1, withscores=True)
+        dict_tws = defaultdict(dict)
+
+        for tw_tuple in tws:
+            tw_n = tw_tuple[0]
+            tw_ts = tw_tuple[1]
+            tw_date = self.ts_to_date(tw_ts)
+            dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
+            dict_tws[tw_n]["blocked"] = False # needed to color profiles
+        return dict_tws
+
 
     def index(self):
         return render_template('hotkeys.html', title='Slips')
