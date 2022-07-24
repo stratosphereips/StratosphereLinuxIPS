@@ -71,15 +71,16 @@ class Hotkeys:
             asnorg = [asn.get('asnorg', '-') if asn else '-']
             reverse_dns = ip_info.get('reverse_dns', '-')
             vt_scores = ip_info.get("VirusTotal", False)
-            url, down_file, ref_file, com_file = '-','-','-','-'
+            url, down_file, ref_file, com_file = '-', '-', '-', '-'
             if vt_scores:
                 url = vt_scores.get("URL", "-")
                 down_file = vt_scores.get("down_file", "-")
                 ref_file = vt_scores.get("ref_file", "-")
                 com_file = vt_scores.get("com_file", "-")
 
-            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns, "URL": url, "down_file": down_file, "ref_file": ref_file,
-                "com_file": com_file}
+            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns, "URL": url,
+                    "down_file": down_file, "ref_file": ref_file,
+                    "com_file": com_file}
         return data
 
     def set_ip_info(self, ip):
@@ -114,21 +115,10 @@ class Hotkeys:
         # Fetch profiles
         profiles = self.db.smembers('profiles')
         data = []
-        id = 0
         for profileid in profiles:
             profile_word, profile_ip = profileid.split("_")
-            tws = self.db.zrange("tws" + profileid, 0, -1, withscores=True)
-            dict_tws = defaultdict(dict)
+            dict_tws = self.get_all_tw_with_ts(profileid)
             blocked_profile = False
-
-            for tw_tuple in tws:
-                tw_n = tw_tuple[0]
-                tw_ts = tw_tuple[1]
-                dict_tws[tw_n]["orig_ts"] = tw_ts
-                tw_date = datetime.fromtimestamp(tw_ts).strftime('%Y/%m/%d %H:%M:%S')
-                dict_tws[tw_n]["date_ts"] = tw_date
-                dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
-                dict_tws[tw_n]["blocked"] = False
 
             if profile_ip in dict_blockedProfileTWs.keys():
                 for blocked_tw in dict_blockedProfileTWs[profile_ip]:
@@ -136,7 +126,6 @@ class Hotkeys:
                 blocked_profile = True
 
             data.append({"id": str(id), "profile": profile_ip, "tws": dict_tws, "blocked": blocked_profile})
-            id = id + 1
 
         return {
             'data': data
@@ -227,8 +216,6 @@ class Hotkeys:
     def set_timeline_flows(self, profile, timewindow):
         """
         Set timeline flows of a chosen profile and timewindow.
-        :param profile: active profile
-        :param timewindow: active timewindow
         :return: list of timeline flows as set initially in database
         """
         data = []
@@ -239,7 +226,7 @@ class Hotkeys:
 
                 # convert timestamp to date
                 timestamp = value["ts"]
-                dt_obj = datetime.fromtimestamp(timestamp).strftime('%Y/%m/%d %H:%M:%S.%f')
+                dt_obj = self.ts_to_date(timestamp, seconds=True)
                 value["ts"] = dt_obj
 
                 data.append(value)
