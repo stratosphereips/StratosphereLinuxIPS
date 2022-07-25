@@ -1273,9 +1273,7 @@ class Database(object):
             self.print(
                 'Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(
                     profileid, twid, tupleid, data_tuple
-                ),
-                3,
-                0,
+                ),3,0,
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
@@ -1300,9 +1298,7 @@ class Database(object):
                         symbol_to_add,
                         previous_two_timestamps,
                         tuples,
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 # Get the last symbols of letters in the DB
                 prev_symbols = tuples[tupleid][0]
@@ -1327,9 +1323,7 @@ class Database(object):
                 self.print(
                     '\tLetters so far for tuple {}: {}'.format(
                         tupleid, new_symbol
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 tuples = json.dumps(tuples)
             except (TypeError, KeyError):
@@ -1338,9 +1332,7 @@ class Database(object):
                 self.print(
                     'First time for tuple {} as an {} for {} in TW {}'.format(
                         tupleid, direction, profileid, twid
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 # Here get the info from the ipinfo key
                 new_data = (symbol_to_add, previous_two_timestamps)
@@ -1384,16 +1376,17 @@ class Database(object):
             dport = columns['dport']
             sport = columns['sport']
             totbytes = columns['bytes']
-            sbytes = columns['sbytes']
             pkts = columns['pkts']
-            spkts = columns['spkts']
-            dpkts = columns['dpkts']
             state = columns['state']
             proto = columns['proto'].upper()
-            daddr = columns['daddr']
-            saddr = columns['saddr']
             starttime = str(columns['starttime'])
             uid = columns['uid']
+            # spkts = columns['spkts']
+            # dpkts = columns['dpkts']
+            # daddr = columns['daddr']
+            # saddr = columns['saddr']
+            # sbytes = columns['sbytes']
+
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
                 port = str(dport)
@@ -1410,7 +1403,8 @@ class Database(object):
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Key
             key_name = port_type + 'Ports' + role + proto + summaryState
-            # self.print('add_port(): As a {} storing info about {} port {} for {}. Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
+            # self.print('add_port(): As a {} storing info about {} port {} for {}.
+            # Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
             prev_data = self.getDataFromProfileTW(
                 profileid, twid, port_type, summaryState, proto, role, 'Ports'
             )
@@ -1432,9 +1426,7 @@ class Database(object):
                 self.print(
                     'add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(
                         port, profileid, key_name, innerdata
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
             except KeyError:
                 # First time for this flow
@@ -1452,9 +1444,7 @@ class Database(object):
                 self.print(
                     'add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(
                         port, profileid, key_name, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
             # Convet the dictionary to json
@@ -1462,9 +1452,7 @@ class Database(object):
             self.print(
                 'add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(
                     port, profileid, key_name, prev_data
-                ),
-                3,
-                0,
+                ),3,0,
             )
             # Store this data in the profile hash
             hash_key = profileid + self.separator + twid
