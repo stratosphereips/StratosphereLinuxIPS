@@ -1458,9 +1458,15 @@ class Main:
                 for module_name in modules_to_call:
                     if module_name not in to_ignore:
                         module_class = modules_to_call[module_name]['obj']
-                        ModuleProcess = module_class(
-                            self.outputqueue, self.config, redis_port
-                        )
+                        if 'p2ptrust' == module_name:
+                            ModuleProcess = module_class(
+                                self.outputqueue, self.config, redis_port, output_dir=self.args.output
+                            )
+                        else:
+                            ModuleProcess = module_class(
+                                self.outputqueue, self.config, redis_port
+                            )
+
                         ModuleProcess.start()
                         __database__.store_process_PID(
                             module_name, int(ModuleProcess.pid)
