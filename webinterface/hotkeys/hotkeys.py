@@ -25,6 +25,7 @@ class Hotkeys:
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
         self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
+        self.bp.add_url_rule("/evidence/<profile>/<timewindow>/<alert_id>", view_func=self.set_evidence)
 
     def ts_to_date(self, ts, seconds=False):
         if seconds:
@@ -265,9 +266,10 @@ class Hotkeys:
             alerts = json.loads(alerts)
             alerts_tw = alerts[timewindow]
             tws = self.get_all_tw_with_ts(profile)
+            evidences = self.db.hget("evidence" + profile, timewindow)
+            evidences = json.loads(evidences)
+
             for alert_ID, evidence_ID_list in alerts_tw.items():
-                evidences = self.db.hget("evidence" + profile, timewindow)
-                evidences = json.loads(evidences)
 
                 evidence_count = len(evidence_ID_list)
                 alert_description = json.loads(evidences[alert_ID])
@@ -275,10 +277,27 @@ class Hotkeys:
                 profile_ip = profile.split("_")[1]
                 tw_name = tws[timewindow]["name"]
 
-                evidence_list = {}
-                for evidence_ID in evidence_ID_list:
-                    evidence_list[evidence_ID] = evidences[evidence_ID]
-                    
-                data.append({"alert": alert_timestamp, "profileid": profile_ip, "timewindow": tw_name,
-                             "evidence_count": evidence_count, "evidence_list": evidence_list})
+                data.append({"alert": alert_timestamp, "alert_id": alert_ID, "profileid": profile_ip, "timewindow": tw_name,
+                             "evidence_count": evidence_count})
         return {"data": data}
+
+
+    def set_evidence(self, profile, timewindow, alert_id):
+        """
+        Set evidence table for the pressed alert in chosem profile and timewindow
+        """
+
+        data = []
+        alerts = self.db.hget("alerts", profile)
+
+        if alerts:
+            alerts = json.loads(alerts)
+            alerts_tw = alerts[timewindow]
+            evidence_ID_list  =  alerts_tw[alert_id]
+            evidences = self.db.hget("evidence" + profile, timewindow)
+            evidences = json.loads(evidences)
+
+            for evidence_ID in evidence_ID_list:
+                data.append(json.loads(evidences[evidence_ID]))
+        return {"data": data}
+
