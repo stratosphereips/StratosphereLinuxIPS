@@ -49,7 +49,7 @@ class FileEventHandler(RegexMatchingEventHandler):
             to_send = json.dumps(to_send)
             __database__.publish('remove_old_files', to_send)
             # give inputProc.py time to close the handle and delete the file
-            time.sleep(3)
+            time.sleep(1)
 
     def on_modified(self, event):
         """this will be triggered everytime zeek modifies a log file"""

@@ -1474,7 +1474,7 @@ class Main:
                             f'[PID {ModuleProcess.pid}]', 1, 0
                         )
                 # give outputprocess time to print all the started modules
-                time.sleep(1)
+                time.sleep(0.5)
                 print('-' * 27)
                 self.print(
                     f"Disabled Modules: {to_ignore}", 1, 0

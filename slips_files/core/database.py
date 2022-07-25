@@ -3557,7 +3557,7 @@ class Database(object):
         if uid:
             try:
                 time.sleep(
-                    3
+                    1
                 )   # it takes time for the binetflow to put the flow into the database
                 flow_information = self.r.hget(
                     profileid + '_' + twid + '_flows', uid
