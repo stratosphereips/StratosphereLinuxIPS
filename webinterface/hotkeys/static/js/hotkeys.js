@@ -181,19 +181,20 @@ profile.onclick_ips();
         ]
     });
 
-    function format(d) {
-        let entry ='<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
-        let exit = '</table>'
-        let head ="<thead> <tr> <th>id</th> <th>description</th> </tr>  </thead>"
 
-        let evidence_table = ""
-        Object.entries(d.evidence_list).forEach(([id, value]) => {
-            evidence_table += '<tr>' +
-                '<td>'+id+'</td>' +
-                '<td>' + value + '</td>' +
-                '</tr>'
-        })
-        return ( entry + head + evidence_table + exit);
+    function format(d) {
+        let table_id = d["alert_id"]
+        let entry ='<table' + ' id="'+ table_id + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+        let exit = '</table>'
+        let head ="<thead>"+
+         "<tr>"+
+         "<th>Evidence</th>" +
+         "<th>Confidence</th>" +
+         "<th>Threat Level</th>" +
+         "<th>Category</th>" +
+         "</tr>"+
+         "</thead>"
+        return ( entry + head  + exit);
     }
 
 // TODO: decide and fix chart
@@ -375,6 +376,21 @@ profile.onclick_ips();
                     tr.removeClass('shown');
                 } else {
                     row.child(format(row.data())).show();
+                    let table_id = "#" + row.data()["alert_id"]
+                    let evidence = $(table_id).DataTable({
+                        "bDestroy": true,
+                        dom: custom_dom,
+                        columns: [
+                            { data: 'stime'},
+                            { data: 'confidence'},
+                            { data: 'threat_level'},
+                            { data: 'category'}
+                        ]
+                    });
+                    let link = "/hotkeys/evidence/" + profile + "/" + timewindow + "/" + row.data()["alert_id"]
+                    console.log(link)
+                    console.log(table_id)
+                    evidence.ajax.url(link).load();
                     tr.addClass('shown');
                 }
             });
