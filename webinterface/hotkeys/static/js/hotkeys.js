@@ -13,9 +13,11 @@ Functions:
 let profiles = function () {
     let profiles_table = $('#profiles').DataTable({
         dom: '<"top"f>rt',
+        scrollX: false,
+        scrollY: "78vh", // hardcoded height to fit the page
+        scrollCollapse: true,
         paging:false,
         info: false,
-        scrollY: "50vh",
         ajax: '/hotkeys/profiles_tws',
         "rowId": 'id',
         columns: [
@@ -32,6 +34,7 @@ let profiles = function () {
             }
     }
     });
+
     return {
         onclick_tws: function () {
             function add_tws(profile_tws) {
