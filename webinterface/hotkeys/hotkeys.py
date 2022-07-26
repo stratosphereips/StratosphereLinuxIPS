@@ -298,6 +298,9 @@ class Hotkeys:
             evidences = json.loads(evidences)
 
             for evidence_ID in evidence_ID_list:
-                data.append(json.loads(evidences[evidence_ID]))
+                temp_evidence = json.loads(evidences[evidence_ID])
+                if "source_target_tag" not in temp_evidence:
+                    temp_evidence["source_target_tag"] = "-"
+                data.append(temp_evidence)
         return {"data": data}
 
