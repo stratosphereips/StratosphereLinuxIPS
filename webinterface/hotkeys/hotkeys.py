@@ -48,9 +48,8 @@ class Hotkeys:
             tw_ts = tw_tuple[1]
             tw_date = self.ts_to_date(tw_ts)
             dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
-            dict_tws[tw_n]["blocked"] = False # needed to color profiles
+            dict_tws[tw_n]["blocked"] = False  # needed to color profiles
         return dict_tws
-
 
     def index(self):
         return render_template('hotkeys.html', title='Slips')
@@ -270,17 +269,16 @@ class Hotkeys:
             evidences = json.loads(evidences)
 
             for alert_ID, evidence_ID_list in alerts_tw.items():
-
                 evidence_count = len(evidence_ID_list)
                 alert_description = json.loads(evidences[alert_ID])
                 alert_timestamp = self.ts_to_date(alert_description["stime"], seconds=True)
                 profile_ip = profile.split("_")[1]
                 tw_name = tws[timewindow]["name"]
 
-                data.append({"alert": alert_timestamp, "alert_id": alert_ID, "profileid": profile_ip, "timewindow": tw_name,
-                             "evidence_count": evidence_count})
+                data.append(
+                    {"alert": alert_timestamp, "alert_id": alert_ID, "profileid": profile_ip, "timewindow": tw_name,
+                     "evidence_count": evidence_count})
         return {"data": data}
-
 
     def set_evidence(self, profile, timewindow, alert_id):
         """
@@ -293,7 +291,7 @@ class Hotkeys:
         if alerts:
             alerts = json.loads(alerts)
             alerts_tw = alerts[timewindow]
-            evidence_ID_list  =  alerts_tw[alert_id]
+            evidence_ID_list = alerts_tw[alert_id]
             evidences = self.db.hget("evidence" + profile, timewindow)
             evidences = json.loads(evidences)
 
@@ -303,4 +301,3 @@ class Hotkeys:
                     temp_evidence["source_target_tag"] = "-"
                 data.append(temp_evidence)
         return {"data": data}
-
