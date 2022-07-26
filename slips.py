@@ -175,16 +175,22 @@ class Main:
         returns the used port
         """
         try:
-            while True:
-                # generate a random unused port
-                port = random.randint(32768, 32850)
+            # generate a random unused port
+            for port in range(32768, 32850):
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
-                if __database__.connect_to_redis_server(port) and len(list(__database__.r.keys())) < 2:
-                    # if the db managed to connect to this random port, then this is
-                    # the port we'll be using
-                    return port
+                connected = __database__.connect_to_redis_server(port)
+                if connected:
+                    server_used = len(list(__database__.r.keys())) < 2
+                    if server_used:
+                        # if the db managed to connect to this random port, then this is
+                        # the port we'll be using
+                        return port
+            else:
+                # there's no usable port in this range
+                self.print("All port from 32768 to 32850 are taken. Unable to start slips")
+                self.terminate_slips()
         except redis.exceptions.ConnectionError:
             # Connection refused to this port
             return self.generate_random_redis_port()
