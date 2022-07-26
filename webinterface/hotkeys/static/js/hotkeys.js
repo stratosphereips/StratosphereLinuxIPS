@@ -173,7 +173,7 @@ profile.onclick_ips();
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
         dom: custom_dom,
-        scrollX: true,
+        scrollX: false,
         columns: [
             { data: 'alert' ,
             "className":"r"},
@@ -195,6 +195,8 @@ profile.onclick_ips();
          "<th>Confidence</th>" +
          "<th>Threat Level</th>" +
          "<th>Category</th>" +
+          "<th>Tag</th>" +
+         "<th>Description</th>" +
          "</tr>"+
          "</thead>"
         return ( entry + head  + exit);
@@ -383,16 +385,20 @@ profile.onclick_ips();
                     let evidence = $(table_id).DataTable({
                         "bDestroy": true,
                         dom: custom_dom,
+                        bInfo: false,
+                        paging: false,
+                        searching: false,
+                        scrollY: "25vh", // hardcoded length of opened datatable
                         columns: [
                             { data: 'stime'},
                             { data: 'confidence'},
                             { data: 'threat_level'},
-                            { data: 'category'}
+                            { data: 'category'},
+                            { data: 'source_target_tag'},
+                            { data: 'description'}
                         ]
                     });
                     let link = "/hotkeys/evidence/" + profile + "/" + timewindow + "/" + row.data()["alert_id"]
-                    console.log(link)
-                    console.log(table_id)
                     evidence.ajax.url(link).load();
                     tr.addClass('shown');
                 }
