@@ -1,5 +1,6 @@
 import configparser
 import multiprocessing
+import os
 import platform
 import shutil
 import signal
@@ -68,26 +69,28 @@ class Trust(Module, multiprocessing.Process):
         output_queue: multiprocessing.Queue,
         config: configparser.ConfigParser,
         redis_port: int,
-        data_dir: str = './output/p2ptrust_runtime/',
         pigeon_port=6668,
         rename_with_port=False,
+        output_dir='output/',
         slips_update_channel='ip_info_change',
         p2p_data_request_channel='p2p_data_request',
         gopy_channel='p2p_gopy',
         pygo_channel='p2p_pygo',
         start_pigeon=True,
         pigeon_binary='p2p4slips',  # make sure the binary is in $PATH or put there full path
-        pigeon_logfile='output/p2p.log',
         pigeon_key_file='pigeon.keys',
         rename_redis_ip_info=False,
         rename_sql_db_file=False,
         override_p2p=False,
     ):
+        # thi smodule is called automatically when slips starts
         multiprocessing.Process.__init__(self)
         # get the used interface
         used_interface = self.get_used_interface()
-        pigeon_logfile = f'output/{used_interface}/p2p.log'
-        data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
+        # pigeon_logfile = f'output/{used_interface}/p2p.log'
+        pigeon_logfile = os.path.join(output_dir, 'p2p.log')
+        data_dir = os.path.join(output_dir, 'p2ptrust_runtime/')
+        # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
 
         # create data folder
         Path(data_dir).mkdir(parents=True, exist_ok=True)

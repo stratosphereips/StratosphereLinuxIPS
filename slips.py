@@ -1543,7 +1543,39 @@ class Main:
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
-                self.load_modules(redis_port)
+                to_ignore = self.get_disabled_modules()
+                # Import all the modules
+                modules_to_call = self.load_modules(to_ignore)[0]
+                for module_name in modules_to_call:
+                    if module_name not in to_ignore:
+                        module_class = modules_to_call[module_name]['obj']
+                        if 'p2ptrust' == module_name:
+                            ModuleProcess = module_class(
+                                self.outputqueue, self.config, redis_port, output_dir=self.args.output
+                            )
+                        else:
+                            ModuleProcess = module_class(
+                            self.outputqueue, self.config, redis_port
+                            )
+                        ModuleProcess.start()
+                        __database__.store_process_PID(
+                            module_name, int(ModuleProcess.pid)
+                        )
+                        description = modules_to_call[module_name][
+                            'description'
+                        ]
+                        self.print(
+                            f'\t\tStarting the module {module_name} '
+                            f'({description}) '
+                            f'[PID {ModuleProcess.pid}]', 1, 0
+                        )
+                # give outputprocess time to print all the started modules
+                time.sleep(0.5)
+                print('-' * 27)
+                self.print(
+                    f"Disabled Modules: {to_ignore}", 1, 0
+                )
+
 
             # self.start_gui_process()
 
