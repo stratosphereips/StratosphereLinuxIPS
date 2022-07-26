@@ -667,6 +667,105 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
 
+    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid, message):
+        """
+        Check for auth_success: true in the given zeek flow
+        """
+        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        original_flow_uid = next(iter(original_ssh_flow))
+        if original_ssh_flow[original_flow_uid]:
+            ssh_flow_dict = json.loads(
+                original_ssh_flow[original_flow_uid]
+            )
+            daddr = ssh_flow_dict['daddr']
+            saddr = ssh_flow_dict['saddr']
+            size = ssh_flow_dict['allbytes']
+            self.helper.set_evidence_ssh_successful(
+                profileid,
+                twid,
+                saddr,
+                daddr,
+                size,
+                uid,
+                timestamp,
+                by='Zeek',
+            )
+            try:
+                self.connections_checked_in_ssh_timer_thread.remove(
+                    uid
+                )
+            except ValueError:
+                pass
+            return True
+        elif uid not in self.connections_checked_in_ssh_timer_thread:
+            # It can happen that the original SSH flow is not in the DB yet
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+            self.connections_checked_in_ssh_timer_thread.append(
+                uid
+            )
+            params = [message]
+            timer = TimerThread(
+                15, self.check_successful_ssh, params
+            )
+            timer.start()
+
+    def detect_successful_ssh_by_slips(self, uid, timestamp, profileid, twid, message):
+        """
+        Try Slips method to detect if SSH was successful by
+        comparing all bytes sent and received to our threshold
+        """
+        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        original_flow_uid = next(iter(original_ssh_flow))
+        if original_ssh_flow[original_flow_uid]:
+            ssh_flow_dict = json.loads(
+                original_ssh_flow[original_flow_uid]
+            )
+            daddr = ssh_flow_dict['daddr']
+            saddr = ssh_flow_dict['saddr']
+            size = ssh_flow_dict['allbytes']
+            if size > self.ssh_succesful_detection_threshold:
+                # Set the evidence because there is no
+                # easier way to show how Slips detected
+                # the successful ssh and not Zeek
+                self.helper.set_evidence_ssh_successful(
+                    profileid,
+                    twid,
+                    saddr,
+                    daddr,
+                    size,
+                    uid,
+                    timestamp,
+                    by='Slips',
+                )
+                try:
+                    self.connections_checked_in_ssh_timer_thread.remove(
+                        uid
+                    )
+                except ValueError:
+                    pass
+                return True
+
+            else:
+                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
+                pass
+        else:
+            # It can happen that the original SSH flow is not in the DB yet
+            if uid not in self.connections_checked_in_ssh_timer_thread:
+                # comes here if we haven't started the timer thread for this connection before
+                # mark this connection as checked
+                # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
+                # time {datetime.datetime.now()}')
+                self.connections_checked_in_ssh_timer_thread.append(
+                    uid
+                )
+                params = [message]
+                timer = TimerThread(
+                    15, self.check_successful_ssh, params
+                )
+                timer.start()
+
     def check_successful_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully
@@ -684,96 +783,10 @@ class Module(Module, multiprocessing.Process):
             timestamp = flow_dict['stime']
             uid = flow_dict['uid']
             if auth_success := flow_dict['auth_success']:
-                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                original_flow_uid = next(iter(original_ssh_flow))
-                if original_ssh_flow[original_flow_uid]:
-                    ssh_flow_dict = json.loads(
-                        original_ssh_flow[original_flow_uid]
-                    )
-                    daddr = ssh_flow_dict['daddr']
-                    saddr = ssh_flow_dict['saddr']
-                    size = ssh_flow_dict['allbytes']
-                    self.helper.set_evidence_ssh_successful(
-                        profileid,
-                        twid,
-                        saddr,
-                        daddr,
-                        size,
-                        uid,
-                        timestamp,
-                        by='Zeek',
-                    )
-                    try:
-                        self.connections_checked_in_ssh_timer_thread.remove(
-                            uid
-                        )
-                    except ValueError:
-                        pass
-                    return True
-                elif uid not in self.connections_checked_in_ssh_timer_thread:
-                    # It can happen that the original SSH flow is not in the DB yet
-                    # comes here if we haven't started the timer thread for this connection before
-                    # mark this connection as checked
-                    # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
-                    self.connections_checked_in_ssh_timer_thread.append(
-                        uid
-                    )
-                    params = [message]
-                    timer = TimerThread(
-                        15, self.check_successful_ssh, params
-                    )
-                    timer.start()
+                self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid, message)
             else:
-                # Try Slips method to detect if SSH was successful.
-                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                original_flow_uid = next(iter(original_ssh_flow))
-                if original_ssh_flow[original_flow_uid]:
-                    ssh_flow_dict = json.loads(
-                        original_ssh_flow[original_flow_uid]
-                    )
-                    daddr = ssh_flow_dict['daddr']
-                    saddr = ssh_flow_dict['saddr']
-                    size = ssh_flow_dict['allbytes']
-                    if size > self.ssh_succesful_detection_threshold:
-                        # Set the evidence because there is no
-                        # easier way to show how Slips detected
-                        # the successful ssh and not Zeek
-                        self.helper.set_evidence_ssh_successful(
-                            profileid,
-                            twid,
-                            saddr,
-                            daddr,
-                            size,
-                            uid,
-                            timestamp,
-                            by='Slips',
-                        )
-                        try:
-                            self.connections_checked_in_ssh_timer_thread.remove(
-                                uid
-                            )
-                        except ValueError:
-                            pass
-                        return True
+                self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, message)
 
-                    else:
-                        # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                        pass
-                else:
-                    # It can happen that the original SSH flow is not in the DB yet
-                    if uid not in self.connections_checked_in_ssh_timer_thread:
-                        # comes here if we haven't started the timer thread for this connection before
-                        # mark this connection as checked
-                        # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
-                        # time {datetime.datetime.now()}')
-                        self.connections_checked_in_ssh_timer_thread.append(
-                            uid
-                        )
-                        params = [message]
-                        timer = TimerThread(
-                            15, self.check_successful_ssh, params
-                        )
-                        timer.start()
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on check_ssh() line {exception_line}', 0, 1)
