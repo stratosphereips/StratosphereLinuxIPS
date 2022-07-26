@@ -89,7 +89,7 @@ class Main:
             # There is a conf, but there is no option, or no section or no configuration file specified
             return False
 
-    def recognize_host_ip(self):
+    def get_host_ip(self):
         """
         Recognize the IP address of the machine
         """
@@ -103,9 +103,28 @@ class Main:
             return None
         return ipaddr_check
 
+    def store_host_ip(self):
+        """
+        Store the host IP address if input type is interface
+        """
+        if self.input_type != 'interface':
+            return
+
+        hostIP = self.get_host_ip()
+        while True:
+            try:
+                __database__.set_host_ip(hostIP)
+                break
+            except redis.exceptions.DataError:
+                self.print(
+                    'Not Connected to the internet. Reconnecting in 10s.'
+                )
+                time.sleep(10)
+                hostIP = self.get_host_ip()
+
     def create_folder_for_logs(self):
         """
-        Create a folder for logs if logs are enabled
+        Create a dir for logs if logs are enabled
         """
         logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
         try:
@@ -159,11 +178,6 @@ class Main:
             while True:
                 # generate a random unused port
                 port = random.randint(32768, 32850)
-                # 6379 is for the cache db,
-                # the cache db shouldn't be closed when using -k
-                # so this is to avoid storing the port in used_redis_server.txt
-                if port == 6379:
-                    continue
                 # check if 1. we can connect
                 # 2.server is not being used by another instance of slips
                 # note: using r.keys() blocks the server
@@ -218,10 +232,12 @@ class Main:
             self.daemon.stop()
         sys.exit(-1)
 
-    def load_modules(self, to_ignore):
+    def get_modules(self, to_ignore):
         """
-        Import modules and loads the modules from the 'modules' folder. Is very relative to the starting position of slips
+        Get modules from the 'modules' folder.
         """
+        # This plugins import will automatically load the modules and put them in
+        # the __modules__ variable
 
         plugins = {}
         failed_to_load_modules = 0
@@ -269,13 +285,76 @@ class Main:
                         description=member_object.description,
                     )
 
-        # Change the order of the blocking module(load it first) so it can receive msgs sent from other modules
+        # Change the order of the blocking module(load it first)
+        # so it can receive msgs sent from other modules
         if 'Blocking' in plugins:
             plugins = OrderedDict(plugins)
             # last=False to move to the beginning of the dict
             plugins.move_to_end('Blocking', last=False)
 
         return plugins, failed_to_load_modules
+
+    def load_modules(self, redis_port):
+        to_ignore = self.get_disabled_modules()
+        # Import all the modules
+        modules_to_call = self.get_modules(to_ignore)[0]
+        for module_name in modules_to_call:
+            if module_name in to_ignore:
+                continue
+
+            module_class = modules_to_call[module_name]['obj']
+            ModuleProcess = module_class(
+                self.outputqueue, self.config, redis_port
+            )
+            ModuleProcess.start()
+            __database__.store_process_PID(
+                module_name, int(ModuleProcess.pid)
+            )
+            description = modules_to_call[module_name]['description']
+            self.print(
+                f'\t\tStarting the module {module_name} '
+                f'({description}) '
+                f'[PID {ModuleProcess.pid}]', 1, 0
+                )
+        # give outputprocess time to print all the started modules
+        time.sleep(0.5)
+        print('-' * 27)
+        self.print(f"Disabled Modules: {to_ignore}", 1, 0)
+
+    def setup_detailed_logs(self, LogsProcess):
+        """
+        Detailed logs are the ones created by logsProcess
+        """
+        do_logs = self.read_configuration(
+            self.config, 'parameters', 'create_log_files'
+        )
+        # if -l is provided or create_log_files is yes then we will create log files
+        if self.args.createlogfiles or do_logs == 'yes':
+            # Create a folder for logs
+            logs_dir = self.create_folder_for_logs()
+            # Create the logsfile thread if by parameter we were told,
+            # or if it is specified in the configuration
+            logsProcessQueue = Queue()
+            logs_process = LogsProcess(
+                logsProcessQueue,
+                self.outputqueue,
+                self.args.verbose,
+                self.args.debug,
+                self.config,
+                logs_dir,
+            )
+            logs_process.start()
+            self.print(
+                f'Started logsfiles thread '
+                f'[PID {logs_process.pid}]', 1, 0
+            )
+            __database__.store_process_PID(
+                'logsProcess', int(logs_process.pid)
+            )
+        else:
+            # If self.args.nologfiles is False, then we don't want log files,
+            # independently of what the conf says.
+            logs_dir = False
 
     def prepare_zeek_scripts(self):
         """
@@ -1272,6 +1351,96 @@ class Main:
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 
+    def check_blocking_permissions(self):
+        """
+        Check if the user blocks on interface, does not make sense to block on files
+        """
+
+        if (
+            self.args.interface
+            and self.args.blocking
+            and os.geteuid() != 0
+        ):
+            # If the user wants to blocks,we need permission to modify iptables
+            print(
+                '[Main] Run Slips with sudo to enable the blocking module.'
+            )
+            self.shutdown_gracefully()
+
+    def setup_print_levels(self):
+        """
+        setup debug and verose levels
+        """
+        # Any verbosity passed as parameter overrides the configuration. Only check its value
+        if self.args.verbose == None:
+            # Read the verbosity from the config
+            try:
+                self.args.verbose = int(
+                    self.config.get('parameters', 'verbose')
+                )
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+                ValueError,
+            ):
+                # There is a conf, but there is no option, or no section or no configuration file specified
+                # By default, 1
+                self.args.verbose = 1
+
+        # Limit any verbosity to > 0
+        if self.args.verbose < 1:
+            self.args.verbose = 1
+
+        # Any debuggsity passed as parameter overrides the configuration. Only check its value
+        if self.args.debug == None:
+            # Read the debug from the config
+            try:
+                self.args.debug = int(
+                    self.config.get('parameters', 'debug')
+                )
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+                ValueError,
+            ):
+                # There is a conf, but there is no option, or no section or no configuration file specified
+                # By default, 0
+                self.args.debug = 0
+
+        # Limit any debuggisity to > 0
+        if self.args.debug < 0:
+            self.args.debug = 0
+
+
+    def check_output_redirection(self) -> tuple:
+        """
+        Determine where slips will place stdout, stderr and logfile based on slips mode
+        """
+        # lsof will provide a list of all open fds belonging to slips
+        command = f'lsof -p {self.pid}'
+        result = subprocess.run(command.split(), capture_output=True)
+        # Get command output
+        output = result.stdout.decode('utf-8')
+        # if stdout is being redirected we'll find '1w' in one of the lines
+        # 1 means stdout, w means write mode
+        # by default, stdout is not redirected
+        current_stdout = ''
+        for line in output.splitlines():
+            if '1w' in line:
+                # stdout is redirected, get the file
+                current_stdout = line.split(' ')[-1]
+                break
+
+        if self.mode == 'daemonized':
+            stderr = self.daemon.stderr
+            slips_logfile = self.daemon.stdout
+        else:
+            stderr = os.path.join(self.args.output, 'errors.log')
+            slips_logfile = os.path.join(self.args.output, 'slips.log')
+        return (current_stdout, stderr, slips_logfile)
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1287,17 +1456,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            # Also check if the user blocks on interface, does not make sense to block on files
-            if (
-                self.args.interface
-                and self.args.blocking
-                and os.geteuid() != 0
-            ):
-                # If the user wants to blocks,we need permission to modify iptables
-                print(
-                    '[Main] Run Slips with sudo to enable the blocking module.'
-                )
-                self.shutdown_gracefully()
+            self.check_blocking_permissions()
 
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
@@ -1309,47 +1468,8 @@ class Main:
             from slips_files.core.guiProcess import GuiProcess
             from slips_files.core.logsProcess import LogsProcess
             from slips_files.core.evidenceProcess import EvidenceProcess
-            # Any verbosity passed as parameter overrides the configuration. Only check its value
-            if self.args.verbose == None:
-                # Read the verbosity from the config
-                try:
-                    self.args.verbose = int(
-                        self.config.get('parameters', 'verbose')
-                    )
-                except (
-                    configparser.NoOptionError,
-                    configparser.NoSectionError,
-                    NameError,
-                    ValueError,
-                ):
-                    # There is a conf, but there is no option, or no section or no configuration file specified
-                    # By default, 1
-                    self.args.verbose = 1
 
-            # Limit any verbosity to > 0
-            if self.args.verbose < 1:
-                self.args.verbose = 1
-
-            # Any debuggsity passed as parameter overrides the configuration. Only check its value
-            if self.args.debug == None:
-                # Read the debug from the config
-                try:
-                    self.args.debug = int(
-                        self.config.get('parameters', 'debug')
-                    )
-                except (
-                    configparser.NoOptionError,
-                    configparser.NoSectionError,
-                    NameError,
-                    ValueError,
-                ):
-                    # There is a conf, but there is no option, or no section or no configuration file specified
-                    # By default, 0
-                    self.args.debug = 0
-
-            # Limit any debuggisity to > 0
-            if self.args.debug < 0:
-                self.args.debug = 0
+            self.setup_print_levels()
             ##########################
             # Creation of the threads
             ##########################
@@ -1363,35 +1483,13 @@ class Main:
             else:
                 redis_port = 6379
 
-            # Output thread. This thread should be created first because it handles
+            # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
-            # Create the queue
             self.outputqueue = Queue()
-            # if stdout it redirected to a file, tell outputProcess.py to redirect it's output as well
-            # lsof will provide a list of all open fds belonging to slips
-            command = f'lsof -p {self.pid}'
-            result = subprocess.run(command.split(), capture_output=True)
-            # Get command output
-            output = result.stdout.decode('utf-8')
-            # if stdout is being redirected we'll find '1w' in one of the lines 1 means stdout, w means write mode
-            # by default, stdout is not redirected
-            current_stdout = ''
-            for line in output.splitlines():
-                if '1w' in line:
-                    # stdout is redirected, get the file
-                    current_stdout = line.split(' ')[-1]
-                    break
 
-            if self.mode == 'daemonized':
-                stderr = self.daemon.stderr
-                slips_logfile = self.daemon.stdout
-            else:
-                stderr = os.path.join(self.args.output, 'errors.log')
-                slips_logfile = os.path.join(self.args.output, 'slips.log')
-
-
-
-            # Create the output thread and start it
+            # if stdout is redirected to a file,
+            # tell outputProcess.py to redirect it's output as well
+            current_stdout, stderr, slips_logfile = self.check_output_redirection()
             output_process = OutputProcess(
                 self.outputqueue,
                 self.args.verbose,
@@ -1404,6 +1502,7 @@ class Main:
             )
             # this process starts the db
             output_process.start()
+
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
 
@@ -1413,120 +1512,59 @@ class Main:
                 __database__.disable_redis_snapshots()
 
             if self.mode == 'daemonized':
-                __database__.store_std_file("stderr", self.daemon.stderr)
-                __database__.store_std_file("stdout", self.daemon.stdout)
-                __database__.store_std_file("stdin", self.daemon.stdin)
-                __database__.store_std_file("pidfile", self.daemon.pidfile)
-                __database__.store_std_file("logsfile", self.daemon.logsfile)
+                std_files = {
+                    'stderr': self.daemon.stderr,
+                    'stdout': self.daemon.stdout,
+                    'stdin': self.daemon.stdin,
+                    'pidfile': self.daemon.pidfile,
+                    'logsfile': self.daemon.logsfile
+                }
+
             else:
-                __database__.store_std_file("stdout", slips_logfile)
-                __database__.store_std_file("stderr", stderr)
+                std_files = {
+                    'stderr': stderr,
+                    'stdout': slips_logfile,
+                }
+
+            __database__.store_std_file(**std_files)
 
 
-            # now that we have successfully connected to the db,
             # log the PID of the started redis-server
             redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
             self.log_redis_server_PID(redis_port, redis_pid)
-            self.print(
-                f'Using redis server on port: {redis_port}', 1, 0
-            )
 
-            # Before starting update malicious file
-            # create an event loop and allow it to run the update_file_manager asynchronously
-            # Print the PID of the main slips process. We do it here because we needed the queue to the output process
-            self.print(
-                f'Started main program [PID {self.pid}]', 1, 0
-            )
-            # Output pid
-            __database__.store_process_PID(
-                'OutputProcess', int(output_process.pid)
-            )
+            __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
-            self.print(
-                f'Started output thread [PID {output_process.pid}]', 1, 0
-            )
-
-            # Start each module in the folder modules
+            self.print(f'Using redis server on port: {redis_port}', 1, 0)
+            self.print(f'Started main program [PID {self.pid}]', 1, 0)
+            self.print(f'Started output thread [PID {output_process.pid}]', 1, 0)
             self.print('Starting modules', 0, 1)
 
-            # This plugins import will automatically load the modules and put them in the __modules__ variable
+
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
-                to_ignore = self.get_disabled_modules()
-                # Import all the modules
-                modules_to_call = self.load_modules(to_ignore)[0]
-                for module_name in modules_to_call:
-                    if module_name not in to_ignore:
-                        module_class = modules_to_call[module_name]['obj']
-                        ModuleProcess = module_class(
-                            self.outputqueue, self.config, redis_port
-                        )
-                        ModuleProcess.start()
-                        __database__.store_process_PID(
-                            module_name, int(ModuleProcess.pid)
-                        )
-                        description = modules_to_call[module_name][
-                            'description'
-                        ]
-                        self.print(
-                            f'\t\tStarting the module {module_name} '
-                            f'({description}) '
-                            f'[PID {ModuleProcess.pid}]', 1, 0
-                        )
-                # give outputprocess time to print all the started modules
-                time.sleep(0.5)
-                print('-' * 27)
-                self.print(
-                    f"Disabled Modules: {to_ignore}", 1, 0
-                )
-
+                self.load_modules(redis_port)
 
             # self.start_gui_process()
+
+
             # call shutdown_gracefully on sigint, and sigterm
             def sig_handler(sig, frame):
                 self.shutdown_gracefully()
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            do_logs = self.read_configuration(
-                self.config, 'parameters', 'create_log_files'
-            )
-            # if -l is provided or create_log_files is yes then we will create log files
-            if self.args.createlogfiles or do_logs == 'yes':
-                # Create a folder for logs
-                logs_folder = self.create_folder_for_logs()
-                # Create the logsfile thread if by parameter we were told, or if it is specified in the configuration
-                logsProcessQueue = Queue()
-                logs_process = LogsProcess(
-                    logsProcessQueue,
-                    self.outputqueue,
-                    self.args.verbose,
-                    self.args.debug,
-                    self.config,
-                    logs_folder,
-                )
-                logs_process.start()
-                self.print(
-                    f'Started logsfiles thread '
-                    f'[PID {logs_process.pid}]', 1, 0
-                )
-                __database__.store_process_PID(
-                    'logsProcess', int(logs_process.pid)
-                )
-            else:
-                # If self.args.nologfiles is False, then we don't want log files, independently of what the conf says.
-                logs_folder = False
 
-            # Evidence thread
-            # Create the queue for the evidence thread
+            logs_dir = self.setup_detailed_logs(LogsProcess)
+
+
             evidenceProcessQueue = Queue()
-            # Create the thread and start it
             evidence_process = EvidenceProcess(
                 evidenceProcessQueue,
                 self.outputqueue,
                 self.config,
                 self.args.output,
-                logs_folder,
+                logs_dir,
                 redis_port,
             )
             evidence_process.start()
@@ -1535,14 +1573,15 @@ class Main:
                 f'[PID {evidence_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'EvidenceProcess', int(evidence_process.pid)
+                'EvidenceProcess',
+                int(evidence_process.pid)
             )
-            __database__.store_process_PID('slips.py', int(self.pid))
+            __database__.store_process_PID(
+                'slips.py',
+                int(self.pid)
+            )
 
-            # Profile thread
-            # Create the queue for the profile thread
             profilerProcessQueue = Queue()
-            # Create the profile thread and start it
             profiler_process = ProfilerProcess(
                 profilerProcessQueue,
                 self.outputqueue,
@@ -1557,7 +1596,8 @@ class Main:
                 f'[PID {profiler_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'ProfilerProcess', int(profiler_process.pid)
+                'ProfilerProcess',
+                int(profiler_process.pid)
             )
 
             self.c1 = __database__.subscribe('finished_modules')
@@ -1577,47 +1617,42 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started input thread [PID {inputProcess.pid}]', 1, 0
+                f'Started input thread '
+                f'[PID {inputProcess.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'InputProcess', int(inputProcess.pid)
+                'InputProcess',
+                int(inputProcess.pid)
             )
 
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
                 self.print(
-                    f'Warning: You have {open_servers} redis servers running. '
+                    f'Warning: You have {open_servers} '
+                    f'redis servers running. '
                     f'Run Slips with --killall to stop them.'
                 )
 
             self.enable_metadata = self.read_configuration(
-                self.config, 'parameters', 'metadata_dir'
-            )
+                                                self.config,
+                                                'parameters',
+                                                'metadata_dir'
+                                                )
+
             if 'yes' in self.enable_metadata.lower():
                 self.info_path = self.add_metadata()
 
-            # Store the host IP address if input type is interface
-            if self.input_type == 'interface':
-                hostIP = self.recognize_host_ip()
-                while True:
-                    try:
-                        __database__.set_host_ip(hostIP)
-                        break
-                    except redis.exceptions.DataError:
-                        self.print(
-                            'Not Connected to the internet. Reconnecting in 10s.'
-                        )
-                        time.sleep(10)
-                        hostIP = self.recognize_host_ip()
+            self.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
-            check_time_sleep = 5
-            # In each interval we check if there has been any modifications to the database by any module.
+            sleep_time = 5
+            # In each interval we check if there has been any modifications to
+            # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
             # We choose 6 to wait 30 seconds.
-            limit_minimum_intervals_to_wait = 4
-            minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+            max_intervals_to_wait = 4
+            intervals_to_wait = max_intervals_to_wait
             slips_internal_time = 0
             try:
                 while True:
@@ -1630,7 +1665,7 @@ class Main:
                         self.shutdown_gracefully()
 
                     # Sleep some time to do routine checks
-                    time.sleep(check_time_sleep)
+                    time.sleep(sleep_time)
                     slips_internal_time = (
                         float(__database__.getSlipsInternalTime()) + 1
                     )
@@ -1678,15 +1713,15 @@ class Main:
                         # After count down we update the host IP, to check if the
                         # network was changed
                         if not modifiedTW_hostIP and self.args.interface:
-                            if minimum_intervals_to_wait == 0:
-                                hostIP = self.recognize_host_ip()
+                            if intervals_to_wait == 0:
+                                hostIP = self.get_host_ip()
                                 if hostIP:
                                     __database__.set_host_ip(hostIP)
-                                minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+                                intervals_to_wait = max_intervals_to_wait
 
-                            minimum_intervals_to_wait -= 1
+                            intervals_to_wait -= 1
                         else:
-                            minimum_intervals_to_wait = limit_minimum_intervals_to_wait
+                            intervals_to_wait = max_intervals_to_wait
 
 
                     # Running Slips in the file.
@@ -1701,13 +1736,13 @@ class Main:
                         ):
                             # print('Counter to stop Slips. Amount of modified
                             # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                            if minimum_intervals_to_wait == 0:
+                            if intervals_to_wait == 0:
                                 self.shutdown_gracefully()
                                 break
-                            minimum_intervals_to_wait -= 1
+                            intervals_to_wait -= 1
                         else:
-                            minimum_intervals_to_wait = (
-                                limit_minimum_intervals_to_wait
+                            intervals_to_wait = (
+                                max_intervals_to_wait
                             )
 
                     __database__.pubsub.check_health()

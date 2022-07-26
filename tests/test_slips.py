@@ -28,7 +28,7 @@ def create_Main_instance():
 
 def test_load_modules():
     main = create_Main_instance()
-    failed_to_load_modules = main.load_modules(
+    failed_to_load_modules = main.get_modules(
         ['template', 'mldetection-1', 'ensembling']
     )[1]
     assert failed_to_load_modules == 0
@@ -67,7 +67,7 @@ def test_load_modules():
 
 def test_recognize_host_ip():
     main = create_Main_instance()
-    assert main.recognize_host_ip() != None
+    assert main.get_host_ip() != None
 
 
 def test_create_folder_for_logs():

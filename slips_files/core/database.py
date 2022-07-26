@@ -3997,8 +3997,19 @@ class Database(object):
     def is_known_ports_read(self):
         return True if self.rcache.get("is services.csv read") == 'True' else False
 
-    def store_std_file(self, file_type, path):
-        self.r.set(file_type, path)
+    def store_std_file(self, **kwargs):
+        """
+        available args are
+            std_files = {
+                    'stderr': ,
+                    'stdout': ,
+                    'stdin': ,
+                    'pidfile': ,
+                    'logsfile': ,
+                }
+        """
+        for file_type, path in kwargs.items():
+            self.r.set(file_type, path)
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
