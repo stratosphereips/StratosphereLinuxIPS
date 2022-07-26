@@ -999,6 +999,13 @@ class Main:
             help='The redis-server port to use',
         )
         parser.add_argument(
+            '-V',
+            '--version',
+            action='store_true',
+            required=False,
+            help='Print Slips Version',
+        )
+        parser.add_argument(
             '-h', '--help', action='help', help='command line help'
         )
         self.args = parser.parse_args()
@@ -1468,23 +1475,26 @@ class Main:
             slips_logfile = os.path.join(self.args.output, 'slips.log')
         return (current_stdout, stderr, slips_logfile)
 
+
     def start(self):
         """Main Slips Function"""
         try:
             slips_version = f'Slips. Version {version}'
-
             branch_info = utils.get_branch_info()
             if branch_info != False:
                 # it's false when we're in docker because there's no .git/ there
                 commit = branch_info[0]
                 slips_version += f' ({commit[:8]})'
 
+
             print(slips_version)
+            if self.args.version:
+                self.terminate_slips()
+
             print('https://stratosphereips.org')
             print('-' * 27)
 
             self.check_blocking_permissions()
-
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
             """
