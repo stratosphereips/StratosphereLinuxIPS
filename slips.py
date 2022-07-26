@@ -1663,7 +1663,7 @@ class Main:
             if 'yes' in self.enable_metadata.lower():
                 self.info_path = self.add_metadata()
 
-            host_IP = self.store_host_ip()
+            hostIP = self.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
             sleep_time = 5
