@@ -303,9 +303,14 @@ class Main:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            ModuleProcess = module_class(
-                self.outputqueue, self.config, redis_port
-            )
+            if 'p2ptrust' == module_name:
+                ModuleProcess = module_class(
+                    self.outputqueue, self.config, redis_port, output_dir=self.args.output
+                )
+            else:
+                ModuleProcess = module_class(
+                    self.outputqueue, self.config, redis_port
+                )
             ModuleProcess.start()
             __database__.store_process_PID(
                 module_name, int(ModuleProcess.pid)
@@ -1043,6 +1048,13 @@ class Main:
         self.mode = mode
         self.daemon = daemon
 
+    def log(self, txt):
+        """
+        Is used instead of print for daemon debugging
+        """
+        with open(self.daemon.stdout, 'a') as f:
+            f.write(f'{txt}\n')
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -1543,38 +1555,7 @@ class Main:
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
-                to_ignore = self.get_disabled_modules()
-                # Import all the modules
-                modules_to_call = self.load_modules(to_ignore)[0]
-                for module_name in modules_to_call:
-                    if module_name not in to_ignore:
-                        module_class = modules_to_call[module_name]['obj']
-                        if 'p2ptrust' == module_name:
-                            ModuleProcess = module_class(
-                                self.outputqueue, self.config, redis_port, output_dir=self.args.output
-                            )
-                        else:
-                            ModuleProcess = module_class(
-                            self.outputqueue, self.config, redis_port
-                            )
-                        ModuleProcess.start()
-                        __database__.store_process_PID(
-                            module_name, int(ModuleProcess.pid)
-                        )
-                        description = modules_to_call[module_name][
-                            'description'
-                        ]
-                        self.print(
-                            f'\t\tStarting the module {module_name} '
-                            f'({description}) '
-                            f'[PID {ModuleProcess.pid}]', 1, 0
-                        )
-                # give outputprocess time to print all the started modules
-                time.sleep(0.5)
-                print('-' * 27)
-                self.print(
-                    f"Disabled Modules: {to_ignore}", 1, 0
-                )
+                self.load_modules()
 
 
             # self.start_gui_process()
@@ -1686,102 +1667,97 @@ class Main:
             max_intervals_to_wait = 4
             intervals_to_wait = max_intervals_to_wait
             slips_internal_time = 0
-            try:
-                while True:
-                    message = self.c1.get_message(timeout=0.01)
-                    if (
-                        message
-                        and utils.is_msg_intended_for(message, 'finished_modules')
-                        and message['data'] == 'stop_slips'
-                    ):
-                        self.shutdown_gracefully()
+            while True:
+                message = self.c1.get_message(timeout=0.01)
+                if (
+                    message
+                    and utils.is_msg_intended_for(message, 'finished_modules')
+                    and message['data'] == 'stop_slips'
+                ):
+                    self.shutdown_gracefully()
 
-                    # Sleep some time to do routine checks
-                    time.sleep(sleep_time)
-                    slips_internal_time = (
-                        float(__database__.getSlipsInternalTime()) + 1
+                # Sleep some time to do routine checks
+                time.sleep(sleep_time)
+                slips_internal_time = (
+                    float(__database__.getSlipsInternalTime()) + 1
+                )
+                # Get the amount of modified profiles since we last checked
+                (
+                    modified_profiles,
+                    last_modified_tw_time,
+                ) = __database__.getModifiedProfilesSince(
+                    slips_internal_time
+                )
+                amount_of_modified = len(modified_profiles)
+                # Get the time of last modified timewindow and set it as a new
+                if last_modified_tw_time != 0:
+                    __database__.setSlipsInternalTime(
+                        last_modified_tw_time
                     )
-                    # Get the amount of modified profiles since we last checked
-                    (
-                        modified_profiles,
-                        last_modified_tw_time,
-                    ) = __database__.getModifiedProfilesSince(
-                        slips_internal_time
+                # How many profiles we have?
+                profilesLen = str(__database__.getProfilesLen())
+                if self.mode != 'daemonized' and self.input_type != 'stdin':
+                    print(
+                        f'Total Number of Profiles in DB so '
+                        f'far: {profilesLen}. '
+                        f'Modified Profiles in the last TW: {amount_of_modified}. '
+                        f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
+                        end='\r',
                     )
-                    amount_of_modified = len(modified_profiles)
-                    # Get the time of last modified timewindow and set it as a new
-                    if last_modified_tw_time != 0:
-                        __database__.setSlipsInternalTime(
-                            last_modified_tw_time
-                        )
-                    # How many profiles we have?
-                    profilesLen = str(__database__.getProfilesLen())
-                    if self.mode != 'daemonized' and self.input_type != 'stdin':
-                        print(
-                            f'Total Number of Profiles in DB so '
-                            f'far: {profilesLen}. '
-                            f'Modified Profiles in the last TW: {amount_of_modified}. '
-                            f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
-                            end='\r',
-                        )
 
-                    # Check if we need to close some TW
-                    __database__.check_TW_to_close()
+                # Check if we need to close some TW
+                __database__.check_TW_to_close()
 
-                    # In interface we keep track of the host IP. If there was no
-                    # modified TWs in the host NotIP, we check if the network was changed.
-                    # Don't try to stop slips if it's capturing from an interface
-                    if self.args.interface:
-                        # To check of there was a modified TW in the host IP. If not,
-                        # count down.
-                        modifiedTW_hostIP = False
-                        for profileIP in modified_profiles:
-                            # True if there was a modified TW in the host IP
-                            if hostIP == profileIP:
-                                modifiedTW_hostIP = True
+                # In interface we keep track of the host IP. If there was no
+                # modified TWs in the host NotIP, we check if the network was changed.
+                # Don't try to stop slips if it's capturing from an interface
+                if self.args.interface:
+                    # To check of there was a modified TW in the host IP. If not,
+                    # count down.
+                    modifiedTW_hostIP = False
+                    for profileIP in modified_profiles:
+                        # True if there was a modified TW in the host IP
+                        if hostIP == profileIP:
+                            modifiedTW_hostIP = True
 
-                        # If there was no modified TW in the host IP
-                        # then start counting down
-                        # After count down we update the host IP, to check if the
-                        # network was changed
-                        if not modifiedTW_hostIP and self.args.interface:
-                            if intervals_to_wait == 0:
-                                hostIP = self.get_host_ip()
-                                if hostIP:
-                                    __database__.set_host_ip(hostIP)
-                                intervals_to_wait = max_intervals_to_wait
-
-                            intervals_to_wait -= 1
-                        else:
+                    # If there was no modified TW in the host IP
+                    # then start counting down
+                    # After count down we update the host IP, to check if the
+                    # network was changed
+                    if not modifiedTW_hostIP and self.args.interface:
+                        if intervals_to_wait == 0:
+                            hostIP = self.get_host_ip()
+                            if hostIP:
+                                __database__.set_host_ip(hostIP)
                             intervals_to_wait = max_intervals_to_wait
 
-
-                    # Running Slips in the file.
-                    # If there were no modified TW in the last timewindow time,
-                    # then start counting down
+                        intervals_to_wait -= 1
                     else:
-                        # don't shutdown slips if it's being debugged or reading flows from stdin
-                        if (
-                            amount_of_modified == 0
-                            and not self.is_debugger_active()
-                            and self.input_type != 'stdin'
-                        ):
-                            # print('Counter to stop Slips. Amount of modified
-                            # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                            if intervals_to_wait == 0:
-                                self.shutdown_gracefully()
-                                break
-                            intervals_to_wait -= 1
-                        else:
-                            intervals_to_wait = (
-                                max_intervals_to_wait
-                            )
+                        intervals_to_wait = max_intervals_to_wait
 
-                    __database__.pubsub.check_health()
 
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
+                # Running Slips in the file.
+                # If there were no modified TW in the last timewindow time,
+                # then start counting down
+                else:
+                    # don't shutdown slips if it's being debugged or reading flows from stdin
+                    if (
+                        amount_of_modified == 0
+                        and not self.is_debugger_active()
+                        and self.input_type != 'stdin'
+                    ):
+                        # print('Counter to stop Slips. Amount of modified
+                        # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
+                        if intervals_to_wait == 0:
+                            self.shutdown_gracefully()
+                            break
+                        intervals_to_wait -= 1
+                    else:
+                        intervals_to_wait = (
+                            max_intervals_to_wait
+                        )
 
+                __database__.pubsub.check_health()
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
