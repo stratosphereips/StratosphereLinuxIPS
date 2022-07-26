@@ -121,6 +121,7 @@ class Main:
                 )
                 time.sleep(10)
                 hostIP = self.get_host_ip()
+        return hostIP
 
     def create_folder_for_logs(self):
         """
@@ -1662,7 +1663,7 @@ class Main:
             if 'yes' in self.enable_metadata.lower():
                 self.info_path = self.add_metadata()
 
-            self.store_host_ip()
+            host_IP = self.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
             sleep_time = 5
