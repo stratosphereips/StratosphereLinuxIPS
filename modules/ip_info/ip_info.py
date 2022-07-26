@@ -282,7 +282,6 @@ class Module(Module, multiprocessing.Process):
         MAC_info = {'MAC': mac_addr}
         if host_name:
             MAC_info['host_name'] = host_name
-
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
         self.mac_db.seek(0)
@@ -302,17 +301,13 @@ class Module(Module, multiprocessing.Process):
 
         if MAC_info['Vendor'] == 'Unknown':
             # couldn't find vendor using offline db, search online
-            url = 'https://www.macvendorlookup.com/api/v2'
+            url = 'https://api.macvendors.com'
             try:
                 response = requests.get(f'{url}/{mac_addr}', timeout=5)
                 if response.status_code == 200:
                     # this onnline db returns results in an array like str [{results}],
                     # make it json
-                    online_info = response.text.replace(']', '').replace(
-                        '[', ''
-                    )
-                    online_info = json.loads(online_info)
-                    if vendor := online_info.get('company', False):
+                    if vendor:= response.text:
                         MAC_info['Vendor'] = vendor
                 else:
                     # If there is no match in the online database,

@@ -1652,7 +1652,6 @@ class ProfilerProcess(multiprocessing.Process):
             ip_obj = ipaddress.IPv4Address(ip)
         else:
             ip_obj = ipaddress.IPv6Address(ip)
-
         if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
             ip_obj.is_multicast or ip_obj.is_link_local
         ):
