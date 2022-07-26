@@ -1377,6 +1377,46 @@ class UpdateFileManager:
         if utils.get_hash_from_file(file) != cached_hash:
             return True
 
+    def update_org_files(self):
+        supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+            )
+
+
+        for org in supported_orgs:
+            org_ips = os.path.join(self.org_info_path, org)
+            org_asn = os.path.join(self.org_info_path, f'{org}_asn')
+            org_domains = os.path.join(self.org_info_path, f'{org}_domains')
+            if self.check_if_update_org(org, org_ips):
+                self.whitelist.load_org_IPs(org)
+
+            if self.check_if_update_org(org, org_domains):
+                self.whitelist.load_org_domains(org)
+
+            if self.check_if_update_org(org, org_asn):
+                self.whitelist.load_org_asn(org)
+
+            for file in (org_ips, org_domains, org_asn):
+                info = {
+                    'hash': utils.get_hash_from_file(file),
+                }
+                __database__.set_TI_file_info(file, info)
+
+    def update_ports_info(self):
+        for file in os.listdir('slips_files/ports_info'):
+            file = os.path.join('slips_files/ports_info', file)
+            if self.__check_if_update_local_file(file):
+                if not self.update_local_file(file):
+                    # update failed
+                    self.print(
+                        f'An error occurred while updating {file}. Updating '
+                        f'was aborted.', 0, 1,
+                    )
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1392,43 +1432,9 @@ class UpdateFileManager:
             self.log('Checking if we need to download TI files.')
             # we update different types of files
             # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-            ############### Update slips local files ################
-            for file in os.listdir('slips_files/ports_info'):
-                file = os.path.join('slips_files/ports_info', file)
-                if self.__check_if_update_local_file(file):
-                    if not self.update_local_file(file):
-                        # update failed
-                        self.print(
-                            f'An error occurred while updating {file}. Updating '
-                            f'was aborted.', 0, 1,
-                        )
-            supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-            )
-
-
-            for org in supported_orgs:
-                org_ips = os.path.join(self.org_info_path, org)
-                org_asn = os.path.join(self.org_info_path, f'{org}_asn')
-                org_domains = os.path.join(self.org_info_path, f'{org}_domains')
-                if self.check_if_update_org(org, org_ips):
-                    self.whitelist.load_org_IPs(org)
-
-                if self.check_if_update_org(org, org_domains):
-                    self.whitelist.load_org_domains(org)
-
-                if self.check_if_update_org(org, org_asn):
-                    self.whitelist.load_org_asn(org)
-
-                for file in (org_ips, org_domains, org_asn):
-                    info = {
-                        'hash': utils.get_hash_from_file(file),
-                    }
-                    __database__.set_TI_file_info(file, info)
+            # ############### Update slips local files ################
+            # self.update_ports_info()
+            # self.update_org_files()
 
 
             ############### Update remote TI files ################

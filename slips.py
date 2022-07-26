@@ -301,7 +301,7 @@ class Main:
 
         return plugins, failed_to_load_modules
 
-    def load_modules(self, redis_port):
+    def load_modules(self):
         to_ignore = self.get_disabled_modules()
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
@@ -312,11 +312,11 @@ class Main:
             module_class = modules_to_call[module_name]['obj']
             if 'p2ptrust' == module_name:
                 ModuleProcess = module_class(
-                    self.outputqueue, self.config, redis_port, output_dir=self.args.output
+                    self.outputqueue, self.config, self.redis_port, output_dir=self.args.output
                 )
             else:
                 ModuleProcess = module_class(
-                    self.outputqueue, self.config, redis_port
+                    self.outputqueue, self.config, self.redis_port
                 )
             ModuleProcess.start()
             __database__.store_process_PID(
@@ -424,6 +424,14 @@ class Main:
             )
             guiProcessThread.start()
             self.print('quiet')
+
+
+    def update_local_TI_files(self):
+        from modules.update_manager.update_file_manager import UpdateFileManager
+        update_manager = UpdateFileManager(self.outputqueue, self.config, self.redis_port)
+        update_manager.update_ports_info()
+        update_manager.update_org_files()
+
 
     def add_metadata(self):
         """
@@ -1496,11 +1504,11 @@ class Main:
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
-                redis_port = int(self.args.port)
+                self.redis_port = int(self.args.port)
             elif self.args.multiinstance:
-                redis_port = self.generate_random_redis_port()
+                self.redis_port = self.generate_random_redis_port()
             else:
-                redis_port = 6379
+                self.redis_port = 6379
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
@@ -1514,7 +1522,7 @@ class Main:
                 self.args.verbose,
                 self.args.debug,
                 self.config,
-                redis_port,
+                self.redis_port,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
@@ -1549,12 +1557,12 @@ class Main:
 
 
             # log the PID of the started redis-server
-            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
-            self.log_redis_server_PID(redis_port, redis_pid)
+            redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
+            self.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
-            self.print(f'Using redis server on port: {redis_port}', 1, 0)
+            self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
             self.print(f'Started main program [PID {self.pid}]', 1, 0)
             self.print(f'Started output thread [PID {output_process.pid}]', 1, 0)
             self.print('Starting modules', 0, 1)
@@ -1562,7 +1570,9 @@ class Main:
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
-                self.load_modules(redis_port)
+                # update local files before starting modules
+                self.update_local_TI_files()
+                self.load_modules()
 
 
             # self.start_gui_process()
@@ -1585,7 +1595,7 @@ class Main:
                 self.config,
                 self.args.output,
                 logs_dir,
-                redis_port,
+                self.redis_port,
             )
             evidence_process.start()
             self.print(
@@ -1608,7 +1618,7 @@ class Main:
                 self.args.verbose,
                 self.args.debug,
                 self.config,
-                redis_port,
+                self.redis_port,
             )
             profiler_process.start()
             self.print(
@@ -1633,7 +1643,7 @@ class Main:
                 self.args.pcapfilter,
                 self.zeek_bro,
                 self.line_type,
-                redis_port,
+                self.redis_port,
             )
             inputProcess.start()
             self.print(
