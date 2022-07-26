@@ -1561,7 +1561,7 @@ class Main:
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
-                self.load_modules()
+                self.load_modules(redis_port)
 
 
             # self.start_gui_process()
