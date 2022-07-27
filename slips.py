@@ -460,10 +460,12 @@ class Main:
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
         with open(self.info_path, 'w') as f:
-            f.write(f'Slips version: {version}\n')
-            f.write(f'Branch: {branch}\n')
-            f.write(f'Commit: {commit}\n')
-            f.write(f'Slips start date: {now}\n')
+            f.write(f'Slips version: {version}\n'
+                    f'File: {self.input_information}\n'
+                    f'Branch: {branch}\n'
+                    f'Commit: {commit}\n'
+                    f'Slips start date: {now}\n'
+                    )
 
         print(f'[Main] Metadata added to {metadata_dir}')
         return self.info_path

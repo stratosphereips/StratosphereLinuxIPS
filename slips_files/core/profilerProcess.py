@@ -2716,16 +2716,15 @@ class ProfilerProcess(multiprocessing.Process):
                         temp_start = firsttw_start_time - self.width
                         for id in range(0, diff + 1):
                             new_start = temp_start
-                            # The method to add an older TW is the same as to add a new one, just the starttime changes
+                            # The method to add an older TW is the same as
+                            # to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(
                                 profileid, new_start
                             )
                             self.print(
                                 'Creating the new older TW id {}. Start: {}.'.format(
                                     twid, new_start
-                                ),
-                                3,
-                                0,
+                                ), 3, 0
                             )
                             temp_start = new_start - self.width
             except ValueError:

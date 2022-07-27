@@ -722,7 +722,7 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
+        return len(self.getTWsfromProfile(profileid))
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
         """
@@ -905,7 +905,7 @@ class Database(object):
         return data
 
     def getAmountTW(self, profileid):
-        """Return the amount of tw for this profile id"""
+        """Return the number of tws for this profile id"""
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
