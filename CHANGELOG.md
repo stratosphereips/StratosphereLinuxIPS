@@ -2,6 +2,9 @@
 * Slips
 - Run multiple slips instances on demand using (-m), and use redis port 6379 by default.
 - Fix false positive 'DNS resolution without connection' alerts 
+- Whitelist connections made by slips
+- Faster Slips and reduces memory and CPU consuption
+- Better 'unknown ports detection' and faster reading of local TI files 
 
 -0.9.2
 * Slips
