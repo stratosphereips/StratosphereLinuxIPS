@@ -288,7 +288,7 @@ class Daemon():
         info = self.get_last_opened_daemon_info()
         if not info:
             return
-        pid, port, zeek_folder, output_dir, save_the_db = info
+        self.pid, port, zeek_folder, output_dir, save_the_db = info
         self.prepare_std_streams(output_dir)
         __database__.start(self.config, port)
         self.slips.c1 = __database__.subscribe('finished_modules')

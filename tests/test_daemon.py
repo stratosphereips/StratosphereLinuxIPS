@@ -16,9 +16,6 @@ def do_nothing(*args):
     pass
 
 
-# Main Class tests
-
-
 def create_main_instance():
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)
@@ -29,9 +26,6 @@ def create_main_instance():
 
 
 # Daemon tests
-@pytest.mark.skipif(
-    os.geteuid() != 0, reason='supported only with root priveledges'
-)
 def create_Daemon_instance():
     """returns an instance of Daemon() class in slips.py"""
     slips = create_main_instance()
@@ -55,9 +49,6 @@ def create_Daemon_instance():
     return Daemon(slips)
 
 
-# @pytest.mark.skipif(
-#     os.geteuid() != 0, reason='supported only with root priveledges'
-# )
 def test_setup_std_streams():
     daemon = create_Daemon_instance()
     os.system('./slips.py -f dataset/hide-and-seek-short.pcap -D')
@@ -70,24 +61,24 @@ def test_setup_std_streams():
     assert os.path.exists(daemon.pidfile)
     # make sure the files aren't empty
     used_files = f'Logsfile: {daemon.logsfile}\n' \
-                 f'pidfile:{daemon.pidfile}\n' \
+                 f'pidfile: {daemon.pidfile}\n' \
                  f'stdin : {daemon.stdin}\n' \
                  f'stdout: {daemon.stdout}\n' \
                  f'stderr: {daemon.stderr}\n'
+
+
     with open(daemon.logsfile, 'r') as logsfile:
         # make sure used file are logged
-        assert used_files in logsfile.read()
+        logs = logsfile.read()
+    assert used_files in logs
     # stop the daemon
-    os.system('sudo ./slips.py -S')
+    os.system('./slips.py -S')
 
-#
-# @pytest.mark.skipif(
-#     os.geteuid() != 0, reason='supported only with root priveledges'
-# )
+
 def test_pidfile():
     """tests creating, writing to and deleting pidfile"""
     # run slips in a parallel process
-    cmd = './slips.py -c slips.conf -f dataset/hide-and-seek-short.pcap -D'
+    cmd = './slips.py -f dataset/hide-and-seek-short.pcap -D'
     subprocess.Popen([cmd], shell=True, stdin=None, stdout=None, stderr=None)
     # wait until the pid is written to the file
     time.sleep(2)
@@ -98,14 +89,12 @@ def test_pidfile():
     # # wait for slips to finish
     # time.sleep(30)
     # stop slips
-    os.system('sudo ./slips.py -S')
+    os.system('./slips.py -S')
+    time.sleep(1)
     # make sure the pidfile is deleted after slips is finished
     assert not os.path.exists(daemon.pidfile)
 
 
-# @pytest.mark.skipif(
-#     os.geteuid() != 0, reason='supported only with root priveledges'
-# )
 def test_print():
     daemon = create_Daemon_instance()
     daemon.print('Test')
@@ -113,29 +102,25 @@ def test_print():
         assert 'Test' in f.read()
 
 
-# @pytest.mark.skipif(
-#     os.geteuid() != 0, reason='supported only with root priveledges'
-# )
 def test_stop():
     """tests if the daemon is successfully killed after running the daemon stop function"""
     # run slips in a parallel process
     cmd = (
-        'sudo ./slips.py -c slips.conf  -f dataset/hide-and-seek-short.pcap'
+        './slips.py  -f dataset/hide-and-seek-short.pcap -D'
     )
     subprocess.Popen([cmd], shell=True, stdin=None, stdout=None, stderr=None)
     # wait until the pid is written to the file
     time.sleep(2)
     # this instance is just to get the pidfile, we're not starting the daemon again
     daemon = create_Daemon_instance()
-    # get the pid of the daemon
-    with open(daemon.pidfile, 'r') as f:
-        pid = int(f.read())
     # run the daemon stop function
-    os.system('sudo ./slips.py -S')
+    # os.system('./slips.py -S')
+    daemon.stop()
+
     # assert that pid is not there after stopping
     process_killed = False
     try:
-        os.kill(pid, 0)
+        os.kill(daemon.pid, 0)
         process_killed = True
     except OSError as e:
         if str(e).find('No such process') > 0:
