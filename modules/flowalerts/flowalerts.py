@@ -315,7 +315,7 @@ class Module(Module, multiprocessing.Process):
     def check_data_upload(self, profileid, twid):
 
 
-        def is_ignored(ip):
+        def is_ignored_ip(ip):
             """
             IPs that we shouldn't alert about if they are most contacted
             """
@@ -360,8 +360,8 @@ class Module(Module, multiprocessing.Process):
         diff_in_mins = self.get_time_diff(time_of_first_flow, time_of_last_flow)
 
         # we need the flows that happend in 20 mins span
-        # if diff_in_mins < 20:
-        #     return
+        if diff_in_mins < 20:
+            return
 
         contacted_daddrs = {}
         # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
@@ -401,16 +401,17 @@ class Module(Module, multiprocessing.Process):
                     sbytes = flow['sbytes']
                 total_bytes += sbytes
         total_mbs = total_bytes / (10**6)
+
         if (
             total_mbs >= self.data_exfiltration_threshold
         ):
             # get the first uid of these flows to use for setEvidence
             for flow_dict in all_flows:
                 for uid, flow in flow_dict.items():
-                    if flow['daddr'] == daddr:
+                    if flow['daddr'] == most_contacted_daddr:
                         self.helper.set_evidence_data_exfiltration(
                             most_contacted_daddr,
-                            total_bytes,
+                            total_mbs,
                             times_contacted,
                             profileid,
                             twid,
