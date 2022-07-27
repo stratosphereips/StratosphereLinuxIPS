@@ -615,6 +615,7 @@ class Helper:
             source_target_tag=source_target_tag,
             profileid=profileid,
             twid=twid,
+            uid=uid
         )
 
     def set_evidence_bad_smtp_login(
