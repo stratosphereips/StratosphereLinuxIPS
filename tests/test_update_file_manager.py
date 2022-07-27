@@ -58,7 +58,7 @@ def test_download_file(outputQueue, url):
         )
     ],
 )
-def test_download_malicious_file(outputQueue, database, url):
+def test_check_if_update(outputQueue, database, url):
     """we're tetsing this condition old_e_tag != new_e_tag"""
     update_manager = create_update_manager_instance(outputQueue)
     # modify old e-tag of this file and store it in the database
@@ -70,18 +70,19 @@ def test_download_malicious_file(outputQueue, database, url):
     # we call this function to set the new self.new_e_tag
     # to something different than the old modified one
     # check_if_update returns a response if we should update or false if we shouldn't update
-    assert update_manager._UpdateFileManager__check_if_update(url) != False
+    is_file_updated = update_manager._UpdateFileManager__check_if_update(url)
+    assert is_file_updated != False
 
 
 @pytest.mark.parametrize(
     'url',
     [
         (
-            'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'
+            'https://osint.digitalside.it/Threat-Intel/lists/latestips.txt'
         )
     ],
 )
-def test_download_malicious_file2(outputQueue, database, url):
+def test_check_if_update2(outputQueue, database, url):
     """we're tetsing old_e_tag == new_e_tag, it shouldn't update"""
     update_manager = create_update_manager_instance(outputQueue)
 
@@ -90,7 +91,8 @@ def test_download_malicious_file2(outputQueue, database, url):
     assert response != False
     old_etag = update_manager.get_e_tag(response)
     database.set_TI_file_info(url.split('/')[-1], {'e-tag': old_etag})
-    assert update_manager._UpdateFileManager__check_if_update(url) == False
+    is_file_updated = update_manager._UpdateFileManager__check_if_update(url)
+    assert is_file_updated == False
 
 
 def test_read_ports_info(outputQueue, database):
