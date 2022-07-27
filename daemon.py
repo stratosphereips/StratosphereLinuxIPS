@@ -22,8 +22,6 @@ import subprocess
 import re
 import random
 from signal import SIGTERM
-from signal import SIGINT
-from signal import SIGKILL
 
 class Daemon():
     description = 'This module runs when slips is in daemonized mode'

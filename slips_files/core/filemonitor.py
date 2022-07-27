@@ -66,7 +66,6 @@ class FileEventHandler(RegexMatchingEventHandler):
                 with open(os.path.join(self.monitored_zeek_files, file), 'r') as f:
                     while line := f.readline():
                         if 'termination' in line:
-                            # to use shutdown gracefully we need to get slips.py PID and send it a sigint
                             __database__.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:
