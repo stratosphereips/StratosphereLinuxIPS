@@ -599,7 +599,7 @@ class Helper:
         ip_identification = __database__.getIPIdentification(
             most_contacted_daddr
         )
-        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
+        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr} '
         description += f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
         timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 
