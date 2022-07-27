@@ -2046,9 +2046,9 @@ class Database(object):
         Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
-            data = json.loads(flow[uid])
-            labels = data['module_labels']
+        if flow and flow.get(uid, False):
+            flow = json.loads(flow[uid])
+            labels = flow.get('module_labels', '')
             return labels
         else:
             return {}

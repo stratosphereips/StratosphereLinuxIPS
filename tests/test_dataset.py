@@ -28,16 +28,18 @@ def is_evidence_present(log_file, expected_evidence):
         return False
 
 
-def has_errors(output_file):
+def has_errors(output_dir):
     """function to parse slips_output file and check for errors"""
+    error_files = [os.path.join(output_dir, 'slips_output.txt'),
+                          os.path.join(output_dir, 'errors.log')]
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
-    with open(output_file, 'r') as f:
-        for line in f:
-            if '<class' in line or 'error' in line:
-                return True
+    for file in error_files:
+        with open(file, 'r') as f:
+            for line in f:
+                if '<class' in line or 'error' in line:
+                    return True
 
     return False
-
 
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
@@ -59,12 +61,12 @@ def test_pcap(
         os.mkdir(output_dir)
     except FileExistsError:
         pass
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -117,12 +119,12 @@ def test_binetflow(
     except FileExistsError:
         pass
 
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -173,11 +175,11 @@ def test_zeek_dir(
     except FileExistsError:
         pass
 
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -225,11 +227,11 @@ def test_zeek_conn_log(
     except FileExistsError:
         pass
 
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -251,12 +253,12 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
         pass
     expected_evidence = 'Connection to unknown destination port 5901/TCP'
 
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -284,14 +286,14 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
 
     expected_evidence = 'Connection to unknown destination port 902/TCP'
 
-    output_file = f'{output_dir}slips_output.txt'
+    output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
-    assert has_errors(output_file) == False
+    assert has_errors(output_dir) == False
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
     # doesn't generate a const number of profiles per file)
