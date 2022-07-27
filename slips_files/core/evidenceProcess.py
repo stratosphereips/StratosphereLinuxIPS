@@ -483,6 +483,9 @@ class EvidenceProcess(multiprocessing.Process):
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
         if '.' in flow_datetime:
             format = '%Y-%m-%dT%H:%M:%S.%f%z'
+        elif '/' in flow_datetime and '-' in flow_datetime :
+            # 2022/06/29-04:36:04
+            format = '%Y/%m/%d-%H:%M:%S'
         else:
             # e.g  2020-12-18T03:11:09+02:00
             format = '%Y-%m-%dT%H:%M:%S%z'
