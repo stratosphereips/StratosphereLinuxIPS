@@ -599,7 +599,7 @@ class Helper:
             most_contacted_daddr
         )
         description = f'possible data upload. {total_mbytes} MBs sent to {most_contacted_daddr} '
-        description += f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
+        description += f'IP contacted {times_contacted} times in the past 1h. {ip_identification}'
         timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 
         __database__.setEvidence(

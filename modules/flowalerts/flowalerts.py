@@ -315,25 +315,24 @@ class Module(Module, multiprocessing.Process):
     def check_data_upload(self, profileid, twid):
 
 
-        def is_ignored_ip(ip):
+        def remove_ignored_ips(contacted_addresses):
             """
-            IPs that we shouldn't alert about if they are most contacted
+            remove IPs that we shouldn't alert about if they are most contacted
+            If the gw is contacted 10 times,
+             and 8.8.8.8 is contacted 8 times, we use 8.8.8.8 as the most contacted
             """
             # most of the times the default gateway will be the most contacted daddr, we don't want that
             # remove it from the dict if it's there
-            if ip == self.gateway:
-                return True
+            res = {}
+            for ip, ip_info in contacted_addresses.items():
+                ip_obj = ipaddress.ip_address(ip)
+                if not  (ip == self.gateway
+                    or ip_obj.is_multicast
+                    or ip_obj.is_link_local
+                    or ip_obj.is_reserved) :
+                    res[ip] = ip_info
+            return res
 
-            ip_obj = ipaddress.ip_address(ip)
-            # Is the IP multicast, private? (including localhost)
-            # local_link or reserved?
-            # The broadcast address 255.255.255.255 is reserved.
-            if (
-                ip_obj.is_multicast
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-            ):
-                return True
 
         # we’re looking for systems that are transferring large amount of data in 20 mins span
         all_flows = __database__.get_all_flows_in_profileid(
@@ -374,10 +373,9 @@ class Module(Module, multiprocessing.Process):
             except KeyError:
                 contacted_daddrs.update({daddr: 1})
 
-
+        contacted_daddrs = remove_ignored_ips(contacted_daddrs)
         if not contacted_daddrs:
             return
-
         # get the top most contacted daddr
         most_contacted_daddr = max(
             contacted_daddrs, key=contacted_daddrs.get
@@ -385,9 +383,6 @@ class Module(Module, multiprocessing.Process):
         times_contacted = contacted_daddrs[
             most_contacted_daddr
         ]
-
-        if is_ignored_ip(most_contacted_daddr) or most_contacted_daddr in profileid:
-            return
 
         # get the sum of all bytes sent to that ip in the past hour
         total_bytes = 0
