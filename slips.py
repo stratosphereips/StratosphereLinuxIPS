@@ -681,13 +681,12 @@ class Main:
             ):
                 # There is a conf, but there is no option, or no section or no configuration file specified
                 store_a_copy_of_zeek_files = False
-
-            if store_a_copy_of_zeek_files:
-                # this is where the copy will be stores
-                zeek_files_path = os.path.join(self.args.output, 'zeek_files')
-                copy_tree('zeek_files', zeek_files_path)
+            if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
+                # this is where the copy will be stored
+                dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
+                copy_tree(self.zeek_folder, dest_zeek_dir)
                 print(
-                    f'[Main] Stored a copy of zeek files to {zeek_files_path}.'
+                    f'[Main] Stored a copy of zeek files to {dest_zeek_dir}'
                 )
 
             # if delete_zeek_files is set to yes in slips.conf,
@@ -1666,7 +1665,7 @@ class Main:
                 'InputProcess',
                 int(inputProcess.pid)
             )
-
+            self.zeek_folder = inputProcess.zeek_folder
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
