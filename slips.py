@@ -346,9 +346,9 @@ class Main:
             logs_dir = self.create_folder_for_logs()
             # Create the logsfile thread if by parameter we were told,
             # or if it is specified in the configuration
-            logsProcessQueue = Queue()
+            self.logsProcessQueue = Queue()
             logs_process = LogsProcess(
-                logsProcessQueue,
+                self.logsProcessQueue,
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
@@ -505,19 +505,15 @@ class Main:
                 pass
             slips_processes = len(list(PIDs.keys()))
 
-            # Send manual stops to the processes not using channels
-            for process in (
-                'OutputProcess',
-                'ProfilerProcess',
-                'EvidenceProcess',
-                'InputProcess',
-                'logsProcess',
-            ):
-                try:
-                    os.kill(int(PIDs[process]), signal.SIGINT)
-                except (KeyError, PermissionError):
-                    # process hasn't started (for example logsProcess) so we can't send sigint
-                    continue
+            # Send manual stops to the processes using queues
+            # os.kill(int(PIDs[process]), signal.SIGINT)
+            stop_msg = 'stop_process'
+            self.outputqueue.put(stop_msg)
+            self.profilerProcessQueue.put(stop_msg)
+            self.evidenceProcessQueue.put(stop_msg)
+            if hasattr(self, 'logsProcessQueue'):
+                self.logsProcessQueue.put(stop_msg)
+            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
 
             # only print that modules are still running once
             warning_printed = False
@@ -1589,7 +1585,7 @@ class Main:
             # self.start_gui_process()
 
 
-            # call shutdown_gracefully on sigint, and sigterm
+            # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
                 self.shutdown_gracefully()
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
@@ -1599,9 +1595,9 @@ class Main:
             logs_dir = self.setup_detailed_logs(LogsProcess)
 
 
-            evidenceProcessQueue = Queue()
+            self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
-                evidenceProcessQueue,
+                self.evidenceProcessQueue,
                 self.outputqueue,
                 self.config,
                 self.args.output,
@@ -1622,9 +1618,9 @@ class Main:
                 int(self.pid)
             )
 
-            profilerProcessQueue = Queue()
+            self.profilerProcessQueue = Queue()
             profiler_process = ProfilerProcess(
-                profilerProcessQueue,
+                self.profilerProcessQueue,
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
@@ -1647,7 +1643,7 @@ class Main:
             # Create the input process and start it
             inputProcess = InputProcess(
                 self.outputqueue,
-                profilerProcessQueue,
+                self.profilerProcessQueue,
                 self.input_type,
                 self.input_information,
                 self.config,
