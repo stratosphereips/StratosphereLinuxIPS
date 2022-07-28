@@ -964,7 +964,12 @@ class UpdateFileManager:
         try:
 
             # Check if the file has any content
-            filesize = os.path.getsize(malicious_data_path)
+            try:
+                filesize = os.path.getsize(malicious_data_path)
+            except FileNotFoundError:
+                # happens inntegration tests, another instance of slips deleted the file
+                return False
+
             if filesize == 0:
                 return False
 
@@ -1353,9 +1358,8 @@ class UpdateFileManager:
                                     ],
                                 }
                             )
-            # Add all loaded malicious ips to the database
+
             __database__.add_ips_to_IoC(malicious_ips_dict)
-            # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             __database__.add_ip_range_to_IoC(malicious_ip_ranges)
             return True

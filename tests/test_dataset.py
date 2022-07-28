@@ -37,6 +37,9 @@ def has_errors(output_dir):
         with open(file, 'r') as f:
             for line in f:
                 if '<class' in line or 'error' in line:
+                    # connection errors shouldn't fail the integration tests
+                    if 'Connection error' in line:
+                        continue
                     return True
 
     return False
