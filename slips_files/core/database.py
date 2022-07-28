@@ -85,7 +85,9 @@ class Database(object):
             self.sudo = ''
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
-
+        self.seen_MACs = {}
+        # flag to know if we found the gateway MAC using the most seen MAC method
+        self.gateway_MAC_found = False
 
     def get_redis_server_PID(self, slips_mode, redis_port):
         """
@@ -510,11 +512,36 @@ class Database(object):
         """
         Check if we are trying to assign the gateway mac to a public IP
         """
+
+        MAC = MAC_info.get('MAC','')
+        if not validators.mac_address(MAC):
+            return False
+
+        if self.gateway_MAC_found:
+            # gateway ip already set using this function
+            return True if __database__.get_gateway_MAC() == MAC else False
+
+
+        if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
+            # we are sure this is the gw mac,
+            # set it if we don't already have it in the db
+            if not self.get_gateway_MAC():
+                for field, mac_info in MAC_info.items():
+                    self.set_default_gateway(field, mac_info)
+
+                # mark the gw mac as found so we don't look for it again
+                self.gateway_MAC_found = True
+                delattr(self, 'seen_MACs')
+                return True
+
         # the dst MAC of all public IPs is the dst mac of the gw,
         # we shouldn't be assigning it to the public IPs
         ip_obj = ipaddress.ip_address(ip)
-        MAC = MAC_info.get('MAC','')
-        if not ip_obj.is_private and validators.mac_address(MAC):
+        if not ip_obj.is_private :
+            try:
+                self.seen_MACs[MAC] += 1
+            except KeyError:
+                self.seen_MACs[MAC] = 1
             return True
 
     def add_mac_addr_to_profile(self, profileid, MAC_info):
@@ -538,7 +565,6 @@ class Database(object):
 
         if self.is_gw_mac(MAC_info, incoming_ip):
             return False
-
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
