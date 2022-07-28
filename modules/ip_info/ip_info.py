@@ -43,6 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
+        self.c4 = __database__.subscribe('new_dhcp')
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
@@ -149,7 +150,7 @@ class Module(Module, multiprocessing.Process):
             '.xyz',
             '.za',
         ]
-        self.get_default_gateway()
+        self.get_gateway_ip()
 
 
     def open_dbs(self):
@@ -398,10 +399,9 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     # GW
-
     def get_gateway_using_ip_route(self):
         """
-        Tries to get the default gateway using ip route
+        Tries to get the default gateway IP address using ip route
         """
         gateway = False
         if platform.system() == 'Darwin':
@@ -424,8 +424,7 @@ class Module(Module, multiprocessing.Process):
             gateway = route_default_result[2]
         return gateway
 
-
-    def get_default_gateway(self, input_type='interface'):
+    def get_gateway_ip(self, input_type='interface'):
         """
         Get and store the default gw in the db
             
@@ -435,11 +434,13 @@ class Module(Module, multiprocessing.Process):
         gateway = False
         if input_type == 'interface':
             # we don't have it in our db, try to get it
-            gateway = utils.get_gateway_using_ip_route()
+            gateway = self.get_gateway_using_ip_route()
             if gateway:
                 __database__.set_default_gateway(gateway)
                 return
+
             # try another method
+
             #todo
 
         elif not gateway and input_type == 'zeek':
@@ -520,6 +521,17 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
+
+
+                message = self.c4.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_dhcp'):
+                    pass
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

@@ -62,6 +62,7 @@ class Database(object):
         'new_smtp',
         'new_blame',
         'new_alert',
+        'new_dhcp',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
