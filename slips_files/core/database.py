@@ -3086,11 +3086,18 @@ class Database(object):
         data = self.r.smembers('zeekfiles')
         return data
 
-    def get_default_gateway(self):
-        return self.r.get('default_gateway')
+    def get_gateway_ip(self):
+        return self.r.hget('default_gateway', 'IP')
 
-    def set_default_gateway(self, gateway):
-        self.r.set('default_gateway', gateway)
+    def get_gateway_MAC(self):
+        return self.r.hget('default_gateway', 'MAC')
+
+    def set_default_gateway(self, address_type:str, address:str):
+        """
+        :param address_type: can either be 'IP' or 'MAC'
+        :param address: can be ip or mac
+        """
+        self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]

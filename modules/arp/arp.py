@@ -39,7 +39,7 @@ class Module(Module, multiprocessing.Process):
         # Threshold to use to detect a port scan. How many arp minimum are required?
         self.arp_scan_threshold = 5
         # get the default gateway
-        self.gateway = __database__.get_default_gateway()
+        self.gateway = __database__.get_gateway_ip()
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0

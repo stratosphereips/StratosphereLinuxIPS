@@ -55,7 +55,7 @@ class Module(Module, multiprocessing.Process):
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
-        self.gateway = __database__.get_default_gateway()
+        self.gateway = __database__.get_gateway_ip()
         # Cache list of connections that we already checked in the timer
         # thread (we waited for the connection of these dns resolutions)
         self.connections_checked_in_dns_conn_timer_thread = []
