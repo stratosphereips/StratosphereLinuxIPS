@@ -16,8 +16,8 @@ import socket
 import requests
 import json
 from contextlib import redirect_stdout
-
-# todo add to conda env
+import subprocess
+import re
 
 
 class Module(Module, multiprocessing.Process):
@@ -149,6 +149,8 @@ class Module(Module, multiprocessing.Process):
             '.xyz',
             '.za',
         ]
+        self.get_default_gateway()
+
 
     def open_dbs(self):
         """Function to open the different offline databases used in this module. ASN, Country etc.."""
@@ -394,6 +396,55 @@ class Module(Module, multiprocessing.Process):
             self.mac_db.close()
         # confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+
+    # GW
+
+    def get_gateway_using_ip_route(self):
+        """
+        Tries to get the default gateway using ip route
+        """
+        gateway = False
+        if platform.system() == 'Darwin':
+            route_default_result = subprocess.check_output(
+                ['route', 'get', 'default']
+            ).decode()
+            try:
+                gateway = re.search(
+                    r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
+                    route_default_result,
+                ).group(0)
+            except AttributeError:
+                pass
+
+        elif platform.system() == 'Linux':
+            route_default_result = re.findall(
+                r"([\w.][\w.]*'?\w?)",
+                subprocess.check_output(['ip', 'route']).decode(),
+            )
+            gateway = route_default_result[2]
+        return gateway
+
+
+    def get_default_gateway(self, input_type='interface'):
+        """
+        Get and store the default gw in the db
+            
+        :param input_type: 'interface' or 'zeek'
+                            this param should be zeeek in case of -f <zeek_dir> or -f <pcap>
+        """
+        gateway = False
+        if input_type == 'interface':
+            # we don't have it in our db, try to get it
+            gateway = utils.get_gateway_using_ip_route()
+            if gateway:
+                __database__.set_default_gateway(gateway)
+                return
+            # try another method
+            #todo
+
+        elif not gateway and input_type == 'zeek':
+            pass
+
 
     def run(self):
         utils.drop_root_privs()
