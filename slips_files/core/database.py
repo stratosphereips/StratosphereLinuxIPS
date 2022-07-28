@@ -506,6 +506,17 @@ class Database(object):
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
 
+    def is_gw_mac(self, MAC_info, ip) -> bool:
+        """
+        Check if we are trying to assign the gateway mac to a public IP
+        """
+        # the dst MAC of all public IPs is the dst mac of the gw,
+        # we shouldn't be assigning it to the public IPs
+        ip_obj = ipaddress.ip_address(ip)
+        MAC = MAC_info.get('MAC','')
+        if not ip_obj.is_private and validators.mac_address(MAC):
+            return True
+
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
@@ -524,6 +535,10 @@ class Database(object):
         # don't save that in MAC hash
         if validators.mac_address(incoming_ip):
             return False
+
+        if self.is_gw_mac(MAC_info, incoming_ip):
+            return False
+
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
