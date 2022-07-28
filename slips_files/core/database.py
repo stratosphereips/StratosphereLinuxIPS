@@ -1935,6 +1935,8 @@ class Database(object):
             # we already have a twid with alerts in this profile, update it
             # the format of twid_alerts is {alert_hash: evidence_IDs}
             twid_alerts: dict = profile_alerts[twid]
+            IDs = False
+            hash = False
             for alert_hash, evidence_IDs in twid_alerts.items():
                 if evidence_ID in evidence_IDs:
                     IDs = evidence_IDs
@@ -1942,9 +1944,12 @@ class Database(object):
                 break
             else:
                 return
-            evidence_IDs = IDs.remove(evidence_ID)
-            alert_ID = f'{profileid}_{twid}_{hash}'
-            self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+
+            if IDs and hash:
+                evidence_IDs = IDs.remove(evidence_ID)
+                alert_ID = f'{profileid}_{twid}_{hash}'
+                self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+
         except KeyError:
             # alert not added to the 'alerts' key yet!
             # this means that this evidence wasn't a part of an alert
