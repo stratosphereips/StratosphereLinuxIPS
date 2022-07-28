@@ -229,6 +229,10 @@ class Hotkeys:
                 dt_obj = self.ts_to_date(timestamp, seconds=True)
                 value["ts"] = dt_obj
 
+                # limit duration decimals
+                duration = float(value["dur"])
+                value["dur"] = "{:.5f}".format(duration)
+
                 data.append(value)
 
         return {
