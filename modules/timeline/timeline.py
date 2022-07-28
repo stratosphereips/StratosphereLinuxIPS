@@ -125,27 +125,28 @@ class Module(Module, multiprocessing.Process):
             allbytes = flow_dict['allbytes']
             if type(allbytes) != int:
                 allbytes = 0
-            allbytes_human = 0.0
 
-            # Convert the bytes into human readable
-            if int(allbytes) < 1024:
-                # In bytes
-                allbytes_human = '{:.2f}{}'.format(float(allbytes), 'b')
-            elif int(allbytes) > 1024 and int(allbytes) < 1048576:
-                # In Kb
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024, 'Kb'
-                )
-            elif int(allbytes) > 1048576 and int(allbytes) < 1073741824:
-                # In Mb
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024 / 1024, 'Mb'
-                )
-            elif int(allbytes) > 1073741824:
-                # In Bg
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024 / 1024 / 1024, 'Gb'
-                )
+            # allbytes_human are sorted wrong in the interface, thus we sticked to original byte size.
+            # # Convert the bytes into human readable
+            # if int(allbytes) < 1024:
+            #     # In bytes
+            #     allbytes_human = '{:.2f}{}'.format(float(allbytes), 'b')
+            # elif int(allbytes) > 1024 and int(allbytes) < 1048576:
+            #     # In Kb
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024, 'Kb'
+            #     )
+            # elif int(allbytes) > 1048576 and int(allbytes) < 1073741824:
+            #     # In Mb
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024 / 1024, 'Mb'
+            #     )
+            # elif int(allbytes) > 1073741824:
+            #     # In Bg
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024 / 1024 / 1024, 'Gb'
+            #     )
+
             spkts = flow_dict['spkts']
             sbytes = flow_dict['sbytes']
             if type(sbytes) != int:
@@ -196,7 +197,7 @@ class Module(Module, multiprocessing.Process):
                         'warning': warning_empty,
                         'Sent': sbytes,
                         'Recv': allbytes - sbytes,
-                        'Tot': allbytes_human,
+                        'Tot': allbytes,
                         'Duration': dur,
                         'info' : '',
                         'critical warning': critical_warning_dport_name
@@ -234,7 +235,7 @@ class Module(Module, multiprocessing.Process):
                         'warning': warning_empty,
                         'Sent': sbytes,
                         'Recv': allbytes - sbytes,
-                        'Tot': allbytes_human,
+                        'Tot': allbytes,
                         'Duration': dur,
                         'info': '',
                         'critical warning': critical_warning_dport_name
@@ -281,7 +282,7 @@ class Module(Module, multiprocessing.Process):
                             'dport_name': dport_name,
                             'preposition': 'from',
                             'saddr': saddr,
-                            'Size': allbytes_human,
+                            'Size': allbytes,
                             'Duration': dur,
                         }
 
@@ -306,7 +307,7 @@ class Module(Module, multiprocessing.Process):
                     'dport_name': dport_name,
                     'preposition': 'from',
                     'saddr': saddr,
-                    'Size': allbytes_human,
+                    'Size': allbytes,
                     'Duration': dur,
                 }
             #################################

@@ -111,7 +111,6 @@ profile.onclick_ips();
     });
 
     let timeline = $('#table_timeline').DataTable({
-        "bDestroy": true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
@@ -135,7 +134,6 @@ profile.onclick_ips();
     });
 
     let outtuples = $('#table_outtuples').DataTable({
-        "bDestroy": true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
