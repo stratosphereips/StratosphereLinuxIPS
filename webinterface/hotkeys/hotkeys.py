@@ -247,12 +247,19 @@ class Hotkeys:
         data = []
         timeline = self.db.zrange(profile + "_" + timewindow + "_timeline", 0, -1)
         if timeline:
-            for line in timeline:
-                line = json.loads(line)
-                if line["preposition"] == "from":
-                    temp = line["saddr"]
-                    line["daddr"] = temp
-                data.append(line)
+            for flow in timeline:
+                flow = json.loads(flow)
+
+                # TODO: check this logic
+                if flow["preposition"] == "from":
+                    temp = flow["saddr"]
+                    flow["daddr"] = temp
+
+                # fix State string
+                if flow["state"] == "notestablished":
+                    flow["state"] = "not established"
+
+                data.append(flow)
 
         return {
             'data': data
