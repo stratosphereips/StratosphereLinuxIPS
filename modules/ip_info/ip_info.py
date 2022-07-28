@@ -150,8 +150,6 @@ class Module(Module, multiprocessing.Process):
             '.xyz',
             '.za',
         ]
-        self.get_gateway_ip()
-
 
     def open_dbs(self):
         """Function to open the different offline databases used in this module. ASN, Country etc.."""
@@ -424,27 +422,6 @@ class Module(Module, multiprocessing.Process):
             gateway = route_default_result[2]
         return gateway
 
-    def get_gateway_ip(self, input_type='interface'):
-        """
-        Get and store the default gw in the db
-            
-        :param input_type: 'interface' or 'zeek'
-                            this param should be zeeek in case of -f <zeek_dir> or -f <pcap>
-        """
-        gateway = False
-        if input_type == 'interface':
-            # we don't have it in our db, try to get it
-            gateway = self.get_gateway_using_ip_route()
-            if gateway:
-                __database__.set_default_gateway(gateway)
-                return
-
-            # try another method
-
-            #todo
-
-        elif not gateway and input_type == 'zeek':
-            pass
 
     def get_gateway_MAC(self, gw_ip):
         """
@@ -457,10 +434,20 @@ class Module(Module, multiprocessing.Process):
             __database__.set_default_gateway('MAC', MAC)
             return MAC
 
-        # we don't have it in arp.lo
+        # we don't have it in arp.log
         if not '-i' in sys.argv:
             # no mac in arp.log and can't use arp table, so no way to get the MAC
             return
+
+        # get it using arp table
+        cmd = "arp -a"
+        output = subprocess.check_output(cmd.split()).decode()
+        for line in output:
+            if gw_ip in line:
+                MAC = line.split()[-4]
+                __database__.set_default_gateway('MAC', MAC)
+                return MAC
+
 
 
     def run(self):
