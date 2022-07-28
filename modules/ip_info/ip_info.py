@@ -446,6 +446,22 @@ class Module(Module, multiprocessing.Process):
         elif not gateway and input_type == 'zeek':
             pass
 
+    def get_gateway_MAC(self, gw_ip):
+        """
+        Gets MAC from arp.log or from arp tables
+        """
+        # In case of a zeek dir or a pcap,
+        # check if we saved the mac of this gw_ip. whenever we see an arp.log we save the ip and the mac
+        MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
+        if MAC:
+            __database__.set_default_gateway('MAC', MAC)
+            return MAC
+
+        # we don't have it in arp.lo
+        if not '-i' in sys.argv:
+            # no mac in arp.log and can't use arp table, so no way to get the MAC
+            return
+
 
     def run(self):
         utils.drop_root_privs()
@@ -531,7 +547,19 @@ class Module(Module, multiprocessing.Process):
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_dhcp'):
-                    pass
+                    # this channel will only get 1 msg if we have dhcp.log
+                    message = json.loads(message['data'])
+                    server_addr = message.get('server_addr', False)
+                    # uid = message.get('uid', False)
+                    # client_addr = message.get('client_addr', False)
+                    # profileid = message.get('profileid', False)
+                    # twid = message.get('twid', False)
+                    # ts = message.get('ts', False)
+                    # override the gw in the db since we have an dhcp
+
+                    __database__.set_default_gateway("IP", server_addr)
+                    self.get_gateway_MAC(server_addr)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
