@@ -3086,35 +3086,10 @@ class Database(object):
         return data
 
     def get_default_gateway(self):
-        """
-        return a string with the ip or False
-        """
-        # if we have the gateway in our db , return it
-        stored_gateway = self.r.get('default_gateway')
+        return self.r.get('default_gateway')
 
-        if not stored_gateway:
-            # we don't have it in our db, try to get it
-            gateway = False
-            if platform.system() == 'Darwin':
-                route_default_result = subprocess.check_output(
-                    ['route', 'get', 'default']
-                ).decode()
-                try:
-                    gateway = re.search(
-                        r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
-                        route_default_result,
-                    ).group(0)
-                except AttributeError:
-                    gateway = False
-
-            elif platform.system() == 'Linux':
-                route_default_result = re.findall(
-                    r"([\w.][\w.]*'?\w?)",
-                    subprocess.check_output(['ip', 'route']).decode(),
-                )
-                gateway = route_default_result[2]
-
-        return gateway
+    def set_default_gateway(self, gateway):
+        self.r.set('default_gateway', gateway)
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
