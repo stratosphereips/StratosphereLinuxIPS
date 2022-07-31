@@ -975,7 +975,7 @@ class UpdateFileManager:
         """
         Given the first line of a TI file (header line), try to get the index of the description column
         """
-        description_keywords = ('desc','collect', 'malware', 'tags_str' )
+        description_keywords = ('desc', 'collect', 'malware', 'tags_str', 'source' )
         for column in header.split(','):
             for keyword in description_keywords:
                 if keyword in column:
