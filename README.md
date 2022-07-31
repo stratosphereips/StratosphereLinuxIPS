@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.9.2
+Slips v0.9.3
 
 
 <h3 align="center"> 
