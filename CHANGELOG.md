@@ -4,7 +4,18 @@
 - Fix false positive 'DNS resolution without connection' alerts 
 - Whitelist connections made by slips
 - Faster Slips and reduces memory and CPU consuption
-- Better 'unknown ports detection' and faster reading of local TI files 
+- Better 'unknown ports' detections 
+- Faster reading of local TI files 
+- Fix docker not working in macOS
+- Fix problem generating the data upload alerts
+- Improve contributing guidelines
+- Update microsoft whitelisted IP ranges
+- Fix problem stopping input process when slips stops
+- Update the locations of GeoIP database in zxeek for better zeek detetcions
+- Fix P2P output dir, now it's the same as alerts.log and slips.log
+- Update our usage of macvendors.com API
+- Whitelist the connections made by slips, so now you won't be alerted when slips is using virustotal.com or macvendors.com
+
 
 -0.9.2
 * Slips
