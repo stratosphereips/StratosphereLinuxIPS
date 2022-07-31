@@ -763,58 +763,43 @@ class Main:
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
-    def close_open_redis_servers(self):
-        """Function to close unused open redis-servers"""
-        if not hasattr(self, 'open_servers_PIDs'):
-            # fill the dict
-            self.get_open_redis_servers()
-
-        if len(self.open_servers_PIDs) == 0:
-            print('No unused open servers to kill.')
-            sys.exit(-1)
-            return
-
+    def kill_redis_server(self, pid):
         failed_to_close = 0
-        for pid, port in self.open_servers_PIDs.items():
-            try:
-                pid = int(pid)
-            except ValueError:
-                # The server was killed before logging its PID
-                # the pid of it is 'not found'
-                failed_to_close += 1
-                continue
+        port = self.open_servers_PIDs[pid]
+        try:
+            pid = int(pid)
+        except ValueError:
+            # The server was killed before logging its PID
+            # the pid of it is 'not found'
+            return False
 
 
-            # clear the server opened on this port
-            try:
-                #todo this function connects to the server even if it was already killed!!
-                if connected := __database__.connect_to_redis_server(port):
-                    __database__.r.flushall()
-                    __database__.r.script_flush()
-            except redis.exceptions.ConnectionError:
-                # server already killed!
-                continue
+        # clear the server opened on this port
+        try:
+            #todo this function connects to the server even if it was already killed!!
+            if connected := __database__.connect_to_redis_server(port):
+                __database__.r.flushall()
+                __database__.r.script_flush()
+        except redis.exceptions.ConnectionError:
+            # server already killed!
+            return False
 
-            # signal 0 is to check if the process is still running or not
-            # it returns 1 if the process used_redis_servers.txtexited
-            try:
-                # check if the process is still running
-                while os.kill(pid, 0) != 1:
-                    # sigterm is 9
-                    os.kill(pid, 9)
-            except (ProcessLookupError, PermissionError):
-                # ProcessLookupError: process already exited, sometimes this exception is raised
-                # but the process is still running, keep trying to kill it
-                # PermissionError happens when the user tries to close redis-servers
-                # opened by root while he's not root,
-                # or when he tries to close redis-servers
-                # opened without root while he's root
-                continue
+        # signal 0 is to check if the process is still running or not
+        # it returns 1 if the process used_redis_servers.txtexited
+        try:
+            # check if the process is still running
+            while os.kill(pid, 0) != 1:
+                # sigterm is 9
+                os.kill(pid, 9)
+        except (ProcessLookupError, PermissionError):
+            # ProcessLookupError: process already exited, sometimes this exception is raised
+            # but the process is still running, keep trying to kill it
+            # PermissionError happens when the user tries to close redis-servers
+            # opened by root while he's not root,
+            # or when he tries to close redis-servers
+            # opened without root while he's root
+            return True
 
-        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
-        print(f'Killed {killed_servers} Redis Servers.')
-        os.remove(self.running_logfile)
-        sys.exit(-1)
 
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
