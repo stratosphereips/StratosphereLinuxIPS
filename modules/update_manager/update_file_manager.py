@@ -624,7 +624,12 @@ class UpdateFileManager:
             self.loaded_ti_files += 1
 
             # done parsing the file, delete it from disk
-            os.remove(full_path)
+            try:
+                os.remove(full_path)
+            except FileNotFoundError:
+                # this happens in integration tests, when another test deletes
+                # the file while this one is updating it, ignore it
+                pass
 
             return True
 
