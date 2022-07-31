@@ -716,7 +716,7 @@ class Main:
 
     def get_open_redis_servers(self) -> dict:
         """
-        Returns the dict of PIDs and ports of the redis unused servers started by slips
+        Returns the dict of PIDs and ports of the redis servers started by slips
         """
         self.open_servers_PIDs = {}
         try:
@@ -736,6 +736,32 @@ class Main:
         except FileNotFoundError:
             # print(f"Error: {self.running_logfile} is not found. Can't kill open servers. Stopping.")
             return {}
+
+    def print_open_redis_servers(self):
+        """
+        Returns a dict {counter: (used_port,pid) }
+        """
+        open_servers = {}
+        print(f"[0] Close all servers")
+        try:
+            with open(self.running_logfile, 'r') as f:
+                line_number = 0
+                for line in f.read().splitlines():
+                    # skip comments
+                    if (
+                        line.startswith('#')
+                        or line.startswith('Date')
+                        or len(line) < 3
+                    ):
+                        continue
+                    line_number += 1
+                    line = line.split(',')
+                    file, port, pid = line[1], line[2], line[3]
+                    print(f"[{line_number}] {file} - port {port}")
+                    open_servers[line_number] = (port, pid)
+                return open_servers
+        except FileNotFoundError:
+            print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
     def close_open_redis_servers(self):
         """Function to close unused open redis-servers"""
