@@ -801,6 +801,46 @@ class Main:
             return True
 
 
+    def close_open_redis_servers(self):
+        """Function to close unused open redis-servers"""
+        if not hasattr(self, 'open_servers_PIDs'):
+            # fill the dict
+            self.get_open_redis_servers()
+
+        if len(self.open_servers_PIDs) == 0:
+            print('No unused open servers to kill.')
+            sys.exit(-1)
+            return
+
+        # print available shit
+        print(f"You have {len(self.open_servers_PIDs)} open redis servers.\n"
+               f"Choose which one to kill [0,1,2 etc..]\n")
+        open_servers:dict = self.print_open_redis_servers()
+
+        server_to_close = input()
+
+        # close all
+        if server_to_close == '0':
+            failed_to_close = 0
+            for pid in self.open_servers_PIDs:
+                if not self.kill_redis_server(pid):
+                    failed_to_close += 1
+            killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
+            print(f'Killed {killed_servers} Redis Servers.')
+            os.remove(self.running_logfile)
+            sys.exit(-1)
+
+
+        try:
+            pid = server_to_close[server_to_close][1]
+            if self.kill_redis_server(pid):
+                self.print(f"Killed redis server at port {self.open_servers_PIDs[pid]}.")
+        except KeyError:
+            print(f"Invalid input {server_to_close}")
+
+        self.terminate_slips()
+
+
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
         gettrace = getattr(sys, 'gettrace', lambda: None)
