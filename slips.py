@@ -1327,6 +1327,9 @@ class Main:
             self.close_open_redis_servers()
             self.terminate_slips()
 
+        if self.args.version:
+            self.print_version()
+            self.terminate_slips()
 
         if self.args.clearblocking:
             if os.geteuid() != 0:
@@ -1472,21 +1475,20 @@ class Main:
             slips_logfile = os.path.join(self.args.output, 'slips.log')
         return (current_stdout, stderr, slips_logfile)
 
+    def print_version(self):
+        slips_version = f'Slips. Version {version}'
+        branch_info = utils.get_branch_info()
+        if branch_info != False:
+            # it's false when we're in docker because there's no .git/ there
+            commit = branch_info[0]
+            slips_version += f' ({commit[:8]})'
+        print(slips_version)
 
     def start(self):
         """Main Slips Function"""
         try:
-            slips_version = f'Slips. Version {version}'
-            branch_info = utils.get_branch_info()
-            if branch_info != False:
-                # it's false when we're in docker because there's no .git/ there
-                commit = branch_info[0]
-                slips_version += f' ({commit[:8]})'
 
-
-            print(slips_version)
-            if self.args.version:
-                self.terminate_slips()
+            self.print_version()
 
             print('https://stratosphereips.org')
             print('-' * 27)
