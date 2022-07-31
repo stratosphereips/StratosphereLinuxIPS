@@ -1745,7 +1745,7 @@ class ProfilerProcess(multiprocessing.Process):
                 return False
 
             # Check if the flow is whitelisted and we should not process
-            if self.whitelist.is_whitelisted_flow(self.column_values):
+            if self.whitelist.is_whitelisted_flow(self.column_values, flow_type):
                 return True
 
             def get_rev_profile(starttime, daddr_as_obj):
