@@ -1,3 +1,8 @@
+-0.9.4
+* Slips
+- Fix the way we update some TI files
+- 
+
 -0.9.3
 * Slips
 - Add the option to close a specific redis server using the -k flag.
