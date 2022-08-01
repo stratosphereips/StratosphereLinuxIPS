@@ -63,7 +63,6 @@ class Main:
         # slips picks a redis port from the following range
         self.start_port = 32768
         #todo change this
-        #todo document this
         self.end_port = 32770
         # in testing mode we manually set the following params
         if not testing:
@@ -468,6 +467,18 @@ class Main:
         self.terminate_slips()
         return
 
+    def get_pid_of_redis_server(self, port: int) -> str:
+        """
+        Gets the pid of the redis server running on this port
+        Returns str(port) or false if there's no redis-server running on this port
+        """
+        cmd = 'ps aux | grep redis-server'
+        cmd_output = os.popen(cmd).read()
+        for line in cmd_output.splitlines():
+            if str(port) in line:
+                pid = line.split()[1]
+                return pid
+        return False
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
