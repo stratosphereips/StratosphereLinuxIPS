@@ -60,8 +60,10 @@ class Main:
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.running_logfile = 'running_slips_info.txt'
-        # slips picks the used ports from the following range
+        # slips picks a redis port from the following range
         self.start_port = 32768
+        #todo change this
+        #todo document this
         self.end_port = 32770
         # in testing mode we manually set the following params
         if not testing:
@@ -473,7 +475,10 @@ class Main:
                     continue
             print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
 
-        os.remove(self.running_logfile)
+        try:
+            os.remove(self.running_logfile)
+        except FileNotFoundError:
+            pass
         self.terminate_slips()
         return
 
@@ -862,20 +867,44 @@ class Main:
             # or when he tries to close redis-servers
             # opened without root while he's root
             return False
+        return True
+
+    def remove_old_logline(self):
+        """
+        The only line with 6379 should be the last line, remove all the ones above
+        """
+        redis_port = str(6379)
+        tmpfile = 'tmp_running_slips_log.txt'
+        with open(self.running_logfile, 'r') as logfile:
+            with open(tmpfile, 'w') as tmp:
+                all_lines = logfile.read().splitlines()
+                # the only one that should have 6379
+                last_line = all_lines[-1]
+                # we want to delete the old log line containing this port
+                # but leave the new one (the last one)
+
+                for line in all_lines[:-1]:
+                    if redis_port not in line:
+                        tmp.write(f'{line}\n')
+
+                # write the last line
+                tmp.write(all_lines[-1]+'\n')
+        # replace file with original name
+        os.replace(tmpfile, self.running_logfile)
+
 
     def remove_server_from_log(self, redis_port):
         """ deletes the server running on the given pid from running_slips_logs """
         redis_port = str(redis_port)
         tmpfile = 'tmp_running_slips_log.txt'
-        with open(self.running_logfile, 'r') as f:
+        with open(self.running_logfile, 'r') as logfile:
             with open(tmpfile, 'w') as tmp:
-                all_lines = f.read().splitlines()
-                # delete the line using that port because the info will be replaced
-                for line in all_lines[:-1]:
+                all_lines = logfile.read().splitlines()
+                # delete the line using that port
+                for line in all_lines:
                     if redis_port not in line:
                         tmp.write(f'{line}\n')
-                # write the last line
-                tmp.write(all_lines[-1]+'\n')
+
         # replace file with original name
         os.replace(tmpfile, self.running_logfile)
 
@@ -1169,11 +1198,8 @@ class Main:
             )
 
         if redis_port == 6379:
-            self.remove_server_from_log(6379)
-
-
-
-
+            # remove the old logline using this port
+            self.remove_old_logline()
 
     def set_mode(self, mode, daemon=''):
         """
