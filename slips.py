@@ -60,6 +60,9 @@ class Main:
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         self.running_logfile = 'running_slips_info.txt'
+        # slips picks the used ports from the following range
+        self.start_port = 32768
+        self.end_port = 32770
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
@@ -175,12 +178,12 @@ class Main:
         Keeps trying to connect to random generated ports until we're connected.
         returns the used port
         """
-        try:
-            # generate a random unused port
-            for port in range(32768, 32850):
-                # check if 1. we can connect
-                # 2.server is not being used by another instance of slips
-                # note: using r.keys() blocks the server
+        # generate a random unused port
+        for port in range(self.start_port, self.end_port):
+            # check if 1. we can connect
+            # 2.server is not being used by another instance of slips
+            # note: using r.keys() blocks the server
+            try:
                 connected = __database__.connect_to_redis_server(port)
                 if connected:
                     server_used = len(list(__database__.r.keys())) < 2
@@ -188,13 +191,15 @@ class Main:
                         # if the db managed to connect to this random port, then this is
                         # the port we'll be using
                         return port
-            else:
-                # there's no usable port in this range
-                self.print("All port from 32768 to 32850 are taken. Unable to start slips")
-                self.terminate_slips()
-        except redis.exceptions.ConnectionError:
-            # Connection refused to this port
-            return self.generate_random_redis_port()
+            except redis.exceptions.ConnectionError:
+                # Connection refused to this port
+                continue
+        else:
+            # there's no usable port in this range
+            print(f"All ports from {self.start_port} to {self.end_port} are used. "
+                   "Unable to start slips.\n")
+            return False
+
 
     def clear_redis_cache_database(
         self, redis_host='localhost', redis_port=6379
@@ -764,7 +769,6 @@ class Main:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
     def kill_redis_server(self, pid):
-        failed_to_close = 0
         port = self.open_servers_PIDs[pid]
         try:
             pid = int(pid)
@@ -779,6 +783,7 @@ class Main:
             #todo this function connects to the server even if it was already killed!!
             if connected := __database__.connect_to_redis_server(port):
                 __database__.r.flushall()
+                __database__.r.flushdb()
                 __database__.r.script_flush()
         except redis.exceptions.ConnectionError:
             # server already killed!
