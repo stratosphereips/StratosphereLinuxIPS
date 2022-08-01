@@ -809,7 +809,23 @@ class Main:
 
     def flush_redis_server(self, pid: str='', port: str=''):
         """
-        port = self.open_servers_PIDs[pid]
+        Flush the redis server on this pid, only 1 param should be given, pid or port
+        :param pid: can be False if port is given
+        Gets the pid of the port is not given
+        """
+        if not port and not pid:
+            return False
+
+        # sometimes the redis port is given, no need to get it manually
+        if not port and pid:
+            if not hasattr(self, 'open_servers_PIDs'):
+                self.get_open_redis_servers()
+            port = self.open_servers_PIDs.get(str(pid), False)
+            if not port:
+                # try to get the port using a cmd
+                port = self.get_port_of_redis_server(pid)
+        port = str(port)
+
         # clear the server opened on this port
         try:
             # if connected := __database__.connect_to_redis_server(port):
@@ -916,31 +932,33 @@ class Main:
         #     print('No unused open servers to kill.')
         #     sys.exit(-1)
         #     return
+        try:
+            print(f"Choose which one to kill [0,1,2 etc..]\n")
+            # open_servers {1: (port,pid),...}}
+            open_servers:dict = self.print_open_redis_servers()
 
-        print(f"Choose which one to kill [0,1,2 etc..]\n")
-        # open_servers {1: (port,pid),...}}
-        open_servers:dict = self.print_open_redis_servers()
+            server_to_close = input()
 
-        server_to_close = input()
+            # close all ports in running_slips_logs.txt
+            if server_to_close == '0':
+                #todo make it press enter
+                self.close_all_ports(in_logfile=True)
 
-        # close all ports in running_slips_logs.txt
-        if server_to_close == '0':
-            self.close_all_ports(in_logfile=True)
-
-        if len(open_servers) > 0:
-            try:
-                pid = open_servers[int(server_to_close)][1]
-                port = open_servers[int(server_to_close)][0]
-                if self.flush_redis_server(pid) and self.kill_redis_server(pid):
+            if len(open_servers) > 0:
+                try:
+                    pid = open_servers[int(server_to_close)][1]
+                    port = open_servers[int(server_to_close)][0]
+                    if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
+                        print(f"Killed redis server on port {port}.")
+                    else:
+                        print(f"Redis server running on port {port} "
+                              f"is either already killed or you don't have "
+                              f"enough permission to kill it.")
                     self.remove_server_from_log(port)
-                    print(f"Killed redis server on port {port}.")
-                else:
-                    print(f"Redis server running on port {port} "
-                          f"is either already killed or you don't have "
-                          f"enough permission to kill it.")
-            except (KeyError, ValueError):
-                print(f"Invalid input {server_to_close}")
-
+                except (KeyError, ValueError):
+                    print(f"Invalid input {server_to_close}")
+        except KeyboardInterrupt:
+            pass
         self.terminate_slips()
 
 
