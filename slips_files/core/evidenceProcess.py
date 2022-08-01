@@ -612,6 +612,7 @@ class EvidenceProcess(multiprocessing.Process):
                         source_target_tag,
                         port,
                         proto,
+                        evidence_ID
                     )
 
                     # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars

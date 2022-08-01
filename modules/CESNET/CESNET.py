@@ -183,6 +183,7 @@ class Module(Module, multiprocessing.Process):
                 source_target_tag,
                 port,
                 proto,
+                ID
             )
 
             # remove private ips from the alert

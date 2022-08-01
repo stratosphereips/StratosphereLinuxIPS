@@ -284,6 +284,7 @@ class Utils(object):
         source_target_tag,
         port,
         proto,
+        evidence_id
     ):
         """
         Function to format our evidence according to Intrusion Detection Extensible Alert (IDEA format).
@@ -291,7 +292,7 @@ class Utils(object):
         """
         IDEA_dict = {
             'Format': 'IDEA0',
-            'ID': str(uuid4()),
+            'ID': evidence_id,
             # both times represet the time of the detection, we probably don't need flow_datetime
             'DetectTime': datetime.now(timezone.utc).isoformat(),
             'EventTime': datetime.now(timezone.utc).isoformat(),
