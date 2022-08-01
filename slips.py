@@ -179,7 +179,7 @@ class Main:
         returns the used port
         """
         # generate a random unused port
-        for port in range(self.start_port, self.end_port):
+        for port in range(self.start_port, self.end_port+1):
             # check if 1. we can connect
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
@@ -442,11 +442,15 @@ class Main:
         if in_logfile:
             failed_to_close = 0
             for pid in self.open_servers_PIDs:
-                if not self.kill_redis_server(pid):
+                if self.flush_redis_server(pid) and self.kill_redis_server(pid):
+                    port = self.open_servers_PIDs[pid]
+                    self.remove_server_from_log(port)
+                else:
                     failed_to_close += 1
             killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
             print(f'Successfully closed {killed_servers} Redis Servers.')
         else:
+            #todo does this function kill all the opened pids???
             # closes all the ports in slips supported range of ports
             for port in range(self.start_port, self.end_port):
                 os.system(
@@ -811,16 +815,12 @@ class Main:
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
-    def kill_redis_server(self, pid):
+
+    def flush_redis_server(self, pid):
+        """
+        Flush the redis server on this pid
+        """
         port = self.open_servers_PIDs[pid]
-        try:
-            pid = int(pid)
-        except ValueError:
-            # The server was killed before logging its PID
-            # the pid of it is 'not found'
-            return False
-
-
         # clear the server opened on this port
         try:
             #todo this function connects to the server even if it was already killed!!
@@ -828,12 +828,25 @@ class Main:
                 __database__.r.flushall()
                 __database__.r.flushdb()
                 __database__.r.script_flush()
+                return True
         except redis.exceptions.ConnectionError:
             # server already killed!
             return False
 
+
+    def kill_redis_server(self, pid):
+        """
+        Kill the redis server on this pid
+        """
+        try:
+            pid = int(pid)
+        except ValueError:
+            # The server was killed before logging its PID
+            # the pid of it is 'not found'
+            return False
+
         # signal 0 is to check if the process is still running or not
-        # it returns 1 if the process used_redis_servers.txtexited
+        # it returns 1 if the process used_redis_servers.txt exited
         try:
             # check if the process is still running
             while os.kill(pid, 0) != 1:
@@ -842,7 +855,6 @@ class Main:
         except ProcessLookupError:
             # ProcessLookupError: process already exited, sometimes this exception is raised
             # but the process is still running, keep trying to kill it
-            self.remove_server_from_log(port)
             return True
         except PermissionError:
             # PermissionError happens when the user tries to close redis-servers
@@ -870,7 +882,7 @@ class Main:
 
     def close_open_redis_servers(self):
         """
-        Function to close unused open redis-servers based on what the user choose
+        Function to close unused open redis-servers based on what the user chooses
         """
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
@@ -893,14 +905,15 @@ class Main:
 
         if len(open_servers) > 0:
             try:
-                # killing server at
                 pid = open_servers[int(server_to_close)][1]
                 port = open_servers[int(server_to_close)][0]
-                if self.kill_redis_server(pid):
-                    print(f"Killed redis server at port {port}.")
+                if self.flush_redis_server(pid) and self.kill_redis_server(pid):
+                    self.remove_server_from_log(port)
+                    print(f"Killed redis server on port {port}.")
                 else:
                     print(f"Redis server running on port {port} "
-                          f"is either already killed or you don't have enough permission to kill it.")
+                          f"is either already killed or you don't have "
+                          f"enough permission to kill it.")
             except (KeyError, ValueError):
                 print(f"Invalid input {server_to_close}")
 
