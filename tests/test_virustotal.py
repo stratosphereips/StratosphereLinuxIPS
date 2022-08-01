@@ -99,4 +99,5 @@ def test_scan_file(outputQueue, database):
         'md5': '7c401bde8cafc5b745b9f65effbd588f',
         'ts': '',
     }
+    virustotal.file_info = file_info
     assert virustotal.scan_file(file_info) == 'malicious'

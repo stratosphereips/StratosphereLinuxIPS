@@ -284,7 +284,135 @@ class Module(Module, multiprocessing.Process):
             self.check_unknown_port(*flow)
         self.unknown_ports_queue = []
 
+    def get_time_diff(self, start_time, end_time):
+        """
+        Both time should be epoch
+        Returs difference in minutes
+        """
+        diff = str(end_time - start_time)
+        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
+        try:
+            # calculate the days difference
+            diff_in_days = int(
+                diff.split(', ')[0].split(' ')[0]
+            )
+            diff = diff.split(', ')[1]
+        except (IndexError, ValueError):
+            # no days different
+            diff = diff.split(', ')[0]
+            diff_in_days = 0
 
+        diff_in_hrs = int(diff.split(':')[0])
+        diff_in_mins = int(diff.split(':')[1])
+        # total diff in mins
+        diff_in_mins = (
+            24 * diff_in_days * 60
+            + diff_in_hrs * 60
+            + diff_in_mins
+        )
+        return diff_in_mins
+
+    def check_data_upload(self, profileid, twid):
+
+
+        def remove_ignored_ips(contacted_addresses):
+            """
+            remove IPs that we shouldn't alert about if they are most contacted
+            If the gw is contacted 10 times,
+             and 8.8.8.8 is contacted 8 times, we use 8.8.8.8 as the most contacted
+            """
+            # most of the times the default gateway will be the most contacted daddr, we don't want that
+            # remove it from the dict if it's there
+            res = {}
+            for ip, ip_info in contacted_addresses.items():
+                ip_obj = ipaddress.ip_address(ip)
+                if not  (ip == self.gateway
+                    or ip_obj.is_multicast
+                    or ip_obj.is_link_local
+                    or ip_obj.is_reserved) :
+                    res[ip] = ip_info
+            return res
+
+
+        # we’re looking for systems that are transferring large amount of data in 20 mins span
+        all_flows = __database__.get_all_flows_in_profileid(
+            profileid
+        )
+        if not all_flows:
+            return
+
+        # get a list of flows without uids
+        flows_list = []
+        for flow_dict in all_flows:
+            flows_list.append(list(flow_dict.items())[0][1])
+        # sort flows by ts
+        flows_list = sorted(flows_list, key=lambda i: i['ts'])
+        # get first and last flow ts
+        time_of_first_flow = datetime.datetime.fromtimestamp(
+            flows_list[0]['ts']
+        )
+        time_of_last_flow = datetime.datetime.fromtimestamp(
+            flows_list[-1]['ts']
+        )
+
+        # get the time difference between them in seconds
+        diff_in_mins = self.get_time_diff(time_of_first_flow, time_of_last_flow)
+
+        # we need the flows that happend in 20 mins span
+        if diff_in_mins < 20:
+            return
+
+        contacted_daddrs = {}
+        # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
+        for flow in flows_list:
+            daddr = flow['daddr']
+            try:
+                contacted_daddrs[daddr] = (
+                    contacted_daddrs[daddr] + 1
+                )
+            except KeyError:
+                contacted_daddrs.update({daddr: 1})
+
+        contacted_daddrs = remove_ignored_ips(contacted_daddrs)
+        if not contacted_daddrs:
+            return
+        # get the top most contacted daddr
+        most_contacted_daddr = max(
+            contacted_daddrs, key=contacted_daddrs.get
+        )
+        times_contacted = contacted_daddrs[
+            most_contacted_daddr
+        ]
+
+        # get the sum of all bytes sent to that ip in the past hour
+        total_bytes = 0
+        for flow in flows_list:
+            daddr = flow['daddr']
+            if daddr == most_contacted_daddr:
+                # In arp the sbytes is actually ''
+                if flow['sbytes'] == '':
+                    sbytes = 0
+                else:
+                    sbytes = flow['sbytes']
+                total_bytes += sbytes
+        total_mbs = total_bytes / (10**6)
+
+        if (
+            total_mbs >= self.data_exfiltration_threshold
+        ):
+            # get the first uid of these flows to use for setEvidence
+            for flow_dict in all_flows:
+                for uid, flow in flow_dict.items():
+                    if flow['daddr'] == most_contacted_daddr:
+                        self.helper.set_evidence_data_exfiltration(
+                            most_contacted_daddr,
+                            total_mbs,
+                            times_contacted,
+                            profileid,
+                            twid,
+                            uid,
+                        )
+                        return True
 
     def check_unknown_port(
             self, dport, proto, daddr, profileid, twid, uid, timestamp
@@ -465,9 +593,20 @@ class Module(Module, multiprocessing.Process):
                 # remove from ram
                 org_domains = ''
 
+            # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
             org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
-            if ip in org_ips:
-                return True
+            if '.' in ip:
+                first_octet = ip.split('.')[0]
+                ip_obj = ipaddress.IPv4Address(ip)
+            elif ':' in ip:
+                first_octet = ip.split(':')[0]
+                ip_obj = ipaddress.IPv6Address(ip)
+            else:
+                return False
+            # organization IPs are sorted by first octet for faster search
+            for range in org_ips.get(first_octet, []):
+                if ip_obj in ipaddress.ip_network(range):
+                    return True
 
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
@@ -656,6 +795,105 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
 
+    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid, message):
+        """
+        Check for auth_success: true in the given zeek flow
+        """
+        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        original_flow_uid = next(iter(original_ssh_flow))
+        if original_ssh_flow[original_flow_uid]:
+            ssh_flow_dict = json.loads(
+                original_ssh_flow[original_flow_uid]
+            )
+            daddr = ssh_flow_dict['daddr']
+            saddr = ssh_flow_dict['saddr']
+            size = ssh_flow_dict['allbytes']
+            self.helper.set_evidence_ssh_successful(
+                profileid,
+                twid,
+                saddr,
+                daddr,
+                size,
+                uid,
+                timestamp,
+                by='Zeek',
+            )
+            try:
+                self.connections_checked_in_ssh_timer_thread.remove(
+                    uid
+                )
+            except ValueError:
+                pass
+            return True
+        elif uid not in self.connections_checked_in_ssh_timer_thread:
+            # It can happen that the original SSH flow is not in the DB yet
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
+            self.connections_checked_in_ssh_timer_thread.append(
+                uid
+            )
+            params = [message]
+            timer = TimerThread(
+                15, self.check_successful_ssh, params
+            )
+            timer.start()
+
+    def detect_successful_ssh_by_slips(self, uid, timestamp, profileid, twid, message):
+        """
+        Try Slips method to detect if SSH was successful by
+        comparing all bytes sent and received to our threshold
+        """
+        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        original_flow_uid = next(iter(original_ssh_flow))
+        if original_ssh_flow[original_flow_uid]:
+            ssh_flow_dict = json.loads(
+                original_ssh_flow[original_flow_uid]
+            )
+            daddr = ssh_flow_dict['daddr']
+            saddr = ssh_flow_dict['saddr']
+            size = ssh_flow_dict['allbytes']
+            if size > self.ssh_succesful_detection_threshold:
+                # Set the evidence because there is no
+                # easier way to show how Slips detected
+                # the successful ssh and not Zeek
+                self.helper.set_evidence_ssh_successful(
+                    profileid,
+                    twid,
+                    saddr,
+                    daddr,
+                    size,
+                    uid,
+                    timestamp,
+                    by='Slips',
+                )
+                try:
+                    self.connections_checked_in_ssh_timer_thread.remove(
+                        uid
+                    )
+                except ValueError:
+                    pass
+                return True
+
+            else:
+                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
+                pass
+        else:
+            # It can happen that the original SSH flow is not in the DB yet
+            if uid not in self.connections_checked_in_ssh_timer_thread:
+                # comes here if we haven't started the timer thread for this connection before
+                # mark this connection as checked
+                # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
+                # time {datetime.datetime.now()}')
+                self.connections_checked_in_ssh_timer_thread.append(
+                    uid
+                )
+                params = [message]
+                timer = TimerThread(
+                    15, self.check_successful_ssh, params
+                )
+                timer.start()
+
     def check_successful_ssh(self, message):
         """
         Function to check if an SSH connection logged in successfully
@@ -673,96 +911,10 @@ class Module(Module, multiprocessing.Process):
             timestamp = flow_dict['stime']
             uid = flow_dict['uid']
             if auth_success := flow_dict['auth_success']:
-                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                original_flow_uid = next(iter(original_ssh_flow))
-                if original_ssh_flow[original_flow_uid]:
-                    ssh_flow_dict = json.loads(
-                        original_ssh_flow[original_flow_uid]
-                    )
-                    daddr = ssh_flow_dict['daddr']
-                    saddr = ssh_flow_dict['saddr']
-                    size = ssh_flow_dict['allbytes']
-                    self.helper.set_evidence_ssh_successful(
-                        profileid,
-                        twid,
-                        saddr,
-                        daddr,
-                        size,
-                        uid,
-                        timestamp,
-                        by='Zeek',
-                    )
-                    try:
-                        self.connections_checked_in_ssh_timer_thread.remove(
-                            uid
-                        )
-                    except ValueError:
-                        pass
-                    return True
-                elif uid not in self.connections_checked_in_ssh_timer_thread:
-                    # It can happen that the original SSH flow is not in the DB yet
-                    # comes here if we haven't started the timer thread for this connection before
-                    # mark this connection as checked
-                    # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}. time {datetime.datetime.now()}')
-                    self.connections_checked_in_ssh_timer_thread.append(
-                        uid
-                    )
-                    params = [message]
-                    timer = TimerThread(
-                        15, self.check_successful_ssh, params
-                    )
-                    timer.start()
+                self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid, message)
             else:
-                # Try Slips method to detect if SSH was successful.
-                original_ssh_flow = __database__.get_flow(profileid, twid, uid)
-                original_flow_uid = next(iter(original_ssh_flow))
-                if original_ssh_flow[original_flow_uid]:
-                    ssh_flow_dict = json.loads(
-                        original_ssh_flow[original_flow_uid]
-                    )
-                    daddr = ssh_flow_dict['daddr']
-                    saddr = ssh_flow_dict['saddr']
-                    size = ssh_flow_dict['allbytes']
-                    if size > self.ssh_succesful_detection_threshold:
-                        # Set the evidence because there is no
-                        # easier way to show how Slips detected
-                        # the successful ssh and not Zeek
-                        self.helper.set_evidence_ssh_successful(
-                            profileid,
-                            twid,
-                            saddr,
-                            daddr,
-                            size,
-                            uid,
-                            timestamp,
-                            by='Slips',
-                        )
-                        try:
-                            self.connections_checked_in_ssh_timer_thread.remove(
-                                uid
-                            )
-                        except ValueError:
-                            pass
-                        return True
+                self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, message)
 
-                    else:
-                        # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                        pass
-                else:
-                    # It can happen that the original SSH flow is not in the DB yet
-                    if uid not in self.connections_checked_in_ssh_timer_thread:
-                        # comes here if we haven't started the timer thread for this connection before
-                        # mark this connection as checked
-                        # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
-                        # time {datetime.datetime.now()}')
-                        self.connections_checked_in_ssh_timer_thread.append(
-                            uid
-                        )
-                        params = [message]
-                        timer = TimerThread(
-                            15, self.check_successful_ssh, params
-                        )
-                        timer.start()
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on check_ssh() line {exception_line}', 0, 1)
@@ -895,7 +1047,6 @@ class Module(Module, multiprocessing.Process):
                     flow = data['flow']
                     # Convert flow to a dict
                     flow = json.loads(flow)
-
                     # Convert the common fields to something that can
                     # be interpreted
                     uid = next(iter(flow))
@@ -915,7 +1066,6 @@ class Module(Module, multiprocessing.Process):
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
-
                     # stime = flow_dict['ts']
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
@@ -1007,7 +1157,8 @@ class Module(Module, multiprocessing.Process):
                         and appproto != 'dns'
                         and not self.is_ignored_ip(daddr)
                     ):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS until 30 minutes has passed
+                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+                        # until 30 minutes has passed
                         # after starting slips because the dns may have happened before starting slips
                         start_time = __database__.get_slips_start_time()
                         internal_time = float(
@@ -1118,102 +1269,7 @@ class Module(Module, multiprocessing.Process):
                                     )
 
                     # --- Detect Data exfiltration ---
-                    # we’re looking for systems that are transferring large amount of data in 20 mins span
-                    all_flows = __database__.get_all_flows_in_profileid(
-                        profileid
-                    )
-                    if all_flows:
-                        # get a list of flows without uids
-                        flows_list = []
-                        for flow_dict in all_flows:
-                            flows_list.append(list(flow_dict.items())[0][1])
-                        # sort flows by ts
-                        flows_list = sorted(flows_list, key=lambda i: i['ts'])
-                        # get first and last flow ts
-                        time_of_first_flow = datetime.datetime.fromtimestamp(
-                            flows_list[0]['ts']
-                        )
-                        time_of_last_flow = datetime.datetime.fromtimestamp(
-                            flows_list[-1]['ts']
-                        )
-                        # get the difference between them in seconds
-
-                        diff = str(time_of_last_flow - time_of_first_flow)
-                        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
-                        try:
-                            # calculate the days difference
-                            diff_in_days = int(
-                                diff.split(', ')[0].split(' ')[0]
-                            )
-                            diff = diff.split(', ')[1]
-                        except (IndexError, ValueError):
-                            # no days different
-                            diff = diff.split(', ')[0]
-                            diff_in_days = 0
-
-                        diff_in_hrs = int(diff.split(':')[0])
-                        diff_in_mins = int(diff.split(':')[1])
-                        # total diff in mins
-                        diff_in_mins = (
-                            24 * diff_in_days * 60
-                            + diff_in_hrs * 60
-                            + diff_in_mins
-                        )
-
-                        # we need the flows that happend in 20 mins span
-                        if diff_in_mins >= 20:
-                            contacted_daddrs = {}
-                            # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
-                            for flow in flows_list:
-                                daddr = flow['daddr']
-                                try:
-                                    contacted_daddrs[daddr] = (
-                                        contacted_daddrs[daddr] + 1
-                                    )
-                                except:
-                                    contacted_daddrs.update({daddr: 1})
-                            # most of the times the default gateway will be the most contacted daddr, we don't want that
-                            # remove it from the dict if it's there
-                            contacted_daddrs.pop(self.gateway, None)
-
-                            # get the most contacted daddr in the past hour, if there is any
-                            if contacted_daddrs:
-                                most_contacted_daddr = max(
-                                    contacted_daddrs, key=contacted_daddrs.get
-                                )
-                                times_contacted = contacted_daddrs[
-                                    most_contacted_daddr
-                                ]
-                                # get the sum of all bytes send to that ip in the past hour
-                                total_bytes = 0
-                                for flow in flows_list:
-                                    daddr = flow['daddr']
-                                    # In arp the sbytes is actually ''
-                                    if flow['sbytes'] == '':
-                                        sbytes = 0
-                                    else:
-                                        sbytes = flow['sbytes']
-                                    if daddr == most_contacted_daddr:
-                                        total_bytes = total_bytes + sbytes
-                                # print(f'total_bytes:{total_bytes} most_contacted_daddr: {most_contacted_daddr} times_contacted: {times_contacted} ')
-                                if (
-                                    total_bytes
-                                    >= self.data_exfiltration_threshold
-                                    * (10**6)
-                                ):
-                                    # get the first uid of these flows to use for setEvidence
-                                    for flow_dict in all_flows:
-                                        for uid, flow in flow_dict.items():
-                                            if flow['daddr'] == daddr:
-                                                break
-                                    self.helper.set_evidence_data_exfiltration(
-                                        most_contacted_daddr,
-                                        total_bytes,
-                                        times_contacted,
-                                        profileid,
-                                        twid,
-                                        uid,
-                                    )
+                    self.check_data_upload(profileid, twid)
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)

@@ -722,7 +722,7 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        return len(self.r.zrange('tws' + profileid, 0, -1, withscores=True))
+        return len(self.getTWsfromProfile(profileid))
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
         """
@@ -905,7 +905,7 @@ class Database(object):
         return data
 
     def getAmountTW(self, profileid):
-        """Return the amount of tw for this profile id"""
+        """Return the number of tws for this profile id"""
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
@@ -1273,9 +1273,7 @@ class Database(object):
             self.print(
                 'Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(
                     profileid, twid, tupleid, data_tuple
-                ),
-                3,
-                0,
+                ),3,0,
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
@@ -1300,9 +1298,7 @@ class Database(object):
                         symbol_to_add,
                         previous_two_timestamps,
                         tuples,
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 # Get the last symbols of letters in the DB
                 prev_symbols = tuples[tupleid][0]
@@ -1327,9 +1323,7 @@ class Database(object):
                 self.print(
                     '\tLetters so far for tuple {}: {}'.format(
                         tupleid, new_symbol
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 tuples = json.dumps(tuples)
             except (TypeError, KeyError):
@@ -1338,9 +1332,7 @@ class Database(object):
                 self.print(
                     'First time for tuple {} as an {} for {} in TW {}'.format(
                         tupleid, direction, profileid, twid
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
                 # Here get the info from the ipinfo key
                 new_data = (symbol_to_add, previous_two_timestamps)
@@ -1384,16 +1376,17 @@ class Database(object):
             dport = columns['dport']
             sport = columns['sport']
             totbytes = columns['bytes']
-            sbytes = columns['sbytes']
             pkts = columns['pkts']
-            spkts = columns['spkts']
-            dpkts = columns['dpkts']
             state = columns['state']
             proto = columns['proto'].upper()
-            daddr = columns['daddr']
-            saddr = columns['saddr']
             starttime = str(columns['starttime'])
             uid = columns['uid']
+            # spkts = columns['spkts']
+            # dpkts = columns['dpkts']
+            # daddr = columns['daddr']
+            # saddr = columns['saddr']
+            # sbytes = columns['sbytes']
+
             # Choose which port to use based if we were asked Dst or Src
             if port_type == 'Dst':
                 port = str(dport)
@@ -1410,7 +1403,8 @@ class Database(object):
             summaryState = __database__.getFinalStateFromFlags(state, pkts)
             # Key
             key_name = port_type + 'Ports' + role + proto + summaryState
-            # self.print('add_port(): As a {} storing info about {} port {} for {}. Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
+            # self.print('add_port(): As a {} storing info about {} port {} for {}.
+            # Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
             prev_data = self.getDataFromProfileTW(
                 profileid, twid, port_type, summaryState, proto, role, 'Ports'
             )
@@ -1432,9 +1426,7 @@ class Database(object):
                 self.print(
                     'add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(
                         port, profileid, key_name, innerdata
-                    ),
-                    3,
-                    0,
+                    ),3,0,
                 )
             except KeyError:
                 # First time for this flow
@@ -1452,9 +1444,7 @@ class Database(object):
                 self.print(
                     'add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(
                         port, profileid, key_name, innerdata
-                    ),
-                    3,
-                    0,
+                    ), 3, 0,
                 )
             # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
             # Convet the dictionary to json
@@ -1462,9 +1452,7 @@ class Database(object):
             self.print(
                 'add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(
                     port, profileid, key_name, prev_data
-                ),
-                3,
-                0,
+                ),3,0,
             )
             # Store this data in the profile hash
             hash_key = profileid + self.separator + twid
@@ -2067,9 +2055,9 @@ class Database(object):
         Get the label from the flow
         """
         flow = self.get_flow(profileid, twid, uid)
-        if flow:
-            data = json.loads(flow[uid])
-            labels = data['module_labels']
+        if flow and flow.get(uid, False):
+            flow = json.loads(flow[uid])
+            labels = flow.get('module_labels', '')
             return labels
         else:
             return {}
@@ -2685,6 +2673,17 @@ class Database(object):
         if not server_name:
             return False
 
+        # We are giving only new server_name to the threat_intelligence module.
+        data_to_send = {
+            'server_name': server_name,
+            'profileid': str(profileid),
+            'twid': str(twid),
+            'stime': stime,
+            'uid': uid,
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+
         # Save new server name in the IPInfo. There might be several server_name per IP.
         ipdata = self.getIPData(str(daddr_as_obj))
         if ipdata:
@@ -2708,16 +2707,7 @@ class Database(object):
                             str(daddr_as_obj), {'SNI': sni_ipdata}
                         )
                         break
-        # We are giving only new server_name to the threat_intelligence module.
-        data_to_send = {
-            'server_name': server_name,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+
 
     def add_out_http(
         self,
@@ -3564,7 +3554,7 @@ class Database(object):
         if uid:
             try:
                 time.sleep(
-                    3
+                    1
                 )   # it takes time for the binetflow to put the flow into the database
                 flow_information = self.r.hget(
                     profileid + '_' + twid + '_flows', uid
@@ -3713,6 +3703,7 @@ class Database(object):
         """
         Set/update time and/or e-tag for TI file
         :param file: a valid filename not a feed url
+        :param data: dict containing info about TI file
         """
         # data = self.get_malicious_file_info(file)
         # for key in file_data:
@@ -4015,8 +4006,19 @@ class Database(object):
     def is_known_ports_read(self):
         return True if self.rcache.get("is services.csv read") == 'True' else False
 
-    def store_std_file(self, file_type, path):
-        self.r.set(file_type, path)
+    def store_std_file(self, **kwargs):
+        """
+        available args are
+            std_files = {
+                    'stderr': ,
+                    'stdout': ,
+                    'stdin': ,
+                    'pidfile': ,
+                    'logsfile': ,
+                }
+        """
+        for file_type, path in kwargs.items():
+            self.r.set(file_type, path)
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)

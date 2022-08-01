@@ -32,8 +32,34 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
-        self.timeout = 0
+        self.timeout = 0.0000001
         self.__read_configuration()
+        self.get_malicious_ip_ranges()
+
+    def get_malicious_ip_ranges(self):
+        """
+        Cache the IoC IP ranges instead of retrieving them from the db
+        """
+        ip_ranges = __database__.get_malicious_ip_ranges()
+        self.cached_ipv6_ranges = {}
+        self.cached_ipv4_ranges = {}
+        for range in ip_ranges.keys():
+            if '.' in range:
+                first_octet = range.split('.')[0]
+                try:
+                    self.cached_ipv4_ranges[first_octet].append(range)
+                except KeyError:
+                    # first time seeing this octect
+                    self.cached_ipv4_ranges[first_octet] = [range]
+            else:
+                # ipv6 range
+                first_octet = range.split(':')[0]
+                try:
+                    self.cached_ipv6_ranges[first_octet].append(range)
+                except KeyError:
+                    # first time seeing this octect
+                    self.cached_ipv6_ranges[first_octet] = [range]
+
 
     def __read_configuration(self):
         """Read the configuration file for what we need"""
@@ -490,6 +516,58 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
+    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
+        """Search for this IP in our database of IoC"""
+        ip_info = __database__.search_IP_in_IoC(ip)
+        # check if it's a blacklisted ip
+        if not ip_info:
+            return False
+
+        # Dont change this condition. This is the only way it works
+        # If the IP is in the blacklist of IoC. Add it as Malicious
+        ip_info = json.loads(ip_info)
+        # Set the evidence on this detection
+        self.set_evidence_malicious_ip(
+            ip,
+            uid,
+            timestamp,
+            ip_info,
+            profileid,
+            twid,
+            ip_state,
+        )
+        return True
+
+
+    def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
+        """ check if this ip belongs to any of our blacklisted ranges"""
+        ip_obj = ipaddress.ip_address(ip)
+        if validators.ipv4(ip):
+            first_octet = ip.split('.')[0]
+            ranges_starting_with_octet = self.cached_ipv4_ranges.get(first_octet, [])
+        elif validators.ipv6(ip):
+            first_octet = ip.split(':')[0]
+            ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
+        else:
+            return False
+
+        for range in ranges_starting_with_octet:
+            if ip_obj in ipaddress.ip_network(range):
+                # ip was found in one of the blacklisted ranges
+                ip_info = __database__.get_malicious_ip_ranges()[range]
+                ip_info = json.loads(ip_info)
+                # Set the evidence on this detection
+                self.set_evidence_malicious_ip(
+                    ip,
+                    uid,
+                    timestamp,
+                    ip_info,
+                    profileid,
+                    twid,
+                    ip_state,
+                )
+                return True
+
     def run(self):
         try:
             utils.drop_root_privs()
@@ -542,51 +620,17 @@ class Module(Module, multiprocessing.Process):
 
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if ip and not self.is_outgoing_icmp_packet(
-                        protocol, ip_state
-                    ):
-                        # Search for this IP in our database of IoC
-                        ip_info = __database__.search_IP_in_IoC(ip)
-                        # check if it's a blacklisted ip
-                        if (
-                            ip_info != False
-                        ):   # Dont change this condition. This is the only way it works
-                            # If the IP is in the blacklist of IoC. Add it as Malicious
-                            ip_info = json.loads(ip_info)
-                            # Set the evidence on this detection
-                            self.set_evidence_malicious_ip(
-                                ip,
-                                uid,
-                                timestamp,
-                                ip_info,
-                                profileid,
-                                twid,
-                                ip_state,
-                            )
-
-                        # check if this ip belongs to any of our blacklisted ranges
-                        ip_ranges = __database__.get_malicious_ip_ranges()
-                        try:
-                            for range, info in ip_ranges.items():
-                                if ipaddress.ip_address(
-                                    ip
-                                ) in ipaddress.ip_network(range):
-                                    # ip was found in one of the blacklisted ranges
-                                    ip_info = json.loads(info)
-                                    # Set the evidence on this detection
-                                    self.set_evidence_malicious_ip(
-                                        ip,
-                                        uid,
-                                        timestamp,
-                                        ip_info,
-                                        profileid,
-                                        twid,
-                                        ip_state,
-                                    )
-                                    break
-                        except AttributeError:
-                            # we don't have ip_ranges in our db
-                            pass
+                    if ip :
+                        ip_obj = ipaddress.ip_address(ip)
+                        if not (
+                                ip_obj.is_multicast
+                                or ip_obj.is_private
+                                or ip_obj.is_link_local
+                                or ip_obj.is_reserved
+                                or self.is_outgoing_icmp_packet(protocol, ip_state)
+                            ):
+                            self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
                     else:
                         # We were not given an IP. Check if we were given a domain
 
@@ -632,7 +676,6 @@ class Module(Module, multiprocessing.Process):
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
-                return True
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -640,4 +683,3 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
                 self.print(traceback.format_exc())
-                return True

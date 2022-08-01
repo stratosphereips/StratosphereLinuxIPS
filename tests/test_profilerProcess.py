@@ -60,7 +60,10 @@ def test_load_org_asn(org, outputQueue, inputQueue, asn):
 def test_load_org_IPs(org, outputQueue, inputQueue, subnet):
     whitelist = create_whitelist_instance(outputQueue)
     assert whitelist.load_org_IPs(org) != False
-    assert subnet in whitelist.load_org_IPs(org)
+    # we now store subnets in a dict sorted by the first octet
+    first_octet = subnet.split('.')[0]
+    assert first_octet in whitelist.load_org_IPs(org)
+    assert subnet in whitelist.load_org_IPs(org)[first_octet]
 
 
 @pytest.mark.parametrize(

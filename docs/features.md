@@ -870,6 +870,12 @@ http://asnlookup.com/api/lookup -> For getting ASN info about whitelisted organi
 http://ipinfo.io/json -> For getting your public IP
 https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
 
+By default, slips whitelists alerts from or to any of the above domains, witch means that if an alert was detected 
+to one of the above alerts, slips does not detect it assuming it's a false positive and the connection was made 
+internally by slips.  
+
+
+You can change this behaviour by updating ```whitelist.conf```.
 
 ## Ensembling
 

@@ -35,7 +35,7 @@ class Module(Module, multiprocessing.Process):
         # Start the DB
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('new_letters')
-        self.timeout = 0
+        self.timeout = 0.00000001
 
     def print(self, text, verbose=1, debug=0):
         """

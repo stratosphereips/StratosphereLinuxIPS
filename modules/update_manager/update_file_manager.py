@@ -12,6 +12,7 @@ import datetime
 import sys
 import asyncio
 from datetime import datetime
+from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
     def __init__(self, outputqueue, config, redis_port):
@@ -31,7 +32,10 @@ class UpdateFileManager:
         self.today = time.time()
         # don't store iocs older than 1 week
         self.interval = 604800
+        self.whitelist = Whitelist(outputqueue, config)
         self.slips_logfile = __database__.get_stdfile("stdout")
+        self.org_info_path = 'slips_files/organizations_info/'
+
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -44,8 +48,7 @@ class UpdateFileManager:
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
-            NameError,
-        ):
+            NameError, TypeError, ValueError):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.update_period = 86400   # 1 day
         try:
@@ -621,7 +624,12 @@ class UpdateFileManager:
             self.loaded_ti_files += 1
 
             # done parsing the file, delete it from disk
-            os.remove(full_path)
+            try:
+                os.remove(full_path)
+            except FileNotFoundError:
+                # this happens in integration tests, when another test deletes
+                # the file while this one is updating it, ignore it
+                pass
 
             return True
 
@@ -961,7 +969,12 @@ class UpdateFileManager:
         try:
 
             # Check if the file has any content
-            filesize = os.path.getsize(malicious_data_path)
+            try:
+                filesize = os.path.getsize(malicious_data_path)
+            except FileNotFoundError:
+                # happens inntegration tests, another instance of slips deleted the file
+                return False
+
             if filesize == 0:
                 return False
 
@@ -1350,9 +1363,8 @@ class UpdateFileManager:
                                     ],
                                 }
                             )
-            # Add all loaded malicious ips to the database
+
             __database__.add_ips_to_IoC(malicious_ips_dict)
-            # Add all loaded malicious domains to the database
             __database__.add_domains_to_IoC(malicious_domains_dict)
             __database__.add_ip_range_to_IoC(malicious_ip_ranges)
             return True
@@ -1369,19 +1381,55 @@ class UpdateFileManager:
             self.print(traceback.format_exc(), 0, 1)
             return False
 
+    def check_if_update_org(self, org, file):
+        cached_hash = __database__.get_TI_file_info(file).get('hash','')
+        if utils.get_hash_from_file(file) != cached_hash:
+            return True
+
+    def update_org_files(self):
+        supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+            )
+
+
+        for org in supported_orgs:
+            org_ips = os.path.join(self.org_info_path, org)
+            org_asn = os.path.join(self.org_info_path, f'{org}_asn')
+            org_domains = os.path.join(self.org_info_path, f'{org}_domains')
+            if self.check_if_update_org(org, org_ips):
+                self.whitelist.load_org_IPs(org)
+
+            if self.check_if_update_org(org, org_domains):
+                self.whitelist.load_org_domains(org)
+
+            if self.check_if_update_org(org, org_asn):
+                self.whitelist.load_org_asn(org)
+
+            for file in (org_ips, org_domains, org_asn):
+                info = {
+                    'hash': utils.get_hash_from_file(file),
+                }
+                __database__.set_TI_file_info(file, info)
+
+    def update_ports_info(self):
+        for file in os.listdir('slips_files/ports_info'):
+            file = os.path.join('slips_files/ports_info', file)
+            if self.__check_if_update_local_file(file):
+                if not self.update_local_file(file):
+                    # update failed
+                    self.print(
+                        f'An error occurred while updating {file}. Updating '
+                        f'was aborted.', 0, 1,
+                    )
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
         """
-        try:
-            self.update_period = float(self.update_period)
-        except (TypeError, ValueError):
-            # User does not want to update the malicious IP list.
-            self.print(
-                'Not Updating the remote file of maliciuos IPs and domains'
-                ' because the user did not configure an update time.', 0, 1,
-            )
-            return False
         try:
             if self.update_period <= 0:
                 # User does not want to update the malicious IP list.
@@ -1390,29 +1438,23 @@ class UpdateFileManager:
                     'because the update period is <= 0.', 0, 1,
                 )
                 return False
-
             self.log('Checking if we need to download TI files.')
             # we update different types of files
             # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-            ############### Update slips local files ################
-            for file in os.listdir('slips_files/ports_info'):
-                file = os.path.join('slips_files/ports_info', file)
-                if self.__check_if_update_local_file(file):
-                    if not self.update_local_file(file):
-                        # update failed
-                        self.print(
-                            f'An error occurred while updating {file}. Updating '
-                            f'was aborted.', 0, 1,
-                        )
+            # ############### Update slips local files ################
+            # self.update_ports_info()
+            # self.update_org_files()
+
+
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
-            files_to_download_dics = {}
-            files_to_download_dics.update(self.url_feeds)
-            files_to_download_dics.update(self.ja3_feeds)
-            files_to_download_dics.update(self.ssl_feeds)
+            files_to_download = {}
+            files_to_download.update(self.url_feeds)
+            files_to_download.update(self.ja3_feeds)
+            files_to_download.update(self.ssl_feeds)
 
-            for file_to_download in files_to_download_dics.keys():
+            for file_to_download in files_to_download.keys():
                 file_to_download = file_to_download.strip()
                 file_to_download = self.sanitize(file_to_download)
 

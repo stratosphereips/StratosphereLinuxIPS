@@ -582,7 +582,7 @@ class Helper:
     def set_evidence_data_exfiltration(
         self,
         most_contacted_daddr,
-        total_bytes,
+        total_mbytes,
         times_contacted,
         profileid,
         twid,
@@ -595,12 +595,11 @@ class Helper:
         type_evidence = 'DataUpload'
         category = 'Malware'
         detection_info = most_contacted_daddr
-        bytes_sent_in_MB = int(total_bytes / (10**6))
         ip_identification = __database__.getIPIdentification(
             most_contacted_daddr
         )
-        description = f'possible data upload. {bytes_sent_in_MB} MBs sent to {most_contacted_daddr}.'
-        description += f'{ip_identification}. IP contacted {times_contacted} times in the past 1h'
+        description = f'possible data upload. {total_mbytes} MBs sent to {most_contacted_daddr} '
+        description += f'IP contacted {times_contacted} times in the past 1h. {ip_identification}'
         timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
 
         __database__.setEvidence(
@@ -615,6 +614,7 @@ class Helper:
             source_target_tag=source_target_tag,
             profileid=profileid,
             twid=twid,
+            uid=uid
         )
 
     def set_evidence_bad_smtp_login(

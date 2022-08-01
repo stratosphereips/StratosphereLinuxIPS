@@ -19,6 +19,7 @@ from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
 import os
+import signal
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
@@ -96,6 +97,14 @@ class InputProcess(multiprocessing.Process):
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
+        self.handle_signals()
+
+    def handle_signals(self):
+        # call shutdown_gracefully on sigterm
+        def sig_handler(sig, frame):
+            self.shutdown_gracefully()
+        # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
+        signal.signal(signal.SIGTERM, sig_handler)
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -684,7 +693,11 @@ class InputProcess(multiprocessing.Process):
                 )
                 return False
             self.shutdown_gracefully()
-            return True
+
+            # keep the module idle until slips.py kills it
+            # without this, the module exits but the pid will remain in memory as <defunct>
+            while True:
+                time.sleep(1)
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return False

@@ -499,20 +499,15 @@ class Module(Module, multiprocessing.Process):
                 # Reason is a much shorter description ("Forbidden"), but it is always there
                 else:
                     message = response.reason
-                raise Exception(
-                    f'VT API returned unexpected code: {response.status} - {message}'
+                self.print(
+                    f'VT API returned unexpected code: {response.status} - {message}', 0, 2
                 )
+
 
             # report that API limit is reached, wait one minute and try again
             self.print(
-                'Status code is '
-                + str(response.status)
-                + ' at '
-                + str(time.asctime())
-                + ', query id: '
-                + str(self.counter),
-                0,
-                2,
+                f'Status code is {response.status} at {time.asctime()}, query id: {self.counter}',
+                0,2
             )
             # return empty dict because api call isn't successful
             data = {}

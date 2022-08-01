@@ -33,7 +33,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(self.config, redis_port)
         self.read_configuration()
         self.c1 = __database__.subscribe('new_alert')
-        self.timeout = 0
+        self.timeout = 0.00000001
         self.stop_module = False
 
     def print(self, text, verbose=1, debug=0):

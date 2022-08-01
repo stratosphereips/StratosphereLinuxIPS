@@ -49,7 +49,7 @@ class FileEventHandler(RegexMatchingEventHandler):
             to_send = json.dumps(to_send)
             __database__.publish('remove_old_files', to_send)
             # give inputProc.py time to close the handle and delete the file
-            time.sleep(3)
+            time.sleep(1)
 
     def on_modified(self, event):
         """this will be triggered everytime zeek modifies a log file"""
@@ -66,7 +66,6 @@ class FileEventHandler(RegexMatchingEventHandler):
                 with open(os.path.join(self.monitored_zeek_files, file), 'r') as f:
                     while line := f.readline():
                         if 'termination' in line:
-                            # to use shutdown gracefully we need to get slips.py PID and send it a sigint
                             __database__.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:

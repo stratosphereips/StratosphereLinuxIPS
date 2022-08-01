@@ -2,6 +2,19 @@
 * Slips
 - Run multiple slips instances on demand using (-m), and use redis port 6379 by default.
 - Fix false positive 'DNS resolution without connection' alerts 
+- Faster Slips and reduced memory and CPU consumption
+- Better 'unknown ports' detections 
+- Faster reading of local TI files 
+- Fix docker not working in macOS
+- Fix problem generating the data upload alerts
+- Improve contributing guidelines
+- Update microsoft whitelisted IP ranges
+- Fix problem stopping input process when slips stops
+- Update the locations of GeoIP database in zeek for better zeek detections
+- Fix P2P output dir, now it's the same as alerts.log and slips.log
+- Update our usage of macvendors.com API
+- Whitelist the connections made by slips, so now you won't be alerted when Slips is using virustotal.com or macvendors.com
+
 
 -0.9.2
 * Slips
