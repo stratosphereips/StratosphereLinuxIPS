@@ -62,6 +62,7 @@ class Database(object):
         'new_smtp',
         'new_blame',
         'new_alert',
+        'new_dhcp',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
@@ -84,7 +85,9 @@ class Database(object):
             self.sudo = ''
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
-
+        self.seen_MACs = {}
+        # flag to know if we found the gateway MAC using the most seen MAC method
+        self.gateway_MAC_found = False
 
     def get_redis_server_PID(self, slips_mode, redis_port):
         """
@@ -505,6 +508,42 @@ class Database(object):
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
 
+    def is_gw_mac(self, MAC_info, ip) -> bool:
+        """
+        Check if we are trying to assign the gateway mac to a public IP
+        """
+
+        MAC = MAC_info.get('MAC','')
+        if not validators.mac_address(MAC):
+            return False
+
+        if self.gateway_MAC_found:
+            # gateway ip already set using this function
+            return True if __database__.get_gateway_MAC() == MAC else False
+
+
+        if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
+            # we are sure this is the gw mac,
+            # set it if we don't already have it in the db
+            if not self.get_gateway_MAC():
+                for field, mac_info in MAC_info.items():
+                    self.set_default_gateway(field, mac_info)
+
+                # mark the gw mac as found so we don't look for it again
+                self.gateway_MAC_found = True
+                delattr(self, 'seen_MACs')
+                return True
+
+        # the dst MAC of all public IPs is the dst mac of the gw,
+        # we shouldn't be assigning it to the public IPs
+        ip_obj = ipaddress.ip_address(ip)
+        if not ip_obj.is_private :
+            try:
+                self.seen_MACs[MAC] += 1
+            except KeyError:
+                self.seen_MACs[MAC] = 1
+            return True
+
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
         Used to associate this profile with it's MAC addr
@@ -522,6 +561,9 @@ class Database(object):
         # sometimes we create profiles with the mac address.
         # don't save that in MAC hash
         if validators.mac_address(incoming_ip):
+            return False
+
+        if self.is_gw_mac(MAC_info, incoming_ip):
             return False
 
         # get the ips that belong to this mac
@@ -1934,6 +1976,8 @@ class Database(object):
             # we already have a twid with alerts in this profile, update it
             # the format of twid_alerts is {alert_hash: evidence_IDs}
             twid_alerts: dict = profile_alerts[twid]
+            IDs = False
+            hash = False
             for alert_hash, evidence_IDs in twid_alerts.items():
                 if evidence_ID in evidence_IDs:
                     IDs = evidence_IDs
@@ -1941,9 +1985,12 @@ class Database(object):
                 break
             else:
                 return
-            evidence_IDs = IDs.remove(evidence_ID)
-            alert_ID = f'{profileid}_{twid}_{hash}'
-            self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+
+            if IDs and hash:
+                evidence_IDs = IDs.remove(evidence_ID)
+                alert_ID = f'{profileid}_{twid}_{hash}'
+                self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+
         except KeyError:
             # alert not added to the 'alerts' key yet!
             # this means that this evidence wasn't a part of an alert
@@ -3085,36 +3132,18 @@ class Database(object):
         data = self.r.smembers('zeekfiles')
         return data
 
-    def get_default_gateway(self):
+    def get_gateway_ip(self):
+        return self.r.hget('default_gateway', 'IP')
+
+    def get_gateway_MAC(self):
+        return self.r.hget('default_gateway', 'MAC')
+
+    def set_default_gateway(self, address_type:str, address:str):
         """
-        return a string with the ip or False
+        :param address_type: can either be 'IP' or 'MAC'
+        :param address: can be ip or mac
         """
-        # if we have the gateway in our db , return it
-        stored_gateway = self.r.get('default_gateway')
-
-        if not stored_gateway:
-            # we don't have it in our db, try to get it
-            gateway = False
-            if platform.system() == 'Darwin':
-                route_default_result = subprocess.check_output(
-                    ['route', 'get', 'default']
-                ).decode()
-                try:
-                    gateway = re.search(
-                        r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
-                        route_default_result,
-                    ).group(0)
-                except AttributeError:
-                    gateway = False
-
-            elif platform.system() == 'Linux':
-                route_default_result = re.findall(
-                    r"([\w.][\w.]*'?\w?)",
-                    subprocess.check_output(['ip', 'route']).decode(),
-                )
-                gateway = route_default_result[2]
-
-        return gateway
+        self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]

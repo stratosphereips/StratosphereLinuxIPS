@@ -69,6 +69,7 @@ class ProfilerProcess(multiprocessing.Process):
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
+        self.gw_set = False
         self.separators = {
             'zeek': '',
             'suricata': '',
@@ -1816,9 +1817,10 @@ class ProfilerProcess(multiprocessing.Process):
                 mac_addr = self.column_values.get('mac', False)
                 host_name = self.column_values.get('host_name', False)
                 server_addr = self.column_values.get('server_addr', False)
-
+                epoch_time = self.column_values['starttime'].timestamp()
                 if client_addr:
-                    profileid = get_rev_profile(starttime, client_addr)[0]
+                    profileid = get_rev_profile(epoch_time, client_addr)[0]
+                    
                 if mac_addr:
                     # send this to ip_info module to get vendor info about this MAC
                     to_send = {'MAC': mac_addr, 'profileid': profileid}
@@ -1829,6 +1831,22 @@ class ProfilerProcess(multiprocessing.Process):
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
+
+                    # this channel is used for setting the default gw ip,
+                    # only 1 flow is enough for that
+                    if not self.gw_set:
+                        #  on home networks, the router serves as a simple DHCP server
+                        to_send = {
+                            'uid': self.column_values['uid'],
+                            'server_addr': server_addr,
+                            'client_addr': client_addr,
+                            'profileid': profileid,
+                            'twid': self.get_timewindow(epoch_time, profileid),
+                            'ts': epoch_time
+                        }
+                        __database__.publish('new_dhcp', json.dumps(to_send))
+                        self.gw_set = True
+
             elif 'software' in flow_type:
                 __database__.add_user_agent_to_profile(
                     profileid, self.column_values['unparsed_version']
