@@ -104,3 +104,9 @@ for redis_port in redis_server_ports:
 
 
 print(f'Closed {closed_servers} unused redis-servers')
+
+zeek_dir = os.path.join(os.getcwd(), 'tmp_dir_for_testing')
+try:
+    os.remove(zeek_dir)
+except FileNotFoundError:
+    pass

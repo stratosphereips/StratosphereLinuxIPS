@@ -1,3 +1,4 @@
+import os
 import pytest
 from slips_files.core.inputProcess import InputProcess
 import configparser
@@ -15,6 +16,7 @@ def create_inputProcess_instance(
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
     config = configparser.ConfigParser()
+    zeek_dir = os.path.join(os.getcwd(), 'tmp_dir_for_testing')
     inputProcess = InputProcess(
         outputQueue,
         profilerQueue,
@@ -23,8 +25,9 @@ def create_inputProcess_instance(
         config,
         None,
         'zeek',
-        65531,
+        zeek_dir,
         False,
+        65531,
     )
     inputProcess.bro_timeout = 1
     # override the self.print function to avoid broken pipes
