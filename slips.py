@@ -851,6 +851,21 @@ class Main:
             # opened without root while he's root
             return False
 
+    def remove_server_from_log(self, redis_port):
+        """ deletes the server running on the given pid from running_slips_logs """
+        redis_port = str(redis_port)
+        tmpfile = 'tmp_running_slips_log.txt'
+        with open(self.running_logfile, 'r') as f:
+            with open(tmpfile, 'w') as tmp:
+                all_lines = f.read().splitlines()
+                # delete the line using that port because the info will be replaced
+                for line in all_lines[:-1]:
+                    if redis_port not in line:
+                        tmp.write(f'{line}\n')
+                # write the last line
+                tmp.write(all_lines[-1]+'\n')
+        # replace file with original name
+        os.replace(tmpfile, self.running_logfile)
 
 
     def close_open_redis_servers(self):
