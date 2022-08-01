@@ -431,6 +431,49 @@ class Main:
             self.print('quiet')
 
 
+    def close_all_ports(self, in_logfile=False):
+        """
+        Closes all the redis ports
+        :param in_logfile: if True closes only the ports present in running_slips_logs.txt
+                           if False, closes all the ports in slips supported range of ports
+                           regardless of what's in running_slips_logs.txt
+        """
+
+        if in_logfile:
+            failed_to_close = 0
+            for pid in self.open_servers_PIDs:
+                if not self.kill_redis_server(pid):
+                    failed_to_close += 1
+            killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
+            print(f'Successfully closed {killed_servers} Redis Servers.')
+        else:
+            # closes all the ports in slips supported range of ports
+            for port in range(self.start_port, self.end_port):
+                os.system(
+                        f'redis-server --port {port} --daemonize yes > /dev/null 2>&1'
+                    )
+                time.sleep(0.5)
+                try:
+                    r = redis.StrictRedis(
+                        host='localhost',
+                        port=port,
+                        db=0,
+                        charset='utf-8',
+                        socket_keepalive=True,
+                        retry_on_timeout=True,
+                        decode_responses=True,
+                        health_check_interval=20,
+                    )
+                    r.flushdb()
+                except redis.exceptions.ConnectionError:
+                    continue
+            print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
+
+        os.remove(self.running_logfile)
+        self.terminate_slips()
+        return
+
+
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
         update_manager = UpdateFileManager(self.outputqueue, self.config, self.redis_port)
@@ -796,14 +839,18 @@ class Main:
             while os.kill(pid, 0) != 1:
                 # sigterm is 9
                 os.kill(pid, 9)
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError:
             # ProcessLookupError: process already exited, sometimes this exception is raised
             # but the process is still running, keep trying to kill it
+            self.remove_server_from_log(port)
+            return True
+        except PermissionError:
             # PermissionError happens when the user tries to close redis-servers
             # opened by root while he's not root,
             # or when he tries to close redis-servers
             # opened without root while he's root
-            return True
+            return False
+
 
 
     def close_open_redis_servers(self):
@@ -812,19 +859,18 @@ class Main:
             # fill the dict
             self.get_open_redis_servers()
 
-        if len(self.open_servers_PIDs) == 0:
-            print('No unused open servers to kill.')
-            sys.exit(-1)
-            return
+        # if len(self.open_servers_PIDs) == 0:
+        #     print('No unused open servers to kill.')
+        #     sys.exit(-1)
+        #     return
 
-        # print available shit
-        print(f"You have {len(self.open_servers_PIDs)} open redis servers.\n"
-               f"Choose which one to kill [0,1,2 etc..]\n")
+        print(f"Choose which one to kill [0,1,2 etc..]\n")
+        # open_servers {1: (port,pid),...}}
         open_servers:dict = self.print_open_redis_servers()
 
         server_to_close = input()
 
-        # close all
+        # close all ports in running_slips_logs.txt
         if server_to_close == '0':
             failed_to_close = 0
             for pid in self.open_servers_PIDs:
@@ -1078,7 +1124,6 @@ class Main:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # used in case we need to remove the line using 6379 from running logfile
-        tmpfile = 'tmp.txt'
         with open(self.running_logfile, 'a') as f:
             # add the header lines if the file is newly created
             if f.tell() == 0:
@@ -1096,18 +1141,7 @@ class Main:
             )
 
         if redis_port == 6379:
-            redis_port = str(redis_port)
-            with open(self.running_logfile, 'r') as f:
-                with open(tmpfile, 'w') as tmp:
-                    all_lines = f.read().splitlines()
-                    # delete the line using that port because the info will be replaced
-                    for line in all_lines[:-1]:
-                        if redis_port not in line:
-                            tmp.write(f'{line}\n')
-                    # write the last line
-                    tmp.write(all_lines[-1]+'\n')
-            # replace file with original name
-            os.replace(tmpfile, self.running_logfile)
+            self.remove_server_from_log(6379)
 
 
 
@@ -1570,6 +1604,12 @@ class Main:
                 self.redis_port = int(self.args.port)
             elif self.args.multiinstance:
                 self.redis_port = self.generate_random_redis_port()
+                if not self.redis_port:
+                    # all ports are unavailable
+                    inp = input("Press 0 to close all ports.\n")
+                    if inp == '0':
+                        self.close_all_ports()
+                    self.terminate_slips()
             else:
                 self.redis_port = 6379
 
