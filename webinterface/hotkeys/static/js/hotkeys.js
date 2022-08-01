@@ -12,6 +12,7 @@ Functions:
 */
 let profiles = function () {
     let profiles_table = $('#profiles').DataTable({
+        destroy: true,
         dom: '<"top"f>rt',
         scrollX: false,
         scrollY: "78vh", // hardcoded height to fit the page
@@ -88,6 +89,7 @@ profile.onclick_ips();
     let active_hotkey_table = null;
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
+        destroy: true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
@@ -111,6 +113,7 @@ profile.onclick_ips();
     });
 
     let timeline = $('#table_timeline').DataTable({
+        destroy: true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
@@ -134,6 +137,7 @@ profile.onclick_ips();
     });
 
     let outtuples = $('#table_outtuples').DataTable({
+        destroy: true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
@@ -151,7 +155,7 @@ profile.onclick_ips();
     });
 
     let intuples = $('#table_intuples').DataTable({
-        "bDestroy": true,
+        destroy: true,
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
