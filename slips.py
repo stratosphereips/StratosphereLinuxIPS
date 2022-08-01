@@ -62,8 +62,7 @@ class Main:
         self.running_logfile = 'running_slips_info.txt'
         # slips picks a redis port from the following range
         self.start_port = 32768
-        #todo change this
-        self.end_port = 32770
+        self.end_port = 32850
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
@@ -965,7 +964,6 @@ class Main:
 
             # close all ports in running_slips_logs.txt
             if server_to_close == '0':
-                #todo make it press enter
                 self.close_all_ports(in_logfile=True)
 
             if len(open_servers) > 0:
@@ -1697,8 +1695,8 @@ class Main:
                 self.redis_port = self.generate_random_redis_port()
                 if not self.redis_port:
                     # all ports are unavailable
-                    inp = input("Press 0 to close all ports.\n")
-                    if inp == '0':
+                    inp = input("Press Enter to close all ports.\n")
+                    if inp == '':
                         self.close_all_ports()
                     self.terminate_slips()
             else:
