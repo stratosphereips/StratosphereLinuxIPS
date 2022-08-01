@@ -78,7 +78,13 @@ class Main:
                     self.prepare_zeek_scripts()
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
-                self.zeek_folder = f'./zeek_files_{self.input_information}/'
+                self.prepare_zeek_output_dir()
+
+    def prepare_zeek_output_dir(self):
+        from pathlib import Path
+        without_ext = Path(self.input_information).stem
+        self.zeek_folder = f'./zeek_files_{without_ext}/'
+
 
     def read_configuration(self, config, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
@@ -1834,6 +1840,7 @@ class Main:
                 self.config,
                 self.args.pcapfilter,
                 self.zeek_bro,
+                self.zeek_folder,
                 self.line_type,
                 self.redis_port,
             )

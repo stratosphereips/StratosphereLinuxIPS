@@ -3,13 +3,18 @@ in the command-line, Kalipso uses two javascript libraries: blessed and blessed-
 
 #Kalipso architecture
 There is so-called 'screen' is created every time Kalipso is run. Kalipso fills the screen with
-widgets (box, table, bar, tree, etc.) where all necessary information is displayed. For each type
-of the widget, there is a file in the folder 'kalipso_widgets'. Each widget has 4 basic functionalities:
-(i) show - display the widget on the screen, (ii) hide - hide the widget on the screen, (iii) 
-focus - focus on the widget on the screen, (iv) setData - put data inside the widget. Other functions
-shown in the files of 'kalipos_widgets' are mostly responsible for retrieving data from the
-Redis database and formatting the data to be put in the widget. All widgets needed in Kalipso
-are initialized in *kalipso_screen.js*, and all the keypresses are captured there as well.
+widgets (box, table, bar, tree, etc.) where all necessary information is displayed. 
+
+For each type of the widget, there is a file in the folder 'kalipso_widgets'. Each widget has 4 basic functionalities:
+(i) show - display the widget on the screen, 
+(ii) hide - hide the widget on the screen, 
+(iii) focus - focus on the widget on the screen, 
+(iv) setData - put data inside the widget. 
+
+Other functions shown in the files of 'kalipos_widgets' are mostly responsible for retrieving data from the
+Redis database and formatting the data to be put in the widget. 
+
+All widgets needed in Kalipso are initialized in *kalipso_screen.js*, and all the keypresses are captured there as well.
 The main execution file is *kalipso.js*: libraries are imported and main screen is initialized.
 Kalipso consists of a main page and hotkeys. 
  

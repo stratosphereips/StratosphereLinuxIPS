@@ -46,6 +46,7 @@ class InputProcess(multiprocessing.Process):
             config,
             packet_filter,
             zeek_or_bro,
+            zeek_folder,
             line_type,
             redis_port,
     ):
@@ -63,8 +64,7 @@ class InputProcess(multiprocessing.Process):
         # entire path
         self.given_path = input_information
         # filename only
-        self.given_file = self.given_path.split('/')[-1]
-        self.zeek_folder = f'./zeek_files_{self.given_file}/'
+        self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
         # Read the configuration

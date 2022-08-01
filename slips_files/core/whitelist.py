@@ -15,6 +15,7 @@ class Whitelist:
         self.config = config
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
+        self.ignored_flow_types = ('arp')
 
 
     def print(self, text, verbose=1, debug=0):
@@ -68,7 +69,15 @@ class Whitelist:
             # No asn data for src ip
             pass
 
-    def is_whitelisted_flow(self, column_values) -> bool:
+    def is_ignored_flow_type(self, flow_type) -> bool:
+        """
+        Function reduce the number of checks we make if we fon't need to check this type of flow
+        """
+        if flow_type in self.ignored_flow_types:
+            return True
+
+
+    def is_whitelisted_flow(self, column_values, flow_type) -> bool:
         """
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
@@ -176,6 +185,34 @@ class Whitelist:
                 ):
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
+
+        if whitelisted_mac := __database__.get_whitelist('mac'):
+            # try to get the mac address of the current flow
+            src_mac = column_values.get('src_mac', False)
+            if not src_mac:
+                src_mac = column_values.get('mac', False)
+            if not src_mac:
+                src_mac = __database__.get_mac_addr_from_profile(
+                    f'profile_{saddr}'
+                )[0]
+
+            if src_mac and src_mac in list(whitelisted_mac.keys()):
+                # the src mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[src_mac]['from']
+                if 'src' in from_ or 'both' in from_:
+                    # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
+                    return True
+
+            dst_mac = column_values.get('dst_mac', False)
+            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+                # the dst mac of this flow is whitelisted, but which direction?
+                from_ = whitelisted_mac[dst_mac]['from']
+                if 'dst' in from_ or 'both' in from_:
+                    # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
+                    return True
+
+        if self.is_ignored_flow_type(flow_type):
+            return False
 
         if whitelisted_orgs := __database__.get_whitelist('organizations'):
             # self.print('Check if the organization is whitelisted')
@@ -287,30 +324,7 @@ class Whitelist:
                                     #            f"a subdomain of {org} domain: {domain}")
                                     return True
 
-        if whitelisted_mac := __database__.get_whitelist('mac'):
-            # try to get the mac address of the current flow
-            src_mac = column_values.get('src_mac', False)
-            if not src_mac:
-                src_mac = column_values.get('mac', False)
-            if not src_mac:
-                src_mac = __database__.get_mac_addr_from_profile(
-                    f'profile_{saddr}'
-                )[0]
 
-            if src_mac and src_mac in list(whitelisted_mac.keys()):
-                # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[src_mac]['from']
-                if 'src' in from_ or 'both' in from_:
-                    # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
-                    return True
-
-            dst_mac = column_values.get('dst_mac', False)
-            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
-                # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[dst_mac]['from']
-                if 'dst' in from_ or 'both' in from_:
-                    # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
-                    return True
 
         return False
 
