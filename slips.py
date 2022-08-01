@@ -854,7 +854,9 @@ class Main:
 
 
     def close_open_redis_servers(self):
-        """Function to close unused open redis-servers"""
+        """
+        Function to close unused open redis-servers based on what the user choose
+        """
         if not hasattr(self, 'open_servers_PIDs'):
             # fill the dict
             self.get_open_redis_servers()
@@ -872,22 +874,20 @@ class Main:
 
         # close all ports in running_slips_logs.txt
         if server_to_close == '0':
-            failed_to_close = 0
-            for pid in self.open_servers_PIDs:
-                if not self.kill_redis_server(pid):
-                    failed_to_close += 1
-            killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
-            print(f'Killed {killed_servers} Redis Servers.')
-            os.remove(self.running_logfile)
-            sys.exit(-1)
+            self.close_all_ports(in_logfile=True)
 
-
-        try:
-            pid = server_to_close[server_to_close][1]
-            if self.kill_redis_server(pid):
-                self.print(f"Killed redis server at port {self.open_servers_PIDs[pid]}.")
-        except KeyError:
-            print(f"Invalid input {server_to_close}")
+        if len(open_servers) > 0:
+            try:
+                # killing server at
+                pid = open_servers[int(server_to_close)][1]
+                port = open_servers[int(server_to_close)][0]
+                if self.kill_redis_server(pid):
+                    print(f"Killed redis server at port {port}.")
+                else:
+                    print(f"Redis server running on port {port} "
+                          f"is either already killed or you don't have enough permission to kill it.")
+            except (KeyError, ValueError):
+                print(f"Invalid input {server_to_close}")
 
         self.terminate_slips()
 
