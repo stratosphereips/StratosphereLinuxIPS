@@ -818,6 +818,19 @@ class Main:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
 
+    def get_port_of_redis_server(self, pid: str):
+        """
+        returns the port of the redis running on this pid
+        """
+        cmd = 'ps aux | grep redis-server'
+        cmd_output = os.popen(cmd).read()
+        for line in cmd_output.splitlines():
+            if str(pid) in line:
+                port = line.split(':')[-1]
+                return port
+        return False
+
+
     def flush_redis_server(self, pid: str='', port: str=''):
         """
         Flush the redis server on this pid, only 1 param should be given, pid or port
