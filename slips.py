@@ -444,35 +444,21 @@ class Main:
         if in_logfile:
             failed_to_close = 0
             for pid in self.open_servers_PIDs:
-                if self.flush_redis_server(pid) and self.kill_redis_server(pid):
+                if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
                     port = self.open_servers_PIDs[pid]
-                    self.remove_server_from_log(port)
+                    # self.remove_server_from_log(port)
                 else:
                     failed_to_close += 1
             killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
             print(f'Successfully closed {killed_servers} Redis Servers.')
         else:
-            #todo does this function kill all the opened pids???
             # closes all the ports in slips supported range of ports
-            for port in range(self.start_port, self.end_port):
-                os.system(
-                        f'redis-server --port {port} --daemonize yes > /dev/null 2>&1'
-                    )
-                time.sleep(0.5)
-                try:
-                    r = redis.StrictRedis(
-                        host='localhost',
-                        port=port,
-                        db=0,
-                        charset='utf-8',
-                        socket_keepalive=True,
-                        retry_on_timeout=True,
-                        decode_responses=True,
-                        health_check_interval=20,
-                    )
-                    r.flushdb()
-                except redis.exceptions.ConnectionError:
-                    continue
+            for port in range(self.start_port, self.end_port + 1):
+                pid = self.get_pid_of_redis_server(port)
+                if pid:
+                    self.flush_redis_server(pid=pid)
+                    self.kill_redis_server(pid)
+
             print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
 
         try:
@@ -821,19 +807,28 @@ class Main:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
 
 
-    def flush_redis_server(self, pid):
-        """
-        Flush the redis server on this pid
+    def flush_redis_server(self, pid: str='', port: str=''):
         """
         port = self.open_servers_PIDs[pid]
         # clear the server opened on this port
         try:
-            #todo this function connects to the server even if it was already killed!!
-            if connected := __database__.connect_to_redis_server(port):
-                __database__.r.flushall()
-                __database__.r.flushdb()
-                __database__.r.script_flush()
-                return True
+            # if connected := __database__.connect_to_redis_server(port):
+            # noinspection PyTypeChecker
+            #todo move this to the db
+            r = redis.StrictRedis(
+                    host='localhost',
+                    port=port,
+                    db=0,
+                    charset='utf-8',
+                    socket_keepalive=True,
+                    decode_responses=True,
+                    retry_on_timeout=True,
+                    health_check_interval=20,
+                    )
+            r.flushall()
+            r.flushdb()
+            r.script_flush()
+            return True
         except redis.exceptions.ConnectionError:
             # server already killed!
             return False
