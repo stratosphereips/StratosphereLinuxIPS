@@ -886,44 +886,6 @@ class UpdateFileManager:
             print(traceback.format_exc())
             return False
 
-    def detect_data_type(self, data):
-        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
-
-        data = data.strip()
-        try:
-            ipaddress.IPv4Address(data)
-            # Is IPv4!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            pass
-        # Is it ipv6?
-        try:
-            ipaddress.IPv6Address(data)
-            # Is IPv6!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # It does not look as IP address.
-            pass
-
-        try:
-            ipaddress.ip_network(data)
-            return 'ip_range'
-        except ValueError:
-            pass
-
-        if validators.domain(data):
-            return 'domain'
-        # some ti files have / at the end of domains, remove it
-        if data.endswith('/'):
-            data = data[:-1]
-        domain = data
-        if domain.startswith('http://'):
-            data = data[7:]
-        if domain.startswith('https://'):
-            data = data[8:]
-        if validators.domain(data):
-            return 'domain'
-
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
         # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]['tags']
@@ -1046,7 +1008,7 @@ class UpdateFileManager:
         """
         for column_idx in range(amount_of_columns):
             # Check if we support this type.
-            data_type = self.detect_data_type(line_fields[column_idx])
+            data_type = utils.detect_data_type(line_fields[column_idx])
             # found a supported type
             if data_type:
                 return column_idx
@@ -1193,7 +1155,7 @@ class UpdateFileManager:
 
                     data_file_name = malicious_data_path.split('/')[-1]
 
-                    data_type = self.detect_data_type(data)
+                    data_type = utils.detect_data_type(data)
                     if data_type == None:
                         self.print(
                             'The data {} is not valid. It was found in {}.'.format(

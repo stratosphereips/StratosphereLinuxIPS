@@ -10,7 +10,7 @@ import json
 import time
 import platform
 import os
-
+import ipaddress
 
 class Utils(object):
     name = 'utils'
@@ -47,6 +47,45 @@ class Utils(object):
          )
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S'
+
+
+    def detect_data_type(self, data):
+        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
+
+        data = data.strip()
+        try:
+            ipaddress.IPv4Address(data)
+            # Is IPv4!
+            return 'ip'
+        except ipaddress.AddressValueError:
+            pass
+        # Is it ipv6?
+        try:
+            ipaddress.IPv6Address(data)
+            # Is IPv6!
+            return 'ip'
+        except ipaddress.AddressValueError:
+            # It does not look as IP address.
+            pass
+
+        try:
+            ipaddress.ip_network(data)
+            return 'ip_range'
+        except ValueError:
+            pass
+
+        if validators.domain(data):
+            return 'domain'
+        # some ti files have / at the end of domains, remove it
+        if data.endswith('/'):
+            data = data[:-1]
+        domain = data
+        if domain.startswith('http://'):
+            data = data[7:]
+        if domain.startswith('https://'):
+            data = data[8:]
+        if validators.domain(data):
+            return 'domain'
 
     def drop_root_privs(self):
         """
