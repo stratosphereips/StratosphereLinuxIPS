@@ -233,6 +233,19 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Store in our local cache how many dips were there:
         self.cache_det_thresholds[cache_key] = amount_of_dports
 
+
+    def calculate_confidence(self, pkts_sent):
+        if pkts_sent > 10:
+            confidence = 1
+        elif pkts_sent == 0:
+            # if the sum of all pkts sent TO these IPs on these dports
+            # are 0, then this is not a portscan
+            raise ValueError
+        else:
+            # Between threshold and 10 pkts compute a kind of linear grow
+            confidence = pkts_sent / 10.0
+        return confidence
+
     def check_vertical_portscan(self, profileid, twid):
         # Get the list of dstips that we connected as client using TCP not established, and their ports
         direction = 'Dst'
@@ -280,15 +293,10 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     # Get the total amount of pkts sent to the same port to all IPs
                     pkts_sent = sum(dstports[dport] for dport in dstports)
-                    if pkts_sent > 10:
-                        confidence = 1
-                    elif pkts_sent == 0:
-                        # if the sum of all pkts sent TO these IPs on these dports
-                        # are 0, then this is not a portscan
+                    try:
+                        confidence = self.calculate_confidence(pkts_sent)
+                    except ValueError:
                         return
-                    else:
-                        # Between threshold and 10 pkts compute a kind of linear grow
-                        confidence = pkts_sent / 10.0
                     # Description
                     description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
