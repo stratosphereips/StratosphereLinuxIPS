@@ -174,6 +174,7 @@ profile.onclick_ips();
 
     let alerts = $('#table_alerts').DataTable({
         "bDestroy": true,
+        select: true,
         dom: custom_dom,
         scrollX: false,
         columns: [
