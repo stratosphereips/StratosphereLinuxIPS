@@ -46,7 +46,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips_threshold = 6
         # The minimum amount of ports to scan in vertical scan
-        self.port_scan_minimum_dports_threshold = 6
+        self.port_scan_minimum_dports_threshold = 5
+        # time in seconds to wait before alerting port scan
+        self.time_to_wait = 10
+        # this flag will be true after the first portscan alert
+        self.alerted_once = False
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -184,6 +189,50 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # Store in our local cache how many dips were there:
                     self.cache_det_thresholds[cache_key] = amount_of_dips
 
+    def set_evidence_portscan(
+            self,
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            pkts_sent,
+            source_target_tag,
+            protocol,
+            profileid,
+            twid,
+            uid,
+            cache_key,
+            amount_of_dports,
+    ):
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            conn_count=pkts_sent,
+            source_target_tag=source_target_tag,
+            proto=protocol,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+        # Set 'malicious' label in the detected profile
+        __database__.set_profile_module_label(
+            profileid, type_evidence, self.malicious_label
+        )
+        self.print(description, 3, 0)
+        # Store in our local cache how many dips were there:
+        self.cache_det_thresholds[cache_key] = amount_of_dports
+
     def check_vertical_portscan(self, profileid, twid):
         # Get the list of dstips that we connected as client using TCP not established, and their ports
         direction = 'Dst'
@@ -213,18 +262,22 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # Key
                 key = 'dstip' + ':' + dstip + ':' + type_evidence
                 # We detect a scan every Threshold. So we detect when there is 6, 9, 12, etc. dports per dip.
-                # The idea is that after X dips we detect a connection. And then we 'reset' the counter until we see again X more.
+                # The idea is that after X dips we detect a connection. And then we 'reset' the counter
+                # until we see again X more.
                 cache_key = f'{profileid}:{twid}:{key}'
                 try:
                     prev_amount_dports = self.cache_det_thresholds[cache_key]
                 except KeyError:
                     prev_amount_dports = 0
-                # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key, prev_amount_dports, amount_of_dports))
+                # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
+                # prev_amount_dports, amount_of_dports))
                 if (
                         amount_of_dports % self.port_scan_minimum_dports_threshold
                         == 0
                         and prev_amount_dports < amount_of_dports
                 ):
+
+
                     # Get the total amount of pkts sent to the same port to all IPs
                     pkts_sent = sum(dstports[dport] for dport in dstports)
                     if pkts_sent > 10:
@@ -245,29 +298,28 @@ class PortScanProcess(Module, multiprocessing.Process):
                     )
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
-                    __database__.setEvidence(
-                        type_evidence,
-                        type_detection,
-                        detection_info,
-                        threat_level,
-                        confidence,
-                        description,
-                        timestamp,
-                        category,
-                        conn_count=pkts_sent,
-                        source_target_tag=source_target_tag,
-                        proto=protocol,
-                        profileid=profileid,
-                        twid=twid,
-                        uid=uid,
-                    )
-                    # Set 'malicious' label in the detected profile
-                    __database__.set_profile_module_label(
-                        profileid, type_evidence, self.malicious_label
-                    )
-                    self.print(description, 3, 0)
-                    # Store in our local cache how many dips were there:
-                    self.cache_det_thresholds[cache_key] = amount_of_dports
+
+
+                    if self.alerted_once == False:
+                        self.alerted_once = True
+                        self.set_evidence_portscan(
+                            type_evidence,
+                            type_detection,
+                            detection_info,
+                            threat_level,
+                            confidence,
+                            description,
+                            timestamp,
+                            category,
+                            pkts_sent,
+                            source_target_tag,
+                            protocol,
+                            profileid,
+                            twid,
+                            uid,
+                            cache_key,
+                            amount_of_dports,
+                        )
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
 
