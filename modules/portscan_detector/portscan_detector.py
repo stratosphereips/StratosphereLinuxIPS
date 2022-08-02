@@ -223,6 +223,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             uid,
             cache_key,
             amount_of_dports,
+            dstip
     ):
 
         __database__.setEvidence(
@@ -345,6 +346,55 @@ class PortScanProcess(Module, multiprocessing.Process):
                             amount_of_dports,
                             dstip
                         )
+                    else:
+                        # after alerting once, wait 10s to see if more packets/flows are coming
+                        self.pending_evidence.put(
+                            {
+                                'type_evidence':type_evidence,
+                                'type_detection':type_detection,
+                                'detection_info':detection_info,
+                                'threat_level':threat_level,
+                                'confidence':confidence,
+                                'description':description,
+                                'timestamp':timestamp,
+                                'category':category,
+                                'pkts_sent':pkts_sent,
+                                'source_target_tag':source_target_tag,
+                                'protocol':protocol,
+                                'profileid':profileid,
+                                'twid':twid,
+                                'uid':uid,
+                                'cache_key':cache_key,
+                                'amount_of_dports':amount_of_dports,
+                                'dstip':dstip
+                            }
+                        )
+                        # self.timer_thread = threading.Thread(
+                        #     target=self.wait_for_more_scans,
+                        #     daemon=True,
+                        #     args=(
+                        #             type_evidence,
+                        #             type_detection,
+                        #             detection_info,
+                        #             threat_level,
+                        #             confidence,
+                        #             description,
+                        #             timestamp,
+                        #             category,
+                        #             pkts_sent,
+                        #             source_target_tag,
+                        #             protocol,
+                        #             profileid,
+                        #             twid,
+                        #             uid,
+                        #             cache_key,
+                        #             amount_of_dports
+                        #         )
+                        # )
+                        self.timer_thread.start()
+                        # todo what if the thread started twice in a row
+
+
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
 
