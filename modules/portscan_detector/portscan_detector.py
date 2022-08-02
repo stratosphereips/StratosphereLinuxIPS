@@ -202,7 +202,92 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
         This thread waits for 10s then checks if more scans happened to modify the alert
         """
-        #todo
+
+        # this evidence is the one triggered this thread
+        evidence:dict = self.pending_evidence.get()
+        time.sleep(self.time_to_wait)
+        # this evidence came after triggering the thread
+        new_evidence:dict = self.pending_evidence.get()
+
+        #unpack the old evidence (the one triggered the thread)
+        type_evidence= evidence['type_evidence']
+        type_detection= evidence['type_detection']
+        detection_info = evidence['detection_info']
+        threat_level = evidence['threat_level']
+        confidence = evidence['confidence']
+        description = evidence['description']
+        timestamp = evidence['timestamp']
+        category = evidence['category']
+        pkts_sent = evidence['pkts_sent']
+        source_target_tag = evidence['source_target_tag']
+        protocol = evidence['protocol']
+        profileid = evidence['profileid']
+        twid = evidence['twid']
+        uid = evidence['uid']
+        cache_key = evidence['cache_key']
+        amount_of_dports = evidence['amount_of_dports']
+        dstip = evidence['dstip']
+
+        if new_evidence:
+            # These are the variables of the combined evidence we are generating
+            timestamp = new_evidence['timestamp']
+            twid = new_evidence['twid']
+            uid = new_evidence['uid']
+            cache_key = new_evidence['cache_key']
+
+            # should be the same as the old evidence, useless
+            # type_evidence2 = new_evidence['type_evidence']
+            # type_detection2 = new_evidence['type_detection']
+            # detection_info2 = new_evidence['detection_info']
+            # category2 = new_evidence['category']
+            # source_target_tag2 = new_evidence['source_target_tag']
+            # description2 = new_evidence['description']
+            # confidence2 = new_evidence['confidence']
+            # threat_level2 = new_evidence['threat_level']
+
+            if (
+                    dstip == new_evidence['dstip']
+                    and profileid == new_evidence['profileid']
+                    and protocol == new_evidence['protocol']
+            ):
+
+                # todo make sure the srcip and dstipo are the same in the 2 alerts
+                # todo handle the case if they are not the same
+
+                # accumulate the new amount of dports and pkts sent
+                pkts_sent2 = new_evidence['pkts_sent']
+                amount_of_dports2 = new_evidence['amount_of_dports']
+                pkts_sent = int(pkts_sent2) + int(pkts_sent)
+                amount_of_dports = int(amount_of_dports) + int(amount_of_dports2)
+
+                confidence = self.calculate_confidence(int(pkts_sent))
+
+        srcip = profileid.split(self.fieldseparator)[1]
+        description = (
+                    f'new vertical port scan to IP {dstip} from {srcip}. '
+                    f'Total {amount_of_dports} dst ports of protocol {protocol}. '
+                    f'Not Established. Tot pkts sent all ports: {pkts_sent}. '
+                    f'Confidence: {confidence}'
+                )
+        self.set_evidence_portscan(
+                type_evidence,
+                type_detection,
+                detection_info,
+                threat_level,
+                confidence,
+                description,
+                timestamp,
+                category,
+                pkts_sent,
+                source_target_tag,
+                protocol,
+                profileid,
+                twid,
+                uid,
+                cache_key,
+                amount_of_dports
+        )
+
 
 
     def set_evidence_portscan(
@@ -393,6 +478,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # )
                         self.timer_thread.start()
                         # todo what if the thread started twice in a row
+
 
 
 
