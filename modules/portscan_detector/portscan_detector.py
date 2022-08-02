@@ -6,8 +6,11 @@ from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
+import time
 import ipaddress
 import json
+import threading
+from multiprocessing import Queue
 
 # Port Scan Detector Process
 class PortScanProcess(Module, multiprocessing.Process):
@@ -49,9 +52,15 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.port_scan_minimum_dports_threshold = 5
         # time in seconds to wait before alerting port scan
         self.time_to_wait = 10
+        # list of tuples, each tuple is the args to setevidence
+        self.pending_evidence = Queue.Queue()
+
         # this flag will be true after the first portscan alert
         self.alerted_once = False
-
+        self.timer_thread = threading.Thread(
+                                target=self.wait_for_more_scans,
+                                daemon=True
+                            )
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -188,6 +197,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.print(description, 3, 0)
                     # Store in our local cache how many dips were there:
                     self.cache_det_thresholds[cache_key] = amount_of_dips
+
+    def wait_for_more_scans(self):
+        """
+        This thread waits for 10s then checks if more scans happened to modify the alert
+        """
+        #todo
+
 
     def set_evidence_portscan(
             self,
@@ -327,6 +343,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             uid,
                             cache_key,
                             amount_of_dports,
+                            dstip
                         )
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
