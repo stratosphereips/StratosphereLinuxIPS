@@ -127,7 +127,7 @@ class Module(Module, multiprocessing.Process):
             tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
 
         if tags != '':
-            description += f' tags={tags}'
+            # description += f' tags={tags}'
             source_target_tag = tags.capitalize()
         else:
             source_target_tag = 'BlacklistedIP'
@@ -585,7 +585,7 @@ class Module(Module, multiprocessing.Process):
 
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if ip :
+                    if ip:
                         ip_obj = ipaddress.ip_address(ip)
                         if not (
                                 ip_obj.is_multicast

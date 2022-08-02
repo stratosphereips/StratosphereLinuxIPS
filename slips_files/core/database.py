@@ -2171,9 +2171,15 @@ class Database(object):
                     + current_data['threatintelligence']['description']
                     + ', '
                 )
+
+                tags = current_data['threatintelligence'].get('tags','[]')
+                # remove brackets
+                tags = tags.replace(']','').replace('[','').replace("'",'')
+                tags = tags.split(',')
+
                 identification += (
-                    'Tags: '
-                    + current_data['threatintelligence'].get('tags','')
+                    'tags='
+                    + ", ".join(tags)
                     + ', '
                 )
 
