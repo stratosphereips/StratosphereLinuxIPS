@@ -1,7 +1,7 @@
 -0.9.4
 * Slips
 - Fix the way we update some TI files
-- 
+- Add a new web interface
 
 -0.9.3
 * Slips
