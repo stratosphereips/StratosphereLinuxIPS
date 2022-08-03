@@ -12,7 +12,7 @@ import json
 import threading
 from multiprocessing import Queue
 
-# Port Scan Detector Process
+
 class PortScanProcess(Module, multiprocessing.Process):
     """
     A class process to find port scans
@@ -59,9 +59,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.alerted_once_vertical_ps = False
         self.alerted_once_horizontal_ps = False
         self.timer_thread = threading.Thread(
-                                target=self.wait_for_more_scans,
+                                target=self.wait_for_vertical_scans,
                                 daemon=True
-                            )
+        )
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -110,7 +111,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             )
             # For each port, see if the amount is over the threshold
             for dport in data.keys():
-                ### PortScan Type 2. Direction OUT
+                # PortScan Type 2. Direction OUT
                 dstips = data[dport]['dstips']
                 # this is the list of dstips that have dns resolution, we will remove them from the dstips later
                 dstips_to_discard = []
@@ -175,22 +176,18 @@ class PortScanProcess(Module, multiprocessing.Process):
                             )
                         )
 
-
-
-
-    def wait_for_more_scans(self):
+    def wait_for_vertical_scans(self):
         """
-        This thread waits for 10s then checks if more scans happened to modify the alert
+        This thread waits for 10s then checks if more vertical scans happened to modify the alert
         """
         while True:
             # this evidence is the one that triggered this thread
             try:
-                evidence:dict = self.pending_vertical_ps_evidence.get(timeout=0.5)
+                evidence: dict = self.pending_vertical_ps_evidence.get(timeout=0.5)
             except:
                 # nothing in queue
                 time.sleep(5)
                 continue
-
 
             # unpack the old evidence (the one triggered the thread)
             timestamp, \
@@ -201,7 +198,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 uid, \
                 amount_of_dports, \
                 dstip = evidence
-
 
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
@@ -221,7 +217,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     profileid2, \
                     twid, \
                     uid, \
-                    amount_of_dports2 , \
+                    amount_of_dports2, \
                     dstip2 = new_evidence
 
                 if (
@@ -234,7 +230,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # we shouldn't accumulate
                     amount_of_dports = amount_of_dports2
                     pkts_sent = pkts_sent2
-                    continue
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # should be the same as the old evidence
@@ -245,10 +240,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                         profileid2,
                         twid,
                         uid,
-                        amount_of_dports2
+                        amount_of_dports2,
+                        dstip2
                     )
-                # tell the queue to remove the pending evidence
-                self.pending_vertical_ps_evidence.task_done()
 
             self.set_evidence_vertical_portscan(
                 timestamp,
@@ -260,9 +254,84 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dports,
                 dstip
             )
+        # todo we are not detecting second port scans
+
+    def wait_for_horizontal_scans(self):
+        """
+        This thread waits for 10s then checks if more horizontal scans happened to modify the alert
+        """
+        while True:
+            try:
+                # this evidence is the one that triggered this thread
+                evidence: dict = self.pending_horizontal_ps_evidence.get(timeout=0.5)
+            except:
+                # nothing in queue
+                time.sleep(5)
+                continue
+
+            # unpack the old evidence (the one triggered the thread)
+            timestamp, \
+                pkts_sent, \
+                protocol, \
+                profileid, \
+                twid, \
+                uid, \
+                dport, \
+                amount_of_dips = evidence
+            # wait 10s if a new evidence arrived
+            time.sleep(self.time_to_wait)
+
+            while True:
+                try:
+                    new_evidence = self.pending_horizontal_ps_evidence.get(timeout=0.5)
+                except:
+                    # queue is empty
+                    break
+
+                # These are the variables of the combined evidence we are generating
+                timestamp, \
+                    pkts_sent2, \
+                    protocol2, \
+                    profileid2, \
+                    twid, \
+                    uid, \
+                    dport2, \
+                    amount_of_dips2 = new_evidence
+
+                if (
+                        dport == dport2
+                        and profileid == profileid2
+                        and protocol == protocol2
+                ):
+
+                    # the last evidence contains the sum of all the dips and pkts sent found so far,
+                    # we shouldn't accumulate
+                    amount_of_dips = amount_of_dips2
+                    pkts_sent = pkts_sent2
+                else:
+                    # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
+                    # should be the same as the old evidence
+                    self.set_evidence_horizontal_portscan(
+                            timestamp,
+                            pkts_sent2,
+                            protocol2,
+                            profileid2,
+                            twid,
+                            uid,
+                            dport,
+                            amount_of_dips2
+                        )
+            self.set_evidence_horizontal_portscan(
+                timestamp,
+                pkts_sent,
+                protocol,
+                profileid,
+                twid,
+                uid,
+                dport,
+                amount_of_dips
+            )
         #todo we are not detecting second port scans
-
-
 
     def set_evidence_horizontal_portscan(
             self,
