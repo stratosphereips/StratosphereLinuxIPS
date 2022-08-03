@@ -248,27 +248,25 @@ class PortScanProcess(Module, multiprocessing.Process):
                 cache_key = new_evidence['cache_key']
                 pkts_sent2 = new_evidence['pkts_sent']
                 amount_of_dports2 = new_evidence['amount_of_dports']
-                # should be the same as the old evidence, useless
-                # type_evidence2 = new_evidence['type_evidence']
-                # type_detection2 = new_evidence['type_detection']
-                # detection_info2 = new_evidence['detection_info']
-                # category2 = new_evidence['category']
-                # source_target_tag2 = new_evidence['source_target_tag']
-                # description2 = new_evidence['description']
-                # confidence2 = new_evidence['confidence']
-                # threat_level2 = new_evidence['threat_level']
+                protocol2 = new_evidence['protocol']
+                dstip2 = new_evidence['dstip']
+                profileid2 = new_evidence['profileid']
+                confidence2 = new_evidence['confidence']
+
                 if (
-                        dstip == new_evidence['dstip']
-                        and profileid == new_evidence['profileid']
-                        and protocol == new_evidence['protocol']
+                        dstip == dstip2
+                        and profileid == profileid2
+                        and protocol == protocol2
                 ):
 
                     # todo make sure the srcip and dstipo are the same in the 2 alerts
                     # todo handle the case if they are not the same
-                    # accumulate the new amount of dports and pkts sent
-                    pkts_sent = int(pkts_sent2) + int(pkts_sent)
-                    amount_of_dports = int(amount_of_dports2) + int(amount_of_dports)
-                    confidence = self.calculate_confidence(int(pkts_sent))
+
+                    # the last evidence contains the sum of all the dports and pkts sent found so far,
+                    # we shouldn't accumulate
+                    amount_of_dports = amount_of_dports2
+                    pkts_sent = pkts_sent2
+                    confidence = confidence2
                     continue
                 else:
                     #todo
