@@ -351,13 +351,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         role = 'Client'
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
-        # Type of evidence
-        type_detection = 'srcip'
         type_evidence = 'PortScanType1'
-        source_target_tag = 'Recon'
-        # Threat level
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
         for protocol in ('TCP', 'UDP'):
             data = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
@@ -365,46 +359,29 @@ class PortScanProcess(Module, multiprocessing.Process):
             # For each dstip, see if the amount of ports connections is over the threshold
             for dstip in data.keys():
                 ### PortScan Type 1. Direction OUT
-                # dstports is a dict
-                dstports = data[dstip]['dstports']
+                dstports: dict = data[dstip]['dstports']
                 amount_of_dports = len(dstports)
-                srcip = profileid.split(self.fieldseparator)[1]
-                detection_info = srcip
-                # Key
-                key = 'dstip' + ':' + dstip + ':' + type_evidence
+                cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
+                prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
+                # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
+                # prev_amount_dports, amount_of_dports))
+
                 # We detect a scan every Threshold. So we detect when there is 6, 9, 12, etc. dports per dip.
                 # The idea is that after X dips we detect a connection. And then we 'reset' the counter
                 # until we see again X more.
-                cache_key = f'{profileid}:{twid}:{key}'
-                try:
-                    prev_amount_dports = self.cache_det_thresholds[cache_key]
-                except KeyError:
-                    prev_amount_dports = 0
-                # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
-                # prev_amount_dports, amount_of_dports))
                 if (
-                        amount_of_dports % self.port_scan_minimum_dports_threshold
-                        == 0
+                        amount_of_dports % self.port_scan_minimum_dports_threshold == 0
                         and prev_amount_dports < amount_of_dports
                 ):
-
-
                     # Get the total amount of pkts sent to the same port to all IPs
                     pkts_sent = sum(dstports[dport] for dport in dstports)
                     try:
                         confidence = self.calculate_confidence(pkts_sent)
                     except ValueError:
                         return
-                    # Description
-                    description = (
-                        f'new vertical port scan to IP {dstip} from {srcip}. '
-                        f'Total {amount_of_dports} dst ports of protocol {protocol}. '
-                        f'Not Established. Tot pkts sent all ports: {pkts_sent}. '
-                        f'Confidence: {confidence}'
-                    )
+
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
-
 
                     if self.alerted_once == False:
                         self.alerted_once = True
