@@ -204,7 +204,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             # this evidence is the one that triggered this thread
             try:
-                evidence:dict = self.pending_evidence.get()
+                evidence:dict = self.pending_evidence.get(timeout=0.5)
             except:
                 # nothing in queue
                 time.sleep(5)
@@ -235,7 +235,8 @@ class PortScanProcess(Module, multiprocessing.Process):
 
             while True:
                 try:
-                    new_evidence = self.pending_evidence.get()
+                    # use a timeout because sometime get() never returns
+                    new_evidence = self.pending_evidence.get(timeout=0.5)
                 except:
                     # queue is empty
                     break
@@ -272,6 +273,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                 else:
                     #todo
                     pass
+                # tell the queue to remove the pending evidence
+                self.pending_evidence.task_done()
+
 
             srcip = profileid.split(self.fieldseparator)[1]
             description = (
