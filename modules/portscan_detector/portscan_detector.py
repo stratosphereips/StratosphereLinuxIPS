@@ -53,9 +53,11 @@ class PortScanProcess(Module, multiprocessing.Process):
         # time in seconds to wait before alerting port scan
         self.time_to_wait = 10
         # list of tuples, each tuple is the args to setevidence
-        self.pending_evidence = Queue()
+        self.pending_vertical_ps_evidence = Queue()
+        self.pending_horizontal_ps_evidence = Queue()
         # this flag will be true after the first portscan alert
-        self.alerted_once = False
+        self.alerted_once_vertical_ps = False
+        self.alerted_once_horizontal_ps = False
         self.timer_thread = threading.Thread(
                                 target=self.wait_for_more_scans,
                                 daemon=True
@@ -125,16 +127,15 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dips = len(dstips)
                 # If we contacted more than 3 dst IPs on this port with not established
                 # connections, we have evidence.
-                # self.print('Horizontal Portscan check. Amount of dips: {}.
-                # Threshold=3'.format(amount_of_dips), 3, 0)
+
+                cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
+                prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
+                # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
 
                 # We detect a scan every Threshold. So, if threshold is 3,
                 # we detect when there are 3, 6, 9, 12, etc. dips per port.
                 # The idea is that after X dips we detect a connection. And then
                 # we 'reset' the counter until we see again X more.
-                cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
-                prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
-                # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
                 if (
                     amount_of_dips % self.port_scan_minimum_dips_threshold == 0
                     and prev_amount_dips < amount_of_dips
@@ -145,16 +146,36 @@ class PortScanProcess(Module, multiprocessing.Process):
                         'uid'
                     ]   # first uid in the dictionary
                     timestamp = next(iter(dstips.values()))['stime']
-                    self.set_evidence_horizontal_portscan(
-                        timestamp,
-                        pkts_sent,
-                        protocol,
-                        profileid,
-                        twid,
-                        uid,
-                        dport,
-                        amount_of_dips
-                    )
+
+
+                    if not self.alerted_once_horizontal_ps:
+                        self.alerted_once_horizontal_ps = True
+                        self.set_evidence_horizontal_portscan(
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            uid,
+                            dport,
+                            amount_of_dips
+                        )
+                    else:
+                        # after alerting once, wait 10s to see if more packets/flows are coming
+                        self.pending_horizontal_ps_evidence.put(
+                            (
+                                timestamp,
+                                pkts_sent,
+                                protocol,
+                                profileid,
+                                twid,
+                                uid,
+                                dport,
+                                amount_of_dips
+                            )
+                        )
+
+
 
 
     def wait_for_more_scans(self):
@@ -164,7 +185,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             # this evidence is the one that triggered this thread
             try:
-                evidence:dict = self.pending_evidence.get(timeout=0.5)
+                evidence:dict = self.pending_vertical_ps_evidence.get(timeout=0.5)
             except:
                 # nothing in queue
                 time.sleep(5)
@@ -187,7 +208,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
             while True:
                 try:
-                    new_evidence = self.pending_evidence.get(timeout=0.5)
+                    new_evidence = self.pending_vertical_ps_evidence.get(timeout=0.5)
                 except:
                     # queue is empty
                     break
@@ -227,7 +248,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         amount_of_dports2
                     )
                 # tell the queue to remove the pending evidence
-                self.pending_evidence.task_done()
+                self.pending_vertical_ps_evidence.task_done()
 
             self.set_evidence_vertical_portscan(
                 timestamp,
@@ -267,10 +288,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         port_info = port_info if port_info else ""
         confidence = self.calculate_confidence(pkts_sent)
         description = (
-                        f'horizontal port scan to port {port_info} {portproto}. '
-                        f'From {srcip} to {amount_of_dips} unique dst IPs. '
-                        f'Tot pkts: {pkts_sent}. Threat Level: {threat_level}. Confidence: {confidence}'
-                    )
+            f'horizontal port scan to port {port_info} {portproto}. '
+            f'From {srcip} to {amount_of_dips} unique dst IPs. '
+            f'Tot pkts: {pkts_sent}. '
+            f'Threat Level: {threat_level}. '
+            f'Confidence: {confidence}'
+        )
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -361,12 +384,14 @@ class PortScanProcess(Module, multiprocessing.Process):
         return confidence
 
     def check_vertical_portscan(self, profileid, twid):
-        # Get the list of dstips that we connected as client using TCP not established, and their ports
+        # Get the list of dstips that we connected as client using TCP not
+        # established, and their ports
         direction = 'Dst'
         state = 'NotEstablished'
         role = 'Client'
         type_data = 'IPs'
-        # self.print('Vertical Portscan check. Amount of dports: {}. Threshold=3'.format(amount_of_dports), 3, 0)
+        # self.print('Vertical Portscan check. Amount of dports: {}.
+        # Threshold=3'.format(amount_of_dports), 3, 0)
         type_evidence = 'PortScanType1'
         for protocol in ('TCP', 'UDP'):
             data = __database__.getDataFromProfileTW(
@@ -382,8 +407,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
                 # prev_amount_dports, amount_of_dports))
 
-                # We detect a scan every Threshold. So we detect when there is 6, 9, 12, etc. dports per dip.
-                # The idea is that after X dips we detect a connection. And then we 'reset' the counter
+                # We detect a scan every Threshold. So we detect when there
+                # is 6, 9, 12, etc. dports per dip.
+                # The idea is that after X dips we detect a connection.
+                # And then we 'reset' the counter
                 # until we see again X more.
                 if (
                         amount_of_dports % self.port_scan_minimum_dports_threshold == 0
@@ -394,8 +421,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uid = data[dstip]['uid']
                     timestamp = data[dstip]['stime']
 
-                    if self.alerted_once == False:
-                        self.alerted_once = True
+                    if not self.alerted_once_vertical_ps:
+                        self.alerted_once_vertical_ps = True
                         self.set_evidence_vertical_portscan(
                             timestamp,
                             pkts_sent,
@@ -408,7 +435,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         )
                     else:
                         # after alerting once, wait 10s to see if more packets/flows are coming
-                        self.pending_evidence.put(
+                        self.pending_vertical_ps_evidence.put(
                             (
                                 timestamp,
                                 pkts_sent,
