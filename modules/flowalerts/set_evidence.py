@@ -364,7 +364,9 @@ class Helper:
         ip_identification = __database__.getIPIdentification(ip)
         # get the duration in minutes
         duration = int(duration / 60)
-        description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
+        srcip = profileid.split('_')[1]
+        description = f'Long Connection. Connection from {srcip} to destination address: {ip} ' \
+                      f'{ip_identification} took {duration} mins'
         __database__.setEvidence(
             type_evidence,
             type_detection,

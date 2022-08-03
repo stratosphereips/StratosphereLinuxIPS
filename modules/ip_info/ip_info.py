@@ -16,8 +16,8 @@ import socket
 import requests
 import json
 from contextlib import redirect_stdout
-
-# todo add to conda env
+import subprocess
+import re
 
 
 class Module(Module, multiprocessing.Process):
@@ -43,6 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
+        self.c4 = __database__.subscribe('new_dhcp')
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
@@ -395,6 +396,60 @@ class Module(Module, multiprocessing.Process):
         # confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
+    # GW
+    def get_gateway_using_ip_route(self):
+        """
+        Tries to get the default gateway IP address using ip route
+        """
+        gateway = False
+        if platform.system() == 'Darwin':
+            route_default_result = subprocess.check_output(
+                ['route', 'get', 'default']
+            ).decode()
+            try:
+                gateway = re.search(
+                    r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
+                    route_default_result,
+                ).group(0)
+            except AttributeError:
+                pass
+
+        elif platform.system() == 'Linux':
+            route_default_result = re.findall(
+                r"([\w.][\w.]*'?\w?)",
+                subprocess.check_output(['ip', 'route']).decode(),
+            )
+            gateway = route_default_result[2]
+        return gateway
+
+
+    def get_gateway_MAC(self, gw_ip):
+        """
+        Gets MAC from arp.log or from arp tables
+        """
+        # In case of a zeek dir or a pcap,
+        # check if we saved the mac of this gw_ip. whenever we see an arp.log we save the ip and the mac
+        MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
+        if MAC:
+            __database__.set_default_gateway('MAC', MAC)
+            return MAC
+
+        # we don't have it in arp.log
+        if not '-i' in sys.argv:
+            # no mac in arp.log and can't use arp table, so no way to get the MAC
+            return
+
+        # get it using arp table
+        cmd = "arp -a"
+        output = subprocess.check_output(cmd.split()).decode()
+        for line in output:
+            if gw_ip in line:
+                MAC = line.split()[-4]
+                __database__.set_default_gateway('MAC', MAC)
+                return MAC
+
+
+
     def run(self):
         utils.drop_root_privs()
         # Main loop function
@@ -469,6 +524,29 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
+
+
+                message = self.c4.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_dhcp'):
+                    # this channel will only get 1 msg if we have dhcp.log
+                    message = json.loads(message['data'])
+                    server_addr = message.get('server_addr', False)
+                    # uid = message.get('uid', False)
+                    # client_addr = message.get('client_addr', False)
+                    # profileid = message.get('profileid', False)
+                    # twid = message.get('twid', False)
+                    # ts = message.get('ts', False)
+                    # override the gw in the db since we have an dhcp
+
+                    __database__.set_default_gateway("IP", server_addr)
+                    self.get_gateway_MAC(server_addr)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

@@ -2,15 +2,37 @@ import os
 import platform
 import psutil
 import pwd
+import subprocess
+
 
 
 class Notify:
+    def __init__(self):
+        self.bin_found = False
+        if self.is_notify_send_installed():
+            self.bin_found = True
+
+
+    def is_notify_send_installed(self) -> bool:
+        """
+        Checks if notify-send bin is installed
+        """
+        cmd = 'notify-send > /dev/null 2>&1'
+        returncode = os.system(cmd)
+        if returncode == 256:
+            # it is installed
+            return True
+        elif returncode == 32512:
+            return False
+
+
     def setup_notifications(self):
         """
         Get the used display, the user using this display and the uid of this user in case of using Slips as root on linux
         """
         # in linux, if the user's not root, notifications command will need extra configurations
-        if platform.system() != 'Linux' or os.geteuid() != 0:
+        if (platform.system() != 'Linux'
+                or os.geteuid() != 0):
             self.notify_cmd = 'notify-send -t 5000 '
             return False
 
@@ -36,7 +58,8 @@ class Notify:
         # get the uid
         uid = pwd.getpwnam(user).pw_uid
         # run notify-send as user using the used_display and give it the dbus addr
-        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
+        self.notify_cmd = f'sudo -u {user} DISPLAY={used_display} ' \
+                          f'DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus notify-send -t 5000 '
 
     def show_popup(self, alert_to_log: str):
         """

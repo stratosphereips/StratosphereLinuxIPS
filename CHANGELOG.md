@@ -1,3 +1,13 @@
+-0.9.4
+* Slips
+- Fix the way we update some TI files
+- 
+
+-0.9.3
+* Slips
+- Add the option to close a specific redis server using the -k flag.
+- Add the option to close all redis servers when slips can't start because all port are unavailable
+
 -0.9.3
 * Slips
 - Run multiple slips instances on demand using (-m), and use redis port 6379 by default.

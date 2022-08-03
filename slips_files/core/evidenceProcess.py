@@ -68,8 +68,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.clear_logs_dir(logs_folder)
         if self.popup_alerts:
             self.notify = Notify()
-            # The way we send notifications differ depending on the user and the OS
-            self.notify.setup_notifications()
+            if self.notify.bin_found:
+                # The way we send notifications differ depending on the user and the OS
+                self.notify.setup_notifications()
+            else:
+                self.popup_alerts = False
 
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
