@@ -269,8 +269,34 @@ class PortScanProcess(Module, multiprocessing.Process):
                     confidence = confidence2
                     continue
                 else:
-                    #todo
-                    pass
+                    # this is a separate ip performing a portscan, we shouldn't accumulate it's evidence
+                    # should be the same as the old evidence, useless
+                    type_evidence2 = new_evidence['type_evidence']
+                    type_detection2 = new_evidence['type_detection']
+                    detection_info2 = new_evidence['detection_info']
+                    category2 = new_evidence['category']
+                    source_target_tag2 = new_evidence['source_target_tag']
+                    description2 = new_evidence['description']
+                    threat_level2 = new_evidence['threat_level']
+
+                    self.set_evidence_portscan(
+                        type_evidence2,
+                        type_detection2,
+                        detection_info2,
+                        threat_level2,
+                        confidence2,
+                        description2,
+                        timestamp,
+                        category2,
+                        pkts_sent2,
+                        source_target_tag2,
+                        protocol2,
+                        profileid2,
+                        twid,
+                        uid,
+                        cache_key,
+                        amount_of_dports2
+                    )
                 # tell the queue to remove the pending evidence
                 self.pending_evidence.task_done()
 
