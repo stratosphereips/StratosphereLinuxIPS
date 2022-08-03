@@ -212,46 +212,36 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
             # unpack the old evidence (the one triggered the thread)
-            type_evidence = evidence['type_evidence']
-            type_detection = evidence['type_detection']
-            detection_info = evidence['detection_info']
-            threat_level = evidence['threat_level']
-            confidence = evidence['confidence']
-            # description = evidence['description']
-            timestamp = evidence['timestamp']
-            category = evidence['category']
-            pkts_sent = evidence['pkts_sent']
-            source_target_tag = evidence['source_target_tag']
-            protocol = evidence['protocol']
-            profileid = evidence['profileid']
-            twid = evidence['twid']
-            uid = evidence['uid']
-            cache_key = evidence['cache_key']
-            amount_of_dports = evidence['amount_of_dports']
-            dstip = evidence['dstip']
+            timestamp, \
+                pkts_sent, \
+                protocol, \
+                profileid, \
+                twid, \
+                uid, \
+                amount_of_dports, \
+                dstip = evidence
+
 
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
 
             while True:
                 try:
-                    # use a timeout because sometime get() never returns
                     new_evidence = self.pending_evidence.get(timeout=0.5)
                 except:
                     # queue is empty
                     break
 
                 # These are the variables of the combined evidence we are generating
-                timestamp = new_evidence['timestamp']
-                twid = new_evidence['twid']
-                uid = new_evidence['uid']
-                cache_key = new_evidence['cache_key']
-                pkts_sent2 = new_evidence['pkts_sent']
-                amount_of_dports2 = new_evidence['amount_of_dports']
-                protocol2 = new_evidence['protocol']
-                dstip2 = new_evidence['dstip']
-                profileid2 = new_evidence['profileid']
-                confidence2 = new_evidence['confidence']
+
+                timestamp, \
+                    pkts_sent2, \
+                    protocol2, \
+                    profileid2, \
+                    twid, \
+                    uid, \
+                    amount_of_dports2 , \
+                    dstip2 = new_evidence
 
                 if (
                         dstip == dstip2
@@ -259,95 +249,65 @@ class PortScanProcess(Module, multiprocessing.Process):
                         and protocol == protocol2
                 ):
 
-                    # todo make sure the srcip and dstipo are the same in the 2 alerts
-                    # todo handle the case if they are not the same
-
                     # the last evidence contains the sum of all the dports and pkts sent found so far,
                     # we shouldn't accumulate
                     amount_of_dports = amount_of_dports2
                     pkts_sent = pkts_sent2
-                    confidence = confidence2
                     continue
                 else:
-                    # this is a separate ip performing a portscan, we shouldn't accumulate it's evidence
-                    # should be the same as the old evidence, useless
-                    type_evidence2 = new_evidence['type_evidence']
-                    type_detection2 = new_evidence['type_detection']
-                    detection_info2 = new_evidence['detection_info']
-                    category2 = new_evidence['category']
-                    source_target_tag2 = new_evidence['source_target_tag']
-                    description2 = new_evidence['description']
-                    threat_level2 = new_evidence['threat_level']
-
+                    # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
+                    # should be the same as the old evidence
                     self.set_evidence_portscan(
-                        type_evidence2,
-                        type_detection2,
-                        detection_info2,
-                        threat_level2,
-                        confidence2,
-                        description2,
                         timestamp,
-                        category2,
                         pkts_sent2,
-                        source_target_tag2,
                         protocol2,
                         profileid2,
                         twid,
                         uid,
-                        cache_key,
                         amount_of_dports2
                     )
                 # tell the queue to remove the pending evidence
                 self.pending_evidence.task_done()
 
+            self.set_evidence_portscan(
+                timestamp,
+                pkts_sent,
+                protocol,
+                profileid,
+                twid,
+                uid,
+                amount_of_dports,
+                dstip
+            )
+        #todo we are not detecting second port scans
 
-            srcip = profileid.split(self.fieldseparator)[1]
-            description = (
+
+    def set_evidence_portscan(
+            self,
+            timestamp,
+            pkts_sent,
+            protocol,
+            profileid,
+            twid,
+            uid,
+            amount_of_dports,
+            dstip
+    ):
+        type_detection = 'srcip'
+        type_evidence = 'PortScanType1'
+        source_target_tag = 'Recon'
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        srcip = profileid.split('_')[-1]
+        detection_info = srcip
+        confidence = self.calculate_confidence(pkts_sent)
+        cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
+        description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst ports of protocol {protocol}. '
                         f'Not Established. Tot pkts sent all ports: {pkts_sent}. '
                         f'Confidence: {confidence}'
                     )
-            self.set_evidence_portscan(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    timestamp,
-                    category,
-                    pkts_sent,
-                    source_target_tag,
-                    protocol,
-                    profileid,
-                    twid,
-                    uid,
-                    cache_key,
-                    amount_of_dports
-            )
-
-
-    def set_evidence_portscan(
-            self,
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            pkts_sent,
-            source_target_tag,
-            protocol,
-            profileid,
-            twid,
-            uid,
-            cache_key,
-            amount_of_dports,
-    ):
-
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -368,7 +328,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
-        self.print(description, 3, 0)
         # Store in our local cache how many dips were there:
         self.cache_det_thresholds[cache_key] = amount_of_dports
 
@@ -450,45 +409,28 @@ class PortScanProcess(Module, multiprocessing.Process):
                     if self.alerted_once == False:
                         self.alerted_once = True
                         self.set_evidence_portscan(
-                            type_evidence,
-                            type_detection,
-                            detection_info,
-                            threat_level,
-                            confidence,
-                            description,
                             timestamp,
-                            category,
                             pkts_sent,
-                            source_target_tag,
                             protocol,
                             profileid,
                             twid,
                             uid,
-                            cache_key,
                             amount_of_dports,
+                            dstip
                         )
                     else:
                         # after alerting once, wait 10s to see if more packets/flows are coming
                         self.pending_evidence.put(
-                            {
-                                'type_evidence':type_evidence,
-                                'type_detection':type_detection,
-                                'detection_info':detection_info,
-                                'threat_level':threat_level,
-                                'confidence':confidence,
-                                'description':description,
-                                'timestamp':timestamp,
-                                'category':category,
-                                'pkts_sent':pkts_sent,
-                                'source_target_tag':source_target_tag,
-                                'protocol':protocol,
-                                'profileid':profileid,
-                                'twid':twid,
-                                'uid':uid,
-                                'cache_key':cache_key,
-                                'amount_of_dports':amount_of_dports,
-                                'dstip':dstip
-                            }
+                            (
+                                timestamp,
+                                pkts_sent,
+                                protocol,
+                                profileid,
+                                twid,
+                                uid,
+                                amount_of_dports,
+                                dstip
+                            )
                         )
 
 
@@ -563,6 +505,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         self.timer_thread.start()
+
         while True:
             try:
                 # Wait for a message from the channel that a TW was modified
