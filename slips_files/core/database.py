@@ -246,6 +246,7 @@ class Database(object):
             self.disabled_detections = (
                 self.disabled_detections.replace('[', '')
                 .replace(']', '')
+                .replace(',', '')
                 .split()
             )
         except (
