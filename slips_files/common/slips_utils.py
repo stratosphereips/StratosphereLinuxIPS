@@ -249,6 +249,77 @@ class Utils(object):
             return False
 
 
+    def get_time_diff(self, start_time: float, end_time: float, return_type='seconds') -> float:
+        """
+        Both times can be in any format
+        returns difference in seconds
+        :param return_type: can be seconds, minutes, hours or days
+        """
+        start_time = self.convert_to_datetime(start_time)
+        end_time = self.convert_to_datetime(end_time)
+
+        diff = str(end_time - start_time)
+        # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
+        try:
+            # calculate the days difference
+            diff_in_days = float(
+                diff.split(', ')[0].split(' ')[0]
+            )
+            diff = diff.split(', ')[1]
+        except (IndexError, ValueError):
+            # no days different
+            diff = diff.split(', ')[0]
+            diff_in_days = 0
+
+        diff_in_hrs, diff_in_mins, diff_in_seconds = [float(i) for i in diff.split(':')]
+
+
+        diff_in_seconds = diff_in_seconds  + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins)*60
+        units = {
+            'days': diff_in_seconds /(60*60*24),
+            'hours':diff_in_seconds/(60*60),
+            'minutes': diff_in_seconds/60,
+            'seconds':  diff_in_seconds
+        }
+
+        return units[return_type]
+
+
+    # def format_timestamp(self, timestamp):
+    #     """
+    #     Function to unify timestamps printed to log files, notification and cli.
+    #     :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
+    #     returns the date and time in RFC3339 format (IDEA standard) as str by default
+    #     """
+    #     if timestamp and (isinstance(timestamp, datetime)):
+    #         # The timestamp is a datetime
+    #         timestamp = timestamp.strftime(self.get_ts_format(timestamp))
+    #     elif timestamp and type(timestamp) == float:
+    #         # The timestamp is a float
+    #         timestamp = (
+    #             datetime.fromtimestamp(timestamp).astimezone().isoformat()
+    #         )
+    #     elif ' ' in timestamp:
+    #         # self.print(f'DATETIME: {timestamp}')
+    #         # The timestamp is a string with spaces
+    #         timestamp = timestamp.replace('/', '-')
+    #         # dt_string = "2020-12-18 3:11:09"
+    #         # format of incoming ts
+    #         try:
+    #             newformat = '%Y-%m-%d %H:%M:%S.%f%z'
+    #             # convert to datetime obj
+    #             timestamp = datetime.strptime(timestamp, newformat)
+    #         except ValueError:
+    #             # The string did not have a time zone
+    #             newformat = '%Y-%m-%d %H:%M:%S.%f'
+    #             # convert to datetime obj
+    #             timestamp = datetime.strptime(timestamp, newformat)
+    #         # convert to iso format
+    #         timestamp = timestamp.astimezone().isoformat()
+    #
+    #     return timestamp
+
+
 
     def IDEA_format(
         self,

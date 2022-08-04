@@ -284,33 +284,7 @@ class Module(Module, multiprocessing.Process):
             self.check_unknown_port(*flow)
         self.unknown_ports_queue = []
 
-    def get_time_diff(self, start_time, end_time):
-        """
-        Both time should be epoch
-        Returs difference in minutes
-        """
-        diff = str(end_time - start_time)
-        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
-        try:
-            # calculate the days difference
-            diff_in_days = int(
-                diff.split(', ')[0].split(' ')[0]
-            )
-            diff = diff.split(', ')[1]
-        except (IndexError, ValueError):
-            # no days different
-            diff = diff.split(', ')[0]
-            diff_in_days = 0
 
-        diff_in_hrs = int(diff.split(':')[0])
-        diff_in_mins = int(diff.split(':')[1])
-        # total diff in mins
-        diff_in_mins = (
-            24 * diff_in_days * 60
-            + diff_in_hrs * 60
-            + diff_in_mins
-        )
-        return diff_in_mins
 
     def check_data_upload(self, profileid, twid):
 
@@ -356,8 +330,9 @@ class Module(Module, multiprocessing.Process):
         )
 
         # get the time difference between them in seconds
-        diff_in_mins = self.get_time_diff(time_of_first_flow, time_of_last_flow)
-
+        diff_in_mins = utils.get_time_diff(time_of_first_flow,
+                                           time_of_last_flow,
+                                           return_type='minutes')
         # we need the flows that happend in 20 mins span
         if diff_in_mins < 20:
             return
@@ -510,6 +485,8 @@ class Module(Module, multiprocessing.Process):
             self.dns_arpa_queries[profileid][-1]
             - self.dns_arpa_queries[profileid][0]
         )
+        diff = utils.get_time_diff(self.dns_arpa_queries[profileid][0],
+                                   self.dns_arpa_queries[profileid][-1])
         if diff > 2:
             # happened within more than 2 seconds
             return False
