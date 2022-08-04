@@ -318,9 +318,7 @@ class InputProcess(multiprocessing.Process):
                 if not cache_lines:
                     # Verify that we didn't have any new lines in the
                     # last 10 seconds. Seems enough for any network to have ANY traffic
-                    now = datetime.now()
-                    diff = now - last_updated_file_time
-                    diff = diff.seconds
+                    diff = utils.get_time_diff(last_updated_file_time, datetime.now())
                     if diff >= self.bro_timeout:
                         # It has been 10 seconds without any file
                         # being updated. So stop Zeek

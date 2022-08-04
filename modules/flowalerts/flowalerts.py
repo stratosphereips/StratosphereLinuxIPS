@@ -1131,7 +1131,7 @@ class Module(Module, multiprocessing.Process):
                     if (
                         flow_type == 'conn'
                         and appproto != 'dns'
-
+                        and not self.is_ignored_ip(daddr)
                     ):
                         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
                         # until 30 minutes has passed
@@ -1535,15 +1535,22 @@ class Module(Module, multiprocessing.Process):
                             saddr, daddr, stime, profileid, twid, uid
                         )
 
+
+                        # check if they happened within 10 seconds or less @@@ remove tihs
+                        diff = utils.get_time_diff(
+                            self.smtp_bruteforce_cache[profileid][0],
+                            self.smtp_bruteforce_cache[profileid][-1]
+                        )
                         # check if (3) bad login attemps happened
                         if (
                             len(self.smtp_bruteforce_cache[profileid])
                             == self.smtp_bruteforce_threshold
                         ):
                             # check if they happened within 10 seconds or less
-                            diff = int(
+                            diff = utils.get_time_diff(
+                                self.smtp_bruteforce_cache[profileid][0],
                                 self.smtp_bruteforce_cache[profileid][-1]
-                            ) - int(self.smtp_bruteforce_cache[profileid][0])
+                            )
                             if diff <= 10:
                                 # remove all 3 logins that caused this alert
                                 self.smtp_bruteforce_cache[profileid] = []
