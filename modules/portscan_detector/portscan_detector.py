@@ -185,6 +185,9 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
         This thread waits for 10s then checks if more vertical scans happened to modify the alert
         """
+        # after 5 dips that aren't the same as the first one, we alert the first one
+        dips_counter = 1
+
         while True:
             # this evidence is the one that triggered this thread
             try:
@@ -237,17 +240,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                     pkts_sent = pkts_sent2
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
-                    # should be the same as the old evidence
-                    self.set_evidence_vertical_portscan(
-                        timestamp,
-                        pkts_sent2,
-                        protocol2,
-                        profileid2,
-                        twid,
-                        uid,
-                        amount_of_dports2,
-                        dstip2
-                    )
+                    # store it back in the queue until we're done with the current one
+                    dips_counter += 1
+                    self.pending_vertical_ps_evidence.put(new_evidence)
+                    if dips_counter == 5:
+                        dips_counter = 0
+                        break
 
             self.set_evidence_vertical_portscan(
                 timestamp,
@@ -317,7 +315,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     pkts_sent = pkts_sent2
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
-                    # should be the same as the old evidence
                     # store it back in the queue until we're done with the current one
                     ports_counter += 1
                     self.pending_horizontal_ps_evidence.put(new_evidence)
