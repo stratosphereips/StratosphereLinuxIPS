@@ -12,7 +12,8 @@ import sys
 import datetime
 import ipaddress
 import time
-
+import threading
+from multiprocessing import Queue
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -43,6 +44,9 @@ class Module(Module, multiprocessing.Process):
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
+        # evidence to skip before calling setevidence
+        self.arp_scan_evidence = 0
+
         if (
             'yes' in self.delete_zeek_files
             and 'no' in self.store_zeek_files_copy
@@ -52,6 +56,12 @@ class Module(Module, multiprocessing.Process):
             self.arp_ts = time.time()
             # in seconds
             self.period_before_deleting = 3600
+        self.timer_thread_arp_scan = threading.Thread(
+                                target=self.wait_for_arp_scans,
+                                daemon=True
+        )
+        self.pending_arp_scan_evidence = Queue()
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -113,6 +123,16 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.store_zeek_files_copy = 'yes'
 
+    def wait_for_arp_scans(self):
+        """
+        This thread waits for 10s then checks if more
+        port scans happened to reduce the number of alerts
+        """
+
+
+
+
+
     def check_arp_scan(
         self, profileid, twid, daddr, uid, ts, dst_mac, src_mac
     ):
@@ -162,6 +182,12 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
+                self.arp_scan_evidence += 1
+                if not self.arp_scan_evidence == 5:
+                    # to reduce the number of arp scan alerts, only alert once every 5 scans
+                    return
+                self.arp_scan_evidence = 0
+                conn_count = len(profileids_twids)
                 # we are sure this is an arp scan
                 confidence = 0.8
                 threat_level = 'low'
@@ -352,6 +378,8 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        self.timer_thread_arp_scan.start()
+
         # Main loop function
         while True:
             try:
