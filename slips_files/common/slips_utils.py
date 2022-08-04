@@ -145,6 +145,34 @@ class Utils(object):
         except ValueError:
             pass
 
+        if '+' in time:
+            # timestamp contains UTC offset, set the new format accordingly
+            time_format = '%Y-%m-%d %H:%M:%S%z'
+            # is the seconds field a float?
+            if '.' in time:
+                # append .f to the seconds field
+                time_format = time_format.replace('S', 'S.%f')
+            return time_format
+        else:
+            return False
+
+    # def get_ts_format(self, timestamp):
+    #     """
+    #     returns the appropriate format of the given ts
+    #     """
+    #     if '+' in timestamp:
+    #         # timestamp contains UTC offset, set the new format accordingly
+    #         newformat = '%Y-%m-%d %H:%M:%S%z'
+    #     else:
+    #         # timestamp doesn't contain UTC offset, set the new format accordingly
+    #         newformat = '%Y-%m-%d %H:%M:%S'
+    #
+    #     # is the seconds field a float?
+    #     if '.' in timestamp:
+    #         # append .f to the seconds field
+    #         newformat = newformat.replace('S', 'S.%f')
+    #     return newformat
+
     def get_own_IPs(self):
         """Returns a list of our local and public IPs"""
         IPs = []
@@ -216,7 +244,6 @@ class Utils(object):
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
-
 
 
 
