@@ -156,6 +156,9 @@ class Utils(object):
         else:
             return False
 
+    def to_delta(self, time_in_seconds):
+        return timedelta(seconds=int(time_in_seconds))
+
     # def get_ts_format(self, timestamp):
     #     """
     #     returns the appropriate format of the given ts
