@@ -1146,9 +1146,9 @@ class Module(Module, multiprocessing.Process):
                             diff
                             >= self.conn_without_dns_interface_wait_time
                         ):
-                        self.check_connection_without_dns_resolution(
-                            daddr, twid, profileid, timestamp, uid
-                        )
+                            self.check_connection_without_dns_resolution(
+                                daddr, twid, profileid, timestamp, uid
+                            )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':

@@ -1,5 +1,6 @@
 # Must imports
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 
 # Your imports
 import json
@@ -131,11 +132,11 @@ class Helper:
         start_time = __database__.get_slips_start_time()
         now = time.time()
         confidence = 0.8
-        if type(start_time) == datetime.datetime:
-            if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
+        if '-i' in sys.argv:
+            diff = utils.get_time_diff(start_time, now, return_type='hours')
+            if diff < 5:
                 confidence = 0.1
-        elif '-i' in sys.argv and (now - start_time < 18000):
-            confidence = 0.1
+
 
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
