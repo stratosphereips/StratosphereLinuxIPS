@@ -94,6 +94,7 @@ class EvidenceProcess(multiprocessing.Process):
         # the accumulated threat level and alert
         # flag to only add commit and hash to the firs alert in alerts.json
         self.is_first_alert = True
+        self.alerts_time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -380,22 +381,6 @@ class EvidenceProcess(multiprocessing.Process):
                 f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
             )
 
-    def get_ts_format(self, timestamp):
-        """
-        returns the appropriate format of the given ts
-        """
-        if '+' in timestamp:
-            # timestamp contains UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S%z'
-        else:
-            # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S'
-
-        # is the seconds field a float?
-        if '.' in timestamp:
-            # append .f to the seconds field
-            newformat = newformat.replace('S', 'S.%f')
-        return newformat
 
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
@@ -424,21 +409,23 @@ class EvidenceProcess(multiprocessing.Process):
             while twid_start_time == None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
+            # iso
+            tw_start_time_str = utils.convert_format(twid_start_time, 'iso')
+            # datetime obj
+            tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
-            tw_start_time_str = utils.format_timestamp(float(twid_start_time))
-            tw_start_time_datetime = datetime.strptime(
-                tw_start_time_str,
-                utils.get_ts_format(tw_start_time_str).replace(' ', 'T'),
-            )
             # Convert the tw width to deltatime
-            tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            # tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            delta_width = utils.to_delta(self.width)
+
             # Get the stop time of the TW
-            tw_stop_time_datetime = (
-                tw_start_time_datetime + tw_width_in_seconds_delta
+            tw_stop_time_datetime = (tw_start_time_datetime + delta_width)
+
+            tw_stop_time_str = utils.convert_format(
+                tw_stop_time_datetime,
+                self.alerts_time_format
             )
-            tw_stop_time_str = tw_stop_time_datetime.strftime(
-                '%Y-%m-%dT%H:%M:%S.%f%z'
-            )
+
 
             hostname = __database__.get_hostname_from_profile(profileid)
             # if there's no hostname, set it as ' '
@@ -453,9 +440,7 @@ class EvidenceProcess(multiprocessing.Process):
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem on format_evidence_causing_this_alert() line {exception_line}',
-                0,
-                1,
+                f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
             )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
@@ -588,7 +573,8 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     # Format the time to a common style given multiple type of time variables
-                    flow_datetime = utils.format_timestamp(timestamp)
+                    # flow_datetime = utils.format_timestamp(timestamp)
+                    flow_datetime = utils.convert_format(timestamp, 'iso')
 
                     # prepare evidence for text log file
                     evidence = self.format_evidence_string(

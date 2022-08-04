@@ -67,7 +67,7 @@ class Module(Module, multiprocessing.Process):
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In seconds
-        self.conn_without_dns_interface_wait_time = 1800
+        self.conn_without_dns_interface_wait_time = 30
         # this dict will contain the number of nxdomains found in every profile
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
@@ -330,9 +330,11 @@ class Module(Module, multiprocessing.Process):
         )
 
         # get the time difference between them in seconds
-        diff_in_mins = utils.get_time_diff(time_of_first_flow,
-                                           time_of_last_flow,
-                                           return_type='minutes')
+        diff_in_mins = utils.get_time_diff(
+            time_of_first_flow,
+            time_of_last_flow,
+            return_type='minutes'
+        )
         # we need the flows that happend in 20 mins span
         if diff_in_mins < 20:
             return
@@ -481,12 +483,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # reached the threshold, did the 10 queries happen within 2 seconds?
-        diff = (
+        diff = utils.get_time_diff(
+            self.dns_arpa_queries[profileid][0],
             self.dns_arpa_queries[profileid][-1]
-            - self.dns_arpa_queries[profileid][0]
         )
-        diff = utils.get_time_diff(self.dns_arpa_queries[profileid][0],
-                                   self.dns_arpa_queries[profileid][-1])
         if diff > 2:
             # happened within more than 2 seconds
             return False
@@ -602,9 +602,8 @@ class Module(Module, multiprocessing.Process):
         if '-i' in sys.argv:
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
-            diff = now - start_time
-            diff = diff.seconds
-            if int(diff) < 120:
+            diff = utils.get_time_diff(start_time, now, return_type='minutes')
+            if diff < 2:
                 # less than 2 minutes have passed
                 return False
 
@@ -1132,28 +1131,24 @@ class Module(Module, multiprocessing.Process):
                     if (
                         flow_type == 'conn'
                         and appproto != 'dns'
-                        and not self.is_ignored_ip(daddr)
+
                     ):
                         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
                         # until 30 minutes has passed
                         # after starting slips because the dns may have happened before starting slips
                         start_time = __database__.get_slips_start_time()
-                        internal_time = float(
-                            __database__.getSlipsInternalTime()
+                        diff = utils.get_time_diff(
+                            start_time,
+                            datetime.datetime.now(),
+                            return_type='minutes'
                         )
-                        internal_time = datetime.datetime.fromtimestamp(
-                            internal_time
-                        )
-                        diff_internal = internal_time - start_time
-                        diff_internal = diff_internal.seconds
-                        # self.print(f'Start: {start_time}, InternalTime: {internal_time} [diff {diff_internal}]. TH: {self.conn_without_dns_interface_wait_time}')
                         if (
-                            int(diff_internal)
+                            diff
                             >= self.conn_without_dns_interface_wait_time
                         ):
-                            self.check_connection_without_dns_resolution(
-                                daddr, twid, profileid, timestamp, uid
-                            )
+                        self.check_connection_without_dns_resolution(
+                            daddr, twid, profileid, timestamp, uid
+                        )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
