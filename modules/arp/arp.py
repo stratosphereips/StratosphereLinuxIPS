@@ -189,37 +189,39 @@ class Module(Module, multiprocessing.Process):
                 self.arp_scan_evidence = 0
                 conn_count = len(profileids_twids)
                 # we are sure this is an arp scan
-                confidence = 0.8
-                threat_level = 'low'
-                description = (
-                    f'performing an arp scan. Confidence {confidence}.'
-                )
-                type_evidence = 'ARPScan'
-                # category of this evidence according to idea categories
-                category = 'Recon.Scanning'
-                type_detection = 'srcip'
-                source_target_tag = 'Recon'  # srcip description
-                detection_info = profileid.split('_')[1]
-                conn_count = len(profileids_twids)
-                __database__.setEvidence(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    ts,
-                    category,
-                    source_target_tag=source_target_tag,
-                    conn_count=conn_count,
-                    profileid=profileid,
-                    twid=twid,
-                    uid=uid,
-                )
-                # after we set evidence, clear the dict so we can detect if it does another scan
-                self.cache_arp_requests.pop(f'{profileid}_{twid}')
+                self.set_evidence_arp_scan(ts, profileid, twid, uid, conn_count)
                 return True
         return False
+
+    def set_evidence_arp_scan(self, ts, profileid, twid, uid, conn_count):
+        confidence = 0.8
+        threat_level = 'low'
+        description = (
+            f'performing an arp scan. Confidence {confidence}.'
+        )
+        type_evidence = 'ARPScan'
+        # category of this evidence according to idea categories
+        category = 'Recon.Scanning'
+        type_detection = 'srcip'
+        source_target_tag = 'Recon'  # srcip description
+        detection_info = profileid.split('_')[1]
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            ts,
+            category,
+            source_target_tag=source_target_tag,
+            conn_count=conn_count,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+        # after we set evidence, clear the dict so we can detect if it does another scan
+        self.cache_arp_requests.pop(f'{profileid}_{twid}')
 
     def check_dstip_outside_localnet(
         self, profileid, twid, daddr, uid, saddr, ts
