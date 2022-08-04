@@ -1848,9 +1848,6 @@ class ProfilerProcess(multiprocessing.Process):
                         self.gw_set = True
 
             elif 'software' in flow_type:
-                __database__.add_user_agent_to_profile(
-                    profileid, self.column_values['unparsed_version']
-                )
                 __database__.add_software_to_profile(
                     profileid,
                     self.column_values['software_type'],
