@@ -24,6 +24,7 @@ from .database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
+import requests
 import os
 import binascii
 import base64
@@ -1586,7 +1587,7 @@ class ProfilerProcess(multiprocessing.Process):
                 except KeyError:
                     self.column_values['filesize'] = ''
 
-    def publish_to_new_MAC(self, mac, ip):
+    def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
         check if mac and ip aren't multicast or link-local
         and publish to new_MAC channel to get more info about the mac
@@ -1594,6 +1595,8 @@ class ProfilerProcess(multiprocessing.Process):
         :param ip: src/dst ip
         src macs should be passed with srcips, dstmac with dstips
         """
+        if not mac:
+            return
         # get the src and dst addresses as objects
         if validators.ipv4(ip):
             ip_obj = ipaddress.IPv4Address(ip)
@@ -1603,98 +1606,187 @@ class ProfilerProcess(multiprocessing.Process):
             ip_obj.is_multicast or ip_obj.is_link_local
         ):
             # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-            to_send = {'MAC': mac, 'profileid': f'profile_{ip}'}
+            to_send = {
+                'MAC': mac,
+                'profileid': f'profile_{ip}'
+            }
+            if host_name:
+                to_send.update({
+                    'host_name': host_name
+                })
             __database__.publish('new_MAC', json.dumps(to_send))
+
+
+    def is_supported_flow(self):
+        # Define which type of flows we are going to process
+        if not self.column_values:
+            return False
+        elif self.column_values['type'] not in (
+            'ssh',
+            'ssl',
+            'http',
+            'dns',
+            'conn',
+            'flow',
+            'argus',
+            'nfdump',
+            'notice',
+            'dhcp',
+            'files',
+            'known_services',
+            'arp',
+            'ftp',
+            'smtp',
+            'software',
+        ):
+            # Not a supported type
+            return False
+        elif self.column_values['starttime'] is None:
+            # There is suricata issue with invalid timestamp
+            # for examaple: "1900-01-00T00:00:08.511802+0000"
+            return False
+
+    def get_starttime(self):
+        ts = self.column_values['starttime']
+        try:
+            # seconds.
+            # make sure starttime is a datetime obj (not a str) so we can get the timestamp
+            if type(ts) == str:
+                datetime_obj = datetime.strptime(ts, self.timeformat)
+                starttime = datetime_obj.timestamp()
+            else:
+                starttime = ts.timestamp()
+        except ValueError:
+            # date
+            try:
+                # This file format is very extended, but we should consider more
+                # options. Maybe we should detect the time format.
+                # Some times if there is no microseconds, the datatime object just give
+                # us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
+                ts = str(ts)
+                # make sure the given ts has microseconds
+                if '.' not in ts:
+                    ts += '.000000'
+                date_time = datetime.strptime(
+                    ts,
+                    '%Y-%m-%d %H:%M:%S.%f',
+                )
+                starttime = date_time.timestamp()
+            except ValueError as e:
+                self.print('We can not recognize time format.', 0, 1)
+                self.print('{}'.format((type(e))), 0, 1)
+                return ts
+
+    def get_starttime(self):
+        ts = self.column_values['starttime']
+        try:
+            # seconds.
+            # make sure starttime is a datetime obj (not a str) so we can get the timestamp
+            starttime = utils.convert_format(ts, 'unixtimestamp')
+        except ValueError:
+            self.print(f'We can not recognize time format: {ts}', 0, 1)
+        return ts
+
+    def get_uid(self):
+        """
+        Generates a uid if none is found
+        """
+        # This uid check is for when we read things that are not zeek
+        uid = self.column_values.get('uid', False)
+        if not uid:
+            # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
+            # Zeeks uses human-readable strings in Base62 format, from 112 bits usually.
+            # We do base64 with some bits just because we need a fast unique way
+            uid = base64.b64encode(
+                binascii.b2a_hex(os.urandom(9))
+            ).decode('utf-8')
+        return uid
+
+    def get_rev_profile(self, starttime, daddr_as_obj):
+        """
+        Get the profileid and twid given the addr and ts when is started
+        """
+        rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
+        if not rev_profileid:
+            self.print(
+                'The dstip profile was not here... create', 3, 0
+            )
+            # Create a reverse profileid for managing the data going to the dstip.
+            rev_profileid = f'profile_{daddr_as_obj}'
+            __database__.addProfile(
+                rev_profileid, starttime, self.width
+            )
+            # Try again
+            rev_profileid = __database__.getProfileIdFromIP(
+                daddr_as_obj
+            )
+        # in the database, Find the id of the tw where the flow belongs.
+        rev_twid = self.get_timewindow(starttime, rev_profileid)
+        return rev_profileid, rev_twid
+
+    def publish_to_new_dhcp(self, uid, server_addr, client_addr, profileid, epoch_time):
+        """
+        Publish the GW addr in the new_dhcp channel
+        """
+        # this channel is used for setting the default gw ip,
+        # only 1 flow is enough for that
+        # on home networks, the router serves as a simple DHCP server
+        to_send = {
+            'uid': uid,
+            'server_addr': server_addr,
+            'client_addr': client_addr,
+            'profileid': profileid,
+            'twid': self.get_timewindow(epoch_time, profileid),
+            'ts': epoch_time
+        }
+        __database__.publish('new_dhcp', json.dumps(to_send))
+        self.gw_set = True
+
+    def publish_to_new_software(self, profileid, starttime):
+        """
+        Send the whole flow to new_software channel
+        """
+        # change the datetime to epoch to be able to use json
+        epoch_time = starttime.timestamp()
+        self.column_values.update(
+            {
+                'starttime': epoch_time,
+                'twid': self.get_timewindow(epoch_time, profileid),
+            }
+        )
+        __database__.publish(
+            'new_software', json.dumps(self.column_values)
+        )
 
     def add_flow_to_profile(self):
         """
-        This is the main function that takes the columns of a flow and does all the magic to convert it into a working data in our system.
+        This is the main function that takes the columns of a flow and does all the magic to
+        convert it into a working data in our system.
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
-        A flow has two IP addresses, so treat both of them correctly.
         """
         try:
 
-            # Define which type of flows we are going to process
+            if not self.is_supported_flow():
+                return False
 
-            if not self.column_values:
-                return True
-            elif self.column_values['type'] not in (
-                'ssh',
-                'ssl',
-                'http',
-                'dns',
-                'conn',
-                'flow',
-                'argus',
-                'nfdump',
-                'notice',
-                'dhcp',
-                'files',
-                'known_services',
-                'arp',
-                'ftp',
-                'smtp',
-                'software',
-            ):
-                # Not a supported type
-                return True
-            elif self.column_values['starttime'] is None:
-                # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
-                return True
+            starttime = self.get_starttime()
 
-            try:
-                # seconds.
-                # make sure starttime is a datetime obj (not a str) so we can get the timestamp
-                ts = self.column_values['starttime']
-                starttime = utils.convert_format(ts, 'unixtimestamp')
-            except ValueError:
-                self.print(f'We can not recognize time format: {ts}', 0, 1)
-
-            # This uid check is for when we read things that are not zeek
-            if 'uid' not in self.column_values or not self.column_values.get(
-                'uid', ''
-            ):
-                # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
-                # Zeeks uses human-readable strings in Base62 format, from 112 bits usually. We do base64 with some bits just because we need a fast unique way
-                self.column_values['uid'] = base64.b64encode(
-                    binascii.b2a_hex(os.urandom(9))
-                ).decode('utf-8')
+            self.column_values['uid'] = self.get_uid()
             uid = self.column_values['uid']
             flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
             self.daddr = self.column_values['daddr']
-            profileid = 'profile' + self.id_separator + str(self.saddr)
+            profileid = f'profile_{self.saddr}'
 
             if self.saddr == '' and self.daddr == '':
-                # some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log! don't store them in the db
+                # some zeek flow don't have saddr or daddr,
+                # seen in dhcp.log and notice.log, ignore them
                 return False
 
             # Check if the flow is whitelisted and we should not process
             if self.whitelist.is_whitelisted_flow(self.column_values, flow_type):
                 return True
-
-            def get_rev_profile(starttime, daddr_as_obj):
-                # Compute the rev_profileid
-                rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
-                if not rev_profileid:
-                    self.print(
-                        'The dstip profile was not here... create', 3, 0
-                    )
-                    # Create a reverse profileid for managing the data going to the dstip.
-                    rev_profileid = (
-                        'profile' + self.id_separator + str(daddr_as_obj)
-                    )
-                    __database__.addProfile(
-                        rev_profileid, starttime, self.width
-                    )
-                    # Try again
-                    rev_profileid = __database__.getProfileIdFromIP(
-                        daddr_as_obj
-                    )
-                    # For the profile to the dstip, find the id in the database of the tw where the flow belongs.
-                rev_twid = self.get_timewindow(starttime, rev_profileid)
-                return rev_profileid, rev_twid
 
             if (
                 'flow' in flow_type
@@ -1712,18 +1804,16 @@ class ProfilerProcess(multiprocessing.Process):
                 allbytes = self.column_values['bytes']
                 spkts = self.column_values['spkts']
                 sbytes = self.column_values['sbytes']
-                endtime = self.column_values['endtime']
                 appproto = self.column_values['appproto']
-                direction = self.column_values['dir']
-                dpkts = self.column_values['dpkts']
-                dbytes = self.column_values['dbytes']
                 smac = self.column_values.get('smac')
                 dmac = self.column_values.get('dmac')
+                # endtime = self.column_values['endtime']
+                # direction = self.column_values['dir']
+                # dpkts = self.column_values['dpkts']
+                # dbytes = self.column_values['dbytes']
 
-                if smac:
-                    self.publish_to_new_MAC(smac, self.saddr)
-                if dmac:
-                    self.publish_to_new_MAC(dmac, self.daddr)
+                self.publish_to_new_MAC(smac, self.saddr)
+                self.publish_to_new_MAC(dmac, self.daddr)
 
             elif 'dns' in flow_type:
                 query = self.column_values['query']
@@ -1731,46 +1821,43 @@ class ProfilerProcess(multiprocessing.Process):
                 qtype_name = self.column_values['qtype_name']
                 rcode_name = self.column_values['rcode_name']
                 answers = self.column_values['answers']
+                ttls = self.column_values['TTLs']
+
                 if type(answers) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
                     answers = [answers]
-                ttls = self.column_values['TTLs']
+
             elif 'dhcp' in flow_type:
                 # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
                 client_addr = self.column_values.get('client_addr', False)
                 mac_addr = self.column_values.get('mac', False)
                 host_name = self.column_values.get('host_name', False)
                 server_addr = self.column_values.get('server_addr', False)
-                epoch_time = self.column_values['starttime'].timestamp()
+                epoch_time = starttime.timestamp()
                 if client_addr:
-                    profileid = get_rev_profile(epoch_time, client_addr)[0]
+                    profileid = self.get_rev_profile(epoch_time, client_addr)[0]
                     
                 if mac_addr:
                     # send this to ip_info module to get vendor info about this MAC
-                    to_send = {'MAC': mac_addr, 'profileid': profileid}
-                    if host_name:
-                        to_send.update({'host_name': host_name})
-                    __database__.publish('new_MAC', json.dumps(to_send))
+                    self.publish_to_new_MAC(
+                        mac_addr,
+                        profileid.split('_')[-1],
+                        host_name=host_name
+                    )
 
                 if server_addr:
                     __database__.store_dhcp_server(server_addr)
                     __database__.mark_profile_as_dhcp(profileid)
 
-                    # this channel is used for setting the default gw ip,
-                    # only 1 flow is enough for that
                     if not self.gw_set:
-                        #  on home networks, the router serves as a simple DHCP server
-                        to_send = {
-                            'uid': self.column_values['uid'],
-                            'server_addr': server_addr,
-                            'client_addr': client_addr,
-                            'profileid': profileid,
-                            'twid': self.get_timewindow(epoch_time, profileid),
-                            'ts': epoch_time
-                        }
-                        __database__.publish('new_dhcp', json.dumps(to_send))
-                        self.gw_set = True
+                        self.publish_to_new_dhcp(
+                            uid,
+                            server_addr,
+                            client_addr,
+                            profileid,
+                            epoch_time
+                        )
 
             elif 'software' in flow_type:
                 __database__.add_software_to_profile(
@@ -1779,36 +1866,22 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['version.major'],
                     self.column_values['version.minor'],
                 )
-                # change the datetime to epoch to be able to use json
-                epoch_time = self.column_values['starttime'].timestamp()
-                self.column_values.update(
-                    {
-                        'starttime': epoch_time,
-                        'twid': self.get_timewindow(epoch_time, profileid),
-                    }
-                )
-                __database__.publish(
-                    'new_software', json.dumps(self.column_values)
-                )
+                self.publish_to_new_software(profileid, starttime)
+
+
             # Create the objects of IPs
             try:
-                saddr_as_obj = ipaddress.IPv4Address(self.saddr)
-                daddr_as_obj = ipaddress.IPv4Address(self.daddr)
-                # Is ipv4
+                saddr_as_obj = ipaddress.ip_address(self.saddr)
+                daddr_as_obj = ipaddress.ip_address(self.daddr)
             except ipaddress.AddressValueError:
-                # Is it ipv6?
-                try:
-                    saddr_as_obj = ipaddress.IPv6Address(self.saddr)
-                    daddr_as_obj = ipaddress.IPv6Address(self.daddr)
-                except ipaddress.AddressValueError:
-                    # Its a mac
-                    return False
+                # Its a mac
+                return False
 
             ##############
             # 4th Define help functions for storing data
             def store_features_going_out(profileid, twid, starttime):
                 """
-                This is an internal function in the add_flow_to_profile function for adding the features going out of the profile
+                function for adding the features going out of the profile
                 """
                 role = 'Client'
                 # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
@@ -1820,7 +1893,8 @@ class ProfilerProcess(multiprocessing.Process):
                 ):
                     # Tuple
                     tupleid = f'{daddr_as_obj}-{dport}-{proto}'
-                    # Compute the symbol for this flow, for this TW, for this profile. The symbol is based on the 'letters' of the original Startosphere ips tool
+                    # Compute the symbol for this flow, for this TW, for this profile.
+                    # The symbol is based on the 'letters' of the original Startosphere ips tool
                     symbol = self.compute_symbol(
                         profileid,
                         twid,
@@ -1963,14 +2037,14 @@ class ProfilerProcess(multiprocessing.Process):
                         profileid,
                         twid,
                         starttime,
-                        self.column_values['daddr'],
+                        self.daddr,
                         self.column_values['sport'],
                         self.column_values['dport'],
                         self.column_values['note'],
                         self.column_values['msg'],
                         self.column_values['scanned_port'],
                         self.column_values['scanning_ip'],
-                        self.column_values['uid'],
+                        uid,
                     )
                 elif flow_type == 'ftp':
                     used_port = self.column_values['used_port']
@@ -1978,9 +2052,9 @@ class ProfilerProcess(multiprocessing.Process):
                         __database__.set_ftp_port(used_port)
                 elif flow_type == 'smtp':
                     to_send = {
-                        'uid': self.column_values['uid'],
-                        'daddr': self.column_values['daddr'],
-                        'saddr': self.column_values['saddr'],
+                        'uid': uid,
+                        'daddr': self.daddr,
+                        'saddr': self.saddr,
                         'profileid': profileid,
                         'twid': twid,
                         'ts': starttime,
@@ -1991,9 +2065,9 @@ class ProfilerProcess(multiprocessing.Process):
                 elif flow_type == 'files':
                     """ " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
                     to_send = {
-                        'uid': self.column_values['uid'],
-                        'daddr': self.column_values['daddr'],
-                        'saddr': self.column_values['saddr'],
+                        'uid': uid,
+                        'daddr': self.daddr,
+                        'saddr': self.saddr,
                         'size': self.column_values['size'],
                         'md5': self.column_values['md5'],
                         'sha1': self.column_values['sha1'],
@@ -2009,8 +2083,8 @@ class ProfilerProcess(multiprocessing.Process):
                 elif flow_type == 'known_services':
                     # Send known_services.log data to new_service channel in flowalerts module
                     to_send = {
-                        'uid': self.column_values['uid'],
-                        'saddr': self.column_values['saddr'],
+                        'uid': uid,
+                        'saddr': self.saddr,
                         'port_num': self.column_values['port_num'],
                         'port_proto': self.column_values['port_proto'],
                         'service': self.column_values['service'],
@@ -2023,9 +2097,9 @@ class ProfilerProcess(multiprocessing.Process):
 
                 elif flow_type == 'arp':
                     to_send = {
-                        'uid': self.column_values['uid'],
-                        'daddr': self.column_values['daddr'],
-                        'saddr': self.column_values['saddr'],
+                        'uid': uid,
+                        'daddr': self.daddr,
+                        'saddr': self.saddr,
                         'dst_mac': self.column_values['dst_mac'],
                         'src_mac': self.column_values['src_mac'],
                         'dst_hw': self.column_values['dst_hw'],
@@ -2167,7 +2241,7 @@ class ProfilerProcess(multiprocessing.Process):
                         )
                         store_features_going_out(profileid, twid, starttime)
                     if daddr_as_obj in self.home_net:
-                        rev_profileid, rev_twid = get_rev_profile(
+                        rev_profileid, rev_twid = self.get_rev_profile(
                             starttime, daddr_as_obj
                         )
                         store_features_going_in(
@@ -2182,7 +2256,7 @@ class ProfilerProcess(multiprocessing.Process):
                 elif self.analysis_direction == 'all':
                     # No home. Store all
                     __database__.addProfile(profileid, starttime, self.width)
-                    rev_profileid, rev_twid = get_rev_profile(
+                    rev_profileid, rev_twid = self.get_rev_profile(
                         starttime, daddr_as_obj
                     )
                     store_features_going_out(profileid, twid, starttime)
@@ -2703,9 +2777,7 @@ class ProfilerProcess(multiprocessing.Process):
                         'Stopping Profiler Process. Received {} lines ({})'.format(
                             rec_lines,
                             utils.convert_format(datetime.now(), utils.alerts_format),
-                        ),
-                        2,
-                        0,
+                        ), 2,0
                     )
                     return True
 

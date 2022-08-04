@@ -212,6 +212,7 @@ class Utils(object):
 
 
     def define_time_format(self, time: str) -> str:
+
         if self.is_datetime_obj(time):
             return 'datetimeobj'
 
