@@ -58,11 +58,16 @@ class PortScanProcess(Module, multiprocessing.Process):
         # this flag will be true after the first portscan alert
         self.alerted_once_vertical_ps = False
         self.alerted_once_horizontal_ps = False
-        self.timer_thread = threading.Thread(
+        # the threads are responsible for combining all evidence each 10 seconds to
+        # avoid many alerts
+        self.timer_thread_vertical_ps = threading.Thread(
                                 target=self.wait_for_vertical_scans,
                                 daemon=True
         )
-
+        self.timer_thread_horizontal_ps = threading.Thread(
+                                target=self.wait_for_horizontal_scans,
+                                daemon=True
+        )
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -260,6 +265,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
         This thread waits for 10s then checks if more horizontal scans happened to modify the alert
         """
+        # after 5 ports that aren't the same as the first one, we alert the first one
+        ports_counter = 1
         while True:
             try:
                 # this evidence is the one that triggered this thread
@@ -311,16 +318,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # should be the same as the old evidence
-                    self.set_evidence_horizontal_portscan(
-                            timestamp,
-                            pkts_sent2,
-                            protocol2,
-                            profileid2,
-                            twid,
-                            uid,
-                            dport,
-                            amount_of_dips2
-                        )
+                    # store it back in the queue until we're done with the current one
+                    ports_counter += 1
+                    self.pending_horizontal_ps_evidence.put(new_evidence)
+                    if ports_counter == 5:
+                        ports_counter = 0
+                        break
+
             self.set_evidence_horizontal_portscan(
                 timestamp,
                 pkts_sent,
@@ -588,7 +592,8 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        self.timer_thread.start()
+        self.timer_thread_vertical_ps.start()
+        self.timer_thread_horizontal_ps.start()
 
         while True:
             try:
