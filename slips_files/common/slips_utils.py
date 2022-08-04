@@ -79,7 +79,10 @@ class Utils(object):
         if given_format == required_format:
             return ts
 
-        datetime_obj = self.convert_to_datetime(ts)
+        if given_format == 'datetimeobj':
+            datetime_obj = ts
+        else:
+            datetime_obj = self.convert_to_datetime(ts)
 
         # convert to the req format
         if required_format == 'unixtimestamp':
@@ -91,9 +94,18 @@ class Utils(object):
 
         return result
 
+    def is_datetime_obj(self, ts):
+        """
+        checks if the given ts is a datetime obj
+        """
+        try:
+            ts.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+            return True
+        except AttributeError:
+            return False
 
     def convert_to_datetime(self, ts):
-        if type(ts) == datetime:
+        if self.is_datetime_obj(ts):
             return ts
 
         given_format = self.define_time_format(ts)
@@ -106,7 +118,9 @@ class Utils(object):
 
 
     def define_time_format(self, time: str) -> str:
-        time_format: str = None
+        if self.is_datetime_obj(time):
+            return 'datetimeobj'
+
         try:
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
@@ -158,23 +172,6 @@ class Utils(object):
 
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
-
-    # def get_ts_format(self, timestamp):
-    #     """
-    #     returns the appropriate format of the given ts
-    #     """
-    #     if '+' in timestamp:
-    #         # timestamp contains UTC offset, set the new format accordingly
-    #         newformat = '%Y-%m-%d %H:%M:%S%z'
-    #     else:
-    #         # timestamp doesn't contain UTC offset, set the new format accordingly
-    #         newformat = '%Y-%m-%d %H:%M:%S'
-    #
-    #     # is the seconds field a float?
-    #     if '.' in timestamp:
-    #         # append .f to the seconds field
-    #         newformat = newformat.replace('S', 'S.%f')
-    #     return newformat
 
     def get_own_IPs(self):
         """Returns a list of our local and public IPs"""
