@@ -732,6 +732,8 @@ class Module(Module, multiprocessing.Process):
         if previous_data_for_domain:
             try:
                 previous_ips_for_domain = previous_data_for_domain['IPs']
+                if type(answers) == set:
+                    answers = list(answers)
                 answers.extend(previous_ips_for_domain)
             except KeyError:
                 pass
@@ -751,6 +753,8 @@ class Module(Module, multiprocessing.Process):
             # If no IPs are in the answer, we can not expect the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
+        # to avoid checking the same answer twice
+        answers = set(answers)
         for ip in answers:
             # self.print(f'Checking if we have a connection to ip {ip}')
             if ip in contacted_ips:
@@ -762,6 +766,12 @@ class Module(Module, multiprocessing.Process):
             # this is not a DNS without resolution
             return False
 
+        for ip in answers:
+            if self.check_if_connection_was_made_by_different_version(
+                    profileid, twid, ip
+            ):
+                return False
+
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
         # It can be that Slips is still reading it from the files. Lets check back in some time
@@ -771,7 +781,8 @@ class Module(Module, multiprocessing.Process):
             # mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
             params = [domain, answers, timestamp, profileid, twid, uid]
-            # self.print(f'Starting the timer to check on {domain}, uid {uid}. time {datetime.datetime.now()}')
+            # self.print(f'Starting the timer to check on {domain}, uid {uid}.
+            # time {datetime.datetime.now()}')
             timer = TimerThread(
                 15, self.check_dns_without_connection, params
             )
@@ -780,11 +791,6 @@ class Module(Module, multiprocessing.Process):
             # self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            for ip in answers:
-                if self.check_if_connection_was_made_by_different_version(
-                        profileid, twid, ip
-                ):
-                    return False
             self.helper.set_evidence_DNS_without_conn(
                 domain, timestamp, profileid, twid, uid
             )
@@ -1497,7 +1503,10 @@ class Module(Module, multiprocessing.Process):
                     stime = data.get('stime', False)
 
                     # only check dns without connection if we have answers(we're sure the query is resolved)
-                    if answers:
+                    # sometimes we have 2 dns flows, 1 for ipv4 and 1 fo ipv6, both have the
+                    # same uid, this causes FP dns without connection,
+                    # so make sure we only check the uid once
+                    if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
                         self.check_dns_without_connection(
                             domain, answers, stime, profileid, twid, uid
                         )
