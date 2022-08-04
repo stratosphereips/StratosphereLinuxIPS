@@ -20,20 +20,15 @@ from .database import __database__
 from slips_files.common.slips_utils import utils
 from .notify import Notify
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import configparser
 from os import path
 from colorama import Fore, Style
-import ipaddress
 import sys
-import re
 import os
 from .whitelist import Whitelist
-import psutil
-import pwd
 import time
 import platform
-from git import Repo
 
 
 # Evidence Process
@@ -94,7 +89,7 @@ class EvidenceProcess(multiprocessing.Process):
         # the accumulated threat level and alert
         # flag to only add commit and hash to the firs alert in alerts.json
         self.is_first_alert = True
-        self.alerts_time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
+        self.alerts_time_format = '%Y/%m/%d %H:%M:%S'
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -130,29 +125,18 @@ class EvidenceProcess(multiprocessing.Process):
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
-        # Get the format of the time in the flows
-        try:
-            self.timeformat = self.config.get('timestamp', 'format')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
-
         # Read the width of the TW
         try:
             data = self.config.get('parameters', 'time_window_width')
             self.width = float(data)
+            # Limit any width to be > 0. By default we use 300 seconds, 5minutes
+            if self.width < 0:
+                raise configparser.NoOptionError
         except ValueError:
             # Its not a float
             if 'only_one_tw' in data:
                 # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                 self.width = 9999999999
-        except configparser.NoOptionError:
-            # By default we use 300 seconds, 5minutes
-            self.width = 300.0
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -160,9 +144,8 @@ class EvidenceProcess(multiprocessing.Process):
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.width = 300.0
-        # Limit any width to be > 0. By default we use 300 seconds, 5minutes
-        if self.width < 0:
-            self.width = 300.0
+
+
 
         # Get the detection threshold
         try:
@@ -177,9 +160,7 @@ class EvidenceProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.detection_threshold = 2
         self.print(
-            f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)',
-            2,
-            0,
+            f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)',2,0,
         )
 
         try:
@@ -206,7 +187,8 @@ class EvidenceProcess(multiprocessing.Process):
         This evidence will be written in alerts.log, it won't be displayed in the terminal
         """
         try:
-            now = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+            now = datetime.now()
+            now = utils.convert_format(now, self.alerts_time_format)
             ip = profileid.split('_')[-1].strip()
             return f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
 
@@ -410,7 +392,7 @@ class EvidenceProcess(multiprocessing.Process):
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
             # iso
-            tw_start_time_str = utils.convert_format(twid_start_time, 'iso')
+            tw_start_time_str = utils.convert_format(twid_start_time, self.alerts_time_format)
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -425,7 +407,6 @@ class EvidenceProcess(multiprocessing.Process):
                 tw_stop_time_datetime,
                 self.alerts_time_format
             )
-
 
             hostname = __database__.get_hostname_from_profile(profileid)
             # if there's no hostname, set it as ' '
@@ -470,18 +451,8 @@ class EvidenceProcess(multiprocessing.Process):
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
-        if '.' in flow_datetime:
-            format = '%Y-%m-%dT%H:%M:%S.%f%z'
-        elif '/' in flow_datetime and '-' in flow_datetime :
-            # 2022/06/29-04:36:04
-            format = '%Y/%m/%d-%H:%M:%S'
-        else:
-            # e.g  2020-12-18T03:11:09+02:00
-            format = '%Y-%m-%dT%H:%M:%S%z'
-        human_readable_datetime = datetime.strptime(
-            flow_datetime, format
-        ).strftime('%Y/%m/%d %H:%M:%S')
-        alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
+        readable_datetime = utils.convert_format(flow_datetime, self.alerts_time_format)
+        alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
     def decide_blocking(self, ip, profileid, twid):
