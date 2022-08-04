@@ -31,6 +31,13 @@ class Utils(object):
             'high': 0.8,
             'critical': 1,
         }
+        self.time_formats = ('%Y-%m-%dT%H:%M:%S.%f%z',
+                             '%Y-%m-%d %H:%M:%S.%f',
+                             '%Y-%m-%d %H:%M:%S',
+                             '%Y-%m-%d %H:%M:%S.%f%z',
+                             '%Y/%m/%d %H:%M:%S.%f',
+                             '%Y/%m/%d %H:%M:%S',
+                             '%Y-%m-%d %H:%M:%S%z')
 
     def drop_root_privs(self):
         """
@@ -109,7 +116,7 @@ class Utils(object):
             return ts
 
         given_format = self.define_time_format(ts)
-        # convert to  dateteime
+
         if given_format == 'unixtimestamp':
             datetime_obj = datetime.fromtimestamp(ts)
         else:
@@ -129,46 +136,15 @@ class Utils(object):
         except ValueError:
             pass
 
-        try:
-            # Try the default time format for suricata.
-            datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
-            time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
-            return time_format
-        except ValueError:
-            pass
 
-        # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
-            time_format = '%Y-%m-%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            pass
+        for time_format in self.time_formats:
+            try:
+                datetime.strptime(time, time_format)
+                return time_format
+            except ValueError:
+                pass
 
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
-            time_format = '%Y-%m-%d %H:%M:%S'
-            return time_format
-        except ValueError:
-            pass
-
-        try:
-            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
-            time_format = '%Y/%m/%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            pass
-
-        if '+' in time:
-            # timestamp contains UTC offset, set the new format accordingly
-            time_format = '%Y-%m-%d %H:%M:%S%z'
-            # is the seconds field a float?
-            if '.' in time:
-                # append .f to the seconds field
-                time_format = time_format.replace('S', 'S.%f')
-            return time_format
-        else:
-            return False
+        return False
 
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))

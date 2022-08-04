@@ -334,13 +334,13 @@ class Database(object):
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
         now = datetime.now()
-        now = now.strftime('%d/%m/%Y %H:%M:%S')
+        now = now.strftime('%Y/%m/%d %H:%M:%S')
         self.r.set('slips_start_time', now)
 
     def get_slips_start_time(self):
         """get the time slips started (datetime obj)"""
         if start_time := self.r.get('slips_start_time'):
-            start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
+            start_time = utils.convert_format(start_time, '%Y/%m/%d %H:%M:%S')
             return start_time
 
     def set_input_metadata(self, info:dict):
