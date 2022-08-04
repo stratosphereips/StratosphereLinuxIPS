@@ -61,7 +61,9 @@ class Module(Module, multiprocessing.Process):
                                 daemon=True
         )
         self.pending_arp_scan_evidence = Queue()
-
+        self.alerted_once_arp_scan = False
+        # wait 10s for mmore arp scan evidence to come
+        self.time_to_wait = 10
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -126,10 +128,56 @@ class Module(Module, multiprocessing.Process):
     def wait_for_arp_scans(self):
         """
         This thread waits for 10s then checks if more
-        port scans happened to reduce the number of alerts
+        arp scans happened to reduce the number of alerts
         """
+        # this evidence is the one that triggered this thread
+        scans_ctr = 0
+        while True:
+            try:
+                evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
+            except:
+                # nothing in queue
+                time.sleep(5)
+                continue
+            # unpack the evidence that triggered the thread
+            (ts, profileid, twid, uid, conn_count) = evidence
 
+            # wait 10s if a new evidence arrived
+            time.sleep(self.time_to_wait)
 
+            while True:
+                try:
+                    new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
+                except:
+                    # queue is empty
+                    break
+
+                (ts2, profileid2, twid2, uid2, conn_count2) = new_evidence
+                if (
+                    profileid == profileid2
+                    and twid == twid2
+                ):
+                    # this should be combined with the past alert
+                    ts = ts2
+                    uid = uid2
+                    conn_count = conn_count2
+                else:
+                    # this is an ip performing arp scan in a diff profile or a diff twid,
+                    # we shouldn't accumulate its evidence
+                    # store it back in the queue until we're done with the current one
+                    scans_ctr += 1
+                    self.pending_arp_scan_evidence.put(new_evidence)
+                    if scans_ctr == 3:
+                        scans_ctr = 0
+                        break
+
+            self.set_evidence_arp_scan(
+                ts,
+                profileid,
+                twid,
+                uid,
+                conn_count
+            )
 
 
 
@@ -158,13 +206,23 @@ class Module(Module, multiprocessing.Process):
             # Get together all the arp requests for each IP in this TW
             cached_requests = self.cache_arp_requests[f'{profileid}_{twid}']
             # Append the arp request, and when it happened
-            cached_requests.update({daddr: {'uid': uid, 'ts': ts}})
+            cached_requests.update(
+                {
+                    daddr: {
+                        'uid': uid,
+                        'ts': ts
+                    }
+                }
+            )
             # Update the dict
             self.cache_arp_requests[f'{profileid}_{twid}'] = cached_requests
         except KeyError:
             # create the key for this profileid_twid if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {
-                daddr: {'uid': uid, 'ts': ts}
+                daddr: {
+                    'uid': uid,
+                    'ts': ts
+                }
             }
             return True
 
@@ -187,9 +245,18 @@ class Module(Module, multiprocessing.Process):
                     # to reduce the number of arp scan alerts, only alert once every 5 scans
                     return
                 self.arp_scan_evidence = 0
+
                 conn_count = len(profileids_twids)
+
                 # we are sure this is an arp scan
-                self.set_evidence_arp_scan(ts, profileid, twid, uid, conn_count)
+                if not self.alerted_once_arp_scan:
+                    self.alerted_once_arp_scan = True
+                    self.set_evidence_arp_scan(ts, profileid, twid, uid, conn_count)
+
+                else:
+                    # after alerting once, wait 10s to see if more evidence are coming
+                    self.pending_arp_scan_evidence.put((ts, profileid, twid, uid, conn_count))
+
                 return True
         return False
 
