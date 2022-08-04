@@ -1,7 +1,7 @@
 # Your imports
 import hashlib
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
 import socket
@@ -69,6 +69,28 @@ class Utils(object):
 
         return timed
 
+
+    def convert_format(self, ts, required_format: str):
+        """
+        Detects and converts the given ts to the given format
+        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
+        """
+        given_format = self.define_time_format(ts)
+        if given_format == required_format:
+            return ts
+
+        datetime_obj = self.convert_to_datetime(ts)
+
+        # convert to the req format
+        if required_format == 'unixtimestamp':
+            result = datetime_obj.timestamp()
+        elif required_format == 'iso':
+            result = datetime_obj.astimezone().isoformat()
+        else:
+            result = datetime_obj.strftime(required_format)
+
+        return result
+
     def define_time_format(self, time: str) -> str:
         time_format: str = None
         try:
@@ -107,24 +129,7 @@ class Utils(object):
             time_format = '%Y/%m/%d %H:%M:%S.%f'
             return time_format
         except ValueError:
-            return False
-
-    def get_ts_format(self, timestamp):
-        """
-        returns the appropriate format of the given ts
-        """
-        if '+' in timestamp:
-            # timestamp contains UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S%z'
-        else:
-            # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S'
-
-        # is the seconds field a float?
-        if '.' in timestamp:
-            # append .f to the seconds field
-            newformat = newformat.replace('S', 'S.%f')
-        return newformat
+            pass
 
     def get_own_IPs(self):
         """Returns a list of our local and public IPs"""
@@ -198,39 +203,8 @@ class Utils(object):
             # we can't add repo metadata
             return False
 
-    def format_timestamp(self, timestamp):
-        """
-        Function to unify timestamps printed to log files, notification and cli.
-        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-        returns the date and time in RFC3339 format (IDEA standard) as str by default
-        """
-        if timestamp and (isinstance(timestamp, datetime)):
-            # The timestamp is a datetime
-            timestamp = timestamp.strftime(self.get_ts_format(timestamp))
-        elif timestamp and type(timestamp) == float:
-            # The timestamp is a float
-            timestamp = (
-                datetime.fromtimestamp(timestamp).astimezone().isoformat()
-            )
-        elif ' ' in timestamp:
-            # self.print(f'DATETIME: {timestamp}')
-            # The timestamp is a string with spaces
-            timestamp = timestamp.replace('/', '-')
-            # dt_string = "2020-12-18 3:11:09"
-            # format of incoming ts
-            try:
-                newformat = '%Y-%m-%d %H:%M:%S.%f%z'
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            except ValueError:
-                # The string did not have a time zone
-                newformat = '%Y-%m-%d %H:%M:%S.%f'
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            # convert to iso format
-            timestamp = timestamp.astimezone().isoformat()
 
-        return timestamp
+
 
     def IDEA_format(
         self,
