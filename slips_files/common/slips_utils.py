@@ -91,6 +91,20 @@ class Utils(object):
 
         return result
 
+
+    def convert_to_datetime(self, ts):
+        if type(ts) == datetime:
+            return ts
+
+        given_format = self.define_time_format(ts)
+        # convert to  dateteime
+        if given_format == 'unixtimestamp':
+            datetime_obj = datetime.fromtimestamp(ts)
+        else:
+            datetime_obj = datetime.strptime(ts, given_format)
+        return datetime_obj
+
+
     def define_time_format(self, time: str) -> str:
         time_format: str = None
         try:
