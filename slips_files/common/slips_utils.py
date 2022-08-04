@@ -31,13 +31,16 @@ class Utils(object):
             'high': 0.8,
             'critical': 1,
         }
-        self.time_formats = ('%Y-%m-%dT%H:%M:%S.%f%z',
-                             '%Y-%m-%d %H:%M:%S.%f',
-                             '%Y-%m-%d %H:%M:%S',
-                             '%Y-%m-%d %H:%M:%S.%f%z',
-                             '%Y/%m/%d %H:%M:%S.%f',
-                             '%Y/%m/%d %H:%M:%S',
-                             '%Y-%m-%d %H:%M:%S%z')
+        self.time_formats = (
+            '%Y-%m-%dT%H:%M:%S.%f%z',
+            '%Y-%m-%d %H:%M:%S.%f',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S.%f%z',
+            '%Y/%m/%d %H:%M:%S.%f',
+            '%Y/%m/%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S%z',
+            "%Y-%m-%dT%H:%M:%S"
+         )
 
     def drop_root_privs(self):
         """

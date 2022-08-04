@@ -29,9 +29,8 @@ class UpdateFileManager:
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
-        self.today = time.time()
         # don't store iocs older than 1 week
-        self.interval = 604800
+        self.interval = 7
         self.whitelist = Whitelist(outputqueue, config)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
@@ -926,13 +925,12 @@ class UpdateFileManager:
             return 'domain'
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
-        # to support
+        # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
         filename = ti_file_path.split('/')[-1]
         malicious_domains_dict = {}
-        pattern = "%Y-%m-%dT%H:%M:%S"
         with open(ti_file_path) as feed:
             self.print(
                 f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
@@ -945,15 +943,12 @@ class UpdateFileManager:
 
             for ioc in file:
                 date = ioc['InsertDate']
-                epoch_date = int(
-                    time.mktime(
-                        time.strptime(
-                            date,
-                            pattern
-                        )
-                    )
+                diff = utils.get_time_diff(
+                    date,
+                    time.time(),
+                    return_type='days'
                 )
-                diff = self.today - epoch_date
+
                 if diff > self.interval:
                     continue
                 domain = ioc['DomainAddress']
