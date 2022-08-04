@@ -168,11 +168,11 @@ class InputProcess(multiprocessing.Process):
 
     def stop_queues(self):
         """Stops the profiler and output queues"""
-
         self.profilerqueue.put('stop')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.outputqueue.put(
             '02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n'.format(
-                self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
+                self.lines, now
             )
         )
         self.outputqueue.close()

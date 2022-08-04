@@ -42,8 +42,11 @@ class Utils(object):
             "%Y-%m-%dT%H:%M:%S",
             '%Y-%m-%dT%H:%M:%S%z',
             '%Y/%m/%d-%H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S'
 
          )
+        # this format will be used accross all modules and logfiles of slips
+        self.alerts_format = '%Y/%m/%d %H:%M:%S'
 
     def drop_root_privs(self):
         """
@@ -262,42 +265,6 @@ class Utils(object):
         }
 
         return units[return_type]
-
-
-    # def format_timestamp(self, timestamp):
-    #     """
-    #     Function to unify timestamps printed to log files, notification and cli.
-    #     :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-    #     returns the date and time in RFC3339 format (IDEA standard) as str by default
-    #     """
-    #     if timestamp and (isinstance(timestamp, datetime)):
-    #         # The timestamp is a datetime
-    #         timestamp = timestamp.strftime(self.get_ts_format(timestamp))
-    #     elif timestamp and type(timestamp) == float:
-    #         # The timestamp is a float
-    #         timestamp = (
-    #             datetime.fromtimestamp(timestamp).astimezone().isoformat()
-    #         )
-    #     elif ' ' in timestamp:
-    #         # self.print(f'DATETIME: {timestamp}')
-    #         # The timestamp is a string with spaces
-    #         timestamp = timestamp.replace('/', '-')
-    #         # dt_string = "2020-12-18 3:11:09"
-    #         # format of incoming ts
-    #         try:
-    #             newformat = '%Y-%m-%d %H:%M:%S.%f%z'
-    #             # convert to datetime obj
-    #             timestamp = datetime.strptime(timestamp, newformat)
-    #         except ValueError:
-    #             # The string did not have a time zone
-    #             newformat = '%Y-%m-%d %H:%M:%S.%f'
-    #             # convert to datetime obj
-    #             timestamp = datetime.strptime(timestamp, newformat)
-    #         # convert to iso format
-    #         timestamp = timestamp.astimezone().isoformat()
-    #
-    #     return timestamp
-
 
 
     def IDEA_format(

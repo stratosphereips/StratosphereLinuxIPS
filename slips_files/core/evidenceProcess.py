@@ -89,7 +89,6 @@ class EvidenceProcess(multiprocessing.Process):
         # the accumulated threat level and alert
         # flag to only add commit and hash to the firs alert in alerts.json
         self.is_first_alert = True
-        self.alerts_time_format = '%Y/%m/%d %H:%M:%S'
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -188,7 +187,7 @@ class EvidenceProcess(multiprocessing.Process):
         """
         try:
             now = datetime.now()
-            now = utils.convert_format(now, self.alerts_time_format)
+            now = utils.convert_format(now, utils.alerts_format)
             ip = profileid.split('_')[-1].strip()
             return f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
 
@@ -392,7 +391,7 @@ class EvidenceProcess(multiprocessing.Process):
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
             # iso
-            tw_start_time_str = utils.convert_format(twid_start_time, self.alerts_time_format)
+            tw_start_time_str = utils.convert_format(twid_start_time, utils.alerts_format)
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -405,7 +404,7 @@ class EvidenceProcess(multiprocessing.Process):
 
             tw_stop_time_str = utils.convert_format(
                 tw_stop_time_datetime,
-                self.alerts_time_format
+                utils.alerts_format
             )
 
             hostname = __database__.get_hostname_from_profile(profileid)
@@ -451,7 +450,7 @@ class EvidenceProcess(multiprocessing.Process):
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
-        readable_datetime = utils.convert_format(flow_datetime, self.alerts_time_format)
+        readable_datetime = utils.convert_format(flow_datetime, utils.alerts_format)
         alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 

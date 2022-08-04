@@ -287,8 +287,6 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_data_upload(self, profileid, twid):
-
-
         def remove_ignored_ips(contacted_addresses):
             """
             remove IPs that we shouldn't alert about if they are most contacted
@@ -321,13 +319,9 @@ class Module(Module, multiprocessing.Process):
             flows_list.append(list(flow_dict.items())[0][1])
         # sort flows by ts
         flows_list = sorted(flows_list, key=lambda i: i['ts'])
-        # get first and last flow ts
-        time_of_first_flow = datetime.datetime.fromtimestamp(
-            flows_list[0]['ts']
-        )
-        time_of_last_flow = datetime.datetime.fromtimestamp(
-            flows_list[-1]['ts']
-        )
+
+        time_of_first_flow = flows_list[0]['ts']
+        time_of_last_flow = flows_list[-1]['ts']
 
         # get the time difference between them in seconds
         diff_in_mins = utils.get_time_diff(
