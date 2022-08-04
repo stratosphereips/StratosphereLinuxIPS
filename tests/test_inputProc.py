@@ -2,12 +2,13 @@ import pytest
 from slips_files.core.inputProcess import InputProcess
 import configparser
 import shutil
-
+import os
 
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
+zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
 def create_inputProcess_instance(
     outputQueue, profilerQueue, input_information, input_type
@@ -23,8 +24,9 @@ def create_inputProcess_instance(
         config,
         None,
         'zeek',
-        65531,
+        zeek_tmp_dir,
         False,
+        65531
     )
     inputProcess.bro_timeout = 1
     # override the self.print function to avoid broken pipes

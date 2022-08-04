@@ -48,7 +48,9 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
     git \
     whois \
     golang \
-    nodejs
+    nodejs \
+    notify-osd \
+    libnotify-bin
 
 
  echo "[+] Executing 'python3 -m pip install --upgrade pip'\n"

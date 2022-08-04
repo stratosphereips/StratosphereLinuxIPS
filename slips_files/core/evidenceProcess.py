@@ -68,8 +68,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.clear_logs_dir(logs_folder)
         if self.popup_alerts:
             self.notify = Notify()
-            # The way we send notifications differ depending on the user and the OS
-            self.notify.setup_notifications()
+            if self.notify.bin_found:
+                # The way we send notifications differ depending on the user and the OS
+                self.notify.setup_notifications()
+            else:
+                self.popup_alerts = False
 
         # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
@@ -82,6 +85,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.print(f'Storing Slips logs in {output_folder}')
         self.timeout = 0.00000001
         # this list will have our local and public ips
+
         self.our_ips = utils.get_own_IPs()
         if not self.our_ips:
             self.print('Error getting local and public IPs', 0, 1)
@@ -636,6 +640,7 @@ class EvidenceProcess(multiprocessing.Process):
                         IDEA_dict.update({'commit': commit, 'branch': branch})
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
+                    __database__.setEvidenceFoAllProfiles(IDEA_dict)
 
                     #
                     # Analysis of evidence for blocking or not

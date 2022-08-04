@@ -170,7 +170,37 @@ Once you're done, you can run slips with ```--killall``` to close all the redis 
 NOTICE: if you run more than one instance of Slips on the same file or the same interface, 
 Slips will generate a new directory with the name of the file and the new timestamp inside the ```output/``` dir
 
+## Closing redis servers
 
+Slips uses a random unused port in the range in the range (32768 to 32850).
+
+When running slips, it will warn you if you have more than 1 redis serve open using the following msg
+    
+    [Main] Warning: You have 2 redis servers running. Run Slips with --killall to stop them.
+
+you can use the -k flag to kill 1 open redis server, or all of them using the following command
+    
+    ./slips.py -k
+
+You will be prompted with the following options
+
+    Choose which one to kill [0,1,2 etc..]
+    
+    [0] Close all servers
+    [1] dataset/sample_zeek_files - port 32768
+    [2] dataset/sample_zeek_files - port 32769
+    [3] dataset/sample_zeek_files - port 32770
+
+you can select the number you want to kill or 0 to close all the servers.
+
+Note that if all ports from (32768 to 32850) are unavailable, slips won't be able to start, and you will 
+be asked to close all all of them using the following warning
+
+    All ports from 32768 to 32769 are used. Unable to start slips.
+    
+    Press Enter to close all ports.
+
+You can press enter to close all ports, then start slips again.
 
 ## Reading the output
 The output process collects output from the modules and handles the display of information on screen. Currently, Slips'

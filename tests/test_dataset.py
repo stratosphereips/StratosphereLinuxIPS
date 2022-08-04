@@ -5,6 +5,8 @@ It checks a random evidence and the total number of profiles in every file
 import os
 import pytest
 import shutil
+# from test_slips import create_Main_instance
+from ..slips import *
 
 alerts_file = 'alerts.log'
 
@@ -44,6 +46,15 @@ def has_errors(output_dir):
 
     return False
 
+
+def create_Main_instance(input_information):
+    """returns an instance of Main() class in slips.py"""
+    main = Main(testing=True)
+    main.input_information = input_information
+    main.input_type = 'pcap'
+    main.line_type = False
+    return main
+
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
@@ -79,8 +90,11 @@ def test_pcap(
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
+    slips = create_Main_instance(pcap_path)
+    slips.prepare_zeek_output_dir()
     # remove the generated zeek files
-    shutil.rmtree(f"zeek_files_{pcap_path.split('/')[-1]}")
+    # shutil.rmtree(f"zeek_files_{pcap_path.split('/')[-1]}")
+    shutil.rmtree(f"{slips.zeek_folder}")
 
 @pytest.mark.parametrize(
     'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',

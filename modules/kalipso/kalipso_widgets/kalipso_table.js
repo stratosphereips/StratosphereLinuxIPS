@@ -138,15 +138,28 @@ class Table{
                     var red_keywords = ['critical warning' ]
                     var orange_keywords = ['Sent','Recv','Tot','Size','Type','Duration']
                     var blue_keywords = ['dport_name', 'dport_name/proto']
-                    var cyan_keywords = ['daddr', 'saddr']
+                    // var cyan_keywords = ['daddr', 'saddr']
+
+                    // display ip (source or dst) based on the direction
+                    var direction = timeline_json['preposition'];
+                    if (direction === "to" ){
+                        var cyan_keywords = ['daddr']
+                        timeline_json['saddr'] = ''
+
+                    } else if(direction === "from"){
+                        var cyan_keywords = ['saddr']
+                        timeline_json['daddr'] = ''
+                    }
 
                     if(timeline_json['timestamp']){
-                      //  we will be appending each row value to thiss final_timeline
+                      //  we will be appending each row value to this final_timeline
                         // each value has it's own color
                       var final_timeline = ''
                       var http_data = ''
 
                       for (let [key, value] of Object.entries(timeline_json)) {
+
+
                         if(key.includes('critical warning')){
                           value = color.red(value)
                         }
