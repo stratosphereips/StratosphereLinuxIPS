@@ -3,6 +3,7 @@ import redis
 import os
 import json
 import configparser
+import time
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -175,7 +176,7 @@ def test_setEvidence(outputQueue):
     threat_level = 0.01
     confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
-    timestamp = ''
+    timestamp = time.time()
     category = 'Infomation'
     uid = '123'
     database.setEvidence(
