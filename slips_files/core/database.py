@@ -246,6 +246,7 @@ class Database(object):
             self.disabled_detections = (
                 self.disabled_detections.replace('[', '')
                 .replace(']', '')
+                .replace(',', '')
                 .split()
             )
         except (
@@ -1787,7 +1788,7 @@ class Database(object):
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence):
+    def is_detection_disabled(self, evidence: str):
         """
         Function to check if detection is disabled in slips.conf
         """

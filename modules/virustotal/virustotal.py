@@ -294,7 +294,8 @@ class Module(Module, multiprocessing.Process):
                 ioc = self.api_call_queue.pop(0)
                 if type(ioc) == dict:
                     # this is a file
-                    self.scan_file(self.file_info)
+                    if hasattr(self, 'file_info'):
+                        self.scan_file(self.file_info)
                     continue
 
                 ioc_type = self.get_ioc_type(ioc)

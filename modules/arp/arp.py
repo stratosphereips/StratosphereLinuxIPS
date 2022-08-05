@@ -12,7 +12,8 @@ import sys
 import datetime
 import ipaddress
 import time
-
+import threading
+from multiprocessing import Queue
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -43,6 +44,9 @@ class Module(Module, multiprocessing.Process):
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
+        # evidence to skip before calling setevidence
+        self.arp_scan_evidence = 0
+
         if (
             'yes' in self.delete_zeek_files
             and 'no' in self.store_zeek_files_copy
@@ -52,6 +56,14 @@ class Module(Module, multiprocessing.Process):
             self.arp_ts = time.time()
             # in seconds
             self.period_before_deleting = 3600
+        self.timer_thread_arp_scan = threading.Thread(
+                                target=self.wait_for_arp_scans,
+                                daemon=True
+        )
+        self.pending_arp_scan_evidence = Queue()
+        self.alerted_once_arp_scan = False
+        # wait 10s for mmore arp scan evidence to come
+        self.time_to_wait = 10
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -113,6 +125,62 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.store_zeek_files_copy = 'yes'
 
+    def wait_for_arp_scans(self):
+        """
+        This thread waits for 10s then checks if more
+        arp scans happened to reduce the number of alerts
+        """
+        # this evidence is the one that triggered this thread
+        scans_ctr = 0
+        while True:
+            try:
+                evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
+            except:
+                # nothing in queue
+                time.sleep(5)
+                continue
+            # unpack the evidence that triggered the thread
+            (ts, profileid, twid, uid, conn_count) = evidence
+
+            # wait 10s if a new evidence arrived
+            time.sleep(self.time_to_wait)
+
+            while True:
+                try:
+                    new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
+                except:
+                    # queue is empty
+                    break
+
+                (ts2, profileid2, twid2, uid2, conn_count2) = new_evidence
+                if (
+                    profileid == profileid2
+                    and twid == twid2
+                ):
+                    # this should be combined with the past alert
+                    ts = ts2
+                    uid = uid2
+                    conn_count = conn_count2
+                else:
+                    # this is an ip performing arp scan in a diff profile or a diff twid,
+                    # we shouldn't accumulate its evidence
+                    # store it back in the queue until we're done with the current one
+                    scans_ctr += 1
+                    self.pending_arp_scan_evidence.put(new_evidence)
+                    if scans_ctr == 3:
+                        scans_ctr = 0
+                        break
+
+            self.set_evidence_arp_scan(
+                ts,
+                profileid,
+                twid,
+                uid,
+                conn_count
+            )
+
+
+
     def check_arp_scan(
         self, profileid, twid, daddr, uid, ts, dst_mac, src_mac
     ):
@@ -138,13 +206,23 @@ class Module(Module, multiprocessing.Process):
             # Get together all the arp requests for each IP in this TW
             cached_requests = self.cache_arp_requests[f'{profileid}_{twid}']
             # Append the arp request, and when it happened
-            cached_requests.update({daddr: {'uid': uid, 'ts': ts}})
+            cached_requests.update(
+                {
+                    daddr: {
+                        'uid': uid,
+                        'ts': ts
+                    }
+                }
+            )
             # Update the dict
             self.cache_arp_requests[f'{profileid}_{twid}'] = cached_requests
         except KeyError:
             # create the key for this profileid_twid if it doesn't exist
             self.cache_arp_requests[f'{profileid}_{twid}'] = {
-                daddr: {'uid': uid, 'ts': ts}
+                daddr: {
+                    'uid': uid,
+                    'ts': ts
+                }
             }
             return True
 
@@ -162,38 +240,55 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
-                # we are sure this is an arp scan
-                confidence = 0.8
-                threat_level = 'low'
-                description = (
-                    f'performing an arp scan. Confidence {confidence}.'
-                )
-                type_evidence = 'ARPScan'
-                # category of this evidence according to idea categories
-                category = 'Recon.Scanning'
-                type_detection = 'srcip'
-                source_target_tag = 'Recon'  # srcip description
-                detection_info = profileid.split('_')[1]
+                self.arp_scan_evidence += 1
+                if not self.arp_scan_evidence == 5:
+                    # to reduce the number of arp scan alerts, only alert once every 5 scans
+                    return
+                self.arp_scan_evidence = 0
+
                 conn_count = len(profileids_twids)
-                __database__.setEvidence(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    ts,
-                    category,
-                    source_target_tag=source_target_tag,
-                    conn_count=conn_count,
-                    profileid=profileid,
-                    twid=twid,
-                    uid=uid,
-                )
-                # after we set evidence, clear the dict so we can detect if it does another scan
-                self.cache_arp_requests.pop(f'{profileid}_{twid}')
+
+                # we are sure this is an arp scan
+                if not self.alerted_once_arp_scan:
+                    self.alerted_once_arp_scan = True
+                    self.set_evidence_arp_scan(ts, profileid, twid, uid, conn_count)
+
+                else:
+                    # after alerting once, wait 10s to see if more evidence are coming
+                    self.pending_arp_scan_evidence.put((ts, profileid, twid, uid, conn_count))
+
                 return True
         return False
+
+    def set_evidence_arp_scan(self, ts, profileid, twid, uid, conn_count):
+        confidence = 0.8
+        threat_level = 'low'
+        description = (
+            f'performing an arp scan. Confidence {confidence}.'
+        )
+        type_evidence = 'ARPScan'
+        # category of this evidence according to idea categories
+        category = 'Recon.Scanning'
+        type_detection = 'srcip'
+        source_target_tag = 'Recon'  # srcip description
+        detection_info = profileid.split('_')[1]
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            ts,
+            category,
+            source_target_tag=source_target_tag,
+            conn_count=conn_count,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+        # after we set evidence, clear the dict so we can detect if it does another scan
+        self.cache_arp_requests.pop(f'{profileid}_{twid}')
 
     def check_dstip_outside_localnet(
         self, profileid, twid, daddr, uid, saddr, ts
@@ -352,6 +447,8 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        self.timer_thread_arp_scan.start()
+
         # Main loop function
         while True:
             try:
