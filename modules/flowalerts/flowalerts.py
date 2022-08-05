@@ -66,7 +66,7 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_ssh_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
-        # In seconds
+        # In mins
         self.conn_without_dns_interface_wait_time = 30
         # this dict will contain the number of nxdomains found in every profile
         self.nxdomains = {}
@@ -583,71 +583,72 @@ class Module(Module, multiprocessing.Process):
         self, daddr, twid, profileid, timestamp, uid
     ):
         """Checks if there's a flow to a dstip that has no cached DNS answer"""
-
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
         # if __database__.get_dhcp_servers(daddr):
         # continue
 
-        # to avoid false positives in case of an interface don't alert
-        # ConnectionWithoutDNS until 2 minutes has passed
+        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+        # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
-            if diff < 2:
-                # less than 2 minutes have passed
+            if diff >= self.conn_without_dns_interface_wait_time:
+                # less than 2=30 minutes have passed
                 return False
 
         answers_dict = __database__.get_reverse_dns(daddr)
-        if not answers_dict:
-            # self.print(f'No DNS resolution in {answers_dict}')
-            # There is no DNS resolution, but it can be that Slips is
-            # still reading it from the files.
-            # To give time to Slips to read all the files and get all the flows
-            # don't alert a Connection Without DNS until 5 seconds has passed
-            # in real time from the time of this checking.
+        if answers_dict:
+            return False
+        # self.print(f'No DNS resolution in {answers_dict}')
+        # There is no DNS resolution, but it can be that Slips is
+        # still reading it from the files.
+        # To give time to Slips to read all the files and get all the flows
+        # don't alert a Connection Without DNS until 5 seconds has passed
+        # in real time from the time of this checking.
 
-            # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
-            # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
-            if uid not in self.connections_checked_in_conn_dns_timer_thread:
-                # comes here if we haven't started the timer thread for this connection before
-                # mark this connection as checked
-                self.connections_checked_in_conn_dns_timer_thread.append(uid)
-                params = [daddr, twid, profileid, timestamp, uid]
-                # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
-                # time {datetime.datetime.now()}')
-                timer = TimerThread(
-                    15, self.check_connection_without_dns_resolution, params
-                )
-                timer.start()
-            else:
-                # It means we already checked this conn with the Timer process
-                # (we waited 15 seconds for the dns to arrive after the connection was made)
-                # but still no dns resolution for it.
-                # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
-                if self.check_if_resolution_was_made_by_different_version(
-                        profileid, daddr
-                ):
-                    return False
+        # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
+        # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
+        if uid not in self.connections_checked_in_conn_dns_timer_thread:
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            self.connections_checked_in_conn_dns_timer_thread.append(uid)
+            params = [daddr, twid, profileid, timestamp, uid]
+            # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
-                if self.is_well_known_org(daddr):
-                    # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
-                    return False
-                # self.print(f'Alerting after timer conn without dns on {daddr},
-                self.helper.set_evidence_conn_without_dns(
-                    daddr, timestamp, profileid, twid, uid
+            # time {datetime.datetime.now()}')
+            timer = TimerThread(
+                15, self.check_connection_without_dns_resolution, params
+            )
+            timer.start()
+        else:
+            # It means we already checked this conn with the Timer process
+            # (we waited 15 seconds for the dns to arrive after the connection was made)
+            # but still no dns resolution for it.
+            # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
+            if self.check_if_resolution_was_made_by_different_version(
+                    profileid, daddr
+            ):
+                return False
+
+            if self.is_well_known_org(daddr):
+                # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
+                return False
+            # self.print(f'Alerting after timer conn without dns on {daddr},
+            self.helper.set_evidence_conn_without_dns(
+                daddr, timestamp, profileid, twid, uid
+            )
+            # This UID will never appear again, so we can remove it and
+            # free some memory
+            try:
+                self.connections_checked_in_conn_dns_timer_thread.remove(
+                    uid
                 )
-                # This UID will never appear again, so we can remove it and
-                # free some memory
-                try:
-                    self.connections_checked_in_conn_dns_timer_thread.remove(
-                        uid
-                    )
-                except ValueError:
-                    pass
+            except ValueError:
+                pass
 
     def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
         """
@@ -1127,22 +1128,10 @@ class Module(Module, multiprocessing.Process):
                         and appproto != 'dns'
                         and not self.is_ignored_ip(daddr)
                     ):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
-                        # until 30 minutes has passed
-                        # after starting slips because the dns may have happened before starting slips
-                        start_time = __database__.get_slips_start_time()
-                        diff = utils.get_time_diff(
-                            start_time,
-                            datetime.datetime.now(),
-                            return_type='minutes'
+
+                        self.check_connection_without_dns_resolution(
+                            daddr, twid, profileid, timestamp, uid
                         )
-                        if (
-                            diff
-                            >= self.conn_without_dns_interface_wait_time
-                        ):
-                            self.check_connection_without_dns_resolution(
-                                daddr, twid, profileid, timestamp, uid
-                            )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
