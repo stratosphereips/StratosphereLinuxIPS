@@ -100,28 +100,9 @@ class Database(object):
         # On modern systems, the netstat utility comes pre-installed,
         # this can be done using psutil but it needs root on macos
         command = f'netstat -peanut'
-        # Iterate over all running process
-        if slips_mode == 'daemonized':
-            # A pty is a pseudo-terminal - it's a software implementation that appears to
-            # the attached program like a terminal, but instead of communicating
-            # directly with a "real" terminal, it transfers the input and output to another program.
-            master, slave = pty.openpty()
-            # connect the slave to the pty, and transfer from slave to master
-            subprocess.Popen(
-                command,
-                shell=True,
-                stdin=subprocess.PIPE,
-                stdout=slave,
-                stderr=slave,
-                close_fds=True,
-            )
-            # connect the master to slips
-            cmd_output = os.fdopen(master)
-        else:
-            command = f'netstat -peanut'
-            result = subprocess.run(command.split(), capture_output=True)
-            # Get command output
-            cmd_output = result.stdout.decode('utf-8').splitlines()
+        result = subprocess.run(command.split(), capture_output=True)
+        # Get command output
+        cmd_output = result.stdout.decode('utf-8').splitlines()
 
         for line in cmd_output:
             if f':{redis_port}' in line and 'redis-server' in line:
