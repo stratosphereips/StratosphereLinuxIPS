@@ -24,7 +24,6 @@ from .database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
-import requests
 import os
 import binascii
 import base64
@@ -359,60 +358,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.print(str(inst), 0, 1)
             sys.exit(1)
 
-    def get_time(self, time: str) -> datetime:
-        """
-        Take time in string and return datetime object.
-        The format of time can be completely different. It can be seconds, or dates with specific formats.
-        If user does not define the time format in configuration file, we have to try most frequent cases of time formats.
-        :param time: epoch time
-        """
-
-        if not self.timeformat:
-            # The time format was not defined from configuration file neither from last flows.
-            self.timeformat = utils.define_time_format(time)
-        if not self.timeformat:
-            # We did not find the right time format.
-            self.outputqueue.put(
-                '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
-            )
-        defined_datetime: datetime = None
-        if self.timeformat:
-            if self.timeformat == 'unixtimestamp':
-                # The format of time is in epoch unix timestamp.
-                # Correct datetime according to the current timezone
-                defined_datetime = datetime.fromtimestamp(
-                    float(time), self.local_timezone
-                )
-            else:
-                try:
-                    # The format of time is a complete date.
-                    # Dont modify it, since
-                    # 1) The time is a string, so we dont know the original timezone
-                    # 2) the python call datetime.fromtimestamp uses by default
-                    # the local zone when nothing is specified.
-                    # https://docs.python.org/3/library/datetime.html#datetime.timezone
-                    # convert epoch to datetime obj and use the current timezone
-                    # self.print(time)
-                    # self.print(self.local_timezone)
-                    # defined_datetime = datetime.strptime(time, self.timeformat)#.astimezone(self.local_timezone)
-                    # defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
-                    # defined_datetime = datetime.fromtimestamp(float(time), self.local_timezone)
-                    # convert dt obj to user specified tiemformat
-                    # defined_datetime = defined_datetime.strftime(self.timeformat)
-                    defined_datetime = time
-                except ValueError:
-                    defined_datetime = None
-        else:
-            # We do not know the time format so we can not read it.
-            self.outputqueue.put(
-                '01|profiler|[Profile] We did not find right time format. Please set the time format in the configuration file.'
-            )
-
-        # if defined_datetime is None and self.timeformat:
-        # There is suricata issue with invalid timestamp for examaple: "1900-01-00T00:00:08.511802+0000"
-        # pass
-        return defined_datetime
-
     def process_zeek_tabs_input(self, new_line: str) -> None:
         """
         Process the tab line from zeek.
@@ -433,7 +378,7 @@ class ProfilerProcess(multiprocessing.Process):
         # the key 'type'
         self.column_values['type'] = ''
         try:
-            self.column_values['starttime'] = self.get_time(line[0])
+            self.column_values['starttime'] = utils.convert_to_datetime(line[0])
         except IndexError:
             self.column_values['starttime'] = ''
 
@@ -894,7 +839,7 @@ class ProfilerProcess(multiprocessing.Process):
         # to set the default value to '' if ts isn't found
         ts = line.get('ts', False)
         if ts:
-            self.column_values['starttime'] = self.get_time(ts)
+            self.column_values['starttime'] = utils.convert_to_datetime(ts)
         else:
             self.column_values['starttime'] = ''
 
@@ -1209,7 +1154,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         nline = line.strip().split(self.separator)
         try:
-            self.column_values['starttime'] = self.get_time(
+            self.column_values['starttime'] = utils.convert_to_datetime(
                 nline[self.column_idx['starttime']]
             )
         except KeyError:
@@ -1312,11 +1257,11 @@ class ProfilerProcess(multiprocessing.Process):
         line = new_line['data']
         nline = line.strip().split(self.separator)
         try:
-            self.column_values['starttime'] = self.get_time(nline[0])
+            self.column_values['starttime'] = utils.convert_to_datetime(nline[0])
         except IndexError:
             pass
         try:
-            self.column_values['endtime'] = self.get_time(nline[1])
+            self.column_values['endtime'] = utils.convert_to_datetime(nline[1])
         except IndexError:
             pass
         try:
@@ -1398,7 +1343,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         self.column_values: dict = {}
         try:
-            self.column_values['starttime'] = self.get_time(line['timestamp'])
+            self.column_values['starttime'] = utils.convert_to_datetime(line['timestamp'])
         # except (KeyError, ValueError):
         except ValueError:
             # Reason for catching ValueError:
@@ -1437,13 +1382,13 @@ class ProfilerProcess(multiprocessing.Process):
                     try:
                         # Define time again, because this is line of flow type and
                         # we do not want timestamp but start time.
-                        self.column_values['starttime'] = self.get_time(
+                        self.column_values['starttime'] = utils.convert_to_datetime(
                             line['flow']['start']
                         )
                     except KeyError:
                         self.column_values['starttime'] = False
                     try:
-                        self.column_values['endtime'] = self.get_time(
+                        self.column_values['endtime'] = utils.convert_to_datetime(
                             line['flow']['end']
                         )
                     except KeyError:
@@ -1602,18 +1547,19 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['server_name'] = ''
 
                     try:
-                        self.column_values['notbefore'] = datetime.strptime(
-                            (line['tls']['notbefore']), '%Y-%m-%dT%H:%M:%S'
+                        self.column_values['notbefore'] = utils.convert_to_datetime(
+                            line['tls']['notbefore']
                         )
                     except KeyError:
                         self.column_values['notbefore'] = ''
 
                     try:
-                        self.column_values['notafter'] = datetime.strptime(
-                            (line['tls']['notafter']), '%Y-%m-%dT%H:%M:%S'
+                        self.column_values['notafter'] = utils.convert_to_datetime(
+                            line['tls']['notafter']
                         )
                     except KeyError:
                         self.column_values['notafter'] = ''
+
             elif self.column_values['type'] == 'alert':
                 if line.get('alert', None):
                     try:
@@ -1701,30 +1647,9 @@ class ProfilerProcess(multiprocessing.Process):
                 # seconds.
                 # make sure starttime is a datetime obj (not a str) so we can get the timestamp
                 ts = self.column_values['starttime']
-                if type(ts) == str:
-                    datetime_obj = datetime.strptime(ts, self.timeformat)
-                    starttime = datetime_obj.timestamp()
-                else:
-                    starttime = self.column_values['starttime'].timestamp()
+                starttime = utils.convert_format(ts, 'unixtimestamp')
             except ValueError:
-                # date
-                try:
-                    # This file format is very extended, but we should consider more options. Maybe we should detect the time format.
-                    # Some times if there is no microseconds, the datatime object just give us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
-                    try:
-                        date_time = datetime.strptime(
-                            str(self.column_values['starttime']),
-                            '%Y-%m-%d %H:%M:%S.%f',
-                        )
-                    except ValueError:
-                        date_time = datetime.strptime(
-                            str(self.column_values['starttime']) + '.000000',
-                            '%Y-%m-%d %H:%M:%S.%f',
-                        )
-                    starttime = date_time.timestamp()
-                except ValueError as e:
-                    self.print('We can not recognize time format.', 0, 1)
-                    self.print('{}'.format((type(e))), 0, 1)
+                self.print(f'We can not recognize time format: {ts}', 0, 1)
 
             # This uid check is for when we read things that are not zeek
             if 'uid' not in self.column_values or not self.column_values.get(
@@ -1848,9 +1773,6 @@ class ProfilerProcess(multiprocessing.Process):
                         self.gw_set = True
 
             elif 'software' in flow_type:
-                __database__.add_user_agent_to_profile(
-                    profileid, self.column_values['unparsed_version']
-                )
                 __database__.add_software_to_profile(
                     profileid,
                     self.column_values['software_type'],
@@ -2780,7 +2702,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(
                         'Stopping Profiler Process. Received {} lines ({})'.format(
                             rec_lines,
-                            datetime.now().strftime('%Y-%m-%d--%H:%M:%S'),
+                            utils.convert_format(datetime.now(), utils.alerts_format),
                         ),
                         2,
                         0,

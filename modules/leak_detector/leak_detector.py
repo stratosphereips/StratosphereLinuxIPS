@@ -12,7 +12,6 @@ import binascii
 import os
 import subprocess
 import json
-import datetime
 
 
 class Module(Module, multiprocessing.Process):
@@ -179,9 +178,7 @@ class Module(Module, multiprocessing.Process):
                     # in which tw is this ts?
                     twid = __database__.getTWofTime(profileid, ts)
                     # convert ts to a readable format
-                    flow_datetime = datetime.datetime.fromtimestamp(float(ts))
-                    ts = flow_datetime.strftime('%Y/%m/%d %H:%M:%S')
-
+                    ts = utils.convert_format(ts, utils.alerts_format)
                     if twid:
                         twid = twid[0]
                         type_detection = 'dstip'

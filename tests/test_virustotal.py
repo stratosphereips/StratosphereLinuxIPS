@@ -3,6 +3,7 @@ from ..modules.virustotal.virustotal import Module
 import configparser
 import random
 import pytest
+import time
 
 
 def do_nothing(*args):
@@ -66,10 +67,13 @@ def test_api_limit(outputQueue):
 
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 def test_api_query_(outputQueue, ip):
+    """
+    This one depends on the available quota
+    """
     virustotal = create_virustotal_instance(outputQueue)
     response = virustotal.api_query_(ip)
     # make sure response.status != 204 or 403
-    assert len(response.keys()) > 0
+    assert response != {}, 'Response code is not 200'
     assert response['response_code'] == 1
 
 
@@ -87,6 +91,10 @@ def test_get_domain_vt_data(outputQueue):
 
 
 def test_scan_file(outputQueue, database):
+    """
+    This one depends on the available quota
+    """
+
     virustotal = create_virustotal_instance(outputQueue)
     # test this function with a hash we know is malicious
     file_info = {
@@ -97,7 +105,7 @@ def test_scan_file(outputQueue, database):
         'profileid': 'profile_192.168.1.1',
         'twid': 'timewindow0',
         'md5': '7c401bde8cafc5b745b9f65effbd588f',
-        'ts': '',
+        'ts': time.time(),
     }
     virustotal.file_info = file_info
-    assert virustotal.scan_file(file_info) == 'malicious'
+    assert virustotal.scan_file(file_info) == 'malicious', 'Response code is not 200'

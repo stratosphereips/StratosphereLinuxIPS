@@ -31,4 +31,4 @@ def test_parse_ti_file(outputQueue):
 def test_check_local_ti_files(outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
     dir_ = threatintel.path_to_local_threat_intelligence_data
-    assert threatintel.check_local_ti_files(dir_) == True
+    assert threatintel.check_local_ti_files_for_update(dir_) == True

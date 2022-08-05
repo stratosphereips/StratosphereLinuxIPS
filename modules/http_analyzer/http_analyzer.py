@@ -263,19 +263,21 @@ class Module(Module, multiprocessing.Process):
             return False
 
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
-        UA_info = {'user_agent': user_agent}
+        UA_info = {
+            'user_agent': user_agent,
+            'os_type' : '',
+            'os_name': ''
+        }
         try:
             response = requests.get(url)
+            if response.status_code != 200:
+               raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
             __database__.add_user_agent_to_profile(
                 profileid, json.dumps(UA_info)
             )
             return False
-        if response.status_code != 200:
-            __database__.add_user_agent_to_profile(
-                profileid, json.dumps(UA_info)
-            )
-            return False
+
 
         # returns the following
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
@@ -358,7 +360,6 @@ class Module(Module, multiprocessing.Process):
         """
         if not cached_ua or not user_agent:
             return False
-
         os_type = cached_ua['os_type']
         os_name = cached_ua['os_name']
         # todo now the first UA seen is considered the only valid one and slips

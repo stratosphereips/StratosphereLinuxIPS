@@ -20,20 +20,15 @@ from .database import __database__
 from slips_files.common.slips_utils import utils
 from .notify import Notify
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 import configparser
 from os import path
 from colorama import Fore, Style
-import ipaddress
 import sys
-import re
 import os
 from .whitelist import Whitelist
-import psutil
-import pwd
 import time
 import platform
-from git import Repo
 
 
 # Evidence Process
@@ -129,29 +124,18 @@ class EvidenceProcess(multiprocessing.Process):
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
-        # Get the format of the time in the flows
-        try:
-            self.timeformat = self.config.get('timestamp', 'format')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.timeformat = '%Y/%m/%d %H:%M:%S.%f'
-
         # Read the width of the TW
         try:
             data = self.config.get('parameters', 'time_window_width')
             self.width = float(data)
+            # Limit any width to be > 0. By default we use 300 seconds, 5minutes
+            if self.width < 0:
+                raise configparser.NoOptionError
         except ValueError:
             # Its not a float
             if 'only_one_tw' in data:
                 # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
                 self.width = 9999999999
-        except configparser.NoOptionError:
-            # By default we use 300 seconds, 5minutes
-            self.width = 300.0
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -159,9 +143,8 @@ class EvidenceProcess(multiprocessing.Process):
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.width = 300.0
-        # Limit any width to be > 0. By default we use 300 seconds, 5minutes
-        if self.width < 0:
-            self.width = 300.0
+
+
 
         # Get the detection threshold
         try:
@@ -176,9 +159,7 @@ class EvidenceProcess(multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified, by default...
             self.detection_threshold = 2
         self.print(
-            f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)',
-            2,
-            0,
+            f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)',2,0,
         )
 
         try:
@@ -205,7 +186,8 @@ class EvidenceProcess(multiprocessing.Process):
         This evidence will be written in alerts.log, it won't be displayed in the terminal
         """
         try:
-            now = datetime.now().strftime('%Y/%m/%d %H:%M:%S')
+            now = datetime.now()
+            now = utils.convert_format(now, utils.alerts_format)
             ip = profileid.split('_')[-1].strip()
             return f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
 
@@ -380,22 +362,6 @@ class EvidenceProcess(multiprocessing.Process):
                 f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
             )
 
-    def get_ts_format(self, timestamp):
-        """
-        returns the appropriate format of the given ts
-        """
-        if '+' in timestamp:
-            # timestamp contains UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S%z'
-        else:
-            # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S'
-
-        # is the seconds field a float?
-        if '.' in timestamp:
-            # append .f to the seconds field
-            newformat = newformat.replace('S', 'S.%f')
-        return newformat
 
     def add_to_log_folder(self, data):
         # If logs folder is enabled (using -l), write alerts in the folder as well
@@ -424,20 +390,21 @@ class EvidenceProcess(multiprocessing.Process):
             while twid_start_time == None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
+            # iso
+            tw_start_time_str = utils.convert_format(twid_start_time, utils.alerts_format)
+            # datetime obj
+            tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
-            tw_start_time_str = utils.format_timestamp(float(twid_start_time))
-            tw_start_time_datetime = datetime.strptime(
-                tw_start_time_str,
-                utils.get_ts_format(tw_start_time_str).replace(' ', 'T'),
-            )
             # Convert the tw width to deltatime
-            tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            # tw_width_in_seconds_delta = timedelta(seconds=int(self.width))
+            delta_width = utils.to_delta(self.width)
+
             # Get the stop time of the TW
-            tw_stop_time_datetime = (
-                tw_start_time_datetime + tw_width_in_seconds_delta
-            )
-            tw_stop_time_str = tw_stop_time_datetime.strftime(
-                '%Y-%m-%dT%H:%M:%S.%f%z'
+            tw_stop_time_datetime = (tw_start_time_datetime + delta_width)
+
+            tw_stop_time_str = utils.convert_format(
+                tw_stop_time_datetime,
+                utils.alerts_format
             )
 
             hostname = __database__.get_hostname_from_profile(profileid)
@@ -453,9 +420,7 @@ class EvidenceProcess(multiprocessing.Process):
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f'Problem on format_evidence_causing_this_alert() line {exception_line}',
-                0,
-                1,
+                f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
             )
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
@@ -485,18 +450,8 @@ class EvidenceProcess(multiprocessing.Process):
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
-        if '.' in flow_datetime:
-            format = '%Y-%m-%dT%H:%M:%S.%f%z'
-        elif '/' in flow_datetime and '-' in flow_datetime :
-            # 2022/06/29-04:36:04
-            format = '%Y/%m/%d-%H:%M:%S'
-        else:
-            # e.g  2020-12-18T03:11:09+02:00
-            format = '%Y-%m-%dT%H:%M:%S%z'
-        human_readable_datetime = datetime.strptime(
-            flow_datetime, format
-        ).strftime('%Y/%m/%d %H:%M:%S')
-        alert_to_print = f'{Fore.RED}{human_readable_datetime}{Style.RESET_ALL} {alert_to_print}'
+        readable_datetime = utils.convert_format(flow_datetime, utils.alerts_format)
+        alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
     def decide_blocking(self, ip, profileid, twid):
@@ -588,7 +543,8 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     # Format the time to a common style given multiple type of time variables
-                    flow_datetime = utils.format_timestamp(timestamp)
+                    # flow_datetime = utils.format_timestamp(timestamp)
+                    flow_datetime = utils.convert_format(timestamp, 'iso')
 
                     # prepare evidence for text log file
                     evidence = self.format_evidence_string(
@@ -613,6 +569,7 @@ class EvidenceProcess(multiprocessing.Process):
                         source_target_tag,
                         port,
                         proto,
+                        evidence_ID
                     )
 
                     # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
@@ -682,9 +639,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 ]
                             except KeyError:
                                 self.print(
-                                    f'Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}',
-                                    0,
-                                    1,
+                                    f'Error: Evidence of type {type_evidence} has '
+                                    f'an invalid threat level {threat_level}', 0, 1
                                 )
                                 self.print(f'Description: {description}')
                                 threat_level = 0
@@ -692,19 +648,16 @@ class EvidenceProcess(multiprocessing.Process):
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print(
-                                '\t\tWeighted Threat Level: {}'.format(
-                                    new_threat_level
-                                ),3,0,
+                                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
                             )
                             accumulated_threat_level += new_threat_level
                             self.print(
-                                '\t\tAccumulated Threat Level: {}'.format(
-                                    accumulated_threat_level
-                                ), 3, 0,
+                                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
                             )
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
-                        # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
+                        # The detection should be done in attacks per minute. The parameter in the configuration
+                        # is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
                         # 60 because the width is specified in seconds
                         detection_threshold_in_this_width = (
@@ -796,7 +749,9 @@ class EvidenceProcess(multiprocessing.Process):
                     # {"key_type": "ip", "key": "1.2.3.40",
                     # "evaluation_type": "score_confidence",
                     # "evaluation": { "score": 0.9, "confidence": 0.6 }}
-                    ip_info = {'p2p4slips': evaluation}
+                    ip_info = {
+                        'p2p4slips': evaluation
+                    }
                     ip_info['p2p4slips'].update({'ts': time.time()})
                     __database__.store_blame_report(key, evaluation)
 

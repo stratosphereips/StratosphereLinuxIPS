@@ -136,7 +136,7 @@ class Main:
         """
         Create a dir for logs if logs are enabled
         """
-        logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
+        logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
         try:
             os.makedirs(logs_folder)
         except OSError as e:
@@ -323,11 +323,16 @@ class Main:
             module_class = modules_to_call[module_name]['obj']
             if 'p2ptrust' == module_name:
                 ModuleProcess = module_class(
-                    self.outputqueue, self.config, self.redis_port, output_dir=self.args.output
+                    self.outputqueue,
+                    self.config,
+                    self.redis_port,
+                    output_dir=self.args.output
                 )
             else:
                 ModuleProcess = module_class(
-                    self.outputqueue, self.config, self.redis_port
+                    self.outputqueue,
+                    self.config,
+                    self.redis_port
                 )
             ModuleProcess.start()
             __database__.store_process_PID(
@@ -365,6 +370,7 @@ class Main:
                 self.args.debug,
                 self.config,
                 logs_dir,
+                self.redis_port
             )
             logs_process.start()
             self.print(
@@ -529,6 +535,33 @@ class Main:
         print(f'[Main] Metadata added to {metadata_dir}')
         return self.info_path
 
+    def stop_core_processes(self, PIDs):
+        # Send manual stops to the processes using queues
+        if self.mode == 'daemonized':
+            # when using -D,we kill the processes because
+            # the queues are not there yet to send stop msgs
+            for process in ('OutputProcess',
+                            'ProfilerProcess',
+                            'EvidenceProcess',
+                            'logsProcess'):
+                try:
+                    os.kill(int(PIDs[process]), signal.SIGINT)
+                except KeyError:
+                    # logsprocess isn't started yet
+                    pass
+        else:
+            stop_msg = 'stop_process'
+            self.outputqueue.put(stop_msg)
+            self.profilerProcessQueue.put(stop_msg)
+            self.evidenceProcessQueue.put(stop_msg)
+            if hasattr(self, 'logsProcessQueue'):
+                self.logsProcessQueue.put(stop_msg)
+
+        try:
+            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
+        except KeyError:
+            pass
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
@@ -540,7 +573,7 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = utils.convert_format(datetime.now(), utils.alerts_format)
             __database__.set_input_metadata({'analysis_end': now})
             # add slips end date in the metadata dir
             try:
@@ -564,15 +597,7 @@ class Main:
                 pass
             slips_processes = len(list(PIDs.keys()))
 
-            # Send manual stops to the processes using queues
-            # os.kill(int(PIDs[process]), signal.SIGINT)
-            stop_msg = 'stop_process'
-            self.outputqueue.put(stop_msg)
-            self.profilerProcessQueue.put(stop_msg)
-            self.evidenceProcessQueue.put(stop_msg)
-            if hasattr(self, 'logsProcessQueue'):
-                self.logsProcessQueue.put(stop_msg)
-            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
+            self.stop_core_processes(PIDs)
 
             # only print that modules are still running once
             warning_printed = False
@@ -1025,7 +1050,7 @@ class Main:
             os.path.basename(self.input_information)  # get pcap name from path
         )
         # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+        ts = utils.convert_format(datetime.now(), '%Y-%m-%d_%H:%M:%S')
         self.args.output += f'_{ts}/'
 
         if not os.path.exists(self.args.output):
@@ -1219,7 +1244,7 @@ class Main:
         return self.config
 
     def log_redis_server_PID(self, redis_port, redis_pid):
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
 
         # used in case we need to remove the line using 6379 from running logfile
         with open(self.running_logfile, 'a') as f:
@@ -1550,7 +1575,7 @@ class Main:
         """
         save info about name, size, analysis start date in the db
         """
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         info = {
             'slips_version': version,
             'name': self.input_information,
@@ -1711,6 +1736,7 @@ class Main:
             else:
                 self.redis_port = 6379
 
+
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
@@ -1733,7 +1759,6 @@ class Main:
 
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
-
             if self.args.save:
                 __database__.enable_redis_snapshots()
             else:
@@ -1747,7 +1772,6 @@ class Main:
                     'pidfile': self.daemon.pidfile,
                     'logsfile': self.daemon.logsfile
                 }
-
             else:
                 std_files = {
                     'stderr': stderr,
@@ -1756,11 +1780,9 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-
             # log the PID of the started redis-server
             redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
             self.log_redis_server_PID(self.redis_port, redis_pid)
-
             __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
             self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
@@ -1916,11 +1938,12 @@ class Main:
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
                 if self.mode != 'daemonized' and self.input_type != 'stdin':
+                    now = utils.convert_format(datetime.now(), utils.alerts_format)
                     print(
                         f'Total Number of Profiles in DB so '
                         f'far: {profilesLen}. '
                         f'Modified Profiles in the last TW: {amount_of_modified}. '
-                        f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
+                        f'({now})',
                         end='\r',
                     )
 
