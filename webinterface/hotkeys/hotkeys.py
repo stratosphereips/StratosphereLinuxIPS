@@ -24,6 +24,7 @@ class Hotkeys:
         # self.bp.add_url_rule("/DstPortsClientUDPNotEstablished", view_func=self.set_dstPortsClientUDPNotEstablished)
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
+        self.bp.add_url_rule("/timeline/<profile>/<timewindow>/<search_filter>", view_func=self.set_timeline)
         self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
         self.bp.add_url_rule("/evidence/<profile>/<timewindow>/<alert_id>", view_func=self.set_evidence)
 
@@ -239,14 +240,23 @@ class Hotkeys:
             'data': data
         }
 
-    def set_timeline(self, profile, timewindow):
+    def set_timeline(self, profile, timewindow, search_filter=""):
         """
         Set timeline data of a chosen profile and timewindow
         :return: list of timeline as set initially in database
         """
         data = []
+
         timeline = self.db.zrange(profile + "_" + timewindow + "_timeline", 0, -1)
         if timeline:
+
+            search_filter = search_filter.strip()
+            search = True if search_filter else False
+            reverse = False
+            if search and "!" in search_filter:
+                search_filter = search_filter.replace("!", "")
+                reverse = True
+
             for flow in timeline:
                 flow = json.loads(flow)
 
@@ -259,7 +269,13 @@ class Hotkeys:
                 if flow["state"] == "notestablished":
                     flow["state"] = "not established"
 
-                data.append(flow)
+                # search
+                if not search:
+                    data.append(flow)
+                else:
+                    value_is_present = True if search_filter in flow.values() else False
+                    if (not reverse and value_is_present) or (reverse and not value_is_present):
+                        data.append(flow)
 
         return {
             'data': data
