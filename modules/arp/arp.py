@@ -157,12 +157,10 @@ class Module(Module, multiprocessing.Process):
             last_daddr = profileids_twids[-1]
             starttime = cached_requests[first_daddr]['ts']
             endtime = cached_requests[last_daddr]['ts']
-            # get the time of each one in seconds
             # todo do we need mac addresses?
-            starttime = datetime.datetime.fromtimestamp(starttime)
-            endtime = datetime.datetime.fromtimestamp(endtime)
-            # get the difference between them in seconds
-            self.diff = float(str(endtime - starttime).split(':')[-1])
+            self.diff = utils.get_time_diff(starttime, endtime)
+
+            # in seconds
             if self.diff <= 30.00:
                 # we are sure this is an arp scan
                 confidence = 0.8

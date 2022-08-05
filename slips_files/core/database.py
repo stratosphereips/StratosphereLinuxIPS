@@ -333,14 +333,13 @@ class Database(object):
 
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
-        now = datetime.now()
-        now = now.strftime('%d/%m/%Y %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.r.set('slips_start_time', now)
 
     def get_slips_start_time(self):
         """get the time slips started (datetime obj)"""
         if start_time := self.r.get('slips_start_time'):
-            start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
+            start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time
 
     def set_input_metadata(self, info:dict):
@@ -1854,6 +1853,9 @@ class Database(object):
         # make the evidence threat_level=info
         if profileid.split('_')[1] in str(detection_info):
             threat_level = 'info'
+
+        if timestamp:
+            timestamp = utils.convert_format(timestamp, utils.alerts_format)
 
         evidence_to_send = {
             'profileid': str(profileid),

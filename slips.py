@@ -136,7 +136,7 @@ class Main:
         """
         Create a dir for logs if logs are enabled
         """
-        logs_folder = datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
+        logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
         try:
             os.makedirs(logs_folder)
         except OSError as e:
@@ -540,7 +540,7 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            now = utils.convert_format(datetime.now(), utils.alerts_format)
             __database__.set_input_metadata({'analysis_end': now})
             # add slips end date in the metadata dir
             try:
@@ -1025,7 +1025,7 @@ class Main:
             os.path.basename(self.input_information)  # get pcap name from path
         )
         # add timestamp to avoid conflicts wlp3s0_2022-03-1_03:55
-        ts = datetime.now().strftime('%Y-%m-%d_%H:%M:%S')
+        ts = utils.convert_format(datetime.now(), '%Y-%m-%d_%H:%M:%S')
         self.args.output += f'_{ts}/'
 
         if not os.path.exists(self.args.output):
@@ -1219,7 +1219,7 @@ class Main:
         return self.config
 
     def log_redis_server_PID(self, redis_port, redis_pid):
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
 
         # used in case we need to remove the line using 6379 from running logfile
         with open(self.running_logfile, 'a') as f:
@@ -1550,7 +1550,7 @@ class Main:
         """
         save info about name, size, analysis start date in the db
         """
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         info = {
             'slips_version': version,
             'name': self.input_information,
@@ -1916,11 +1916,12 @@ class Main:
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
                 if self.mode != 'daemonized' and self.input_type != 'stdin':
+                    now = utils.convert_format(datetime.now(), utils.alerts_format)
                     print(
                         f'Total Number of Profiles in DB so '
                         f'far: {profilesLen}. '
                         f'Modified Profiles in the last TW: {amount_of_modified}. '
-                        f'({datetime.now().strftime("%Y-%m-%d--%H:%M:%S")})',
+                        f'({now})',
                         end='\r',
                     )
 

@@ -376,13 +376,12 @@ class Module(Module, multiprocessing.Process):
 
         today = datetime.datetime.now()
 
-        # calculate age
-        day = today.day - creation_date.day
-        month = today.month - creation_date.month
-        year = today.year - creation_date.year
+        age = utils.get_time_diff(
+            creation_date,
+            today,
+            return_type='days'
+        )
 
-        # get the age in days
-        age = (year * 365) + (month * 30) + day
         __database__.setInfoForDomains(domain, {'Age': age})
         return age
 

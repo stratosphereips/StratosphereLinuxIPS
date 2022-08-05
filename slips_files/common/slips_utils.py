@@ -1,7 +1,7 @@
 # Your imports
 import hashlib
 from uuid import uuid4
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
 import socket
@@ -31,6 +31,22 @@ class Utils(object):
             'high': 0.8,
             'critical': 1,
         }
+        self.time_formats = (
+            '%Y-%m-%dT%H:%M:%S.%f%z',
+            '%Y-%m-%d %H:%M:%S.%f',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S.%f%z',
+            '%Y/%m/%d %H:%M:%S.%f',
+            '%Y/%m/%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S%z',
+            "%Y-%m-%dT%H:%M:%S",
+            '%Y-%m-%dT%H:%M:%S%z',
+            '%Y/%m/%d-%H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S'
+
+         )
+        # this format will be used accross all modules and logfiles of slips
+        self.alerts_format = '%Y/%m/%d %H:%M:%S'
 
     def drop_root_privs(self):
         """
@@ -69,8 +85,58 @@ class Utils(object):
 
         return timed
 
+
+    def convert_format(self, ts, required_format: str):
+        """
+        Detects and converts the given ts to the given format
+        :param required_format: can be any format like '%Y/%m/%d %H:%M:%S.%f' or 'unixtimestamp', 'iso'
+        """
+        given_format = self.define_time_format(ts)
+        if given_format == required_format:
+            return ts
+
+        if given_format == 'datetimeobj':
+            datetime_obj = ts
+        else:
+            datetime_obj = self.convert_to_datetime(ts)
+
+        # convert to the req format
+        if required_format == 'unixtimestamp':
+            result = datetime_obj.timestamp()
+        elif required_format == 'iso':
+            result = datetime_obj.astimezone().isoformat()
+        else:
+            result = datetime_obj.strftime(required_format)
+
+        return result
+
+    def is_datetime_obj(self, ts):
+        """
+        checks if the given ts is a datetime obj
+        """
+        try:
+            ts.strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+            return True
+        except AttributeError:
+            return False
+
+    def convert_to_datetime(self, ts):
+        if self.is_datetime_obj(ts):
+            return ts
+
+        given_format = self.define_time_format(ts)
+
+        if given_format == 'unixtimestamp':
+            datetime_obj = datetime.fromtimestamp(float(ts))
+        else:
+            datetime_obj = datetime.strptime(ts, given_format)
+        return datetime_obj
+
+
     def define_time_format(self, time: str) -> str:
-        time_format: str = None
+        if self.is_datetime_obj(time):
+            return 'datetimeobj'
+
         try:
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
@@ -79,52 +145,18 @@ class Utils(object):
         except ValueError:
             pass
 
-        try:
-            # Try the default time format for suricata.
-            datetime.strptime(time, '%Y-%m-%dT%H:%M:%S.%f%z')
-            time_format = '%Y-%m-%dT%H:%M:%S.%f%z'
-            return time_format
-        except ValueError:
-            pass
 
-        # Let's try the classic time format "'%Y-%m-%d %H:%M:%S.%f'"
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S.%f')
-            time_format = '%Y-%m-%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            pass
+        for time_format in self.time_formats:
+            try:
+                datetime.strptime(time, time_format)
+                return time_format
+            except ValueError:
+                pass
 
-        try:
-            datetime.strptime(time, '%Y-%m-%d %H:%M:%S')
-            time_format = '%Y-%m-%d %H:%M:%S'
-            return time_format
-        except ValueError:
-            pass
+        return False
 
-        try:
-            datetime.strptime(time, '%Y/%m/%d %H:%M:%S.%f')
-            time_format = '%Y/%m/%d %H:%M:%S.%f'
-            return time_format
-        except ValueError:
-            return False
-
-    def get_ts_format(self, timestamp):
-        """
-        returns the appropriate format of the given ts
-        """
-        if '+' in timestamp:
-            # timestamp contains UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S%z'
-        else:
-            # timestamp doesn't contain UTC offset, set the new format accordingly
-            newformat = '%Y-%m-%d %H:%M:%S'
-
-        # is the seconds field a float?
-        if '.' in timestamp:
-            # append .f to the seconds field
-            newformat = newformat.replace('S', 'S.%f')
-        return newformat
+    def to_delta(self, time_in_seconds):
+        return timedelta(seconds=int(time_in_seconds))
 
     def get_own_IPs(self):
         """Returns a list of our local and public IPs"""
@@ -198,39 +230,42 @@ class Utils(object):
             # we can't add repo metadata
             return False
 
-    def format_timestamp(self, timestamp):
-        """
-        Function to unify timestamps printed to log files, notification and cli.
-        :param timestamp: can be float, datetime obj or strings like 2021-06-07T12:44:56.654854+0200
-        returns the date and time in RFC3339 format (IDEA standard) as str by default
-        """
-        if timestamp and (isinstance(timestamp, datetime)):
-            # The timestamp is a datetime
-            timestamp = timestamp.strftime(self.get_ts_format(timestamp))
-        elif timestamp and type(timestamp) == float:
-            # The timestamp is a float
-            timestamp = (
-                datetime.fromtimestamp(timestamp).astimezone().isoformat()
-            )
-        elif ' ' in timestamp:
-            # self.print(f'DATETIME: {timestamp}')
-            # The timestamp is a string with spaces
-            timestamp = timestamp.replace('/', '-')
-            # dt_string = "2020-12-18 3:11:09"
-            # format of incoming ts
-            try:
-                newformat = '%Y-%m-%d %H:%M:%S.%f%z'
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            except ValueError:
-                # The string did not have a time zone
-                newformat = '%Y-%m-%d %H:%M:%S.%f'
-                # convert to datetime obj
-                timestamp = datetime.strptime(timestamp, newformat)
-            # convert to iso format
-            timestamp = timestamp.astimezone().isoformat()
 
-        return timestamp
+    def get_time_diff(self, start_time: float, end_time: float, return_type='seconds') -> float:
+        """
+        Both times can be in any format
+        returns difference in seconds
+        :param return_type: can be seconds, minutes, hours or days
+        """
+        start_time = self.convert_to_datetime(start_time)
+        end_time = self.convert_to_datetime(end_time)
+
+        diff = str(end_time - start_time)
+        # if there are days diff between the flows, diff will be something like 1 day, 17:25:57.458395
+        try:
+            # calculate the days difference
+            diff_in_days = float(
+                diff.split(', ')[0].split(' ')[0]
+            )
+            diff = diff.split(', ')[1]
+        except (IndexError, ValueError):
+            # no days different
+            diff = diff.split(', ')[0]
+            diff_in_days = 0
+
+        diff_in_hrs, diff_in_mins, diff_in_seconds = [float(i) for i in diff.split(':')]
+
+
+        diff_in_seconds = diff_in_seconds  + (24 * diff_in_days * 60 + diff_in_hrs * 60 + diff_in_mins)*60
+        units = {
+            'days': diff_in_seconds /(60*60*24),
+            'hours':diff_in_seconds/(60*60),
+            'minutes': diff_in_seconds/60,
+            'seconds':  diff_in_seconds
+        }
+
+        return units[return_type]
+
 
     def IDEA_format(
         self,
