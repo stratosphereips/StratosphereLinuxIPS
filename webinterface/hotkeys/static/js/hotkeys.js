@@ -334,6 +334,12 @@ let profiles = function () {
             update_hotkey()
         },
 
+        search_reload: function(filter_parameter){
+           let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+            if (filter_parameter){ link += "/" + filter_parameter; }
+            active_hotkey_table.ajax.url(link).load();
+        },
+
         onclick_buttons: function () {
             $("#buttons .btn").click(function () {
                 $("#buttons .btn").removeClass('active');
@@ -473,3 +479,14 @@ let hotkey_hook = {
     }
 }
 
+$('#table_timeline_filter_button').click(function(){
+    var filter_gender = $('#table_timeline_filter_input').val();
+    if(filter_gender != '')
+    {
+        hotkeys.search_reload(filter_gender);
+    }
+    else
+    {
+        hotkeys.search_reload(filter_gender)
+    }
+});
