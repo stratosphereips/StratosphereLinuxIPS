@@ -113,6 +113,7 @@ let profiles = function () {
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
+        searching: false,
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
