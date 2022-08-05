@@ -282,7 +282,9 @@ class Hotkeys:
             for alert_ID, evidence_ID_list in alerts_tw.items():
                 evidence_count = len(evidence_ID_list)
                 alert_description = json.loads(evidences[alert_ID])
-                alert_timestamp = self.ts_to_date(alert_description["stime"], seconds=True)
+                alert_timestamp = alert_description["stime"]
+                if not isinstance(alert_timestamp, str): # add check if the timestamp is a string
+                    alert_timestamp = self.ts_to_date(alert_description["stime"], seconds=True)
                 profile_ip = profile.split("_")[1]
                 tw_name = tws[timewindow]["name"]
 
