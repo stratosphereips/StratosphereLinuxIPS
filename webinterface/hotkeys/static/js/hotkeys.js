@@ -77,10 +77,6 @@ let profiles = function () {
     }
 }
 
-let profile = profiles();
-profile.onclick_tws();
-profile.onclick_ips();
-
  let operate_hotkeys = function () {
     let profile = '';
     let timewindow = '';
@@ -430,21 +426,6 @@ let ipinfo = $('#ipinfo').DataTable({
 });
 
 
-let hotkeys = operate_hotkeys();
-hotkeys.onclick_buttons();
-hotkeys.onclick_timeline_flows_saddr();
-hotkeys.onclick_timeline_flows_daddr();
-hotkeys.onclick_timeline_daddr();
-hotkeys.onclick_alerts();
-
-
-let hotkey_hook = {
-    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
-        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
-        hotkeys.update_hook();
-    }
-}
-
 // TODO: fix the chart filter
 //    function filterFunction() {
 //        let chartDom = document.getElementById("container");
@@ -472,4 +453,23 @@ let hotkey_hook = {
 //                })
 //              }
 //      }
+
+
+let profile = profiles();
+profile.onclick_tws();
+profile.onclick_ips();
+
+let hotkeys = operate_hotkeys();
+hotkeys.onclick_buttons();
+hotkeys.onclick_timeline_flows_saddr();
+hotkeys.onclick_timeline_flows_daddr();
+hotkeys.onclick_timeline_daddr();
+hotkeys.onclick_alerts();
+
+let hotkey_hook = {
+    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
+        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
+        hotkeys.update_hook();
+    }
+}
 
