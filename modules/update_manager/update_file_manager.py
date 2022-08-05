@@ -1077,10 +1077,10 @@ class UpdateFileManager:
             malicious_ip_ranges = {}
             # to support nsec/full-results-2019-05-15.json
             if 'json' in malicious_data_path:
-                self.parse_json_ti_feed(
+                return self.parse_json_ti_feed(
                     link_to_download, malicious_data_path
                 )
-                return True
+
 
             with open(malicious_data_path) as feed:
                 self.print(
@@ -1112,7 +1112,7 @@ class UpdateFileManager:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
                 data_column = self.get_data_column(amount_of_columns, line_fields, malicious_data_path)
-                if data_column == 'False':  # don't use if not becayuse it may be 0
+                if data_column == 'False':  # don't use if not because it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it

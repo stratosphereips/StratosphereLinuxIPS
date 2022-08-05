@@ -450,7 +450,6 @@ class Main:
                            if False, closes all the ports in slips supported range of ports
                            regardless of what's in running_slips_logs.txt
         """
-
         if in_logfile:
             failed_to_close = 0
             for pid in self.open_servers_PIDs:
@@ -995,7 +994,7 @@ class Main:
 
             # close all ports in running_slips_logs.txt
             if server_to_close == '0':
-                self.close_all_ports(in_logfile=True)
+                self.close_all_ports()
 
             if len(open_servers) > 0:
                 try:
