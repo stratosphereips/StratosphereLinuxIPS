@@ -11,7 +11,6 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-import pty
 import platform
 import re
 import ast
