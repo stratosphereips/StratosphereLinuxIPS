@@ -1112,7 +1112,7 @@ class UpdateFileManager:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
                 data_column = self.get_data_column(amount_of_columns, line_fields, malicious_data_path)
-                if data_column == 'False':  # don't use if not because it may be 0
+                if data_column == 'False':  # don't use if not becayuse it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it
