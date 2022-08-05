@@ -557,6 +557,11 @@ class Main:
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
+        try:
+            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
+        except KeyError:
+            pass
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
@@ -593,7 +598,6 @@ class Main:
             slips_processes = len(list(PIDs.keys()))
 
             self.stop_core_processes(PIDs)
-            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
 
             # only print that modules are still running once
             warning_printed = False
