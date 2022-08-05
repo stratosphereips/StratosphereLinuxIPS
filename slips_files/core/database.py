@@ -1854,6 +1854,9 @@ class Database(object):
         if profileid.split('_')[1] in str(detection_info):
             threat_level = 'info'
 
+        if timestamp:
+            timestamp = utils.convert_format(timestamp, utils.alerts_format)
+
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),

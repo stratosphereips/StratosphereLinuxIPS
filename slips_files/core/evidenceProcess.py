@@ -638,9 +638,8 @@ class EvidenceProcess(multiprocessing.Process):
                                 ]
                             except KeyError:
                                 self.print(
-                                    f'Error: Evidence of type {type_evidence} has an invalid threat level {threat_level}',
-                                    0,
-                                    1,
+                                    f'Error: Evidence of type {type_evidence} has '
+                                    f'an invalid threat level {threat_level}', 0, 1
                                 )
                                 self.print(f'Description: {description}')
                                 threat_level = 0
@@ -648,19 +647,16 @@ class EvidenceProcess(multiprocessing.Process):
                             # Compute the moving average of evidence
                             new_threat_level = threat_level * confidence
                             self.print(
-                                '\t\tWeighted Threat Level: {}'.format(
-                                    new_threat_level
-                                ),3,0,
+                                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
                             )
                             accumulated_threat_level += new_threat_level
                             self.print(
-                                '\t\tAccumulated Threat Level: {}'.format(
-                                    accumulated_threat_level
-                                ), 3, 0,
+                                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
                             )
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
-                        # The detection should be done in attacks per minute. The parameter in the configuration is attacks per minute
+                        # The detection should be done in attacks per minute. The parameter in the configuration
+                        # is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
                         # 60 because the width is specified in seconds
                         detection_threshold_in_this_width = (
@@ -752,7 +748,9 @@ class EvidenceProcess(multiprocessing.Process):
                     # {"key_type": "ip", "key": "1.2.3.40",
                     # "evaluation_type": "score_confidence",
                     # "evaluation": { "score": 0.9, "confidence": 0.6 }}
-                    ip_info = {'p2p4slips': evaluation}
+                    ip_info = {
+                        'p2p4slips': evaluation
+                    }
                     ip_info['p2p4slips'].update({'ts': time.time()})
                     __database__.store_blame_report(key, evaluation)
 

@@ -127,7 +127,7 @@ class Utils(object):
         given_format = self.define_time_format(ts)
 
         if given_format == 'unixtimestamp':
-            datetime_obj = datetime.fromtimestamp(ts)
+            datetime_obj = datetime.fromtimestamp(float(ts))
         else:
             datetime_obj = datetime.strptime(ts, given_format)
         return datetime_obj
