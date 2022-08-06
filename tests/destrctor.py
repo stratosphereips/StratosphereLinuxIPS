@@ -98,8 +98,9 @@ if __name__ == '__main__':
 
     print(f'Closed {closed_servers} unused redis-servers')
 
-    try:
-        zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
-        os.rmdir(zeek_tmp_dir)
-    except FileNotFoundError:
-        pass
+
+zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
+try:
+    os.rmdir(zeek_tmp_dir)
+except FileNotFoundError:
+    pass

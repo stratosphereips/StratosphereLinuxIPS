@@ -10,7 +10,6 @@ import sys
 import time
 import json
 import configparser
-from datetime import datetime
 
 
 class Module(Module, multiprocessing.Process):
@@ -80,17 +79,7 @@ class Module(Module, multiprocessing.Process):
 
     def process_timestamp(self, timestamp: float) -> str:
         if self.is_human_timestamp is True:
-            # human readable time
-            d = datetime.fromtimestamp(timestamp)
-            timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(
-                d.year,
-                d.month,
-                d.day,
-                d.hour,
-                d.minute,
-                d.second,
-                d.microsecond,
-            )
+            timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
     def process_flow(self, profileid, twid, flow, timestamp: float):

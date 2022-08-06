@@ -27,9 +27,11 @@ class Daemon():
     description = 'This module runs when slips is in daemonized mode'
 
     def __init__(self, slips):
-
         # to use read_configurations defined in Main
         self.slips = slips
+        # tell Main class that we're running in daemonized mode
+        self.slips.set_mode('daemonized', daemon=self)
+
         # this is a conf file used to store the pid of the daemon and is deleted when the daemon stops
         self.pidfile_dir = '/var/lock'
         self.pidfile = os.path.join(self.pidfile_dir, 'slips.lock')
@@ -236,8 +238,6 @@ class Daemon():
 
         # any code run after daemonizing will be run inside the daemon and have the same PID as slips.py
         self.print(f'Slips Daemon is running. [PID {self.pid}]\n')
-        # tell Main class that we're running in daemonized mode
-        self.slips.set_mode('daemonized', daemon=self)
         # start slips normally
         self.slips.start()
 

@@ -365,7 +365,7 @@ class Module(Module, multiprocessing.Process):
             flow = json.loads(flow)
             # suricata ts format: Date+T+Time
             # toddo take the original timestamp or the current tiemstamp?
-            timestamp = str(datetime.datetime.now()).replace(' ', 'T')
+            timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
             line = {
                 'timestamp': timestamp,
                 'flow_id': uid,

@@ -66,8 +66,8 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_ssh_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
-        # In seconds
-        self.conn_without_dns_interface_wait_time = 1800
+        # In mins
+        self.conn_without_dns_interface_wait_time = 30
         # this dict will contain the number of nxdomains found in every profile
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
@@ -284,37 +284,9 @@ class Module(Module, multiprocessing.Process):
             self.check_unknown_port(*flow)
         self.unknown_ports_queue = []
 
-    def get_time_diff(self, start_time, end_time):
-        """
-        Both time should be epoch
-        Returs difference in minutes
-        """
-        diff = str(end_time - start_time)
-        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
-        try:
-            # calculate the days difference
-            diff_in_days = int(
-                diff.split(', ')[0].split(' ')[0]
-            )
-            diff = diff.split(', ')[1]
-        except (IndexError, ValueError):
-            # no days different
-            diff = diff.split(', ')[0]
-            diff_in_days = 0
 
-        diff_in_hrs = int(diff.split(':')[0])
-        diff_in_mins = int(diff.split(':')[1])
-        # total diff in mins
-        diff_in_mins = (
-            24 * diff_in_days * 60
-            + diff_in_hrs * 60
-            + diff_in_mins
-        )
-        return diff_in_mins
 
     def check_data_upload(self, profileid, twid):
-
-
         def remove_ignored_ips(contacted_addresses):
             """
             remove IPs that we shouldn't alert about if they are most contacted
@@ -347,17 +319,16 @@ class Module(Module, multiprocessing.Process):
             flows_list.append(list(flow_dict.items())[0][1])
         # sort flows by ts
         flows_list = sorted(flows_list, key=lambda i: i['ts'])
-        # get first and last flow ts
-        time_of_first_flow = datetime.datetime.fromtimestamp(
-            flows_list[0]['ts']
-        )
-        time_of_last_flow = datetime.datetime.fromtimestamp(
-            flows_list[-1]['ts']
-        )
+
+        time_of_first_flow = flows_list[0]['ts']
+        time_of_last_flow = flows_list[-1]['ts']
 
         # get the time difference between them in seconds
-        diff_in_mins = self.get_time_diff(time_of_first_flow, time_of_last_flow)
-
+        diff_in_mins = utils.get_time_diff(
+            time_of_first_flow,
+            time_of_last_flow,
+            return_type='minutes'
+        )
         # we need the flows that happend in 20 mins span
         if diff_in_mins < 20:
             return
@@ -506,9 +477,9 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # reached the threshold, did the 10 queries happen within 2 seconds?
-        diff = (
+        diff = utils.get_time_diff(
+            self.dns_arpa_queries[profileid][0],
             self.dns_arpa_queries[profileid][-1]
-            - self.dns_arpa_queries[profileid][0]
         )
         if diff > 2:
             # happened within more than 2 seconds
@@ -612,72 +583,72 @@ class Module(Module, multiprocessing.Process):
         self, daddr, twid, profileid, timestamp, uid
     ):
         """Checks if there's a flow to a dstip that has no cached DNS answer"""
-
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
         # if __database__.get_dhcp_servers(daddr):
         # continue
 
-        # to avoid false positives in case of an interface don't alert
-        # ConnectionWithoutDNS until 2 minutes has passed
+        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+        # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
-            diff = now - start_time
-            diff = diff.seconds
-            if int(diff) < 120:
-                # less than 2 minutes have passed
+            diff = utils.get_time_diff(start_time, now, return_type='minutes')
+            if diff >= self.conn_without_dns_interface_wait_time:
+                # less than 2=30 minutes have passed
                 return False
 
         answers_dict = __database__.get_reverse_dns(daddr)
-        if not answers_dict:
-            # self.print(f'No DNS resolution in {answers_dict}')
-            # There is no DNS resolution, but it can be that Slips is
-            # still reading it from the files.
-            # To give time to Slips to read all the files and get all the flows
-            # don't alert a Connection Without DNS until 5 seconds has passed
-            # in real time from the time of this checking.
+        if answers_dict:
+            return False
+        # self.print(f'No DNS resolution in {answers_dict}')
+        # There is no DNS resolution, but it can be that Slips is
+        # still reading it from the files.
+        # To give time to Slips to read all the files and get all the flows
+        # don't alert a Connection Without DNS until 5 seconds has passed
+        # in real time from the time of this checking.
 
-            # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
-            # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
-            if uid not in self.connections_checked_in_conn_dns_timer_thread:
-                # comes here if we haven't started the timer thread for this connection before
-                # mark this connection as checked
-                self.connections_checked_in_conn_dns_timer_thread.append(uid)
-                params = [daddr, twid, profileid, timestamp, uid]
-                # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
-                # time {datetime.datetime.now()}')
-                timer = TimerThread(
-                    15, self.check_connection_without_dns_resolution, params
-                )
-                timer.start()
-            else:
-                # It means we already checked this conn with the Timer process
-                # (we waited 15 seconds for the dns to arrive after the connection was made)
-                # but still no dns resolution for it.
-                # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
-                if self.check_if_resolution_was_made_by_different_version(
-                        profileid, daddr
-                ):
-                    return False
+        # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
+        # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
+        if uid not in self.connections_checked_in_conn_dns_timer_thread:
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            self.connections_checked_in_conn_dns_timer_thread.append(uid)
+            params = [daddr, twid, profileid, timestamp, uid]
+            # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
-                if self.is_well_known_org(daddr):
-                    # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
-                    return False
-                # self.print(f'Alerting after timer conn without dns on {daddr},
-                self.helper.set_evidence_conn_without_dns(
-                    daddr, timestamp, profileid, twid, uid
+            # time {datetime.datetime.now()}')
+            timer = TimerThread(
+                15, self.check_connection_without_dns_resolution, params
+            )
+            timer.start()
+        else:
+            # It means we already checked this conn with the Timer process
+            # (we waited 15 seconds for the dns to arrive after the connection was made)
+            # but still no dns resolution for it.
+            # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
+            if self.check_if_resolution_was_made_by_different_version(
+                    profileid, daddr
+            ):
+                return False
+
+            if self.is_well_known_org(daddr):
+                # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
+                return False
+            # self.print(f'Alerting after timer conn without dns on {daddr},
+            self.helper.set_evidence_conn_without_dns(
+                daddr, timestamp, profileid, twid, uid
+            )
+            # This UID will never appear again, so we can remove it and
+            # free some memory
+            try:
+                self.connections_checked_in_conn_dns_timer_thread.remove(
+                    uid
                 )
-                # This UID will never appear again, so we can remove it and
-                # free some memory
-                try:
-                    self.connections_checked_in_conn_dns_timer_thread.remove(
-                        uid
-                    )
-                except ValueError:
-                    pass
+            except ValueError:
+                pass
 
     def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
         """
@@ -1157,26 +1128,10 @@ class Module(Module, multiprocessing.Process):
                         and appproto != 'dns'
                         and not self.is_ignored_ip(daddr)
                     ):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
-                        # until 30 minutes has passed
-                        # after starting slips because the dns may have happened before starting slips
-                        start_time = __database__.get_slips_start_time()
-                        internal_time = float(
-                            __database__.getSlipsInternalTime()
+
+                        self.check_connection_without_dns_resolution(
+                            daddr, twid, profileid, timestamp, uid
                         )
-                        internal_time = datetime.datetime.fromtimestamp(
-                            internal_time
-                        )
-                        diff_internal = internal_time - start_time
-                        diff_internal = diff_internal.seconds
-                        # self.print(f'Start: {start_time}, InternalTime: {internal_time} [diff {diff_internal}]. TH: {self.conn_without_dns_interface_wait_time}')
-                        if (
-                            int(diff_internal)
-                            >= self.conn_without_dns_interface_wait_time
-                        ):
-                            self.check_connection_without_dns_resolution(
-                                daddr, twid, profileid, timestamp, uid
-                            )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     if proto == 'tcp' and state == 'Established':
@@ -1563,15 +1518,22 @@ class Module(Module, multiprocessing.Process):
                             saddr, daddr, stime, profileid, twid, uid
                         )
 
+
+                        # check if they happened within 10 seconds or less @@@ remove tihs
+                        diff = utils.get_time_diff(
+                            self.smtp_bruteforce_cache[profileid][0],
+                            self.smtp_bruteforce_cache[profileid][-1]
+                        )
                         # check if (3) bad login attemps happened
                         if (
                             len(self.smtp_bruteforce_cache[profileid])
                             == self.smtp_bruteforce_threshold
                         ):
                             # check if they happened within 10 seconds or less
-                            diff = int(
+                            diff = utils.get_time_diff(
+                                self.smtp_bruteforce_cache[profileid][0],
                                 self.smtp_bruteforce_cache[profileid][-1]
-                            ) - int(self.smtp_bruteforce_cache[profileid][0])
+                            )
                             if diff <= 10:
                                 # remove all 3 logins that caused this alert
                                 self.smtp_bruteforce_cache[profileid] = []

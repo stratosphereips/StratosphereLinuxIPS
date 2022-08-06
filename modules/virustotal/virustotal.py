@@ -294,7 +294,8 @@ class Module(Module, multiprocessing.Process):
                 ioc = self.api_call_queue.pop(0)
                 if type(ioc) == dict:
                     # this is a file
-                    self.scan_file(self.file_info)
+                    if hasattr(self, 'file_info'):
+                        self.scan_file(self.file_info)
                     continue
 
                 ioc_type = self.get_ioc_type(ioc)
@@ -450,19 +451,15 @@ class Module(Module, multiprocessing.Process):
         params = {'apikey': self.key}
         ioc_type = self.get_ioc_type(ioc)
         if ioc_type == 'ip':
-            # VT api URL for querying IPs
             self.url = 'https://www.virustotal.com/vtapi/v2/ip-address/report'
             params['ip'] = ioc
         elif ioc_type == 'domain':
-            # VT api URL for querying domains
             self.url = 'https://www.virustotal.com/vtapi/v2/domain/report'
             params['domain'] = ioc
         elif ioc_type == 'url':
-            # VT api URL for querying URLS
             self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
             params['resource'] = ioc
         elif ioc_type == 'md5':
-            # VT api URL for querying files
             self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
             params['resource'] = ioc
 

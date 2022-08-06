@@ -95,7 +95,8 @@ class OutputProcess(multiprocessing.Process):
             return
 
         with open(self.slips_logfile, 'a') as slips_logfile:
-            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            date_time = datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
             slips_logfile.write(f'{date_time} {sender}{msg}\n')
 
 
@@ -189,7 +190,8 @@ class OutputProcess(multiprocessing.Process):
         Log error line to errors.log
         """
         with open(self.errors_logfile, 'a') as errors_logfile:
-            date_time = datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+            date_time = datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
             errors_logfile.write(f'{date_time} {sender}{msg}\n')
 
     def output_line(self, level, sender, msg):

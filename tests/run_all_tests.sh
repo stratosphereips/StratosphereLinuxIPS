@@ -1,7 +1,7 @@
 #!/bin/bash
 # clear the cache database
 ./slips.py -cc
-./slips.py --killall
+
 
 # run all unit tests, -n *5 means distribute tests on 5 different process
 # -s to see print statements as they are executed

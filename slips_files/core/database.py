@@ -100,28 +100,9 @@ class Database(object):
         # On modern systems, the netstat utility comes pre-installed,
         # this can be done using psutil but it needs root on macos
         command = f'netstat -peanut'
-        # Iterate over all running process
-        if slips_mode == 'daemonized':
-            # A pty is a pseudo-terminal - it's a software implementation that appears to
-            # the attached program like a terminal, but instead of communicating
-            # directly with a "real" terminal, it transfers the input and output to another program.
-            master, slave = pty.openpty()
-            # connect the slave to the pty, and transfer from slave to master
-            subprocess.Popen(
-                command,
-                shell=True,
-                stdin=subprocess.PIPE,
-                stdout=slave,
-                stderr=slave,
-                close_fds=True,
-            )
-            # connect the master to slips
-            cmd_output = os.fdopen(master)
-        else:
-            command = f'netstat -peanut'
-            result = subprocess.run(command.split(), capture_output=True)
-            # Get command output
-            cmd_output = result.stdout.decode('utf-8').splitlines()
+        result = subprocess.run(command.split(), capture_output=True)
+        # Get command output
+        cmd_output = result.stdout.decode('utf-8').splitlines()
 
         for line in cmd_output:
             if f':{redis_port}' in line and 'redis-server' in line:
@@ -246,6 +227,7 @@ class Database(object):
             self.disabled_detections = (
                 self.disabled_detections.replace('[', '')
                 .replace(']', '')
+                .replace(',', '')
                 .split()
             )
         except (
@@ -333,14 +315,13 @@ class Database(object):
 
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
-        now = datetime.now()
-        now = now.strftime('%d/%m/%Y %H:%M:%S')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.r.set('slips_start_time', now)
 
     def get_slips_start_time(self):
         """get the time slips started (datetime obj)"""
         if start_time := self.r.get('slips_start_time'):
-            start_time = datetime.strptime(start_time, '%d/%m/%Y %H:%M:%S')
+            start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time
 
     def set_input_metadata(self, info:dict):
@@ -1788,7 +1769,7 @@ class Database(object):
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence):
+    def is_detection_disabled(self, evidence: str):
         """
         Function to check if detection is disabled in slips.conf
         """
@@ -1854,6 +1835,9 @@ class Database(object):
         # make the evidence threat_level=info
         if profileid.split('_')[1] in str(detection_info):
             threat_level = 'info'
+
+        if timestamp:
+            timestamp = utils.convert_format(timestamp, utils.alerts_format)
 
         evidence_to_send = {
             'profileid': str(profileid),
@@ -2169,9 +2153,15 @@ class Database(object):
                     + current_data['threatintelligence']['description']
                     + ', '
                 )
+
+                tags = current_data['threatintelligence'].get('tags','[]')
+                # remove brackets
+                tags = tags.replace(']','').replace('[','').replace("'",'')
+                tags = tags.split(',')
+
                 identification += (
-                    'Tags: '
-                    + current_data['threatintelligence'].get('tags','')
+                    'tags='
+                    + ", ".join(tags)
                     + ', '
                 )
 

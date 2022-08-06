@@ -48,5 +48,4 @@ if __name__ == '__main__':
 
     general = General(__database__, __cache__)
     app.register_blueprint(general.bp, url_prefix="/general")
-
-    app.run(host="0.0.0.0", port=55000, debug=True)
+    app.run(host="0.0.0.0")
