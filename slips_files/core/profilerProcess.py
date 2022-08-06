@@ -24,7 +24,6 @@ from .database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
-import requests
 import os
 import binascii
 import base64
@@ -127,6 +126,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.whitelist_path = 'whitelist.conf'
 
         # Get the time window width, if it was not specified as a parameter
+        data = ''
         try:
             data = self.config.get('parameters', 'time_window_width')
             self.width = float(data)
@@ -885,7 +885,11 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'dns' in file_type:
-            # {"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,"id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org","qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR","AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250","213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
+            # {"ts":1538080852.403669,"uid":"CtahLT38vq7vKJVBC3","id.orig_h":"192.168.2.12","id.orig_p":56343,
+            # "id.resp_h":"192.168.2.1","id.resp_p":53,"proto":"udp","trans_id":2,"rtt":0.008364,"query":"pool.ntp.org"
+            # ,"qclass":1,"qclass_name":"C_INTERNET","qtype":1,"qtype_name":"A","rcode":0,"rcode_name":"NOERROR",
+            # "AA":false,"TC":false,"RD":true,"RA":true,"Z":0,"answers":["185.117.82.70","212.237.100.250",
+            # "213.251.52.107","183.177.72.201"],"TTLs":[42.0,42.0,42.0,42.0],"rejected":false}
             self.column_values.update(
                 {
                     'type': 'dns',
@@ -1651,37 +1655,6 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             # seconds.
             # make sure starttime is a datetime obj (not a str) so we can get the timestamp
-            if type(ts) == str:
-                datetime_obj = datetime.strptime(ts, self.timeformat)
-                starttime = datetime_obj.timestamp()
-            else:
-                starttime = ts.timestamp()
-        except ValueError:
-            # date
-            try:
-                # This file format is very extended, but we should consider more
-                # options. Maybe we should detect the time format.
-                # Some times if there is no microseconds, the datatime object just give
-                # us '2018-12-18 14:00:00' instead of '2018-12-18 14:00:00.000000' so the format fails
-                ts = str(ts)
-                # make sure the given ts has microseconds
-                if '.' not in ts:
-                    ts += '.000000'
-                date_time = datetime.strptime(
-                    ts,
-                    '%Y-%m-%d %H:%M:%S.%f',
-                )
-                starttime = date_time.timestamp()
-            except ValueError as e:
-                self.print('We can not recognize time format.', 0, 1)
-                self.print('{}'.format((type(e))), 0, 1)
-                return ts
-
-    def get_starttime(self):
-        ts = self.column_values['starttime']
-        try:
-            # seconds.
-            # make sure starttime is a datetime obj (not a str) so we can get the timestamp
             starttime = utils.convert_format(ts, 'unixtimestamp')
         except ValueError:
             self.print(f'We can not recognize time format: {ts}', 0, 1)
@@ -1692,6 +1665,7 @@ class ProfilerProcess(multiprocessing.Process):
         Generates a uid if none is found
         """
         # This uid check is for when we read things that are not zeek
+
         uid = self.column_values.get('uid', False)
         if not uid:
             # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
@@ -1700,12 +1674,14 @@ class ProfilerProcess(multiprocessing.Process):
             uid = base64.b64encode(
                 binascii.b2a_hex(os.urandom(9))
             ).decode('utf-8')
+        self.column_values['uid'] = uid
         return uid
 
     def get_rev_profile(self, starttime, daddr_as_obj):
         """
         Get the profileid and twid given the addr and ts when is started
         """
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
         rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
         if not rev_profileid:
             self.print(
@@ -1720,11 +1696,12 @@ class ProfilerProcess(multiprocessing.Process):
             rev_profileid = __database__.getProfileIdFromIP(
                 daddr_as_obj
             )
+
         # in the database, Find the id of the tw where the flow belongs.
         rev_twid = self.get_timewindow(starttime, rev_profileid)
         return rev_profileid, rev_twid
 
-    def publish_to_new_dhcp(self, uid, server_addr, client_addr, profileid, epoch_time):
+    def publish_to_new_dhcp(self, client_addr, epoch_time):
         """
         Publish the GW addr in the new_dhcp channel
         """
@@ -1732,17 +1709,17 @@ class ProfilerProcess(multiprocessing.Process):
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
         to_send = {
-            'uid': uid,
-            'server_addr': server_addr,
+            'uid': self.uid,
+            'server_addr': self.column_values['server_addr'],
             'client_addr': client_addr,
-            'profileid': profileid,
-            'twid': self.get_timewindow(epoch_time, profileid),
+            'profileid': self.profileid,
+            'twid': self.get_timewindow(epoch_time, self.profileid),
             'ts': epoch_time
         }
         __database__.publish('new_dhcp', json.dumps(to_send))
         self.gw_set = True
 
-    def publish_to_new_software(self, profileid, starttime):
+    def publish_to_new_software(self, starttime):
         """
         Send the whole flow to new_software channel
         """
@@ -1751,12 +1728,16 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values.update(
             {
                 'starttime': epoch_time,
-                'twid': self.get_timewindow(epoch_time, profileid),
+                'twid': self.get_timewindow(epoch_time, self.profileid),
             }
         )
         __database__.publish(
             'new_software', json.dumps(self.column_values)
         )
+
+
+
+    ##########################################################################
 
     def add_flow_to_profile(self):
         """
@@ -1766,18 +1747,17 @@ class ProfilerProcess(multiprocessing.Process):
         It interprets each column
         """
         try:
-
             if not self.is_supported_flow():
                 return False
 
-            starttime = self.get_starttime()
+            self.starttime = self.get_starttime()
 
-            self.column_values['uid'] = self.get_uid()
-            uid = self.column_values['uid']
-            flow_type = self.column_values['type']
+            self.uid = self.get_uid()
+            # uid = self.column_values['uid']
+            self.flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
             self.daddr = self.column_values['daddr']
-            profileid = f'profile_{self.saddr}'
+            self.profileid = f'profile_{self.saddr}'
 
             if self.saddr == '' and self.daddr == '':
                 # some zeek flow don't have saddr or daddr,
@@ -1785,89 +1765,8 @@ class ProfilerProcess(multiprocessing.Process):
                 return False
 
             # Check if the flow is whitelisted and we should not process
-            if self.whitelist.is_whitelisted_flow(self.column_values, flow_type):
+            if self.whitelist.is_whitelisted_flow(self.column_values, self.flow_type):
                 return True
-
-            if (
-                'flow' in flow_type
-                or 'conn' in flow_type
-                or 'argus' in flow_type
-                or 'nfdump' in flow_type
-            ):
-                dur = self.column_values['dur']
-                sport = self.column_values['sport']
-                dport = self.column_values['dport']
-                sport = self.column_values['sport']
-                proto = self.column_values['proto']
-                state = self.column_values['state']
-                pkts = self.column_values['pkts']
-                allbytes = self.column_values['bytes']
-                spkts = self.column_values['spkts']
-                sbytes = self.column_values['sbytes']
-                appproto = self.column_values['appproto']
-                smac = self.column_values.get('smac')
-                dmac = self.column_values.get('dmac')
-                # endtime = self.column_values['endtime']
-                # direction = self.column_values['dir']
-                # dpkts = self.column_values['dpkts']
-                # dbytes = self.column_values['dbytes']
-
-                self.publish_to_new_MAC(smac, self.saddr)
-                self.publish_to_new_MAC(dmac, self.daddr)
-
-            elif 'dns' in flow_type:
-                query = self.column_values['query']
-                qclass_name = self.column_values['qclass_name']
-                qtype_name = self.column_values['qtype_name']
-                rcode_name = self.column_values['rcode_name']
-                answers = self.column_values['answers']
-                ttls = self.column_values['TTLs']
-
-                if type(answers) == str:
-                    # If the answer is only 1, Zeek gives a string
-                    # so convert to a list
-                    answers = [answers]
-
-            elif 'dhcp' in flow_type:
-                # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-                client_addr = self.column_values.get('client_addr', False)
-                mac_addr = self.column_values.get('mac', False)
-                host_name = self.column_values.get('host_name', False)
-                server_addr = self.column_values.get('server_addr', False)
-                epoch_time = starttime.timestamp()
-                if client_addr:
-                    profileid = self.get_rev_profile(epoch_time, client_addr)[0]
-                    
-                if mac_addr:
-                    # send this to ip_info module to get vendor info about this MAC
-                    self.publish_to_new_MAC(
-                        mac_addr,
-                        profileid.split('_')[-1],
-                        host_name=host_name
-                    )
-
-                if server_addr:
-                    __database__.store_dhcp_server(server_addr)
-                    __database__.mark_profile_as_dhcp(profileid)
-
-                    if not self.gw_set:
-                        self.publish_to_new_dhcp(
-                            uid,
-                            server_addr,
-                            client_addr,
-                            profileid,
-                            epoch_time
-                        )
-
-            elif 'software' in flow_type:
-                __database__.add_software_to_profile(
-                    profileid,
-                    self.column_values['software_type'],
-                    self.column_values['version.major'],
-                    self.column_values['version.minor'],
-                )
-                self.publish_to_new_software(profileid, starttime)
-
 
             # Create the objects of IPs
             try:
@@ -1877,390 +1776,34 @@ class ProfilerProcess(multiprocessing.Process):
                 # Its a mac
                 return False
 
-            ##############
-            # 4th Define help functions for storing data
-            def store_features_going_out(profileid, twid, starttime):
-                """
-                function for adding the features going out of the profile
-                """
-                role = 'Client'
-                # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-                if (
-                    'flow' in flow_type
-                    or 'conn' in flow_type
-                    or 'argus' in flow_type
-                    or 'nfdump' in flow_type
-                ):
-                    # Tuple
-                    tupleid = f'{daddr_as_obj}-{dport}-{proto}'
-                    # Compute the symbol for this flow, for this TW, for this profile.
-                    # The symbol is based on the 'letters' of the original Startosphere ips tool
-                    symbol = self.compute_symbol(
-                        profileid,
-                        twid,
-                        tupleid,
-                        starttime,
-                        dur,
-                        allbytes,
-                        tuple_key='OutTuples',
-                    )
-                    # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
-                    # Add the out tuple
-                    __database__.add_tuple(
-                        profileid, twid, tupleid, symbol, role, starttime, uid
-                    )
-                    # Add the dstip
-                    __database__.add_ips(
-                        profileid, twid, daddr_as_obj, self.column_values, role
-                    )
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(
-                        profileid,
-                        twid,
-                        daddr_as_obj,
-                        self.column_values,
-                        role,
-                        port_type,
-                    )
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(
-                        profileid,
-                        twid,
-                        daddr_as_obj,
-                        self.column_values,
-                        role,
-                        port_type,
-                    )
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(
-                        profileid=profileid,
-                        twid=twid,
-                        stime=starttime,
-                        dur=dur,
-                        saddr=str(saddr_as_obj),
-                        sport=sport,
-                        daddr=str(daddr_as_obj),
-                        dport=dport,
-                        proto=proto,
-                        state=state,
-                        pkts=pkts,
-                        allbytes=allbytes,
-                        spkts=spkts,
-                        sbytes=sbytes,
-                        appproto=appproto,
-                        uid=uid,
-                        label=self.label,
-                        flow_type=flow_type,
-                    )
 
-                elif 'dns' in flow_type:
-                    __database__.add_out_dns(
-                        profileid,
-                        twid,
-                        starttime,
-                        flow_type,
-                        uid,
-                        query,
-                        qclass_name,
-                        qtype_name,
-                        rcode_name,
-                        answers,
-                        ttls,
-                    )
-                elif flow_type == 'http':
-
-                    __database__.add_out_http(
-                        profileid,
-                        twid,
-                        starttime,
-                        flow_type,
-                        uid,
-                        self.column_values['method'],
-                        self.column_values['host'],
-                        self.column_values['uri'],
-                        self.column_values['httpversion'],
-                        self.column_values['user_agent'],
-                        self.column_values['request_body_len'],
-                        self.column_values['response_body_len'],
-                        self.column_values['status_code'],
-                        self.column_values['status_msg'],
-                        self.column_values['resp_mime_types'],
-                        self.column_values['resp_fuids'],
-                    )
-                elif flow_type == 'ssl':
-                    __database__.add_out_ssl(
-                        profileid,
-                        twid,
-                        starttime,
-                        daddr_as_obj,
-                        self.column_values['dport'],
-                        flow_type,
-                        uid,
-                        self.column_values['sslversion'],
-                        self.column_values['cipher'],
-                        self.column_values['resumed'],
-                        self.column_values['established'],
-                        self.column_values['cert_chain_fuids'],
-                        self.column_values['client_cert_chain_fuids'],
-                        self.column_values['subject'],
-                        self.column_values['issuer'],
-                        self.column_values['validation_status'],
-                        self.column_values['curve'],
-                        self.column_values['server_name'],
-                        self.column_values['ja3'],
-                        self.column_values['ja3s'],
-                        self.column_values['is_DoH'],
-                    )
-                elif flow_type == 'ssh':
-                    __database__.add_out_ssh(
-                        profileid,
-                        twid,
-                        starttime,
-                        flow_type,
-                        uid,
-                        self.column_values['version'],
-                        self.column_values['auth_attempts'],
-                        self.column_values['auth_success'],
-                        self.column_values['client'],
-                        self.column_values['server'],
-                        self.column_values['cipher_alg'],
-                        self.column_values['mac_alg'],
-                        self.column_values['compression_alg'],
-                        self.column_values['kex_alg'],
-                        self.column_values['host_key_alg'],
-                        self.column_values['host_key'],
-                    )
-                elif flow_type == 'notice':
-                    __database__.add_out_notice(
-                        profileid,
-                        twid,
-                        starttime,
-                        self.daddr,
-                        self.column_values['sport'],
-                        self.column_values['dport'],
-                        self.column_values['note'],
-                        self.column_values['msg'],
-                        self.column_values['scanned_port'],
-                        self.column_values['scanning_ip'],
-                        uid,
-                    )
-                elif flow_type == 'ftp':
-                    used_port = self.column_values['used_port']
-                    if used_port:
-                        __database__.set_ftp_port(used_port)
-                elif flow_type == 'smtp':
-                    to_send = {
-                        'uid': uid,
-                        'daddr': self.daddr,
-                        'saddr': self.saddr,
-                        'profileid': profileid,
-                        'twid': twid,
-                        'ts': starttime,
-                        'last_reply': self.column_values['last_reply'],
-                    }
-                    to_send = json.dumps(to_send)
-                    __database__.publish('new_smtp', to_send)
-                elif flow_type == 'files':
-                    """ " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
-                    to_send = {
-                        'uid': uid,
-                        'daddr': self.daddr,
-                        'saddr': self.saddr,
-                        'size': self.column_values['size'],
-                        'md5': self.column_values['md5'],
-                        'sha1': self.column_values['sha1'],
-                        'analyzers': self.column_values['analyzers'],
-                        'source': self.column_values['source'],
-                        'profileid': profileid,
-                        'twid': twid,
-                        'ts': starttime,
-                    }
-                    to_send = json.dumps(to_send)
-                    __database__.publish('new_downloaded_file', to_send)
-
-                elif flow_type == 'known_services':
-                    # Send known_services.log data to new_service channel in flowalerts module
-                    to_send = {
-                        'uid': uid,
-                        'saddr': self.saddr,
-                        'port_num': self.column_values['port_num'],
-                        'port_proto': self.column_values['port_proto'],
-                        'service': self.column_values['service'],
-                        'profileid': profileid,
-                        'twid': twid,
-                        'ts': starttime,
-                    }
-                    to_send = json.dumps(to_send)
-                    __database__.publish('new_service', to_send)
-
-                elif flow_type == 'arp':
-                    to_send = {
-                        'uid': uid,
-                        'daddr': self.daddr,
-                        'saddr': self.saddr,
-                        'dst_mac': self.column_values['dst_mac'],
-                        'src_mac': self.column_values['src_mac'],
-                        'dst_hw': self.column_values['dst_hw'],
-                        'src_hw': self.column_values['src_hw'],
-                        'operation': self.column_values['operation'],
-                        'ts': starttime,
-                        'profileid': profileid,
-                        'twid': twid,
-                    }
-                    # send to arp module
-                    to_send = json.dumps(to_send)
-                    __database__.publish('new_arp', to_send)
-
-                    self.publish_to_new_MAC(
-                        self.column_values['dst_mac'], self.daddr
-                    )
-                    self.publish_to_new_MAC(
-                        self.column_values['src_mac'], self.saddr
-                    )
-
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(
-                        profileid=profileid,
-                        twid=twid,
-                        stime=starttime,
-                        dur='0',
-                        saddr=str(saddr_as_obj),
-                        daddr=str(daddr_as_obj),
-                        proto='ARP',
-                        uid=uid,
-                    )
-                else:
-                    return False
-                # if the flow type matched any of the ifs above,
-                # mark this profile as modified
-                __database__.markProfileTWAsModified(profileid, twid, '')
-
-            def store_features_going_in(profileid, twid, starttime):
-                """
-                This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
-                """
-                role = 'Server'
-                # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-                if (
-                    'flow' in flow_type
-                    or 'conn' in flow_type
-                    or 'argus' in flow_type
-                    or 'nfdump' in flow_type
-                ):
-                    # Tuple. We use the src ip, but the dst port still!
-                    tupleid = (
-                        str(saddr_as_obj) + '-' + str(dport) + '-' + proto
-                    )
-                    # Compute symbols.
-                    symbol = self.compute_symbol(
-                        profileid,
-                        twid,
-                        tupleid,
-                        starttime,
-                        dur,
-                        allbytes,
-                        tuple_key='InTuples',
-                    )
-                    # Add the src tuple
-                    __database__.add_tuple(
-                        profileid, twid, tupleid, symbol, role, starttime, uid
-                    )
-                    # Add the srcip
-                    __database__.add_ips(
-                        profileid, twid, saddr_as_obj, self.column_values, role
-                    )
-                    # Add the dstport
-                    port_type = 'Dst'
-                    __database__.add_port(
-                        profileid,
-                        twid,
-                        daddr_as_obj,
-                        self.column_values,
-                        role,
-                        port_type,
-                    )
-                    # Add the srcport
-                    port_type = 'Src'
-                    __database__.add_port(
-                        profileid,
-                        twid,
-                        daddr_as_obj,
-                        self.column_values,
-                        role,
-                        port_type,
-                    )
-                    # Add the flow with all the fields interpreted
-                    __database__.add_flow(
-                        profileid=profileid,
-                        twid=twid,
-                        stime=starttime,
-                        dur=dur,
-                        saddr=str(saddr_as_obj),
-                        sport=sport,
-                        daddr=str(daddr_as_obj),
-                        dport=dport,
-                        proto=proto,
-                        state=state,
-                        pkts=pkts,
-                        allbytes=allbytes,
-                        spkts=spkts,
-                        sbytes=sbytes,
-                        appproto=appproto,
-                        uid=uid,
-                        label=self.label,
-                    )
-                    # No dns check going in. Probably ok.
-                    __database__.markProfileTWAsModified(profileid, twid, '')
-
-            ##########################################
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.print(
-                'Storing data in the profile: {}'.format(profileid), 3, 0
+                'Storing data in the profile: {}'.format(self.profileid), 3, 0
             )
 
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
-            twid = self.get_timewindow(starttime, profileid)
-
+            self.twid = self.get_timewindow(self.starttime, self.profileid)
             if self.home_net:
                 # Home. Create profiles for home IPs only
-                if self.analysis_direction == 'out':
-                    # Home and only out. Check if the src IP is in the home. If yes, store only out
-                    if saddr_as_obj in self.home_net:
-                        __database__.addProfile(
-                            profileid, starttime, self.width
-                        )
-                        store_features_going_out(profileid, twid, starttime)
-                elif self.analysis_direction == 'all':
+                if saddr_as_obj in self.home_net:
+                    __database__.addProfile(
+                        self.profileid, self.starttime, self.width
+                    )
+                self.store_features_going_out()
+
+                if self.analysis_direction == 'all':
                     # Home and all. Check if src IP or dst IP are in home. Store all
-                    if saddr_as_obj in self.home_net:
-                        __database__.addProfile(
-                            profileid, starttime, self.width
-                        )
-                        store_features_going_out(profileid, twid, starttime)
                     if daddr_as_obj in self.home_net:
-                        rev_profileid, rev_twid = self.get_rev_profile(
-                            starttime, daddr_as_obj
-                        )
-                        store_features_going_in(
-                            rev_profileid, rev_twid, starttime
-                        )
+                        self.handle_in_flows(daddr_as_obj, self, self.starttime)
             elif not self.home_net:
                 # No home. Create profiles for everybody
-                if self.analysis_direction == 'out':
-                    # No home. Only store out
-                    __database__.addProfile(profileid, starttime, self.width)
-                    store_features_going_out(profileid, twid, starttime)
-                elif self.analysis_direction == 'all':
+                __database__.addProfile(self.profileid, self.starttime, self.width)
+                self.store_features_going_out()
+                if self.analysis_direction == 'all':
                     # No home. Store all
-                    __database__.addProfile(profileid, starttime, self.width)
-                    rev_profileid, rev_twid = self.get_rev_profile(
-                        starttime, daddr_as_obj
-                    )
-                    store_features_going_out(profileid, twid, starttime)
-                    store_features_going_in(rev_profileid, rev_twid, starttime)
+                    self.handle_in_flows(daddr_as_obj, self, self.starttime)
 
             """
             # 2nd. Check home network
@@ -2352,8 +1895,9 @@ class ProfilerProcess(multiprocessing.Process):
                         store_features_going_out(profileid, twid, starttime)
                         self.print('Features going in')
                         store_features_going_in(rev_profileid, rev_twid, starttime)
+                return self.profileid, twid
+
             """
-            return profileid, twid
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print(
@@ -2367,32 +1911,451 @@ class ProfilerProcess(multiprocessing.Process):
             self.print('{}'.format(inst), 0, 1)
             return False
 
+
+    def handle_conn(self):
+        role = 'Client'
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        saddr_as_obj = ipaddress.ip_address(self.saddr)
+
+        tupleid = f'{daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        # Compute the symbol for this flow, for this TW, for this profile.
+        # The symbol is based on the 'letters' of the original Startosphere ips tool
+        symbol = self.compute_symbol('OutTuples')
+        # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
+        # Add the out tuple
+        __database__.add_tuple(
+            self.profileid, self.twid, tupleid, symbol, role, self.starttime, self.uid
+        )
+        # Add the dstip
+        __database__.add_ips(
+            self.profileid, self.twid, daddr_as_obj, self.column_values, role
+        )
+        # Add the dstport
+        port_type = 'Dst'
+        __database__.add_port(
+            self.profileid,
+            self.twid,
+            daddr_as_obj,
+            self.column_values,
+            role,
+            port_type,
+        )
+        # Add the srcport
+        port_type = 'Src'
+        __database__.add_port(
+            self.profileid,
+            self.twid,
+            daddr_as_obj,
+            self.column_values,
+            role,
+            port_type,
+        )
+        # Add the flow with all the fields interpreted
+        __database__.add_flow(
+            profileid=self.profileid,
+            twid=self.twid,
+            stime=self.starttime,
+            dur=self.column_values['dur'],
+            saddr=str(saddr_as_obj),
+            sport=self.column_values['sport'],
+            daddr=str(daddr_as_obj),
+            dport=self.column_values['dport'],
+            proto=self.column_values['proto'],
+            state=self.column_values['state'],
+            pkts=self.column_values['pkts'],
+            allbytes=self.column_values['bytes'],
+            spkts=self.column_values['spkts'],
+            sbytes=self.column_values['sbytes'],
+            appproto=self.column_values['appproto'],
+            uid=self.uid,
+            label=self.label,
+            flow_type=self.flow_type,
+        )
+
+    def handle_dns(self):
+        __database__.add_out_dns(
+            self.profileid,
+            self.twid,
+            self.starttime,
+            self.flow_type,
+            self.uid,
+            self.column_values['query'],
+            self.column_values['qclass_name'],
+            self.column_values['qtype_name'],
+            self.column_values['rcode_name'],
+            self.column_values['answers'],
+            self.column_values['TTLs']
+        )
+
+    def handle_http(self):
+        __database__.add_out_http(
+            self.profileid,
+            self.twid,
+            self.starttime,
+            self.flow_type,
+            self.uid,
+            self.column_values['method'],
+            self.column_values['host'],
+            self.column_values['uri'],
+            self.column_values['httpversion'],
+            self.column_values['user_agent'],
+            self.column_values['request_body_len'],
+            self.column_values['response_body_len'],
+            self.column_values['status_code'],
+            self.column_values['status_msg'],
+            self.column_values['resp_mime_types'],
+            self.column_values['resp_fuids'],
+        )
+
+    def handle_ssl(self):
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        __database__.add_out_ssl(
+            self.profileid,
+            self.twid,
+            self.starttime,
+            daddr_as_obj,
+            self.column_values['dport'],
+            self.flow_type,
+            self.uid,
+            self.column_values['sslversion'],
+            self.column_values['cipher'],
+            self.column_values['resumed'],
+            self.column_values['established'],
+            self.column_values['cert_chain_fuids'],
+            self.column_values['client_cert_chain_fuids'],
+            self.column_values['subject'],
+            self.column_values['issuer'],
+            self.column_values['validation_status'],
+            self.column_values['curve'],
+            self.column_values['server_name'],
+            self.column_values['ja3'],
+            self.column_values['ja3s'],
+            self.column_values['is_DoH'],
+        )
+
+    def handle_ssh(self):
+        __database__.add_out_ssh(
+            self.profileid,
+            self.twid,
+            self.starttime,
+            self.flow_type,
+            self.uid,
+            self.column_values['version'],
+            self.column_values['auth_attempts'],
+            self.column_values['auth_success'],
+            self.column_values['client'],
+            self.column_values['server'],
+            self.column_values['cipher_alg'],
+            self.column_values['mac_alg'],
+            self.column_values['compression_alg'],
+            self.column_values['kex_alg'],
+            self.column_values['host_key_alg'],
+            self.column_values['host_key'],
+        )
+
+
+    def handle_notice(self):
+        __database__.add_out_notice(
+                self.profileid,
+                self.twid,
+                self.starttime,
+                self.daddr,
+                self.column_values['sport'],
+                self.column_values['dport'],
+                self.column_values['note'],
+                self.column_values['msg'],
+                self.column_values['scanned_port'],
+                self.column_values['scanning_ip'],
+                self.uid,
+        )
+
+    def handle_ftp(self):
+        used_port = self.column_values['used_port']
+        if used_port:
+            __database__.set_ftp_port(used_port)
+
+    def handle_smtp(self):
+        to_send = {
+                'uid': self.uid,
+                'daddr': self.daddr,
+                'saddr': self.saddr,
+                'profileid': self.profileid,
+                'twid': self.twid,
+                'ts': self.starttime,
+                'last_reply': self.column_values['last_reply'],
+            }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_smtp', to_send)
+
+    def handle_in_flows(self, daddr_as_obj):
+        rev_profileid, rev_twid = self.get_rev_profile(
+            self.starttime
+        )
+        self.store_features_going_in(
+            rev_profileid, rev_twid, self.starttime
+        )
+
+    def handle_software(self):
+        __database__.add_software_to_profile(
+            self.profileid,
+            self.column_values['software_type'],
+            self.column_values['version.major'],
+            self.column_values['version.minor'],
+        )
+        self.publish_to_new_software(self.profileid, self.starttime)
+
+
+    def handle_dhcp(self):
+        # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
+        if self.column_values.get('client_addr', False):
+            self.profileid = \
+                self.get_rev_profile(self.starttime.timestamp(), self.column_values.get('client_addr', False))[0]
+        if self.column_values.get('mac', False):
+            # send this to ip_info module to get vendor info about this MAC
+            self.publish_to_new_MAC(
+                self.column_values.get('mac', False),
+                self.profileid.split('_')[-1],
+                host_name=(self.column_values.get('host_name', False))
+            )
+        if self.column_values.get('server_addr', False):
+            __database__.store_dhcp_server(self.column_values.get('server_addr', False))
+            __database__.mark_profile_as_dhcp(self.profileid)
+
+            if not self.gw_set:
+                self.publish_to_new_dhcp(
+                    self.uid,
+                    self.column_values.get('server_addr', False),
+                    self.column_values.get('client_addr', False),
+                    self.profileid,
+                    self.starttime.timestamp()
+                )
+
+
+    def handle_files(self):
+        """ " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
+        to_send = {
+            'uid': self.uid,
+            'daddr': self.daddr,
+            'saddr': self.saddr,
+            'size': self.column_values['size'],
+            'md5': self.column_values['md5'],
+            'sha1': self.column_values['sha1'],
+            'analyzers': self.column_values['analyzers'],
+            'source': self.column_values['source'],
+            'profileid': self.profileid,
+            'twid': self.twid,
+            'ts': self.starttime,
+        }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_downloaded_file', to_send)
+
+    def handle_known_services(self, ):
+        # Send known_services.log data to new_service channel in flowalerts module
+        to_send = {
+            'uid': self.uid,
+            'saddr': self.saddr,
+            'port_num': self.column_values['port_num'],
+            'port_proto': self.column_values['port_proto'],
+            'service': self.column_values['service'],
+            'profileid': self.profileid,
+            'twid': self.twid,
+            'ts': self.starttime,
+        }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_service', to_send)
+
+    def handle_arp(self):
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        saddr_as_obj = ipaddress.ip_address(self.saddr)
+        to_send = {
+            'uid': self.uid,
+            'daddr': self.daddr,
+            'saddr': self.saddr,
+            'dst_mac': self.column_values['dst_mac'],
+            'src_mac': self.column_values['src_mac'],
+            'dst_hw': self.column_values['dst_hw'],
+            'src_hw': self.column_values['src_hw'],
+            'operation': self.column_values['operation'],
+            'ts': self.starttime,
+            'profileid': self.profileid,
+            'twid': self.twid,
+        }
+        # send to arp module
+        to_send = json.dumps(to_send)
+        __database__.publish('new_arp', to_send)
+
+        self.publish_to_new_MAC(
+            self.column_values['dst_mac'], self.daddr
+        )
+        self.publish_to_new_MAC(
+            self.column_values['src_mac'], self.saddr
+        )
+
+        # Add the flow with all the fields interpreted
+        __database__.add_flow(
+            profileid=self.profileid,
+            twid=self.twid,
+            stime=self.starttime,
+            dur='0',
+            saddr=str(saddr_as_obj),
+            daddr=str(daddr_as_obj),
+            proto='ARP',
+            uid=self.uid,
+        )
+
+    def store_features_going_out(self):
+        """
+        function for adding the features going out of the profile
+        """
+
+        # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
+        if (
+            'flow' in self.flow_type
+            or 'conn' in self.flow_type
+            or 'argus' in self.flow_type
+            or 'nfdump' in self.flow_type
+        ):
+            self.handle_conn()
+            self.publish_to_new_MAC(self.column_values.get('smac'), self.saddr)
+            self.publish_to_new_MAC(self.column_values.get('dmac'), self.daddr)
+
+        elif 'dns' in self.flow_type:
+            if type(self.column_values['answers']) == str:
+                # If the answer is only 1, Zeek gives a string
+                # so convert to a list
+                self.column_values['answers'] = [self.column_values['answers']]
+            self.handle_dns()
+        elif self.flow_type == 'http':
+            self.handle_http()
+        elif self.flow_type == 'ssl':
+            self.handle_ssl()
+        elif self.flow_type == 'ssh':
+            self.handle_ssh()
+        elif self.flow_type == 'notice':
+            self.handle_notice()
+
+        elif self.flow_type == 'ftp':
+            self.handle_ftp()
+        elif self.flow_type == 'smtp':
+            self.handle_smtp()
+        elif self.flow_type == 'files':
+            self.handle_files()
+
+        elif self.flow_type == 'known_services':
+           self.handle_known_services()
+
+        elif self.flow_type == 'arp':
+            self.handle_arp()
+        elif 'dhcp' in self.flow_type:
+            self.handle_dhcp()
+
+        elif 'software' in self.flow_type:
+            self.handle_software()
+        else:
+            return False
+        # if the flow type matched any of the ifs above,
+        # mark this profile as modified
+        __database__.markProfileTWAsModified(self.profileid, self.twid, '')
+
+    def store_features_going_in(self):
+        """
+        This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+        """
+        role = 'Server'
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        saddr_as_obj = ipaddress.ip_address(self.saddr)
+
+        # self.print(f'Storing features going in for profile {profileid} and tw {self.twid}')
+        if not (
+            'flow' in self.flow_type
+            or 'conn' in self.flow_type
+            or 'argus' in self.flow_type
+            or 'nfdump' in self.flow_type
+        ):
+            return
+
+        # Tuple. We use the src ip, but the dst port still!
+        tupleid = f'{daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+
+        symbol = self.compute_symbol('InTuples')
+        # Add the src tuple
+        __database__.add_tuple(
+            self.profileid, self.twid, tupleid, symbol, role, self.starttime, self.uid
+        )
+        # Add the srcip
+        __database__.add_ips(
+            self.profileid, self.twid, saddr_as_obj, self.column_values, role
+        )
+        # Add the dstport
+        port_type = 'Dst'
+        __database__.add_port(
+            self.profileid,
+            self.twid,
+            daddr_as_obj,
+            self.column_values,
+            role,
+            port_type,
+        )
+        # Add the srcport
+        port_type = 'Src'
+        __database__.add_port(
+            self.profileid,
+            self.twid,
+            daddr_as_obj,
+            self.column_values,
+            role,
+            port_type,
+        )
+        # Add the flow with all the fields interpreted
+        __database__.add_flow(
+            profileid=self.profileid,
+            twid=self.twid,
+            stime=self.starttime,
+            dur=self.column_values['dur'],
+            saddr=str(saddr_as_obj),
+            sport=self.column_values['sport'],
+            daddr=str(daddr_as_obj),
+            dport=self.column_values['dport'],
+            proto=self.column_values['proto'],
+            state=self.column_values['state'],
+            pkts=self.column_values['pkts'],
+            allbytes=self.column_values['bytes'],
+            spkts=self.column_values['spkts'],
+            sbytes=self.column_values['sbytes'],
+            appproto=self.column_values['appproto'],
+            uid=self.uid,
+            label=self.label,
+        )
+        # No dns check going in. Probably ok.
+        __database__.markProfileTWAsModified(self.profileid, self.twid, '')
+
     def compute_symbol(
         self,
-        profileid,
-        twid,
-        tupleid,
-        current_time,
-        current_duration,
-        current_size,
         tuple_key: str,
     ):
         """
         This function computes the new symbol for the tuple according to the
         original stratosphere ips model of letters
         Here we do not apply any detection model, we just create the letters
-        as one more feature current_time is the starttime of the flow
+        as one more feature twid is the starttime of the flow
         """
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        tupleid = f'{daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+
+        # current_time = self.column_values['starttime']
+        current_duration = self.column_values['dur']
+        current_size = self.column_values['bytes']
+
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
-            now_ts = float(current_time)
+            now_ts = float(self.twid)
             self.print(
                 'Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
-                    profileid,
+                    self.profileid,
                     tupleid,
-                    current_time,
-                    type(current_time),
+                    self.twid,
+                    type(self.twid),
                     current_duration,
                     current_size,
                 ),
@@ -2416,7 +2379,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Get the time of the last flow in this tuple, and the last last
             # Implicitely this is converting what we stored as 'now' into 'last_ts' and what we stored as 'last_ts' as 'last_last_ts'
             (last_last_ts, last_ts) = __database__.getT2ForProfileTW(
-                profileid, twid, tupleid, tuple_key
+                self.profileid, self.twid, tupleid, tuple_key
             )
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
@@ -2471,7 +2434,7 @@ class ProfilerProcess(multiprocessing.Process):
                         TD = 4
                 self.print(
                     'Compute Periodicity: Profileid: {}, Tuple: {}, T1={}, T2={}, TD={}'.format(
-                        profileid, tupleid, T1, T2, TD
+                        self.profileid, tupleid, T1, T2, TD
                     ),
                     3,
                     0,
@@ -2588,7 +2551,7 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print("TimeChar: {}".format(timechar), 0, 1)
             self.print(
                 'Profileid: {}, Tuple: {}, Periodicity: {}, Duration: {}, Size: {}, Letter: {}. TimeChar: {}'.format(
-                    profileid,
+                    self.profileid,
                     tupleid,
                     periodicity,
                     duration,
@@ -2630,16 +2593,14 @@ class ProfilerProcess(multiprocessing.Process):
                     return False
                 [
                     (lasttwid, lasttw_start_time)
-                ] = __database__.getLastTWforProfile(profileid)
+                ] = __database__.getLastTWforProfile(self.profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
                 self.print(
                     'The last TW id for profile {} was {}. Start:{}. End: {}'.format(
-                        profileid, lasttwid, lasttw_start_time, lasttw_end_time
-                    ),
-                    3,
-                    0,
+                        self.profileid, lasttwid, lasttw_start_time, lasttw_end_time
+                    ), 3,0,
                 )
                 # There was a last TW, so check if the current flow belongs here.
                 if (
@@ -2649,9 +2610,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(
                         'The flow ({}) is on the last time window ({})'.format(
                             flowtime, lasttw_end_time
-                        ),
-                        3,
-                        0,
+                        ), 3, 0
                     )
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
@@ -2676,7 +2635,7 @@ class ProfilerProcess(multiprocessing.Process):
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end
-                        twid = __database__.addNewTW(profileid, new_start)
+                        twid = __database__.addNewTW(self.profileid, new_start)
                         self.print(
                             'Creating the TW id {}. Start: {}.'.format(
                                 twid, new_start
@@ -2696,7 +2655,7 @@ class ProfilerProcess(multiprocessing.Process):
                         0,
                     )
                     # Find out if we already have this TW in the past
-                    data = __database__.getTWofTime(profileid, flowtime)
+                    data = __database__.getTWofTime(self.profileid, flowtime)
                     if data:
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
@@ -2710,7 +2669,7 @@ class ProfilerProcess(multiprocessing.Process):
                         )
                         # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = (
-                            __database__.getamountTWsfromProfile(profileid)
+                            __database__.getamountTWsfromProfile(self.profileid)
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
@@ -2724,7 +2683,7 @@ class ProfilerProcess(multiprocessing.Process):
                         # Get the first TW
                         [
                             (firsttwid, firsttw_start_time)
-                        ] = __database__.getFirstTWforProfile(profileid)
+                        ] = __database__.getFirstTWforProfile(self.profileid)
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
@@ -2733,7 +2692,7 @@ class ProfilerProcess(multiprocessing.Process):
                             # The method to add an older TW is the same as
                             # to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(
-                                profileid, new_start
+                                self.profileid, new_start
                             )
                             self.print(
                                 'Creating the new older TW id {}. Start: {}.'.format(
@@ -2751,7 +2710,7 @@ class ProfilerProcess(multiprocessing.Process):
                 else:
                     startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
-                twid = __database__.addNewTW(profileid, startoftw)
+                twid = __database__.addNewTW(self.profileid, startoftw)
                 # self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
             return twid
         except Exception as e:
