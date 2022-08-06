@@ -285,7 +285,11 @@ class Module(Module, multiprocessing.Process):
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
         if not response.text:
             return False
-        json_response = json.loads(response.text)
+        try:
+            json_response = json.loads(response.text)
+        except json.decoder.JSONDecodeError:
+            # unexpected server response
+            return False
         # the above website returns unknown if it has no info about this UA,
         # remove the 'unknown' from the string before storing in the db
         os_type = (
