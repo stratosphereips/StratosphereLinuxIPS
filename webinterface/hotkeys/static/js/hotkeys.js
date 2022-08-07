@@ -422,7 +422,8 @@ let ipinfo = $('#ipinfo').DataTable({
         { data: 'geocountry' },
         { data: 'reverse_dns' },
         { data: 'asnorg' },
-        { data: 'URL' },
+        { data: 'threat_intel' },
+        { data: 'url' },
         { data: 'down_file' },
         { data: 'ref_file' },
         { data: 'com_file' }

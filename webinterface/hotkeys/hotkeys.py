@@ -70,6 +70,10 @@ class Hotkeys:
             asn = ip_info.get('asn', False)
             asnorg = [asn.get('asnorg', '-') if asn else '-']
             reverse_dns = ip_info.get('reverse_dns', '-')
+
+            threatintel = ip_info.get('threatintelligence', False)
+            threatintel_info = [threatintel.get('description', '-') + "," + threatintel.get('threat_level', '-') + " threat level" if threatintel else '-']
+
             vt_scores = ip_info.get("VirusTotal", False)
             url, down_file, ref_file, com_file = '-', '-', '-', '-'
             if vt_scores:
@@ -78,7 +82,9 @@ class Hotkeys:
                 ref_file = vt_scores.get("ref_file", "-")
                 com_file = vt_scores.get("com_file", "-")
 
-            data = {'geocountry': geocountry, 'asnorg': asnorg, 'reverse_dns': reverse_dns, "URL": url,
+            data = {'geocountry': geocountry, 'asnorg': asnorg,
+                    'reverse_dns': reverse_dns,
+                    'threat_intel': threatintel_info, "url": url,
                     "down_file": down_file, "ref_file": ref_file,
                     "com_file": com_file}
         return data
