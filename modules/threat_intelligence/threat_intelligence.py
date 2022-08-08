@@ -101,7 +101,7 @@ class Module(Module, multiprocessing.Process):
         :param ip_info: is all the info we have about that IP in the db source, confidence, description, etc.
         :param profileid: profile where the alert was generated. It includes the src ip
         :param twid: name of the timewindow when it happened.
-        :param ip_state: If the IP was a srcip or dstip
+        :param ip_state: can be 'srcip' or 'dstip'
         """
 
         type_detection = ip_state
@@ -605,7 +605,8 @@ class Module(Module, multiprocessing.Process):
                             or data.get('server_name')
                             or data.get('query')
                         )
-                        if domain:
+                        if domain and not (domain.endswith('.arpa') or domain.endswith('.local')):
+
                             # Search for this domain in our database of IoC
                             (
                                 domain_info,
