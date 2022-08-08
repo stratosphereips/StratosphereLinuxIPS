@@ -408,7 +408,7 @@ For now the supported systems are:
 - Slack
 - TAXII Servers (STIX format)
 - Warden servers
-- suricata-like JSON format
+- IDEA JSON format
 - Logstash
 
 

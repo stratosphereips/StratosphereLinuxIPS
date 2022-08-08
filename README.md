@@ -71,7 +71,7 @@ The following table summarizes all active modules in Slips, its status and purpo
 | RiskIQ              |   ✅   | lookups IP addresses on RiskIQ  |
 | IP_Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
 | CESNET              |   ✅   | sends and receives alerts from CESNET Warden servers |
-| ExportingAlerts     |   ✅   | exports alerts to Slack, STIX or Suricata-like JSON format |
+| ExportingAlerts     |   ✅   | exports alerts to Slack or STIX format |
 | http_analyzer       |   ✅   | analyzes HTTP traffic |
 | blocking            |   ✅   | blocks malicious IPs connecting to the device |
 | P2P                 |   ✅   | shares network detections with other Slips peers in the local network |
