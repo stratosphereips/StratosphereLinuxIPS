@@ -1957,6 +1957,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['kex_alg'],
                         self.column_values['host_key_alg'],
                         self.column_values['host_key'],
+                        self.daddr
                     )
                 elif flow_type == 'notice':
                     __database__.add_out_notice(
