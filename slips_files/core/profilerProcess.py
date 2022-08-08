@@ -1344,7 +1344,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line = json.loads(line['data'])
             except KeyError:
                 # can't find the line!
-                return True
+                return
 
         self.column_values: dict = {}
         try:
@@ -1622,10 +1622,8 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def is_supported_flow(self):
-        # Define which type of flows we are going to process
-        if not self.column_values:
-            return False
-        elif self.column_values['type'] not in (
+
+        supported_types = (
             'ssh',
             'ssl',
             'http',
@@ -1641,14 +1639,14 @@ class ProfilerProcess(multiprocessing.Process):
             'arp',
             'ftp',
             'smtp',
-            'software',
-        ):
-            # Not a supported type
+            'software'
+        )
+
+        if (not self.column_values
+                or self.column_values['starttime'] is None
+                or self.column_values['type'] not in supported_types):
             return False
-        elif self.column_values['starttime'] is None:
-            # There is suricata issue with invalid timestamp
-            # for examaple: "1900-01-00T00:00:08.511802+0000"
-            return False
+        return True
 
     def get_starttime(self):
         ts = self.column_values['starttime']
@@ -1658,7 +1656,8 @@ class ProfilerProcess(multiprocessing.Process):
             starttime = utils.convert_format(ts, 'unixtimestamp')
         except ValueError:
             self.print(f'We can not recognize time format: {ts}', 0, 1)
-        return ts
+            starttime = ts
+        return starttime
 
     def get_uid(self):
         """
@@ -1677,11 +1676,11 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['uid'] = uid
         return uid
 
-    def get_rev_profile(self, starttime, daddr_as_obj):
+    def get_rev_profile(self, starttime, daddr):
         """
         Get the profileid and twid given the addr and ts when is started
         """
-        daddr_as_obj = ipaddress.ip_address(self.daddr)
+        daddr_as_obj = ipaddress.ip_address(daddr)
         rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
         if not rev_profileid:
             self.print(
@@ -1750,8 +1749,6 @@ class ProfilerProcess(multiprocessing.Process):
             if not self.is_supported_flow():
                 return False
 
-            self.starttime = self.get_starttime()
-
             self.uid = self.get_uid()
             # uid = self.column_values['uid']
             self.flow_type = self.column_values['type']
@@ -1768,25 +1765,22 @@ class ProfilerProcess(multiprocessing.Process):
             if self.whitelist.is_whitelisted_flow(self.column_values, self.flow_type):
                 return True
 
-            # Create the objects of IPs
-            try:
-                saddr_as_obj = ipaddress.ip_address(self.saddr)
-                daddr_as_obj = ipaddress.ip_address(self.daddr)
-            except ipaddress.AddressValueError:
-                # Its a mac
-                return False
-
-
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
             self.print(
                 'Storing data in the profile: {}'.format(self.profileid), 3, 0
             )
-
+            self.starttime = self.get_starttime()
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
             self.twid = self.get_timewindow(self.starttime, self.profileid)
             if self.home_net:
                 # Home. Create profiles for home IPs only
+                try:
+                    saddr_as_obj = ipaddress.ip_address(self.saddr)
+                    daddr_as_obj = ipaddress.ip_address(self.daddr)
+                except ipaddress.AddressValueError:
+                    # Its a mac
+                    return False
                 if saddr_as_obj in self.home_net:
                     __database__.addProfile(
                         self.profileid, self.starttime, self.width
@@ -1995,9 +1989,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_smtp', to_send)
 
     def handle_in_flows(self):
-        rev_profileid, rev_twid = self.get_rev_profile(
-            self.starttime
-        )
+        rev_profileid, rev_twid = self.get_rev_profile(self.starttime)
         self.store_features_going_in(
             rev_profileid, rev_twid, self.starttime
         )
@@ -2014,9 +2006,17 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_dhcp(self):
         # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-        if self.column_values.get('client_addr', False):
+        client_addr = self.column_values.get('client_addr', False)
+        if client_addr:
+            # in dhcp flows, there's no daddr and no profileid, so set it
+            print(f"@@@@@@@@@@@@@@@@@@ here with b4 {self.profileid}")
             self.profileid = \
-                self.get_rev_profile(self.starttime.timestamp(), self.column_values.get('client_addr', False))[0]
+                self.get_rev_profile(
+                    self.starttime.timestamp(),
+                    client_addr)[0]
+            print(f"@@@@@@@@@@@@@@@@@@ here with after {self.profileid}")
+            #todo
+
         if self.column_values.get('mac', False):
             # send this to ip_info module to get vendor info about this MAC
             self.publish_to_new_MAC(
@@ -2256,7 +2256,7 @@ class ProfilerProcess(multiprocessing.Process):
         try:
             current_duration = float(current_duration)
             current_size = int(current_size)
-            now_ts = float(self.twid)
+            now_ts = float(self.starttime)
             self.print(
                 'Starting compute symbol. Profileid: {}, Tupleid {}, time:{} ({}), dur:{}, size:{}'.format(
                     self.profileid,
@@ -2265,9 +2265,7 @@ class ProfilerProcess(multiprocessing.Process):
                     type(self.twid),
                     current_duration,
                     current_size,
-                ),
-                3,
-                0,
+                ),3,0
             )
             # Variables for computing the symbol of each tuple
             T2 = False
@@ -2492,21 +2490,18 @@ class ProfilerProcess(multiprocessing.Process):
         """
         try:
             # First check if we are not in the last TW. Since this will be the majority of cases
-
             try:
                 if not profileid:
                     # profileid is None if we're dealing with a profile
                     # outside of home_network when this param is given
                     return False
-                [
-                    (lasttwid, lasttw_start_time)
-                ] = __database__.getLastTWforProfile(self.profileid)
+                [(lasttwid, lasttw_start_time)] = __database__.getLastTWforProfile(profileid)
                 lasttw_start_time = float(lasttw_start_time)
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
                 self.print(
                     'The last TW id for profile {} was {}. Start:{}. End: {}'.format(
-                        self.profileid, lasttwid, lasttw_start_time, lasttw_end_time
+                        profileid, lasttwid, lasttw_start_time, lasttw_end_time
                     ), 3,0,
                 )
                 # There was a last TW, so check if the current flow belongs here.
@@ -2525,9 +2520,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(
                         'The flow ({}) is NOT on the last time window ({}). Its newer'.format(
                             flowtime, lasttw_end_time
-                        ),
-                        3,
-                        0,
+                        ), 3, 0
                     )
                     amount_of_new_tw = int(
                         (flowtime - lasttw_end_time) / self.width
@@ -2535,20 +2528,16 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(
                         'We have to create {} empty TWs in the midle.'.format(
                             amount_of_new_tw
-                        ),
-                        3,
-                        0,
+                        ), 3, 0
                     )
                     temp_end = lasttw_end_time
                     for id in range(0, amount_of_new_tw + 1):
                         new_start = temp_end
-                        twid = __database__.addNewTW(self.profileid, new_start)
+                        twid = __database__.addNewTW(profileid, new_start)
                         self.print(
                             'Creating the TW id {}. Start: {}.'.format(
                                 twid, new_start
-                            ),
-                            3,
-                            0,
+                            ), 3, 0
                         )
                         temp_end = new_start + self.width
                     # Now get the id of the last TW so we can return it
@@ -2557,12 +2546,10 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print(
                         'The flow ({}) is NOT on the last time window ({}). Its older'.format(
                             flowtime, lasttw_end_time
-                        ),
-                        3,
-                        0,
+                        ), 3, 0
                     )
                     # Find out if we already have this TW in the past
-                    data = __database__.getTWofTime(self.profileid, flowtime)
+                    data = __database__.getTWofTime(profileid, flowtime)
                     if data:
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
@@ -2576,21 +2563,19 @@ class ProfilerProcess(multiprocessing.Process):
                         )
                         # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = (
-                            __database__.getamountTWsfromProfile(self.profileid)
+                            __database__.getamountTWsfromProfile(profileid)
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
                         self.print(
                             'We need to create {} TW before the first'.format(
                                 diff + 1
-                            ),
-                            3,
-                            0,
+                            ), 3, 0
                         )
                         # Get the first TW
                         [
                             (firsttwid, firsttw_start_time)
-                        ] = __database__.getFirstTWforProfile(self.profileid)
+                        ] = __database__.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
@@ -2599,7 +2584,7 @@ class ProfilerProcess(multiprocessing.Process):
                             # The method to add an older TW is the same as
                             # to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(
-                                self.profileid, new_start
+                                profileid, new_start
                             )
                             self.print(
                                 'Creating the new older TW id {}. Start: {}.'.format(
@@ -2617,7 +2602,7 @@ class ProfilerProcess(multiprocessing.Process):
                 else:
                     startoftw = float(flowtime)
                 # Add this TW, of this profile, to the DB
-                twid = __database__.addNewTW(self.profileid, startoftw)
+                twid = __database__.addNewTW(profileid, startoftw)
                 # self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
             return twid
         except Exception as e:
@@ -2732,18 +2717,18 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(
-                    f'Error. Stopped Profiler Process. Received {rec_lines} '
-                    f'lines', 0, 1,
-                )
-                self.print(
-                    f'\tProblem with Profiler Process. line '
-                    f'{exception_line}', 0, 1,
-                )
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                self.print(traceback.format_exc())
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(
+            #         f'Error. Stopped Profiler Process. Received {rec_lines} '
+            #         f'lines', 0, 1,
+            #     )
+            #     self.print(
+            #         f'\tProblem with Profiler Process. line '
+            #         f'{exception_line}', 0, 1,
+            #     )
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     self.print(traceback.format_exc())
+            #     return True
