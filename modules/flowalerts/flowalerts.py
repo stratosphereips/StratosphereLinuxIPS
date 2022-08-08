@@ -1519,7 +1519,6 @@ class Module(Module, multiprocessing.Process):
                         )
 
 
-                        # check if they happened within 10 seconds or less @@@ remove tihs
                         diff = utils.get_time_diff(
                             self.smtp_bruteforce_cache[profileid][0],
                             self.smtp_bruteforce_cache[profileid][-1]
