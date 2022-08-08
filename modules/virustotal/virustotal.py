@@ -446,6 +446,9 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type == 'md5':
             self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
             params['resource'] = ioc
+        else:
+            # unsupported ioc
+            return {}
 
         # wait for network
         while True:

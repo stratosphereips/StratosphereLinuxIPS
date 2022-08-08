@@ -1,6 +1,5 @@
 # Your imports
 import hashlib
-from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
