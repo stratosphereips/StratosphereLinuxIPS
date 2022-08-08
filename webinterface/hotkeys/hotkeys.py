@@ -61,7 +61,7 @@ class Hotkeys:
         :param ip: active IP
         :return: all data about the IP in database
         """
-        data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-", "URL": "-", "down_file": "-", "ref_file": "-",
+        data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-", "threat_intel":"-", "url": "-", "down_file": "-", "ref_file": "-",
                 "com_file": "-"}
         ip_info = self.cache.hget('IPsInfo', ip)
         if ip_info:
