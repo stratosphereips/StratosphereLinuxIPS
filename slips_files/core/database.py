@@ -1741,6 +1741,17 @@ class Database(object):
         self.r.hset('alerts', profileid, profile_alerts)
 
 
+    def get_profileid_twid_alerts(self, profileid, twid) -> dict:
+        """
+        The format for the returned dict is
+            {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
+        """
+        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        if not alerts:
+            return {}
+        alerts = json.loads(alerts)
+        return alerts
+
     def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
         Returns all the IDs of evidence causing this alert
