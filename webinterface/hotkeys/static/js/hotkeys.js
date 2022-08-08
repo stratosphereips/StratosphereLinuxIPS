@@ -1,6 +1,6 @@
 
 const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 col-xs-12'fl>>" +
-           "<'row'<'col-sm-12'Rtr>>" +
+           "<'row'<'col-sm-12'tr>>" +
            "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
 
 
@@ -77,10 +77,6 @@ let profiles = function () {
     }
 }
 
-let profile = profiles();
-profile.onclick_tws();
-profile.onclick_ips();
-
  let operate_hotkeys = function () {
     let profile = '';
     let timewindow = '';
@@ -117,6 +113,7 @@ profile.onclick_ips();
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
+        searching: false,
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
@@ -340,6 +337,12 @@ profile.onclick_ips();
             update_hotkey()
         },
 
+        search_reload: function(filter_parameter){
+           let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+            if (filter_parameter){ link += "/" + filter_parameter; }
+            active_hotkey_table.ajax.url(link).load();
+        },
+
         onclick_buttons: function () {
             $("#buttons .btn").click(function () {
                 $("#buttons .btn").removeClass('active');
@@ -433,21 +436,6 @@ let ipinfo = $('#ipinfo').DataTable({
 });
 
 
-let hotkeys = operate_hotkeys();
-hotkeys.onclick_buttons();
-hotkeys.onclick_timeline_flows_saddr();
-hotkeys.onclick_timeline_flows_daddr();
-hotkeys.onclick_timeline_daddr();
-hotkeys.onclick_alerts();
-
-
-let hotkey_hook = {
-    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
-        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
-        hotkeys.update_hook();
-    }
-}
-
 // TODO: fix the chart filter
 //    function filterFunction() {
 //        let chartDom = document.getElementById("container");
@@ -476,3 +464,33 @@ let hotkey_hook = {
 //              }
 //      }
 
+
+let profile = profiles();
+profile.onclick_tws();
+profile.onclick_ips();
+
+let hotkeys = operate_hotkeys();
+hotkeys.onclick_buttons();
+hotkeys.onclick_timeline_flows_saddr();
+hotkeys.onclick_timeline_flows_daddr();
+hotkeys.onclick_timeline_daddr();
+hotkeys.onclick_alerts();
+
+let hotkey_hook = {
+    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
+        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
+        hotkeys.update_hook();
+    }
+}
+
+$('#table_timeline_filter_button').click(function(){
+    var filter_gender = $('#table_timeline_filter_input').val();
+    if(filter_gender != '')
+    {
+        hotkeys.search_reload(filter_gender);
+    }
+    else
+    {
+        hotkeys.search_reload(filter_gender)
+    }
+});
