@@ -491,7 +491,7 @@ class EvidenceProcess(multiprocessing.Process):
         for alert_id, evidence_IDs in past_alerts.items():
             evidence_IDs = json.loads(evidence_IDs)
             for ID in evidence_IDs:
-                tw_evidence.pop(ID)
+                tw_evidence.pop(ID, None)
         return tw_evidence
 
     def run(self):
