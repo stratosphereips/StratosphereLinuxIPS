@@ -163,9 +163,10 @@ class EvidenceProcess(multiprocessing.Process):
         )
 
         try:
-            self.popup_alerts = self.config.get(
+            self.popup_alerts = self.config\
+                .get(
                 'detection', 'popup_alerts'
-            ).lower()
+                ).lower()
             self.popup_alerts = 'yes' in self.popup_alerts
 
             # In docker, disable alerts no matter what slips.conf says
@@ -480,6 +481,19 @@ class EvidenceProcess(multiprocessing.Process):
         self.jsonfile.close()
         __database__.publish('finished_modules', 'EvidenceProcess')
 
+    def delete_alerted_evidence(self, proflied, twid, tw_evidence):
+        """
+        if there was an alert in this tw before, remove the evidence that were part of the past alert
+        from the current evidence
+        """
+        # format of tw_evidence is {<ev_id>: {evidence_details}}
+        past_alerts = __database__.get_profileid_twid_alerts(proflied, twid)
+        for alert_id, evidence_IDs in past_alerts.items():
+            evidence_IDs = json.loads(evidence_IDs)
+            for ID in evidence_IDs:
+                tw_evidence.pop(ID)
+        return tw_evidence
+
     def run(self):
         # add metadata to alerts.log
         branch_info = utils.get_branch_info()
@@ -531,6 +545,7 @@ class EvidenceProcess(multiprocessing.Process):
                     evidence_ID = data.get('ID', False)
                     # Ignore alert if IP is whitelisted
                     flow = __database__.get_flow(profileid, twid, uid)
+
                     if flow and self.whitelist.is_whitelisted_evidence(
                         srcip, detection_info, type_detection, description
                     ):
@@ -541,6 +556,7 @@ class EvidenceProcess(multiprocessing.Process):
                             profileid, twid, evidence_ID
                         )
                         continue
+
 
                     # Format the time to a common style given multiple type of time variables
                     # flow_datetime = utils.format_timestamp(timestamp)
@@ -594,7 +610,12 @@ class EvidenceProcess(multiprocessing.Process):
                     if self.is_first_alert and branch_info != False:
                         # only add commit and hash to the firs alert in alerts.json
                         self.is_first_alert = False
-                        IDEA_dict.update({'commit': commit, 'branch': branch})
+                        IDEA_dict.update(
+                            {
+                                'commit': commit,
+                                'branch': branch
+                            }
+                        )
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
                     __database__.setEvidenceFoAllProfiles(IDEA_dict)
@@ -614,6 +635,8 @@ class EvidenceProcess(multiprocessing.Process):
                     # profiles for attackers
                     if tw_evidence:
                         tw_evidence = json.loads(tw_evidence)
+
+                        tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
 
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
                         # The accumulated threat level is for all the types of evidence for this profile
@@ -675,8 +698,11 @@ class EvidenceProcess(multiprocessing.Process):
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
                                 # todo we can just publish in new_alert, do we need to save it in the db??
-                                __database__.set_evidence_causing_alert( profileid, twid,
-                                    alert_ID, IDs_causing_an_alert
+                                __database__.set_evidence_causing_alert(
+                                    profileid,
+                                    twid,
+                                    alert_ID,
+                                    IDs_causing_an_alert
                                 )
                                 __database__.publish('new_alert', alert_ID)
 
