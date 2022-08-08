@@ -1192,14 +1192,6 @@ class Main:
             help='Stop slips daemon',
         )
         parser.add_argument(
-            '-R',
-            '--restartdaemon',
-            required=False,
-            default=False,
-            action='store_true',
-            help='Restart slips daemon',
-        )
-        parser.add_argument(
             '-k',
             '--killall',
             action='store_true',
@@ -2025,12 +2017,6 @@ if __name__ == '__main__':
             # it takes about 5 seconds for the stop_slips msg to arrive in the channel, so give slips time to stop
             time.sleep(3)
             print('Daemon stopped.')
-
-    elif slips.args.restartdaemon:
-        # -R is provided
-        daemon = Daemon(slips)
-        print('Daemon restarted.')
-        daemon.restart()
     elif slips.args.daemon:
         daemon = Daemon(slips)
         if daemon.pid != None:
