@@ -139,7 +139,7 @@ class Helper:
 
 
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
+        description = f'a connection without DNS resolution to IP: {daddr} {ip_identification}'
         __database__.setEvidence(
             type_evidence,
             type_detection,
