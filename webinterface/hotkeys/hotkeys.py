@@ -265,7 +265,7 @@ class Hotkeys:
                     temp = flow["saddr"]
                     flow["daddr"] = temp
 
-                # fix State string
+                # fix State string TODO: fix in slips code
                 if flow["state"] == "notestablished":
                     flow["state"] = "not established"
 
@@ -273,7 +273,14 @@ class Hotkeys:
                 if not search:
                     data.append(flow)
                 else:
-                    value_is_present = True if search_filter in flow.values() else False
+                    value_is_present = False
+
+                    # partial search in each flow key
+                    for v in flow.values():
+                        if search_filter.lower() in str(v).lower():
+                            value_is_present = True
+                            break
+
                     if (not reverse and value_is_present) or (reverse and not value_is_present):
                         data.append(flow)
 
