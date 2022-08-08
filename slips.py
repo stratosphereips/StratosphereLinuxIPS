@@ -542,8 +542,7 @@ class Main:
             # the queues are not there yet to send stop msgs
             for process in ('OutputProcess',
                             'ProfilerProcess',
-                            'EvidenceProcess',
-                            'logsProcess'):
+                            'logsProcess'): #'EvidenceProcess',
                 try:
                     os.kill(int(PIDs[process]), signal.SIGINT)
                 except KeyError:
@@ -553,7 +552,7 @@ class Main:
             stop_msg = 'stop_process'
             self.outputqueue.put(stop_msg)
             self.profilerProcessQueue.put(stop_msg)
-            self.evidenceProcessQueue.put(stop_msg)
+            # self.evidenceProcessQueue.put(stop_msg)
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
@@ -593,6 +592,7 @@ class Main:
             # we don't want to kill this process
             try:
                 PIDs.pop('slips.py')
+                PIDs.pop('EvidenceProcess')
             except KeyError:
                 pass
             slips_processes = len(list(PIDs.keys()))
@@ -710,6 +710,12 @@ class Main:
                     print(
                         f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.'
                     )
+            # evidence process should be the last process to exit, so it can print detections of the
+            # modules that are still processing
+            try:
+                os.kill(int(PIDs['EvidenceProcess']), signal.SIGINT)
+            except KeyError:
+                pass
 
             # save redis database if '-s' is specified
             if self.args.save:
