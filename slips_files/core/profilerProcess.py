@@ -27,9 +27,7 @@ import traceback
 import os
 import binascii
 import base64
-import validators
 from re import split
-from tzlocal import get_localzone
 from .whitelist import Whitelist
 
 
@@ -61,8 +59,6 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
         self.id_separator = __database__.getFieldSeparator()
-        # get the user's local timezone
-        self.local_timezone = get_localzone()
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
@@ -101,99 +97,43 @@ class ProfilerProcess(multiprocessing.Process):
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
-        # Get the home net if we have one from the config
-        try:
-            self.home_net = ipaddress.ip_network(
-                self.config.get('parameters', 'home_network')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no
-            # configuration file specified
-            self.home_net = False
-        try:
-            self.whitelist_path = self.config.get(
-                'parameters', 'whitelist_path'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            self.whitelist_path = 'whitelist.conf'
 
-        # Get the time window width, if it was not specified as a parameter
-        data = ''
-        try:
-            data = self.config.get('parameters', 'time_window_width')
-            self.width = float(data)
-        except ValueError:
-            # Its not a float
-            if 'only_one_tw' in data:
-                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                self.width = 9999999999
-        except configparser.NoOptionError:
-            # By default we use 3600 seconds, 1hs
-            self.width = 3600
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no
-            # configuration file specified
-            self.width = 3600
+        def get(section, value, default_value):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
 
-        # Report the time window width
-        if self.width == 9999999999:
+
+        self.whitelist_path = get('parameters', 'whitelist_path', 'whitelist.conf')
+        self.timeformat = get('timestamp', 'format', None)
+        self.analysis_direction = get('parameters', 'analysis_direction', 'all')
+        self.label = get('parameters', 'label', 'unknown')
+
+        self.home_net = get('parameters', 'home_network', False)
+        if self.home_net:
+            self.home_net = ipaddress.ip_network(self.home_net)
+
+        self.width = get('parameters', 'time_window_width', 3600)
+        if 'only_one_tw' in str(self.width):
+            # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
+            self.width = 9999999999
             self.print(
-                f'Time Windows Width used: {self.width} seconds. Only 1 time windows. Dates in the names of files are 100 years in the past.',
-                3,
-                0,
+                f'Time Windows Width used: {self.width} seconds.'
+                f' Only 1 time windows. Dates in the names of files are 100 years in the past.',3,0
             )
         else:
-            self.print(f'Time Windows Width used: {self.width} seconds.', 3, 0)
-
-        # Get the format of the time in the flows
-        try:
-            self.timeformat = self.config.get('timestamp', 'format')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # This has to be None, beacause we try to detect the time format below, if it is None.
-            self.timeformat = None
-        ##
-        # Get the direction of analysis
-        try:
-            self.analysis_direction = self.config.get(
-                'parameters', 'analysis_direction'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default
-            self.analysis_direction = 'all'
-        # Get the default label for all this flow. Used during training usually
-        try:
-            self.label = self.config.get('parameters', 'label')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # By default
-            self.label = 'unknown'
-
+            self.width = float(self.width)
 
 
     def define_type(self, line):
@@ -1602,10 +1542,10 @@ class ProfilerProcess(multiprocessing.Process):
         if not mac:
             return
         # get the src and dst addresses as objects
-        if validators.ipv4(ip):
-            ip_obj = ipaddress.IPv4Address(ip)
-        else:
-            ip_obj = ipaddress.IPv6Address(ip)
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except ValueError:
+            return
         if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
             ip_obj.is_multicast or ip_obj.is_link_local
         ):
@@ -1676,11 +1616,15 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values['uid'] = uid
         return uid
 
-    def get_rev_profile(self, starttime, daddr):
+    def get_rev_profile(self):
         """
-        Get the profileid and twid given the addr and ts when is started
+        get the profileid and twid of the daddr at the current starttime,
+         not the source address
         """
-        daddr_as_obj = ipaddress.ip_address(daddr)
+        if not self.daddr:
+            # some flows don't have a daddr like software.log flows
+            return False, False
+        daddr_as_obj = ipaddress.ip_address(self.daddr)
         rev_profileid = __database__.getProfileIdFromIP(daddr_as_obj)
         if not rev_profileid:
             self.print(
@@ -1689,7 +1633,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Create a reverse profileid for managing the data going to the dstip.
             rev_profileid = f'profile_{daddr_as_obj}'
             __database__.addProfile(
-                rev_profileid, starttime, self.width
+                rev_profileid, self.starttime, self.width
             )
             # Try again
             rev_profileid = __database__.getProfileIdFromIP(
@@ -1697,20 +1641,21 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         # in the database, Find the id of the tw where the flow belongs.
-        rev_twid = self.get_timewindow(starttime, rev_profileid)
+        rev_twid = self.get_timewindow(self.starttime, rev_profileid)
         return rev_profileid, rev_twid
 
-    def publish_to_new_dhcp(self, client_addr, epoch_time):
+    def publish_to_new_dhcp(self):
         """
         Publish the GW addr in the new_dhcp channel
         """
+        epoch_time = utils.convert_format(self.starttime, 'unixtimestamp')
         # this channel is used for setting the default gw ip,
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
         to_send = {
             'uid': self.uid,
-            'server_addr': self.column_values['server_addr'],
-            'client_addr': client_addr,
+            'server_addr': self.column_values.get('server_addr', False),
+            'client_addr': self.column_values.get('client_addr', False),
             'profileid': self.profileid,
             'twid': self.get_timewindow(epoch_time, self.profileid),
             'ts': epoch_time
@@ -1718,12 +1663,13 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_dhcp', json.dumps(to_send))
         self.gw_set = True
 
-    def publish_to_new_software(self, starttime):
+    def publish_to_new_software(self):
         """
         Send the whole flow to new_software channel
         """
         # change the datetime to epoch to be able to use json
-        epoch_time = starttime.timestamp()
+        # epoch_time = self.starttime.timestamp()
+        epoch_time = utils.convert_format(self.starttime, 'unixtimestamp')
         self.column_values.update(
             {
                 'starttime': epoch_time,
@@ -1788,9 +1734,10 @@ class ProfilerProcess(multiprocessing.Process):
                 self.store_features_going_out()
 
                 if self.analysis_direction == 'all':
-                    # Home and all. Check if src IP or dst IP are in home. Store all
+                    # in all mode we create profiled for daddrs too
                     if daddr_as_obj in self.home_net:
                         self.handle_in_flows()
+
             elif not self.home_net:
                 # No home. Create profiles for everybody
                 __database__.addProfile(self.profileid, self.starttime, self.width)
@@ -1799,15 +1746,13 @@ class ProfilerProcess(multiprocessing.Process):
                     # No home. Store all
                     self.handle_in_flows()
 
+
+
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print(
-                'Error in add_flow_to_profile profilerProcess. {}'.format(
-                    traceback.format_exc()
-                ),
-                0,
-                1,
-            )
+                f'Error in add_flow_to_profile profilerProcess. {traceback.format_exc()}'
+            ,0,1)
             self.print('{}'.format(type(inst)), 0, 1)
             self.print('{}'.format(inst), 0, 1)
             return False
@@ -1989,10 +1934,13 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_smtp', to_send)
 
     def handle_in_flows(self):
-        rev_profileid, rev_twid = self.get_rev_profile(self.starttime)
-        self.store_features_going_in(
-            rev_profileid, rev_twid, self.starttime
-        )
+        # they are not actual flows to add in slips,
+        # they are info about some ips derived by zeek from the flows
+        execluded_flows = ('software')
+        if self.flow_type in execluded_flows:
+            return
+        rev_profileid, rev_twid = self.get_rev_profile()
+        self.store_features_going_in(rev_profileid, rev_twid)
 
     def handle_software(self):
         __database__.add_software_to_profile(
@@ -2001,41 +1949,24 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['version.major'],
             self.column_values['version.minor'],
         )
-        self.publish_to_new_software(self.profileid, self.starttime)
+        self.publish_to_new_software()
 
 
     def handle_dhcp(self):
-        # client mac addr and client_addr is optional in zeek, so sometimes it may not be there
-        client_addr = self.column_values.get('client_addr', False)
-        if client_addr:
-            # in dhcp flows, there's no daddr and no profileid, so set it
-            print(f"@@@@@@@@@@@@@@@@@@ here with b4 {self.profileid}")
-            self.profileid = \
-                self.get_rev_profile(
-                    self.starttime.timestamp(),
-                    client_addr)[0]
-            print(f"@@@@@@@@@@@@@@@@@@ here with after {self.profileid}")
-            #todo
-
         if self.column_values.get('mac', False):
             # send this to ip_info module to get vendor info about this MAC
             self.publish_to_new_MAC(
                 self.column_values.get('mac', False),
-                self.profileid.split('_')[-1],
+                self.saddr,
                 host_name=(self.column_values.get('host_name', False))
             )
+
         if self.column_values.get('server_addr', False):
             __database__.store_dhcp_server(self.column_values.get('server_addr', False))
             __database__.mark_profile_as_dhcp(self.profileid)
 
-            if not self.gw_set:
-                self.publish_to_new_dhcp(
-                    self.uid,
-                    self.column_values.get('server_addr', False),
-                    self.column_values.get('client_addr', False),
-                    self.profileid,
-                    self.starttime.timestamp()
-                )
+            if not self.gw_set and self.column_values.get('client_addr', False):
+                self.publish_to_new_dhcp()
 
 
     def handle_files(self):
@@ -2164,7 +2095,7 @@ class ProfilerProcess(multiprocessing.Process):
         # mark this profile as modified
         __database__.markProfileTWAsModified(self.profileid, self.twid, '')
 
-    def store_features_going_in(self):
+    def store_features_going_in(self, profileid, twid):
         """
         This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
         """
@@ -2172,7 +2103,7 @@ class ProfilerProcess(multiprocessing.Process):
         daddr_as_obj = ipaddress.ip_address(self.daddr)
         saddr_as_obj = ipaddress.ip_address(self.saddr)
 
-        # self.print(f'Storing features going in for profile {profileid} and tw {self.twid}')
+        # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
         if not (
             'flow' in self.flow_type
             or 'conn' in self.flow_type
@@ -2187,17 +2118,17 @@ class ProfilerProcess(multiprocessing.Process):
         symbol = self.compute_symbol('InTuples')
         # Add the src tuple
         __database__.add_tuple(
-            self.profileid, self.twid, tupleid, symbol, role, self.starttime, self.uid
+            profileid, twid, tupleid, symbol, role, self.starttime, self.uid
         )
         # Add the srcip
         __database__.add_ips(
-            self.profileid, self.twid, saddr_as_obj, self.column_values, role
+            profileid, twid, saddr_as_obj, self.column_values, role
         )
         # Add the dstport
         port_type = 'Dst'
         __database__.add_port(
-            self.profileid,
-            self.twid,
+            profileid,
+            twid,
             daddr_as_obj,
             self.column_values,
             role,
@@ -2206,8 +2137,8 @@ class ProfilerProcess(multiprocessing.Process):
         # Add the srcport
         port_type = 'Src'
         __database__.add_port(
-            self.profileid,
-            self.twid,
+            profileid,
+            twid,
             daddr_as_obj,
             self.column_values,
             role,
@@ -2215,8 +2146,8 @@ class ProfilerProcess(multiprocessing.Process):
         )
         # Add the flow with all the fields interpreted
         __database__.add_flow(
-            profileid=self.profileid,
-            twid=self.twid,
+            profileid=profileid,
+            twid=twid,
             stime=self.starttime,
             dur=self.column_values['dur'],
             saddr=str(saddr_as_obj),
@@ -2234,7 +2165,7 @@ class ProfilerProcess(multiprocessing.Process):
             label=self.label,
         )
         # No dns check going in. Probably ok.
-        __database__.markProfileTWAsModified(self.profileid, self.twid, '')
+        __database__.markProfileTWAsModified(profileid, twid, '')
 
     def compute_symbol(
         self,
