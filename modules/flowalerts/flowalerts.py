@@ -899,7 +899,6 @@ class Module(Module, multiprocessing.Process):
         starttime,
         saddr,
         used_software,
-        unparsed_version,
         major_v,
         minor_v,
         twid,
@@ -916,10 +915,12 @@ class Module(Module, multiprocessing.Process):
         if not cached_ssh_versions:
             # we have no previous software info about this saddr in out db
             return False
+
         cached_software = cached_ssh_versions['software']
         if cached_software != used_software:
             # we need them both to be "SSH::CLIENT"
             return False
+
         cached_major_v = cached_ssh_versions['version-major']
         cached_minor_v = cached_ssh_versions['version-minor']
         cached_versions = f'{cached_major_v}_{cached_minor_v}'
@@ -1519,7 +1520,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
 
-                        # check if they happened within 10 seconds or less @@@ remove tihs
+                        # check if they happened within 10 seconds or less
                         diff = utils.get_time_diff(
                             self.smtp_bruteforce_cache[profileid][0],
                             self.smtp_bruteforce_cache[profileid][-1]
@@ -1564,14 +1565,12 @@ class Module(Module, multiprocessing.Process):
                     software_type = flow.get('software_type', '')
                     if 'ssh' not in software_type.lower():
                         continue
-                    unparsed_version = flow.get('saddr', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
                     self.check_multiple_ssh_clients(
                         starttime,
                         saddr,
                         software_type,
-                        unparsed_version,
                         major_v,
                         minor_v,
                         twid,

@@ -428,7 +428,9 @@ class Database(object):
             'version-major': version_major,
             'version-minor': version_minor,
         }
-        self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
+        self.r.hmset(profileid, {
+            'used_software': json.dumps(sw_dict)
+        })
 
     def get_software_from_profile(self, profileid):
         """

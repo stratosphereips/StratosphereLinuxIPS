@@ -1664,8 +1664,6 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Send the whole flow to new_software channel
         """
-        # change the datetime to epoch to be able to use json
-        # epoch_time = self.starttime.timestamp()
         epoch_time = utils.convert_format(self.starttime, 'unixtimestamp')
         self.column_values.update(
             {
@@ -1694,13 +1692,14 @@ class ProfilerProcess(multiprocessing.Process):
             self.daddr = self.column_values['daddr']
             self.profileid = f'profile_{self.saddr}'
 
-
             try:
                 self.saddr_as_obj = ipaddress.ip_address(self.saddr)
                 self.daddr_as_obj = ipaddress.ip_address(self.daddr)
             except (ipaddress.AddressValueError, ValueError):
                 # Its a mac
-                return False
+                if self.flow_type != 'software':
+                    # software flows are allowed to not have a daddr
+                    return False
 
             # Check if the flow is whitelisted and we should not process
             if self.whitelist.is_whitelisted_flow(self.column_values, self.flow_type):
@@ -1720,7 +1719,7 @@ class ProfilerProcess(multiprocessing.Process):
                     __database__.addProfile(
                         self.profileid, self.starttime, self.width
                     )
-                self.store_features_going_out()
+                    self.store_features_going_out()
 
                 if self.analysis_direction == 'all':
                     # in all mode we create profiled for daddrs too
