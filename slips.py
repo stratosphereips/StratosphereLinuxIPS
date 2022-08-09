@@ -534,8 +534,13 @@ class Main:
         print(f'[Main] Metadata added to {metadata_dir}')
         return self.info_path
 
-    def stop_core_processes(self, PIDs):
-        # Send manual stops to the processes using queues
+    def stop_core_processes(self):
+        try:
+            os.kill(int(self.PIDs['InputProcess']), signal.SIGKILL)
+            self.PIDs.pop('InputProcess')
+        except KeyError:
+            pass
+
         if self.mode == 'daemonized':
             # when using -D,we kill the processes because
             # the queues are not there yet to send stop msgs
@@ -543,11 +548,12 @@ class Main:
                             'ProfilerProcess',
                             'logsProcess'): #'EvidenceProcess',
                 try:
-                    os.kill(int(PIDs[process]), signal.SIGINT)
+                    os.kill(int(self.PIDs[process]), signal.SIGINT)
                 except KeyError:
                     # logsprocess isn't started yet
                     pass
         else:
+            # Send manual stops to the processes using queues
             stop_msg = 'stop_process'
             self.outputqueue.put(stop_msg)
             self.profilerProcessQueue.put(stop_msg)
@@ -555,10 +561,7 @@ class Main:
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
-        try:
-            os.kill(int(PIDs['InputProcess']), signal.SIGTERM)
-        except KeyError:
-            pass
+
 
     def shutdown_gracefully(self):
         """
@@ -586,17 +589,17 @@ class Main:
             __database__.publish_stop()
             finished_modules = []
             # get dict of PIDs spawned by slips
-            PIDs = __database__.get_PIDs()
+            self.PIDs = __database__.get_PIDs()
 
             # we don't want to kill this process
             try:
-                PIDs.pop('slips.py')
-                PIDs.pop('EvidenceProcess')
+                self.PIDs.pop('slips.py')
+                self.PIDs.pop('EvidenceProcess')
             except KeyError:
                 pass
-            slips_processes = len(list(PIDs.keys()))
+            slips_processes = len(list(self.PIDs.keys()))
 
-            self.stop_core_processes(PIDs)
+            self.stop_core_processes()
 
             # only print that modules are still running once
             warning_printed = False
@@ -633,20 +636,15 @@ class Main:
                             if module_name not in finished_modules:
                                 finished_modules.append(module_name)
                                 try:
-                                    # remove module from the list of opened pids
-                                    PIDs.pop(module_name)
+                                    os.kill(int(self.PIDs[module_name]), signal.SIGKILL)
                                 except KeyError:
-                                    # reaching this block means a module that belongs to slips
-                                    # is publishing in  finished_modules
-                                    # but slips doesn't know of it's PID!!
-                                    print(
-                                        f'[Main] Module{module_name} just published in '
-                                        f"finished_modules channel and Slips doesn't know about it's PID!",
-                                    )
-                                    # pass insead of continue because
-                                    # this module is finished and we need to print that it has stopped
                                     pass
-                                modules_left = len(list(PIDs.keys()))
+
+                                # remove module from the list of opened pids
+                                self.PIDs.pop(module_name, None)
+
+
+                                modules_left = len(list(self.PIDs.keys()))
                                 # to vertically align them when printing
                                 module_name = module_name + ' ' * (
                                     20 - len(module_name)
@@ -657,12 +655,12 @@ class Main:
                         max_loops -= 1
                         # after reaching the max_loops and before killing the modules that aren't finished,
                         # make sure we're not in the middle of processing
-                        if len(PIDs) > 0 and max_loops < 2:
+                        if len(self.PIDs) > 0 and max_loops < 2:
                             if not warning_printed:
                                 # some modules publish in finished_modules channel before slips.py starts listening,
                                 # but they finished gracefully.
                                 # remove already stopped modules from PIDs dict
-                                for module, pid in PIDs.items():
+                                for module, pid in self.PIDs.items():
                                     try:
                                         # signal 0 is used to check if the pid exists
                                         os.kill(int(pid), 0)
@@ -673,7 +671,7 @@ class Main:
                                 # exclude the module that are already stopped from the pending modules
                                 pending_modules = [
                                     module
-                                    for module in list(PIDs.keys())
+                                    for module in list(self.PIDs.keys())
                                     if module not in finished_modules
                                 ]
                                 if len(pending_modules) > 0:
@@ -698,7 +696,7 @@ class Main:
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
-            for unstopped_proc, pid in PIDs.items():
+            for unstopped_proc, pid in self.PIDs.items():
                 unstopped_proc = unstopped_proc + ' ' * (
                     20 - len(unstopped_proc)
                 )
@@ -712,7 +710,7 @@ class Main:
             # evidence process should be the last process to exit, so it can print detections of the
             # modules that are still processing
             try:
-                os.kill(int(PIDs['EvidenceProcess']), signal.SIGINT)
+                os.kill(int(self.PIDs['EvidenceProcess']), signal.SIGINT)
             except KeyError:
                 pass
 
