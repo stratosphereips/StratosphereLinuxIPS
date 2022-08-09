@@ -86,6 +86,9 @@ if __name__ == '__main__':
         # On modern systems, the netstat utility comes pre-installed,
         # this can be done using psutil but it needs root on macos
         redis_pid = get_pid_of_redis_server(redis_port)
+        if not redis_pid:
+            # server isn't started yet
+            continue
         print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
         try:
             flush_redis_server(str(redis_port))
@@ -99,8 +102,8 @@ if __name__ == '__main__':
     print(f'Closed {closed_servers} unused redis-servers')
 
 
-zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
-try:
-    os.rmdir(zeek_tmp_dir)
-except FileNotFoundError:
-    pass
+    zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
+    try:
+        os.rmdir(zeek_tmp_dir)
+    except FileNotFoundError:
+        pass

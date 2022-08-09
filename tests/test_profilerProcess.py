@@ -28,7 +28,6 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     # override the self.print function to avoid broken pipes
     profilerProcess.print = do_nothing
     profilerProcess.whitelist_path = 'tests/test_whitelist.conf'
-    profilerProcess.x()
     return profilerProcess
 
 
