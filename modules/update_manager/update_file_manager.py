@@ -31,7 +31,7 @@ class UpdateFileManager:
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, config)
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line

@@ -9,13 +9,14 @@ import os
 
 
 class Whitelist:
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         self.name = 'whitelist'
         self.outputqueue = outputqueue
         self.config = config
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
+        __database__.start(self.config, redis_port)
 
 
     def print(self, text, verbose=1, debug=0):
