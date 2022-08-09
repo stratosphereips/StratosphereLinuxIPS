@@ -40,8 +40,8 @@ class Daemon():
 
         std_streams = [self.stderr, self.stdout, self.logsfile]
         for file in std_streams:
-            # we don't want to clear the logfile when we stop the daemon using -S
-            if '-S' in sys.argv and file == self.stdout:
+            # we don't want to clear the stdout or the logsfile when we stop the daemon using -S
+            if '-S' in sys.argv and file != self.stderr:
                 continue
             # create the file if it doesn't exist or clear it if it exists
             try:
@@ -50,13 +50,13 @@ class Daemon():
                 os.mkdir(os.path.dirname(file))
                 open(file, 'w').close()
 
-    def prepare_std_streams(self, otput_dir):
+    def prepare_std_streams(self, output_dir):
         """
         prepare the path of stderr, stdout, logsfile
         """
-        self.stderr = os.path.join(otput_dir, self.stderr)
-        self.stdout = os.path.join(otput_dir, self.stdout)
-        self.logsfile = os.path.join(otput_dir, self.logsfile)
+        self.stderr = os.path.join(output_dir, self.stderr)
+        self.stdout = os.path.join(output_dir, self.stdout)
+        self.logsfile = os.path.join(output_dir, self.logsfile)
 
 
     def read_configuration(self):
@@ -139,7 +139,7 @@ class Daemon():
     def delete_pidfile(self):
         """Deletes the pidfile to mark the daemon as closed"""
 
-        self.print('Deleting pidfile...')
+        # self.print('Deleting pidfile...')
         # dont write logs when stopping the daemon,
         # because we don't know the output dir
         if os.path.exists(self.pidfile):
@@ -222,6 +222,7 @@ class Daemon():
 
         # any code run after daemonizing will be run inside the daemon and have the same PID as slips.py
         self.print(f'Slips Daemon is running. [PID {self.pid}]\n')
+
         # start slips normally
         self.slips.start()
 
@@ -275,11 +276,3 @@ class Daemon():
         __database__.start(self.config, port)
         self.slips.c1 = __database__.subscribe('finished_modules')
         self.slips.shutdown_gracefully()
-
-
-    def restart(self):
-        """Restart the daemon"""
-        self.print('Daemon restarting...')
-        self.stop()
-        self.pid = False
-        self.start()
