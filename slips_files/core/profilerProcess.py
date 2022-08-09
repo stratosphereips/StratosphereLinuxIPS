@@ -1881,6 +1881,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['kex_alg'],
             self.column_values['host_key_alg'],
             self.column_values['host_key'],
+            self.daddr
         )
 
     def handle_notice(self):
@@ -2609,18 +2610,18 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(
-            #         f'Error. Stopped Profiler Process. Received {rec_lines} '
-            #         f'lines', 0, 1,
-            #     )
-            #     self.print(
-            #         f'\tProblem with Profiler Process. line '
-            #         f'{exception_line}', 0, 1,
-            #     )
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     self.print(traceback.format_exc())
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(
+                    f'Error. Stopped Profiler Process. Received {rec_lines} '
+                    f'lines', 0, 1,
+                )
+                self.print(
+                    f'\tProblem with Profiler Process. line '
+                    f'{exception_line}', 0, 1,
+                )
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc())
+                return True

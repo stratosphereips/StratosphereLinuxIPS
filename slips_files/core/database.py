@@ -2846,6 +2846,7 @@ class Database(object):
         kex_alg,
         host_key_alg,
         host_key,
+        daddr,
     ):
         """
         Store in the DB a SSH request
@@ -2892,6 +2893,18 @@ class Database(object):
         self.publish('new_ssh', to_send)
         self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        data_to_send = {
+            'ip': daddr,
+            'profileid': str(profileid),
+            'twid': str(twid),
+            'stime': stime,
+            'uid': uid,
+
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+
+
 
     def add_out_notice(
         self,
@@ -2937,6 +2950,16 @@ class Database(object):
         )
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
+        data_to_send = {
+            'query': daddr,
+            'profileid': profileid,
+            'twid': twid,
+            'stime': stime,
+            'uid': uid,
+            'ip_state': 'dstip'
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_dns(
         self,
