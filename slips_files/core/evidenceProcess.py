@@ -53,7 +53,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
-        self.whitelist = Whitelist(outputqueue, config)
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         # Start the DB
         __database__.start(self.config, redis_port)
         self.separator = __database__.separator
