@@ -46,12 +46,10 @@ class ProfilerProcess(multiprocessing.Process):
         self.columns_defined = False
         self.timeformat = None
         self.input_type = False
-        self.whitelist = Whitelist(outputqueue, config)
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         # Read the configuration
         self.read_configuration()
         # Read the whitelist
-        # anything in this list will be ignored
-
         self.whitelist.read_whitelist()
         # Start the DB
         __database__.start(self.config, redis_port)
@@ -148,14 +146,10 @@ class ProfilerProcess(multiprocessing.Process):
             # All lines come as a dict, specifying the name of file and data.
             # Take the data
             try:
-                # Did data came with the json format?
+                # is data in json format?
                 data = line['data']
                 file_type = line['type']
-                # Yes
             except KeyError:
-                # No
-                data = line
-                file_type = ''
                 self.print('\tData did is not in json format ', 0, 1)
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
@@ -432,6 +426,10 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['answers'] = [
                         self.column_values['answers']
                     ]
+                if type(self.column_values['answers']) == str:
+                    # If the answer is only 1, Zeek gives a string
+                    # so convert to a list
+                    self.column_values['answers'] = [self.column_values['answers']]
             except IndexError:
                 self.column_values['answers'] = ''
             try:
@@ -1745,9 +1743,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if self.analysis_direction == 'all':
                     # No home. Store all
                     self.handle_in_flows()
-
-
-
+            return True
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print(
@@ -1817,6 +1813,8 @@ class ProfilerProcess(multiprocessing.Process):
             label=self.label,
             flow_type=self.flow_type,
         )
+        self.publish_to_new_MAC(self.column_values.get('smac'), self.saddr)
+        self.publish_to_new_MAC(self.column_values.get('dmac'), self.daddr)
 
     def handle_dns(self):
         __database__.add_out_dns(
@@ -2046,51 +2044,38 @@ class ProfilerProcess(multiprocessing.Process):
         function for adding the features going out of the profile
         """
 
-        # self.print(f'Storing features going out for profile {profileid} and tw {twid}')
-        if (
-            'flow' in self.flow_type
-            or 'conn' in self.flow_type
-            or 'argus' in self.flow_type
-            or 'nfdump' in self.flow_type
-        ):
-            self.handle_conn()
-            self.publish_to_new_MAC(self.column_values.get('smac'), self.saddr)
-            self.publish_to_new_MAC(self.column_values.get('dmac'), self.daddr)
+        cases = {
+            'flow': self.handle_conn,
+            'conn': self.handle_conn,
+            'nfdump': self.handle_conn,
+            'argus': self.handle_conn,
+            'dns': self.handle_dns,
+            'http': self.handle_http,
+            'ssl': self.handle_ssl,
+            'ssh': self.handle_ssh,
+            'notice': self.handle_notice,
+            'ftp': self.handle_ftp,
+            'smtp': self.handle_smtp,
+            'files': self.handle_files,
+            'known_services': self.handle_known_services,
+            'arp': self.handle_arp,
+            'dhcp': self.handle_dhcp,
+            'software': self.handle_software
 
-        elif 'dns' in self.flow_type:
-            if type(self.column_values['answers']) == str:
-                # If the answer is only 1, Zeek gives a string
-                # so convert to a list
-                self.column_values['answers'] = [self.column_values['answers']]
-            self.handle_dns()
-        elif self.flow_type == 'http':
-            self.handle_http()
-        elif self.flow_type == 'ssl':
-            self.handle_ssl()
-        elif self.flow_type == 'ssh':
-            self.handle_ssh()
-        elif self.flow_type == 'notice':
-            self.handle_notice()
+        }
 
-        elif self.flow_type == 'ftp':
-            self.handle_ftp()
-        elif self.flow_type == 'smtp':
-            self.handle_smtp()
-        elif self.flow_type == 'files':
-            self.handle_files()
 
-        elif self.flow_type == 'known_services':
-           self.handle_known_services()
+        try:
+            # call the function that handles this flow
+            cases[self.flow_type]()
+        except KeyError:
+            # does flow contain a part of the key
+            for flow in cases:
+                if flow in self.flow_type:
+                    cases[flow]()
+            else:
+                return False
 
-        elif self.flow_type == 'arp':
-            self.handle_arp()
-        elif 'dhcp' in self.flow_type:
-            self.handle_dhcp()
-
-        elif 'software' in self.flow_type:
-            self.handle_software()
-        else:
-            return False
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
         __database__.markProfileTWAsModified(self.profileid, self.twid, '')
@@ -2111,19 +2096,28 @@ class ProfilerProcess(multiprocessing.Process):
             or 'nfdump' in self.flow_type
         ):
             return
-
-        # Tuple. We use the src ip, but the dst port still!
-        tupleid = f'{daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
-
         symbol = self.compute_symbol('InTuples')
-        # Add the src tuple
+
+        # Add the src tuple using the src ip, and dst port
+        tupleid = f'{daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
         __database__.add_tuple(
             profileid, twid, tupleid, symbol, role, self.starttime, self.uid
         )
-        # Add the srcip
+
+        # Add the srcip and srcport
         __database__.add_ips(
             profileid, twid, saddr_as_obj, self.column_values, role
         )
+        port_type = 'Src'
+        __database__.add_port(
+            profileid,
+            twid,
+            daddr_as_obj,
+            self.column_values,
+            role,
+            port_type,
+        )
+
         # Add the dstport
         port_type = 'Dst'
         __database__.add_port(
@@ -2134,16 +2128,7 @@ class ProfilerProcess(multiprocessing.Process):
             role,
             port_type,
         )
-        # Add the srcport
-        port_type = 'Src'
-        __database__.add_port(
-            profileid,
-            twid,
-            daddr_as_obj,
-            self.column_values,
-            role,
-            port_type,
-        )
+
         # Add the flow with all the fields interpreted
         __database__.add_flow(
             profileid=profileid,
@@ -2164,7 +2149,6 @@ class ProfilerProcess(multiprocessing.Process):
             uid=self.uid,
             label=self.label,
         )
-        # No dns check going in. Probably ok.
         __database__.markProfileTWAsModified(profileid, twid, '')
 
     def compute_symbol(
