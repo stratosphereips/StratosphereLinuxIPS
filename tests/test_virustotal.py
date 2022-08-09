@@ -73,7 +73,7 @@ def test_api_query_(outputQueue, ip):
     virustotal = create_virustotal_instance(outputQueue)
     response = virustotal.api_query_(ip)
     # make sure response.status != 204 or 403
-    assert response != {}, 'Response code is not 200'
+    assert response != {}, 'Server Error: Response code is not 200'
     assert response['response_code'] == 1
 
 
@@ -108,4 +108,4 @@ def test_scan_file(outputQueue, database):
         'ts': time.time(),
     }
     virustotal.file_info = file_info
-    assert virustotal.scan_file(file_info) == 'malicious', 'Response code is not 200'
+    assert virustotal.scan_file(file_info) == 'malicious', 'Server Error: Response code is not 200'
