@@ -1,26 +1,10 @@
-from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database import __database__
 import configparser
 import signal
 import sys
-import redis
 import os
-import time
-import shutil
-from datetime import datetime
-import socket
-import warnings
-import pty
-import json
-import pkgutil
-import inspect
-import modules
-import importlib
 import errno
-import subprocess
-import re
-import random
 from signal import SIGTERM
 
 class Daemon():
@@ -273,7 +257,7 @@ class Daemon():
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
         try:
-            os.kill(self.pid, signal.SIGTERM)
+            os.kill(self.pid, SIGTERM)
         except ProcessLookupError:
             # daemon was killed manually
             pass

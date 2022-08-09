@@ -417,26 +417,10 @@ class Module(Module, multiprocessing.Process):
 
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
-        try:
-            # Is IPv4
-            ipaddress.IPv4Address(ioc)
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # Is it ipv6?
-            try:
-                ipaddress.IPv6Address(ioc)
-                return 'ip'
-            except ipaddress.AddressValueError:
-                # It does not look as IP address.
-                if validators.domain(ioc):
-                    return 'domain'
-                elif validators.url(ioc):
-                    return 'url'
-                elif len(ioc) == 32:
-                    return 'md5'
-                else:
-                    # 192.168.1.1/wpad.dat combinations like this are treated as a url
-                    return 'url'
+        if validators.url(ioc):
+            return 'url'
+
+        return utils.detect_data_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -462,6 +446,9 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type == 'md5':
             self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
             params['resource'] = ioc
+        else:
+            # unsupported ioc
+            return {}
 
         # wait for network
         while True:
