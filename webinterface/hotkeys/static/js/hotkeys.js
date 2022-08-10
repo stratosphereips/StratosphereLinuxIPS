@@ -212,7 +212,7 @@ let profiles = function () {
     });
 
 
-    function format(d) {
+    function add_table_evidence(d) {
         let table_id = d["alert_id"]
         let entry ='<table' + ' id="'+ table_id + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
         let exit = '</table>'
@@ -226,7 +226,7 @@ let profiles = function () {
          "<th>Description</th>" +
          "</tr>"+
          "</thead>"
-        return ( entry + head  + exit);
+        return (entry + head  + exit);
     }
 
 // TODO: decide and fix chart
@@ -413,7 +413,7 @@ let profiles = function () {
                     row.child.hide();
                     tr.removeClass('shown');
                 } else {
-                    row.child(format(row.data())).show();
+                    row.child(add_table_evidence(row.data())).show();
                     let table_id = "#" + row.data()["alert_id"]
                     let evidence = $(table_id).DataTable({
                         "bDestroy": true,
