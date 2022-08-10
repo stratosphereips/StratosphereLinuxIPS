@@ -1367,16 +1367,7 @@ class UpdateFileManager:
             return True
 
     def update_org_files(self):
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-            )
-
-
-        for org in supported_orgs:
+        for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f'{org}_asn')
             org_domains = os.path.join(self.org_info_path, f'{org}_domains')
