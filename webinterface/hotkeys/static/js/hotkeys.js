@@ -20,14 +20,13 @@ let profiles = function () {
         paging:false,
         info: false,
         ajax: '/hotkeys/profiles_tws',
-        "rowId": 'id',
         columns: [
             {
                 data: 'profile',
                 "className": 'r'
             }
         ],
-        "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){
                 case true:
                     $('td', nRow).css('background-color', '#FF8989')
