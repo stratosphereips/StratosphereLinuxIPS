@@ -82,10 +82,18 @@ let profiles = function () {
                         searching: false,
                         scrollY: "25vh", // hardcoded length of opened datatable
                         columns: [
-                            {data: 'tws'}
-                        ]
+                            {data: 'tw'}
+                        ],
+
+                        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+                            switch(aData['blocked']){
+                                case true:
+                                    $('td', nRow).css('background-color', '#FF8989')
+                                    break;
+                            }
+                        }
                     });
-                    let link = '/hotkeys/profiles_tws'
+                    let link = '/hotkeys/' + profileid + "/tws"
                     table_tws.ajax.url(link).load();
                     tr.addClass('shown');
                 }
