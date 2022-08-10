@@ -3842,8 +3842,11 @@ class Database(object):
         org_info = self.rcache.hget('OrgInfo', f'{org}_IPs')
         if not org_info:
             org_info = {}
-        return json.loads(org_info)
-
+        try:
+            return json.loads(org_info)
+        except TypeError:
+            # it's a dict
+            return org_info
 
     def set_whitelist(self, type, whitelist_dict):
         """
