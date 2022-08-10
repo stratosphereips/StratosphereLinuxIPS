@@ -3829,7 +3829,7 @@ class Database(object):
         """
         get the ASN, IP and domains of an org from the db
         :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
-        :param info_type: supported types are 'asn', 'domains', 'IPs'
+        :param info_type: supported types are 'asn', 'domains'
         " returns a json serialized dict with info
         """
         # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
@@ -3837,6 +3837,13 @@ class Database(object):
         if not org_info:
             org_info = '[]'
         return org_info
+
+    def get_org_IPs(self, org):
+        org_info = self.rcache.hget('OrgInfo', f'{org}_IPs')
+        if not org_info:
+            org_info = {}
+        return json.loads(org_info)
+
 
     def set_whitelist(self, type, whitelist_dict):
         """

@@ -565,7 +565,8 @@ class Module(Module, multiprocessing.Process):
                 org_domains = ''
 
             # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
-            org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
+            org_ips = __database__.get_org_IPs(org)
+
             if '.' in ip:
                 first_octet = ip.split('.')[0]
                 ip_obj = ipaddress.IPv4Address(ip)
