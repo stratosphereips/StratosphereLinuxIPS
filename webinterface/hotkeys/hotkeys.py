@@ -118,26 +118,25 @@ class Hotkeys:
         :return: (profile, [tw, blocked], blocked)
         '''
 
-        # Fetch blocked
-        dict_blockedProfileTWs = defaultdict(list)
-        blockedProfileTWs = self.db.smembers('BlockedProfTW')
-
-        if blockedProfileTWs:
-            for blocked in blockedProfileTWs:
-                profile_word, blocked_ip, blocked_tw = blocked.split("_")
-                dict_blockedProfileTWs[blocked_ip].append(blocked_tw)
+        profiles_dict = dict()
+        data = []
 
         # Fetch profiles
         profiles = self.db.smembers('profiles')
-        data = []
         for profileid in profiles:
             profile_word, profile_ip = profileid.split("_")
-            blocked_profile = False
+            profiles_dict[profile_ip] = False
 
-            if profile_ip in dict_blockedProfileTWs.keys():
-                blocked_profile = True
+        # Fetch blocked profiles
+        blockedProfileTWs = self.db.hgetall('BlockedProfTW')
+        if blockedProfileTWs:
+            for blocked in blockedProfileTWs.keys():
+                profile_word, blocked_ip = blocked.split("_")
+                profiles_dict[blocked_ip] = True
 
-            data.append({"profile": profile_ip, "blocked": blocked_profile})
+        # Set all profiles
+        for profile_ip, blocked_state in profiles_dict.items():
+            data.append({"profile": profile_ip, "blocked": blocked_state})
 
         return {
             'data': data
