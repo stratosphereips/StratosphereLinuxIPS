@@ -1719,6 +1719,7 @@ class Database(object):
             }
         }
         if not profile_alerts:
+            # first alert in this profile
             alert = json.dumps(alert)
             self.r.hset('alerts', profileid, alert)
             return
@@ -1727,7 +1728,10 @@ class Database(object):
         #                              twid2: {alert_hash: [evidence_IDs]}}
         profile_alerts:dict = json.loads(profile_alerts)
 
-        try:
+        if twid not in profile_alerts:
+            # first time having an alert for this twid
+            profile_alerts.update(alert)
+        else:
             # we already have a twid with alerts in this profile, update it
             # the format of twid_alerts is {alert_hash: evidence_IDs}
             twid_alerts: dict = profile_alerts[twid]
@@ -1735,9 +1739,6 @@ class Database(object):
                 alert_hash: evidence_IDs
             })
             profile_alerts[twid] = twid_alerts
-        except KeyError:
-            # first time having an alert for this twid
-            profile_alerts.update(alert)
 
         profile_alerts = json.dumps(profile_alerts)
         self.r.hset('alerts', profileid, profile_alerts)

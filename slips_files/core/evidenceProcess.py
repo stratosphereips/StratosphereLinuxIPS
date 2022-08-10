@@ -488,10 +488,25 @@ class EvidenceProcess(multiprocessing.Process):
         """
         # format of tw_evidence is {<ev_id>: {evidence_details}}
         past_alerts = __database__.get_profileid_twid_alerts(proflied, twid)
+        if not past_alerts:
+            return tw_evidence
+
         for alert_id, evidence_IDs in past_alerts.items():
             evidence_IDs = json.loads(evidence_IDs)
             for ID in evidence_IDs:
                 tw_evidence.pop(ID, None)
+        return tw_evidence
+
+    def get_evidence_for_tw(self, profileid, twid):
+        # Get all the evidence for the TW
+        tw_evidence = __database__.getEvidenceForTW(
+            profileid, twid
+        )
+        if not tw_evidence:
+            return False
+
+        tw_evidence = json.loads(tw_evidence)
+        tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
         return tw_evidence
 
     def run(self):
@@ -620,24 +635,17 @@ class EvidenceProcess(multiprocessing.Process):
                     # Analysis of evidence for blocking or not
                     # This is done every time we receive 1 new evidence
                     #
-
-                    # Get all the evidence for the TW
-                    tw_evidence = __database__.getEvidenceForTW(
-                        profileid, twid
-                    )
+                    tw_evidence = self.get_evidence_for_tw(profileid, twid)
 
                     # Important! It may happen that the evidence is not related to a profileid and twid.
                     # For example when the evidence is on some src IP attacking our home net, and we are not creating
                     # profiles for attackers
                     if tw_evidence:
-                        tw_evidence = json.loads(tw_evidence)
-
-                        tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
-
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
+                        
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = 0.0
-                        srcip = profileid.split(self.separator)[1]
+
                         # to store all the ids causing this alerts in the database
                         IDs_causing_an_alert = []
                         for evidence in tw_evidence.values():
