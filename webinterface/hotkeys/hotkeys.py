@@ -104,6 +104,14 @@ class Hotkeys:
             'data': data
         }
 
+    def set_tws(self, profile):
+        '''
+        Set timewindows for selected profile
+        :return:
+        '''
+
+        dict_tws = self.get_all_tw_with_ts(profile)
+
     def set_profile_tws(self):
         '''
         Set profiles and their timewindows into the tree. Blocked are highligted in red.
@@ -124,15 +132,12 @@ class Hotkeys:
         data = []
         for profileid in profiles:
             profile_word, profile_ip = profileid.split("_")
-            dict_tws = self.get_all_tw_with_ts(profileid)
             blocked_profile = False
 
             if profile_ip in dict_blockedProfileTWs.keys():
-                for blocked_tw in dict_blockedProfileTWs[profile_ip]:
-                    dict_tws[blocked_tw]["blocked"] = True
                 blocked_profile = True
 
-            data.append({"id": str(id), "profile": profile_ip, "tws": dict_tws, "blocked": blocked_profile})
+            data.append({"profile": profile_ip, "blocked": blocked_profile})
 
         return {
             'data': data
