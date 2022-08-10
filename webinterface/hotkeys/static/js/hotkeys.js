@@ -489,7 +489,6 @@ let ipinfo = $('#ipinfo').DataTable({
 //              }
 //      }
 
-
 let profile = profiles();
 profile.onclick_tws();
 profile.onclick_ips();
@@ -510,12 +509,6 @@ let hotkey_hook = {
 
 $('#table_timeline_filter_button').click(function(){
     var filter_gender = $('#table_timeline_filter_input').val();
-    if(filter_gender != '')
-    {
-        hotkeys.search_reload(filter_gender);
-    }
-    else
-    {
-        hotkeys.search_reload(filter_gender)
-    }
+    if(filter_gender != ''){hotkeys.search_reload(filter_gender);}
+    else{hotkeys.search_reload(filter_gender);}
 });
