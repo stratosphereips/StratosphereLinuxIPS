@@ -37,6 +37,13 @@ let profiles = function () {
 
     return {
         onclick_tws: function () {
+
+            function add_table_tws(profileid) {
+                let entry ='<table' + ' id="'+ profileid + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+                let exit = '</table>'
+                return (entry  + exit);
+            };
+
             function add_tws(profile_tws) {
                 const open_string = '<table class="table table-striped">'
                 const close_string = '</table>'
@@ -52,7 +59,7 @@ let profiles = function () {
                     data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ',' +"'" + value["name"] +"'" +')">' + colored_item + '</tr>';
                 })
                 return open_string + data + close_string;
-            }
+            };
 
             $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
@@ -61,7 +68,26 @@ let profiles = function () {
                     row.child.hide();
                 }
                 else {
-                    row.child(add_tws(row.data())).show();
+                    let profileid = row.data()['profile']
+                    console.log(profileid)
+                    row.child(add_table_tws(profileid)).show();
+                    let table_id = "#" + profileid
+                    console.log(table_id)
+
+                    let table_tws = $(table_id).DataTable({
+                        "bDestroy": true,
+                        dom: custom_dom,
+                        bInfo: false,
+                        paging: false,
+                        searching: false,
+                        scrollY: "25vh", // hardcoded length of opened datatable
+                        columns: [
+                            {data: 'tws'}
+                        ]
+                    });
+                    let link = '/hotkeys/profiles_tws'
+                    table_tws.ajax.url(link).load();
+                    tr.addClass('shown');
                 }
             });
         },
