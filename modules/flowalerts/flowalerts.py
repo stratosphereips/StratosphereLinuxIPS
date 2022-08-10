@@ -495,13 +495,7 @@ class Module(Module, multiprocessing.Process):
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-        )
+
         ip_data = __database__.getIPData(ip)
         try:
             ip_asn = ip_data['asn']['asnorg']
@@ -529,7 +523,7 @@ class Module(Module, multiprocessing.Process):
             rdns = False
 
         flow_domain = rdns or SNI
-        for org in supported_orgs:
+        for org in utils.supported_orgs:
             if ip_asn and ip_asn != 'Unknown':
                 org_asn = json.loads(__database__.get_org_info(org, 'asn'))
                 if org.lower() in ip_asn.lower() or ip_asn in org_asn:

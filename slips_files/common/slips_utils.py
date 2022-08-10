@@ -15,6 +15,13 @@ class Utils(object):
     name = 'utils'
     description = 'Common functions used by different modules of slips.'
     authors = ['Alya Gomaa']
+    supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+        )
 
     def __init__(self):
         self.home_network_ranges = (
