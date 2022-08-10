@@ -512,3 +512,19 @@ $('#table_timeline_filter_button').click(function(){
     if(filter_gender != ''){hotkeys.search_reload(filter_gender);}
     else{hotkeys.search_reload(filter_gender);}
 });
+
+
+
+
+function KeyPress(e) {
+      var evtobj = window.event? event : e
+      if (evtobj.keyCode == 78 && evtobj.ctrlKey){
+//      var tableIndexes = profiles.rows().indexes();
+//var curRowIndex = tableIndexes.indexOf(row);
+//alert(tableIndexes, curRowIndex);
+//var nextRow =  tableIndexes[curRowIndex + 1];
+        alert("IJDIDEJ")
+      }
+}
+
+document.onkeydown = KeyPress;
