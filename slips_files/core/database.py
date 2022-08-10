@@ -2053,10 +2053,10 @@ class Database(object):
         """
         Check if profile and timewindow is blocked
         """
-        res = self.r.sismember(
-            'BlockedProfTW', profileid + self.separator + twid
-        )
-        return res
+        profile_tws = self.getBlockedProfTW(profileid)
+        if twid in profile_tws:
+            return True
+        return False
 
     def set_first_stage_ensembling_label_to_flow(
         self, profileid, twid, uid, ensembling_label
@@ -2107,12 +2107,21 @@ class Database(object):
 
     def markProfileTWAsBlocked(self, profileid, twid):
         """Add this profile and tw to the list of blocked"""
-        self.r.sadd('BlockedProfTW', profileid + self.separator + twid)
+        tws = self.getBlockedProfTW(profileid)
+        tws.append(twid)
+        self.r.hset('BlockedProfTW', profileid, json.dumps(tws))
 
-    def getBlockedProfTW(self):
+    def getAllBlockedProfTW(self):
         """Return all the list of blocked tws"""
-        data = self.r.smembers('BlockedProfTW')
+        data = self.r.hgetall('BlockedProfTW')
         return data
+
+    def getBlockedProfTW(self, profileid):
+        """Return all the list of blocked tws"""
+        tws = self.r.hget('BlockedProfTW', profileid)
+        if tws:
+            return json.loads(tws)
+        return []
 
     def getDomainData(self, domain):
         """
