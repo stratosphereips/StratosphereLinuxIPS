@@ -69,8 +69,12 @@ def test_check_incompatible_user_agent(outputQueue, database):
     # add os_type , os_name and agent_name to the db
     http_analyzer.get_user_agent_info(safari_ua, profileid)
 
+    # set this profile's vendor to intel
     intel_oui = '00:13:20'
-    MAC_info = {'Vendor': 'Intel Corp', 'MAC': 'FF:FF:FF' + intel_oui}
+    MAC_info = {
+        'Vendor': 'Intel Corp',
+        'MAC': 'FF:FF:FF' + intel_oui
+    }
     database.add_mac_addr_to_profile(profileid, MAC_info)
 
     assert (
