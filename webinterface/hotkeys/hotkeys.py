@@ -104,13 +104,31 @@ class Hotkeys:
             'data': data
         }
 
-    def set_tws(self, profile):
+    def set_tws(self, profile_ip):
         '''
         Set timewindows for selected profile
         :return:
         '''
 
-        dict_tws = self.get_all_tw_with_ts(profile)
+        data=[]
+
+        # Fetch all profile TWs
+        tws = self.get_all_tw_with_ts("profile_"+ profile_ip)
+
+        # Fetch blocked tws
+        blockedTWs = self.db.hget('BlockedProfTW', "profile_"+profile_ip)
+        if blockedTWs:
+            blockedTWs = json.loads(blockedTWs)
+
+        for tw in blockedTWs:
+            tws[tw]['blocked'] = True
+
+        for tw in tws:
+            data.append({"tw": tw["name"], "blocked": tw["blocked"]})
+
+        return{
+            "data": data
+        }
 
     def set_profile_tws(self):
         '''
