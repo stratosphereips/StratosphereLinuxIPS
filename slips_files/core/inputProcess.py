@@ -97,14 +97,6 @@ class InputProcess(multiprocessing.Process):
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
-        self.handle_signals()
-
-    def handle_signals(self):
-        # call shutdown_gracefully on sigterm
-        def sig_handler(sig, frame):
-            self.shutdown_gracefully()
-        # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
-        signal.signal(signal.SIGTERM, sig_handler)
 
     def read_configuration(self):
         """Read the configuration file for what we need"""

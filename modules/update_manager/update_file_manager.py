@@ -31,7 +31,7 @@ class UpdateFileManager:
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, config)
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
@@ -1077,10 +1077,10 @@ class UpdateFileManager:
             malicious_ip_ranges = {}
             # to support nsec/full-results-2019-05-15.json
             if 'json' in malicious_data_path:
-                self.parse_json_ti_feed(
+                return self.parse_json_ti_feed(
                     link_to_download, malicious_data_path
                 )
-                return True
+
 
             with open(malicious_data_path) as feed:
                 self.print(

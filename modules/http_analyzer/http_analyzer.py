@@ -196,7 +196,6 @@ class Module(Module, multiprocessing.Process):
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
         user_agent = user_agent.get('user_agent', '')
-
         if 'safari' in browser and 'apple' not in vendor:
             self.set_evidence_incompatible_user_agent(
                 host, uri, vendor, user_agent, timestamp, profileid, twid, uid
@@ -270,7 +269,7 @@ class Module(Module, multiprocessing.Process):
         }
         try:
             response = requests.get(url)
-            if response.status_code != 200:
+            if response.status_code != 200 or not response.text:
                raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
             __database__.add_user_agent_to_profile(
@@ -283,9 +282,11 @@ class Module(Module, multiprocessing.Process):
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
         # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
-        if not response.text:
+        try:
+            json_response = json.loads(response.text)
+        except json.decoder.JSONDecodeError:
+            # unexpected server response
             return False
-        json_response = json.loads(response.text)
         # the above website returns unknown if it has no info about this UA,
         # remove the 'unknown' from the string before storing in the db
         os_type = (

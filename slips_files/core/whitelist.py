@@ -9,13 +9,14 @@ import os
 
 
 class Whitelist:
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         self.name = 'whitelist'
         self.outputqueue = outputqueue
         self.config = config
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
+        __database__.start(self.config, redis_port)
 
 
     def print(self, text, verbose=1, debug=0):
@@ -243,21 +244,17 @@ class Whitelist:
                     elif 'dst' in from_:
                         domains_to_check = domains_to_check_dst
                     # get the ips of this org
-                    org_subnets = json.loads(
-                        __database__.get_org_info(org, 'IPs')
-                    )
+                    org_subnets: dict = __database__.get_org_IPs(org)
 
                     if 'src' in from_ or 'both' in from_:
                         # Method 1 Check if src IP belongs to a whitelisted organization range
-                        for network in org_subnets:
-                            try:
-                                ip = ipaddress.ip_address(saddr)
-                                if ip in ipaddress.ip_network(network):
-                                    # self.print(f"The src IP {saddr} is in the range {network} or org {org}. Whitelisted.")
-                                    return True
-                            except ValueError:
-                                # Some flows don't have IPs, but mac address or just - in some cases
-                                return False
+                        try:
+                            if self.is_ip_in_range(saddr, org_subnets):
+                                #self.print(f"The src IP {saddr} is in the ranges of org {org}. Whitelisted.")
+                                return True
+                        except ValueError:
+                            # Some flows don't have IPs, but mac address or just - in some cases
+                            return False
 
                         # Method 2 Check if the ASN of this src IP is any of these organizations
                         if self.is_whitelisted_asn(saddr, org):
@@ -509,6 +506,21 @@ class Whitelist:
             pass
         return domains_to_check_dst, domains_to_check_src
 
+
+    def is_ip_in_range(self, ip:str, org_subnets):
+        if '.' in ip:
+            first_octet = ip.split('.')[0]
+        elif ':' in ip:
+            first_octet = ip.split(':')[0]
+        else:
+            return False
+        ip_obj = ipaddress.ip_address(ip)
+        # organization IPs are sorted by first octet for faster search
+        for range in org_subnets.get(first_octet, []):
+            if ip_obj in ipaddress.ip_network(range):
+                return True
+        return False
+
     def is_whitelisted_evidence(
             self, srcip, data, type_detection, description
         ) -> bool:
@@ -727,27 +739,18 @@ class Whitelist:
                                     or ip_asn in org_asn
                                 ):
                                     # this ip belongs to a whitelisted org, ignore alert
-                                    # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip} related to {org}. {data} in {description}')
+                                    # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip}
+                                    # related to {org}. {data} in {description}')
                                     return True
 
                         # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
                         try:
-                            org_subnets = json.loads(__database__.get_org_info(org, 'IPs'))
-                            if '.' in ip:
-                                first_octet = ip.split('.')[0]
-                                ip_obj = ipaddress.IPv4Address(ip)
-                            elif ':' in ip:
-                                first_octet = ip.split(':')[0]
-                                ip_obj = ipaddress.IPv6Address(ip)
-                            else:
-                                return False
-                            # organization IPs are sorted by first octet for faster search
-                            for range in org_subnets.get(first_octet, []):
-                                if ip_obj in ipaddress.ip_network(range):
-                                    # self.print(f'Whitelisting evidence sent by {srcip} about {ip}, due to {ip} being in the range of {org}. {data} in {description}')
-                                    return True
-
+                            org_subnets = __database__.get_org_IPs(org)
+                            if self.is_ip_in_range(ip, org_subnets):
+                                # self.print(f'Whitelisting evidence sent by {srcip} about {ip},
+                                # due to {ip} being in the range of {org}. {data} in {description}')
+                                return True
                         except (KeyError, TypeError):
                             # comes here if the whitelisted org doesn't have info in slips/organizations_info (not a famous org)
                             # and ip doesn't have asn info.
@@ -774,17 +777,17 @@ class Whitelist:
                                 # match subdomains
                                 # if org has org.com, and the flow_domain is xyz.org.com whitelist it
                                 if org_domain in flow_domain:
-                                    print(
-                                        f'The src domain of this flow ({flow_domain}) is '
-                                        f'a subdomain of {org} domain: {org_domain}'
-                                    )
+                                    # print(
+                                    #     f'The src domain of this flow ({flow_domain}) is '
+                                    #     f'a subdomain of {org} domain: {org_domain}'
+                                    # )
                                     return True
                                 # if org has xyz.org.com, and the flow_domain is org.com whitelist it
                                 if flow_domain in org_domain:
-                                    print(
-                                        f'The domain of {org} ({org_domain}) is a subdomain of '
-                                        f'this flow domain ({flow_domain})'
-                                    )
+                                    # print(
+                                    #     f'The domain of {org} ({org_domain}) is a subdomain of '
+                                    #     f'this flow domain ({flow_domain})'
+                                    # )
                                     return True
 
                         except (KeyError, TypeError):

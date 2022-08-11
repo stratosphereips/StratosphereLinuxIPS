@@ -17,53 +17,20 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     needed by every other test in this file"""
     config = configparser.ConfigParser(interpolation=None)
     profilerProcess = ProfilerProcess(
-        inputQueue, outputQueue, 1, 0, config, 6380
+        inputQueue,
+        outputQueue,
+        1,
+        0,
+        config,
+        6380
     )
+
     # override the self.print function to avoid broken pipes
     profilerProcess.print = do_nothing
     profilerProcess.whitelist_path = 'tests/test_whitelist.conf'
     return profilerProcess
 
 
-def create_whitelist_instance(outputQueue):
-    """Create an instance of whitelist.py
-    needed by every other test in this file"""
-    config = configparser.ConfigParser(interpolation=None)
-    whitelist = Whitelist(outputQueue, config)
-    # override the self.print function to avoid broken pipes
-    whitelist.print = do_nothing
-    whitelist.whitelist_path = 'tests/test_whitelist.conf'
-    return whitelist
-
-
-def test_read_whitelist(outputQueue, inputQueue, database):
-    """
-    make sure the content of whitelists is read and stored properly
-    uses tests/test_whitelist.conf for testing
-    """
-    whitelist = create_whitelist_instance(outputQueue)
-    # 9 is the number of lines read after the comment lines at th ebegging of the file
-    assert whitelist.read_whitelist() == 29
-    assert '91.121.83.118' in database.get_whitelist('IPs').keys()
-    assert 'apple.com' in database.get_whitelist('domains').keys()
-    assert 'microsoft' in database.get_whitelist('organizations').keys()
-
-
-@pytest.mark.parametrize('org,asn', [('google', 'AS6432')])
-def test_load_org_asn(org, outputQueue, inputQueue, asn):
-    whitelist = create_whitelist_instance(outputQueue)
-    assert whitelist.load_org_asn(org) != False
-    assert asn in whitelist.load_org_asn(org)
-
-
-@pytest.mark.parametrize('org,subnet', [('google', '216.73.80.0/20')])
-def test_load_org_IPs(org, outputQueue, inputQueue, subnet):
-    whitelist = create_whitelist_instance(outputQueue)
-    assert whitelist.load_org_IPs(org) != False
-    # we now store subnets in a dict sorted by the first octet
-    first_octet = subnet.split('.')[0]
-    assert first_octet in whitelist.load_org_IPs(org)
-    assert subnet in whitelist.load_org_IPs(org)[first_octet]
 
 
 @pytest.mark.parametrize(
@@ -77,7 +44,10 @@ def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
             # get the first line that isn't a comment
             if not sample_flow.startswith('#'):
                 break
-    sample_flow = {'data': sample_flow, 'type': expected_value}
+    sample_flow = {
+        'data': sample_flow,
+        'type': expected_value
+    }
     assert profilerProcess.define_type(sample_flow) == expected_value
 
 
@@ -104,8 +74,12 @@ def test_define_type_zeek_dict(outputQueue, inputQueue, file, expected_value):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
+
     sample_flow = json.loads(sample_flow)
-    sample_flow = {'data': sample_flow, 'type': expected_value}
+    sample_flow = {
+        'data': sample_flow,
+        'type': expected_value
+    }
     assert profilerProcess.define_type(sample_flow) == expected_value
 
 
@@ -192,15 +166,21 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
     sample_flow = json.loads(sample_flow)
-    sample_flow = {'data': sample_flow, 'type': type_}
+    sample_flow = {
+        'data': sample_flow,
+        'type': type_
+    }
+
     # process it
     assert profilerProcess.process_zeek_input(sample_flow) == True
     # add to profile
-    ret = profilerProcess.add_flow_to_profile()
-    assert type(ret) == tuple
-    profileid, twid = ret[0], ret[1]
-    # get the uid of the current flow
-    uid = profilerProcess.column_values['uid']
+    added_to_prof = profilerProcess.add_flow_to_profile()
+    assert added_to_prof == True
+
+    uid = profilerProcess.uid
+    profileid =  profilerProcess.profileid
+    twid =  profilerProcess.twid
+
     # make sure it's added
     if type_ == 'conn':
         added_flow = database.get_flow(profileid, twid, uid)[uid]

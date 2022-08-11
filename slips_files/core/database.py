@@ -11,7 +11,6 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-import pty
 import platform
 import re
 import ast
@@ -428,7 +427,9 @@ class Database(object):
             'version-major': version_major,
             'version-minor': version_minor,
         }
-        self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
+        self.r.hmset(profileid, {
+            'used_software': json.dumps(sw_dict)
+        })
 
     def get_software_from_profile(self, profileid):
         """
@@ -1742,6 +1743,17 @@ class Database(object):
         self.r.hset('alerts', profileid, profile_alerts)
 
 
+    def get_profileid_twid_alerts(self, profileid, twid) -> dict:
+        """
+        The format for the returned dict is
+            {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
+        """
+        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        if not alerts:
+            return {}
+        alerts = json.loads(alerts)
+        return alerts
+
     def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
         Returns all the IDs of evidence causing this alert
@@ -2843,6 +2855,7 @@ class Database(object):
         kex_alg,
         host_key_alg,
         host_key,
+        daddr,
     ):
         """
         Store in the DB a SSH request
@@ -2889,6 +2902,18 @@ class Database(object):
         self.publish('new_ssh', to_send)
         self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        data_to_send = {
+            'ip': daddr,
+            'profileid': str(profileid),
+            'twid': str(twid),
+            'stime': stime,
+            'uid': uid,
+
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
+
+
 
     def add_out_notice(
         self,
@@ -2934,6 +2959,16 @@ class Database(object):
         )
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
+        data_to_send = {
+            'query': daddr,
+            'profileid': profileid,
+            'twid': twid,
+            'stime': stime,
+            'uid': uid,
+            'ip_state': 'dstip'
+        }
+        data_to_send = json.dumps(data_to_send)
+        self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_dns(
         self,
@@ -3794,7 +3829,7 @@ class Database(object):
         """
         get the ASN, IP and domains of an org from the db
         :param org: supported orgs are ('google', 'microsoft', 'apple', 'facebook', 'twitter')
-        :param info_type: supported types are 'asn', 'domains', 'IPs'
+        :param info_type: supported types are 'asn', 'domains'
         " returns a json serialized dict with info
         """
         # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
@@ -3802,6 +3837,16 @@ class Database(object):
         if not org_info:
             org_info = '[]'
         return org_info
+
+    def get_org_IPs(self, org):
+        org_info = self.rcache.hget('OrgInfo', f'{org}_IPs')
+        if not org_info:
+            org_info = {}
+        try:
+            return json.loads(org_info)
+        except TypeError:
+            # it's a dict
+            return org_info
 
     def set_whitelist(self, type, whitelist_dict):
         """

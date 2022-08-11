@@ -1,6 +1,5 @@
 # Your imports
 import hashlib
-from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
@@ -54,18 +53,9 @@ class Utils(object):
 
         data = data.strip()
         try:
-            ipaddress.IPv4Address(data)
-            # Is IPv4!
+            ipaddress.ip_address(data)
             return 'ip'
         except ipaddress.AddressValueError:
-            pass
-        # Is it ipv6?
-        try:
-            ipaddress.IPv6Address(data)
-            # Is IPv6!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # It does not look as IP address.
             pass
 
         try:
@@ -74,16 +64,24 @@ class Utils(object):
         except ValueError:
             pass
 
+        if validators.md5(data):
+            return 'md5'
+
         if validators.domain(data):
             return 'domain'
+
         # some ti files have / at the end of domains, remove it
         if data.endswith('/'):
             data = data[:-1]
+
         domain = data
+
         if domain.startswith('http://'):
             data = data[7:]
+
         if domain.startswith('https://'):
             data = data[8:]
+
         if validators.domain(data):
             return 'domain'
 
@@ -212,6 +210,7 @@ class Utils(object):
 
 
     def define_time_format(self, time: str) -> str:
+
         if self.is_datetime_obj(time):
             return 'datetimeobj'
 
