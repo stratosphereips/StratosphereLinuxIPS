@@ -92,7 +92,7 @@ def create_virustotal_instance(outputQueue):
     )
     return virustotal
 
-
+@pytest.mark.dependency(name='test_api_availability')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 def test_api_query_(outputQueue, ip):
     """
@@ -104,7 +104,7 @@ def test_api_query_(outputQueue, ip):
     assert response != {}, 'Server Error: Response code is not 200'
     assert response['response_code'] == 1
 
-
+@pytest.mark.dependency(depends=["test_api_availability"])
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 def test_interpret_rsponse(outputQueue, ip):
     virustotal = create_virustotal_instance(outputQueue)
@@ -113,11 +113,13 @@ def test_interpret_rsponse(outputQueue, ip):
         assert type(ratio) == float
 
 
+@pytest.mark.dependency(depends=["test_api_availability"])
 def test_get_domain_vt_data(outputQueue):
     virustotal = create_virustotal_instance(outputQueue)
     assert virustotal.get_domain_vt_data('google.com') != False
 
 
+@pytest.mark.dependency(depends=["test_api_availability"])
 def test_scan_file(outputQueue, database):
     """
     This one depends on the available quota
