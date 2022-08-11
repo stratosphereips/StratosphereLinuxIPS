@@ -443,32 +443,32 @@ class Main:
             self.print('quiet')
 
 
-    def close_all_ports(self, in_logfile=False):
+    def close_all_ports(self):
         """
         Closes all the redis ports
-        :param in_logfile: if True closes only the ports present in running_slips_logs.txt
-                           if False, closes all the ports in slips supported range of ports
-                           regardless of what's in running_slips_logs.txt
         """
-        if in_logfile:
-            failed_to_close = 0
-            for pid in self.open_servers_PIDs:
-                if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
-                    port = self.open_servers_PIDs[pid]
-                    # self.remove_server_from_log(port)
-                else:
-                    failed_to_close += 1
-            killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
-            print(f'Successfully closed {killed_servers} Redis Servers.')
-        else:
-            # closes all the ports in slips supported range of ports
-            for port in range(self.start_port, self.end_port + 1):
-                pid = self.get_pid_of_redis_server(port)
-                if pid:
-                    self.flush_redis_server(pid=pid)
-                    self.kill_redis_server(pid)
 
-            print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
+        # close all ports in logfile
+        failed_to_close = 0
+        for pid in self.open_servers_PIDs:
+            if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
+                port = self.open_servers_PIDs[pid]
+                # self.remove_server_from_log(port)
+            else:
+                failed_to_close += 1
+        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
+        # print(f'Successfully closed {killed_servers} redis servers.')
+
+
+        # closes all the ports in slips supported range of ports
+        for port in range(self.start_port, self.end_port + 1):
+            pid = self.get_pid_of_redis_server(port)
+            if pid:
+                self.flush_redis_server(pid=pid)
+                self.kill_redis_server(pid)
+
+        # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
+        print(f"Successfully closed all open redis servers")
 
         try:
             os.remove(self.running_logfile)
@@ -849,6 +849,7 @@ class Main:
                 return open_servers
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
+            return False
 
 
     def get_port_of_redis_server(self, pid: str):
@@ -993,10 +994,11 @@ class Main:
             print(f"Choose which one to kill [0,1,2 etc..]\n")
             # open_servers {1: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
-
+            if not open_servers:
+                self.terminate_slips()
+                
             server_to_close = input()
-
-            # close all ports in running_slips_logs.txt
+            # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == '0':
                 self.close_all_ports()
 
