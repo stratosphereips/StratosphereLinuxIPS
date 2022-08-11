@@ -44,7 +44,7 @@ def test_get_asn_online(database):
     ip = '104.18.7.29'
     found_info = ASN_info.get_asn_online(ip)
     assert found_info != {'asn': {'asnorg': 'Unknown'}}, 'Connection Error'
-    assert found_info['asn']['asnorg'] == 'AS13335 Cloudflare, Inc.'
+    assert found_info['asn']['asnorg'] == 'AS13335 Cloudflare, Inc.', 'Server Error'
 
 def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
@@ -95,7 +95,7 @@ def test_get_vendor_online(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
     mac_addr = '08:00:27:7f:09:e1'
     found_info = ip_info.get_vendor_online(mac_addr).lower()
-    assert found_info == 'Pcs Systemtechnik GmbH'.lower(), 'Error Connecting to server'
+    assert found_info == 'Pcs Systemtechnik GmbH'.lower(), 'Error connecting to server'
 
 
 def test_get_vendor(outputQueue, database):
