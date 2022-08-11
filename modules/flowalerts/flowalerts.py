@@ -82,9 +82,6 @@ class Module(Module, multiprocessing.Process):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
-        # this list will have the flows to check after services.csv is read
-        self.unknown_ports_queue = []
-        self.ran_once = False
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -273,18 +270,6 @@ class Module(Module, multiprocessing.Process):
 
         # consider this port as unknown
         return False
-
-    def check_flows_in_queue(self):
-        """
-        flows are added to queue while services.csv is being read, now that it's read,
-        check if we have unknown ports
-        """
-        # services.csv is read, run  this func on all the flows in queue
-        for flow in self.unknown_ports_queue:
-            self.check_unknown_port(*flow)
-        self.unknown_ports_queue = []
-
-
 
     def check_data_upload(self, profileid, twid):
         def remove_ignored_ips(contacted_addresses):
@@ -1057,22 +1042,15 @@ class Module(Module, multiprocessing.Process):
 
                     # --- Detect unknown destination ports ---
                     if dport:
-                        if not __database__.is_known_ports_read():
-                            self.unknown_ports_queue.append((dport, proto, daddr, profileid, twid, uid, timestamp))
-                        else:
-                            if not self.ran_once:
-                                self.check_flows_in_queue()
-                                self.ran_once = True
-
-                            self.check_unknown_port(
-                                dport,
-                                proto.lower(),
-                                daddr,
-                                profileid,
-                                twid,
-                                uid,
-                                timestamp,
-                            )
+                        self.check_unknown_port(
+                            dport,
+                            proto.lower(),
+                            daddr,
+                            profileid,
+                            twid,
+                            uid,
+                            timestamp,
+                        )
 
                     # --- Detect Multiple Reconnection attempts ---
                     key = saddr + '-' + daddr

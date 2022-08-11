@@ -4069,17 +4069,6 @@ class Database(object):
         """return the path of zeek log files slips is currently using"""
         return self.r.get('zeek_path')
 
-    def mark_known_ports_as_read(self):
-        """
-        To fix the  problem of slips generating fp unknown ports alerts
-        because of the delayed reading of services.csv, slips now
-        doesn't generate unknown ports alerts unless this variable is True
-        """
-        self.rcache.set("is services.csv read", 'True')
-
-    def is_known_ports_read(self):
-        return True if self.rcache.get("is services.csv read") == 'True' else False
-
     def store_std_file(self, **kwargs):
         """
         available args are
