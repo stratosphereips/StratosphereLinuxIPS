@@ -49,8 +49,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.whitelist = Whitelist(outputqueue, config, redis_port)
         # Read the configuration
         self.read_configuration()
-        # Read the whitelist
-        self.whitelist.read_whitelist()
         # Start the DB
         __database__.start(self.config, redis_port)
         # Set the database output queue
