@@ -248,35 +248,19 @@ class Module(Module, multiprocessing.Process):
 
                     return True
 
-    def get_user_agent_info(self, user_agent, profileid):
+
+    def get_ua_info_online(self, user_agent):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
-        returns a dict with
         """
-        # some zeek http flows don't have a user agent field
-        if not user_agent:
-            return False
-        # don't make a request again if we already have a user agent associated with this profile
-        if __database__.get_user_agent_from_profile(profileid) != None:
-            # this profile already has a user agent
-            return False
-
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
-        UA_info = {
-            'user_agent': user_agent,
-            'os_type' : '',
-            'os_name': ''
-        }
+
         try:
             response = requests.get(url)
             if response.status_code != 200 or not response.text:
                raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
-            __database__.add_user_agent_to_profile(
-                profileid, json.dumps(UA_info)
-            )
             return False
-
 
         # returns the following
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
@@ -287,31 +271,54 @@ class Module(Module, multiprocessing.Process):
         except json.decoder.JSONDecodeError:
             # unexpected server response
             return False
-        # the above website returns unknown if it has no info about this UA,
-        # remove the 'unknown' from the string before storing in the db
-        os_type = (
-            json_response.get('os_type', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
-        os_name = (
-            json_response.get('os_name', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
-        browser = (
-            json_response.get('agent_name', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
+        return json_response
 
-        UA_info.update(
-            {
-                'os_name': os_name,
-                'os_type': os_type,
-                'browser': browser,
-            }
-        )
+    def get_user_agent_info(self, user_agent, profileid):
+        """
+        Get OS and browser info about a user agent
+        """
+        # some zeek http flows don't have a user agent field
+        if not user_agent:
+            return False
+        # don't make a request again if we already have a user agent associated with this profile
+        if __database__.get_user_agent_from_profile(profileid) != None:
+            # this profile already has a user agent
+            return False
+
+        UA_info = {
+            'user_agent': user_agent,
+            'os_type' : '',
+            'os_name': ''
+        }
+
+        ua_info = self.get_ua_info_online(user_agent)
+        if ua_info:
+            # the above website returns unknown if it has no info about this UA,
+            # remove the 'unknown' from the string before storing in the db
+            os_type = (
+                ua_info.get('os_type', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+            os_name = (
+                ua_info.get('os_name', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+            browser = (
+                ua_info.get('agent_name', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+
+            UA_info.update(
+                {
+                    'os_name': os_name,
+                    'os_type': os_type,
+                    'browser': browser,
+                }
+            )
+
         __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
