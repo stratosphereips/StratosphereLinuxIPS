@@ -280,7 +280,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
-    assert profiles > 90
+    assert profiles > 60
 
     log_file = output_dir + alerts_file
     assert (is_evidence_present(log_file, expected_evidence)

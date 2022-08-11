@@ -93,21 +93,6 @@ def create_virustotal_instance(outputQueue):
     return virustotal
 
 
-def test_api_limit(outputQueue):
-    virustotal = create_virustotal_instance(outputQueue)
-    ip = (
-        str(random.randint(0, 255))
-        + '.'
-        + str(random.randint(0, 255))
-        + '.'
-        + str(random.randint(0, 255))
-        + '.'
-        + str(random.randint(0, 255))
-    )
-    virustotal.api_query_(ip)
-    # remember to set a key_file
-
-
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 def test_api_query_(outputQueue, ip):
     """
@@ -137,7 +122,7 @@ def test_scan_file(outputQueue, database):
     """
     This one depends on the available quota
     """
-
+    # this one always fails due to the 4 reqs/minute free quota
     virustotal = create_virustotal_instance(outputQueue)
     # test this function with a hash we know is malicious
     file_info = {
