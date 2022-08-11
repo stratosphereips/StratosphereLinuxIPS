@@ -851,6 +851,7 @@ class Whitelist:
 
 
     def get_org_ipranges_online(self, org):
+        return False
         org_subnets = {}
         org_info_file = os.path.join(self.org_info_path, org)
         # see if we can get asn about this org
