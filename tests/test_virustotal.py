@@ -4,7 +4,8 @@ import configparser
 import random
 import pytest
 import time
-
+import requests
+import json
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -18,14 +19,56 @@ def get_vt_key():
             api_key = f.read()
     except FileNotFoundError:
         api_key = ''
+
     return api_key
+
+def have_available_quota(api_key):
+    """
+    Check if the used has available VT quota
+    """
+    def get_allowed(quota):
+        return res.get(quota, {}).get('user', {}).get('allowed', 0)
+
+    url = f'https://www.virustotal.com/api/v3/users/{api_key}/overall_quotas'
+    headers = {'Accept': 'application/json', 'x-apikey':api_key }
+
+    try:
+        response = requests.get(url, headers=headers, timeout=5)
+        if response.status_code == 200:
+            res = json.loads(response.text)['data']
+            api_requests_daily = get_allowed('api_requests_daily')
+            api_requests_hourly = get_allowed('api_requests_hourly')
+            api_requests_monthly = get_allowed('api_requests_monthly')
+            quotas = (api_requests_daily, api_requests_hourly, api_requests_monthly)
+            quotas = list(map(int, quotas))
+
+            if not any(quotas):
+                # one of the above is 0
+                return f'Not enough quota.'
+            return True
+        else:
+            error = json.loads(response.text)['error']
+            code = error['code']
+            msg = error['message']
+            return f'{response.status_code}: {code}, {msg}'
+    except (
+        requests.exceptions.ReadTimeout,
+        requests.exceptions.ConnectionError,
+        json.decoder.JSONDecodeError,
+    ):
+        return False
 
 
 # only run the following tests if an API key was found
 API_KEY = get_vt_key()
+enough_quota = have_available_quota(API_KEY)
+error_msg = 'API key not found'
+if enough_quota != True:
+    error_msg = f"server response {enough_quota}"
+
 pytestmark = pytest.mark.skipif(
-    len(API_KEY) != 64,
-    reason='API KEY not found in modules/virustotal/api_key_secret/',
+    len(API_KEY) != 64 or enough_quota != True,
+    reason=f'API KEY not found or you do not have quota. error: {error_msg}',
 )
 
 
