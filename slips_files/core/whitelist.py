@@ -849,6 +849,51 @@ class Whitelist:
         return domains
 
 
+
+    def get_org_ipranges_online(self, org):
+        org_subnets = {}
+        org_info_file = os.path.join(self.org_info_path, org)
+        # see if we can get asn about this org
+        try:
+            url = f'https://asn-lookup.p.rapidapi.com/api&orgname={org}'
+            headers = {
+                'X-RapidAPI-Host': 'asn-lookup.p.rapidapi.com',
+                'X-RapidAPI-Key': self.asnlookup_api_key
+            }
+            response = requests.get(
+                url,
+                headers=headers,
+                timeout=10,
+            )
+            if response.status_code != 200:
+                return
+            ip_space = json.loads(response.text)
+            if not ip_space:
+                return
+
+            with open(org_info_file, 'w') as f:
+                for subnet in ip_space:
+                    # get ipv4 only
+                    if ':' not in subnet and '.' in subnet:
+                        try:
+                            # make sure this line is a valid network
+                            ipaddress.ip_network(subnet)
+                        except ValueError:
+                            # not a valid line, ignore it
+                            continue
+
+                        f.write(subnet + '\n')
+                        first_octet = subnet.split('.')
+                        try:
+                            org_subnets[first_octet].append(subnet)
+                        except KeyError:
+                            org_subnets[first_octet] = [subnet]
+            return org_subnets
+
+        except requests.exceptions.ConnectionError:
+            # Connection reset by peer
+            return
+
     def load_org_IPs(self, org):
         """
         Reads the specified org's info from slips_files/organizations_info and stores the info in the database
@@ -889,41 +934,8 @@ class Whitelist:
 
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
-            org_subnets = {}
-            # see if we can get asn about this org
-            try:
-                response = requests.get(
-                    'http://asnlookup.com/api/lookup?org='
-                    + org.replace('_', ' '),
-                    headers={'User-Agent': 'ASNLookup PY/Client'},
-                    timeout=10,
-                )
-                if response.status_code != 200:
-                    return
-                ip_space = json.loads(response.text)
-                if not ip_space:
-                    return
-
-                with open(org_info_file, 'w') as f:
-                    for subnet in ip_space:
-                        # get ipv4 only
-                        if ':' not in subnet and '.' in subnet:
-                            try:
-                                # make sure this line is a valid network
-                                ipaddress.ip_network(subnet)
-                            except ValueError:
-                                # not a valid line, ignore it
-                                continue
-
-                                f.write(subnet + '\n')
-                                first_octet = subnet.split('.')
-                                try:
-                                    org_subnets[first_octet].append(subnet)
-                                except KeyError:
-                                    org_subnets[first_octet] = [subnet]
-
-            except requests.exceptions.ConnectionError:
-                # Connection reset by peer
+            org_subnets = self.get_org_ipranges_online(org)
+            if not org_subnets:
                 return
 
         # Store the IPs of this org
