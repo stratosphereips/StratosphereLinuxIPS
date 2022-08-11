@@ -555,7 +555,7 @@ class Module(Module, multiprocessing.Process):
             else:
                 return False
             # organization IPs are sorted by first octet for faster search
-            for range in org_ips.get(first_octet, []):
+            for range in org_ips.get(first_octet, {}):
                 if ip_obj in ipaddress.ip_network(range):
                     return True
 

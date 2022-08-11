@@ -3841,8 +3841,11 @@ class Database(object):
 
     def get_org_IPs(self, org):
         org_info = self.rcache.hget('OrgInfo', f'{org}_IPs')
+
         if not org_info:
             org_info = {}
+            return org_info
+
         try:
             return json.loads(org_info)
         except TypeError:
