@@ -23,17 +23,13 @@ class General:
         '''
         Function to set blocked profiles and tws
         '''
-        blockedProfileTWs = self.db.smembers('BlockedProfTW')
+        blockedProfileTWs = self.db.hgetall('BlockedProfTW')
         data = []
-        id = 0
-        for blocked in blockedProfileTWs:
-            data.append({"blocked": blocked})
-            id = id + 1
-        data_length = id
-        total_filtered = id
+
+        if blockedProfileTWs:
+            for profile, tws in blockedProfileTWs.items():
+                data.append({"blocked": profile + str(tws)})
+
         return {
             'data': data,
-            'recordsFiltered': total_filtered,
-            'recordsTotal': data_length,
-            'draw': request.args.get('draw', type=int)
         }
