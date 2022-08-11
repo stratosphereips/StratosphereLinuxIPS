@@ -112,12 +112,12 @@ class Hotkeys:
 
         # Fetch blocked
         dict_blockedProfileTWs = defaultdict(list)
-        blockedProfileTWs = self.db.smembers('BlockedProfTW')
+        blockedProfileTWs = self.db.hgetall('BlockedProfTW')
 
         if blockedProfileTWs:
-            for blocked in blockedProfileTWs:
-                profile_word, blocked_ip, blocked_tw = blocked.split("_")
-                dict_blockedProfileTWs[blocked_ip].append(blocked_tw)
+            for profile, tws in blockedProfileTWs.items():
+                profile_word, blocked_ip = profile.split("_")
+                dict_blockedProfileTWs[blocked_ip] = json.loads(tws)
 
         # Fetch profiles
         profiles = self.db.smembers('profiles')
