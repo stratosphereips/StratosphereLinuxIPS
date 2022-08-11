@@ -47,7 +47,7 @@ def test_getting_header_fields(outputQueue, file, etag):
 def test_download_file(outputQueue, url):
     update_manager = create_update_manager_instance(outputQueue)
     response = update_manager.download_file(url)
-    assert str(response) == '<Response [200]>'
+    assert str(response) == '<Response [200]>', 'Connection error'
 
 
 @pytest.mark.parametrize(

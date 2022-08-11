@@ -88,7 +88,7 @@ def test_get_vendor_online(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
     mac_addr = '08:00:27:7f:09:e1'
     found_info = ip_info.get_vendor_online(mac_addr).lower()
-    assert found_info == 'Pcs Systemtechnik GmbH'.lower()
+    assert found_info == 'Pcs Systemtechnik GmbH'.lower(), 'Error Connecting to server'
 
 
 def test_get_vendor(outputQueue, database):
