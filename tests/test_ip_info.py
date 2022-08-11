@@ -39,6 +39,13 @@ def test_get_asn_info_from_geolite(database):
     }
 
 
+def test_get_asn_online(database):
+    ASN_info = create_ASN_Info_instance()
+    ip = '104.18.7.29'
+    found_info = ASN_info.get_asn_online(ip)
+    assert found_info != {'asn': {'asnorg': 'Unknown'}}, 'Connection Error'
+    assert found_info['asn']['asnorg'] == 'AS13335 Cloudflare, Inc.'
+
 def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
     assert ASN_info.cache_ip_range('8.8.8.8') == True
