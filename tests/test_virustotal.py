@@ -1,7 +1,10 @@
 """Unit test for modules/virustotal/virustotal.py"""
+
+#### NOTE: this file should conjtain as minimum tests as possible due to the 4reqs/minute vt api quota
+#####       if more than 4 calls to _api_query in a row winn cause unit tests to fail
+
 from ..modules.virustotal.virustotal import Module
 import configparser
-import random
 import pytest
 import time
 import requests
@@ -92,19 +95,18 @@ def create_virustotal_instance(outputQueue):
     )
     return virustotal
 
-@pytest.mark.dependency(name='test_api_availability')
-@pytest.mark.parametrize('ip', ['8.8.8.8'])
-def test_api_query_(outputQueue, ip):
-    """
-    This one depends on the available quota
-    """
-    virustotal = create_virustotal_instance(outputQueue)
-    response = virustotal.api_query_(ip)
-    # make sure response.status != 204 or 403
-    assert response != {}, 'Server Error: Response code is not 200'
-    assert response['response_code'] == 1
+# @pytest.mark.parametrize('ip', ['8.8.8.8'])
+# def test_api_query_(outputQueue, ip):
+#     """
+#     This one depends on the available quota
+#     """
+#     virustotal = create_virustotal_instance(outputQueue)
+#     response = virustotal.api_query_(ip)
+#     # make sure response.status != 204 or 403
+#     assert response != {}, 'Server Error: Response code is not 200'
+#     assert response['response_code'] == 1
 
-@pytest.mark.dependency(depends=["test_api_availability"])
+@pytest.mark.dependency(name='sufficient_quota')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 def test_interpret_rsponse(outputQueue, ip):
     virustotal = create_virustotal_instance(outputQueue)
@@ -112,14 +114,13 @@ def test_interpret_rsponse(outputQueue, ip):
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
 
-
-@pytest.mark.dependency(depends=["test_api_availability"])
+@pytest.mark.dependency(depends=["sufficient_quota"])
 def test_get_domain_vt_data(outputQueue):
     virustotal = create_virustotal_instance(outputQueue)
     assert virustotal.get_domain_vt_data('google.com') != False
 
 
-@pytest.mark.dependency(depends=["test_api_availability"])
+@pytest.mark.dependency(depends=["test_get_domain_vt_data"])
 def test_scan_file(outputQueue, database):
     """
     This one depends on the available quota
