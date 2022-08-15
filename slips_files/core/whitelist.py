@@ -243,13 +243,11 @@ class Whitelist:
                         domains_to_check = domains_to_check_src
                     elif 'dst' in from_:
                         domains_to_check = domains_to_check_dst
-                    # get the ips of this org
-                    org_subnets: dict = __database__.get_org_IPs(org)
 
                     if 'src' in from_ or 'both' in from_:
                         # Method 1 Check if src IP belongs to a whitelisted organization range
                         try:
-                            if self.is_ip_in_range(saddr, org_subnets):
+                            if self.is_ip_in_org(saddr, org):
                                 #self.print(f"The src IP {saddr} is in the ranges of org {org}. Whitelisted.")
                                 return True
                         except ValueError:
@@ -293,18 +291,14 @@ class Whitelist:
 
                     if 'dst' in from_ or 'both' in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted organization range
-                        for network in org_subnets:
-                            try:
-                                ip = ipaddress.ip_address(
-                                    column_values['daddr']
-                                )
-                                if ip in ipaddress.ip_network(network):
-                                    # self.print(f"The dst IP {column_values['daddr']} "
-                                    #            f"is in the range {network} or org {org}. Whitelisted.")
-                                    return True
-                            except ValueError:
-                                # Some flows don't have IPs, but mac address or just - in some cases
-                                return False
+                        try:
+                            if self.is_ip_in_org(column_values['daddr'], org):
+                                # self.print(f"The dst IP {column_values['daddr']} "
+                                # f"is in the range {network} or org {org}. Whitelisted.")
+                                return True
+                        except ValueError:
+                            # Some flows don't have IPs, but mac address or just - in some cases
+                            return False
 
                         # Method 2 Check if the ASN of this dst IP is any of these organizations
                         if self.is_whitelisted_asn(daddr, org):
@@ -320,8 +314,6 @@ class Whitelist:
                                     # self.print(f"The dst domain of this flow ({flow_domain}) is "
                                     #            f"a subdomain of {org} domain: {domain}")
                                     return True
-
-
 
         return False
 
@@ -469,8 +461,6 @@ class Whitelist:
 
         return line_number
 
-
-
     def get_domains_of_flow(self, column_values):
         """Returns the domains of each ip (src and dst) that appeard in this flow"""
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
@@ -507,7 +497,12 @@ class Whitelist:
         return domains_to_check_dst, domains_to_check_src
 
 
-    def is_ip_in_range(self, ip:str, org_subnets):
+    def is_ip_in_org(self, ip:str, org):
+        """
+        Check if the given ip belongs to the given org
+        """
+        org_subnets: dict = __database__.get_org_IPs(org)
+
         if '.' in ip:
             first_octet = ip.split('.')[0]
         elif ':' in ip:
@@ -746,8 +741,7 @@ class Whitelist:
                         # Method 2 using the organization's list of ips
                         # ip doesn't have asn info, search in the list of organization IPs
                         try:
-                            org_subnets = __database__.get_org_IPs(org)
-                            if self.is_ip_in_range(ip, org_subnets):
+                            if self.is_ip_in_org(ip, org):
                                 # self.print(f'Whitelisting evidence sent by {srcip} about {ip},
                                 # due to {ip} being in the range of {org}. {data} in {description}')
                                 return True
@@ -847,8 +841,6 @@ class Whitelist:
 
         __database__.set_org_info(org, json.dumps(domains), 'domains')
         return domains
-
-
 
     def get_org_ipranges_online(self, org):
         return False
