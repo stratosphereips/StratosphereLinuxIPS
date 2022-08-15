@@ -225,6 +225,9 @@ class Utils(object):
         IPs.append(public_ip)
         return IPs
 
+    def convert_to_mb(self, bytes):
+        return int(bytes)/(10**6)
+
     def get_hash_from_file(self, filename):
         """
         Compute the sha256 hash of a file
@@ -351,7 +354,7 @@ class Utils(object):
             IDEA_dict['Source'][0].update({'MAC': [srcip]})
 
         # update the srcip description if specified in the evidence
-        if source_target_tag:
+        if source_target_tag:   # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
             # for example: this will be 'Botnet' in case of C&C alerts not C&C,
             # because it describes the source ip
             IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
