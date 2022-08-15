@@ -260,35 +260,6 @@ class Whitelist:
                             # self.print(f"The src IP {saddr} belong to {org}. Whitelisted because of ASN.")
                             return True
 
-                        # Method 3 Check if the domains of this flow belong to this org
-                        org_domains = json.loads(
-                            __database__.get_org_info(org, 'domains')
-                        )
-                        # domains to check are usually 1 or 2 domains
-                        for flow_domain in domains_to_check:
-                            if org in flow_domain:
-                                # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
-                                return True
-
-                            flow_TLD = flow_domain.split('.')[-1]
-                            for org_domain in org_domains:
-                                org_domain_TLD = org_domain.split('.')[-1]
-                                # make sure the 2 domains have the same same top level domain
-                                if flow_TLD != org_domain_TLD:
-                                    continue
-
-                                # match subdomains too
-                                # if org has org.com, and the flow_domain is xyz.org.com whitelist it
-                                if org_domain in flow_domain:
-                                    # self.print(f"The src domain of this flow ({flow_domain}) is "
-                                    #            f"a subdomain of {org} domain: {org_domain}")
-                                    return True
-                                # if org has xyz.org.com, and the flow_domain is org.com whitelist it
-                                if flow_domain in org_domain:
-                                    # self.print(f"The domain of {org} ({org_domain}) is a subdomain of "
-                                    #       f"this flow domain ({flow_domain})")
-                                    return True
-
                     if 'dst' in from_ or 'both' in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted organization range
                         try:
@@ -305,17 +276,44 @@ class Whitelist:
                             # this ip belongs to a whitelisted org, ignore flow
                             return True
 
-                        # Method 3 Check if the domains of this flow belong to this org
-                        for domain in org_domains:
-                            # domains to check are usually 1 or 2 domains
-                            for flow_domain in domains_to_check:
-                                # match subdomains too
-                                if domain in flow_domain:
-                                    # self.print(f"The dst domain of this flow ({flow_domain}) is "
-                                    #            f"a subdomain of {org} domain: {domain}")
-                                    return True
+                    # either we're blocking src, dst, or both check the domain of this flow
+                    # Method 3 Check if the domains of this flow belong to this org
+                    # domains to check are usually 1 or 2 domains
+                    for flow_domain in domains_to_check:
+                        if self.is_domain_in_org(flow_domain, org):
+                            return True
 
         return False
+
+    def is_domain_in_org(self, domain, org):
+        """
+        Checks if the given domains belongs to the given org
+        """
+        org_domains = json.loads(
+            __database__.get_org_info(org, 'domains')
+        )
+        if org in domain:
+            # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+            return True
+
+        flow_TLD = domain.split('.')[-1]
+        for org_domain in org_domains:
+            org_domain_TLD = org_domain.split('.')[-1]
+            # make sure the 2 domains have the same same top level domain
+            if flow_TLD != org_domain_TLD:
+                continue
+
+            # match subdomains too
+            # if org has org.com, and the flow_domain is xyz.org.com whitelist it
+            if org_domain in domain:
+                # self.print(f"The src domain of this flow ({flow_domain}) is "
+                #            f"a subdomain of {org} domain: {org_domain}")
+                return True
+            # if org has xyz.org.com, and the flow_domain is org.com whitelist it
+            if domain in org_domain:
+                # self.print(f"The domain of {org} ({org_domain}) is a subdomain of "
+                #       f"this flow domain ({flow_domain})")
+                return True
 
     def read_whitelist(self):
         """Reads the content of whitelist.conf and stores information about each ip/org/domain in the database"""
@@ -752,38 +750,10 @@ class Whitelist:
 
                     if data_type == 'domain':
                         flow_domain = data
-                        flow_TLD = flow_domain.split('.')[-1]
                         # Method 3 Check if the domains of this flow belong to this org domains
                         try:
-                            org_domains = json.loads(
-                                __database__.get_org_info(org, 'domains')
-                            )
-                            if org in flow_domain:
-                                # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                            if self.is_domain_in_org(flow_domain, org):
                                 return True
-
-                            for org_domain in org_domains:
-                                org_domain_TLD = org_domain.split('.')[-1]
-                                # make sure the 2 domains have the same same top level domain
-                                if flow_TLD != org_domain_TLD:
-                                    continue
-
-                                # match subdomains
-                                # if org has org.com, and the flow_domain is xyz.org.com whitelist it
-                                if org_domain in flow_domain:
-                                    # print(
-                                    #     f'The src domain of this flow ({flow_domain}) is '
-                                    #     f'a subdomain of {org} domain: {org_domain}'
-                                    # )
-                                    return True
-                                # if org has xyz.org.com, and the flow_domain is org.com whitelist it
-                                if flow_domain in org_domain:
-                                    # print(
-                                    #     f'The domain of {org} ({org_domain}) is a subdomain of '
-                                    #     f'this flow domain ({flow_domain})'
-                                    # )
-                                    return True
-
                         except (KeyError, TypeError):
                             # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
                             # and ip doesn't have asn info.
