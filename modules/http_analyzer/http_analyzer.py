@@ -452,6 +452,46 @@ class Module(Module, multiprocessing.Process):
             )
             return True
 
+    def detect_binary_downloads(
+            self,
+            resp_mime_types,
+            daddr,
+            host,
+            uri,
+            timestamp,
+            profileid,
+            twid,
+            uid
+    ):
+        if resp_mime_types and 'application/x-dosexec' not in resp_mime_types:
+            return False
+
+        type_detection = 'dstdomain'
+        source_target_tag = 'Malware'
+        detection_info = f'{host}{uri}'
+        type_evidence = 'BinaryDownload'
+        threat_level = 'low'
+        category = 'Information'
+        confidence = 1
+        description = (
+            f'DOS executable binary download from IP: {daddr} {detection_info}'
+        )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
@@ -479,6 +519,8 @@ class Module(Module, multiprocessing.Process):
                     request_body_len = flow.get('request_body_len')
                     response_body_len = flow.get('response_body_len')
                     method = flow.get('method')
+                    resp_mime_types = flow.get('resp_mime_types')
+
                     self.check_suspicious_user_agents(
                         uid, host, uri, timestamp, user_agent, profileid, twid
                     )
@@ -536,6 +578,20 @@ class Module(Module, multiprocessing.Process):
                         timestamp,
                         uid
                     )
+
+
+
+                    self.detect_binary_downloads(
+                        resp_mime_types,
+                        daddr,
+                        host,
+                        uri,
+                        timestamp,
+                        profileid,
+                        twid,
+                        uid
+                    )
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
