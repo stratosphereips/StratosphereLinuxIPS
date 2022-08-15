@@ -22,6 +22,7 @@ The detection techniques are:
 - SMTP login bruteforce
 - DNS ARPA Scans
 - Multiple SSH versions
+- Incompatible CN
 
 The details of each detection follows.
 
@@ -221,3 +222,12 @@ When slips detects an SSH client, it stores it with the IP and the SSH client ve
 Then whenever slips sees the same IP using another SSH client, it compares the stored SSH versions with the current SSH versions
 
 If they are different, slips generates an alert
+
+## Incompatible CN
+
+Zeek logs each Certificate CN in ssl.log
+
+When slips enccounters a cn that claims to belong to any of Slips supported orgs (Google, Microsoft, Apple or Twitter)
+Slips checks if the destination address or the destination server name belongs to these org. 
+
+If not, slips generates an alert.

@@ -2,6 +2,7 @@
 * Slips
 - Fix the way we update some TI files
 - Add a new web interface
+- Detect Incompatible certificate CN
 
 -0.9.3
 * Slips
