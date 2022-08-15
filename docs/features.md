@@ -707,6 +707,7 @@ Available detection are:
 - Incompatible user agents
 - Multiple user agents
 - Downloads from pastebin
+- DOS executable downloads
 
 #### Multiple empty connections
 
@@ -763,6 +764,12 @@ Some malware use pastebin as the host of their malicious payloads.
 Slips detects downloads of files from pastebin with size > 12000. 
 
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
+
+
+#### DOS executable downloads
+
+Slips generates an evidence everytime there's a DOS executable download from an HTTP website.
+
 
 ### Leak Detector Module
 

@@ -469,7 +469,7 @@ class Module(Module, multiprocessing.Process):
         type_detection = 'dstdomain'
         source_target_tag = 'Malware'
         detection_info = f'{host}{uri}'
-        type_evidence = 'BinaryDownload'
+        type_evidence = 'DOSExecutableDownload'
         threat_level = 'low'
         category = 'Information'
         confidence = 1
