@@ -425,11 +425,11 @@ class Module(Module, multiprocessing.Process):
         if ('pastebin' in ip_identification
             and response_body_len > 12000
             and method == 'GET'):
-            type_detection = 'srcip'
+            type_detection = 'dstip'
             source_target_tag = 'Malware'
             detection_info = daddr
             type_evidence = 'PastebinDownload'
-            threat_level = 'low'
+            threat_level = 'info'
             category = 'Anomaly.Behaviour'
             confidence = 1
             response_body_len = utils.convert_to_mb(response_body_len)
