@@ -3,6 +3,7 @@
 - Fix the way we update some TI files
 - Add a new web interface
 - Detect Incompatible certificate CN
+- Detect downloads from pastebin with size > 0.012 MBs
 
 -0.9.3
 * Slips

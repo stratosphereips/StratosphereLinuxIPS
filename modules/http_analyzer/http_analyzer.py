@@ -429,7 +429,7 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = 'Malware'
             detection_info = daddr
             type_evidence = 'PastebinDownload'
-            threat_level = 'medium'
+            threat_level = 'low'
             category = 'Anomaly.Behaviour'
             confidence = 1
             response_body_len = utils.convert_to_mb(response_body_len)

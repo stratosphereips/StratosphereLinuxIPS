@@ -706,6 +706,7 @@ Available detection are:
 - Suspicious user agents
 - Incompatible user agents
 - Multiple user agents
+- Downloads from pastebin
 
 #### Multiple empty connections
 
@@ -755,7 +756,13 @@ operating systems, an alert of type 'Multiple user agents' is made
 for example, if an IP is detected using a macOS user agent then an android user agent,
 slips detects this with 'low' threat level
 
+#### Pastebin downloads
 
+Some malware use pastebin as the host of their malicious payloads. 
+
+Slips detects downloads of files from pastebin with size > 12000. 
+
+When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
 ### Leak Detector Module
 
