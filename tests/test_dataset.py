@@ -165,6 +165,7 @@ def test_binetflow(
                 'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
                 'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
+                'Incompatible certificate CN'
             ],
             'sample_zeek_files/',
             6661,
