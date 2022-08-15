@@ -19,7 +19,7 @@ import ast
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'threatintelligence1'
-    description = 'Check if the srcIP or dstIP are in a malicious list of IPs'
+    description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
     def __init__(self, outputqueue, config, redis_port):

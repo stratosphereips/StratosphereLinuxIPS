@@ -1818,6 +1818,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_http(self):
         __database__.add_out_http(
+            self.daddr,
             self.profileid,
             self.twid,
             self.starttime,

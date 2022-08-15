@@ -2770,6 +2770,7 @@ class Database(object):
 
     def add_out_http(
         self,
+        daddr,
         profileid,
         twid,
         stime,
@@ -2807,6 +2808,7 @@ class Database(object):
             'resp_mime_types': resp_mime_types,
             'resp_fuids': resp_fuids,
             'stime': stime,
+            'daddr': daddr,
         }
         # Convert to json string
         data = json.dumps(data)
