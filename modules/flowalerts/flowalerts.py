@@ -880,6 +880,23 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return False
 
+    def detect_incompatible_CN(self, daddr, server_name, issuer):
+        """
+        Detects if a certificate claims that it's CN (common name) belongs
+        to an org that the domain doesn't belong to
+        """
+        if not issuer:
+            return False
+        # cn = issuer.split(',')[0].split('=')[1]
+        for org in utils.supported_orgs:
+            if org in cn:
+                # check that the domain belongs to that same org
+                if self.whitelist.is_ip_in_org(daddr, org):
+                    return False
+
+                # check that the ip belongs to that same org
+                #todo
+
     def check_multiple_ssh_clients(
         self,
         starttime,
@@ -1334,6 +1351,7 @@ class Module(Module, multiprocessing.Process):
                         timestamp = flow['stime']
                         ja3 = flow.get('ja3', False)
                         ja3s = flow.get('ja3s', False)
+                        issuer = flow.get('issuer', False)
                         profileid = data['profileid']
                         twid = data['twid']
                         daddr = flow['daddr']
@@ -1391,6 +1409,7 @@ class Module(Module, multiprocessing.Process):
                                     ioc=ja3s,
                                 )
 
+                        self.detect_incompatible_CN(daddr, server_name, issuer)
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
