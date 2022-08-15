@@ -159,8 +159,6 @@ class Module(Module, multiprocessing.Process):
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        if not twid:
-            twid = ''
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -175,6 +173,8 @@ class Module(Module, multiprocessing.Process):
             twid=twid,
             uid=uid,
         )
+
+
 
     def check_incompatible_user_agent(
         self, host, uri, timestamp, profileid, twid, uid
@@ -406,6 +406,52 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
+    def check_pastebin_downloads(
+            self,
+            daddr,
+            response_body_len,
+            method,
+            profileid,
+            twid,
+            timestamp,
+            uid
+    ):
+        try:
+            response_body_len = int(response_body_len)
+        except ValueError:
+            return False
+
+        ip_identification = __database__.getIPIdentification(daddr)
+        if ('pastebin' in ip_identification
+            and response_body_len > 12000
+            and method == 'GET'):
+            type_detection = 'srcip'
+            source_target_tag = 'Malware'
+            detection_info = daddr
+            type_evidence = 'PastebinDownload'
+            threat_level = 'medium'
+            category = 'Anomaly.Behaviour'
+            confidence = 1
+            response_body_len = utils.convert_to_mb(response_body_len)
+            description = (
+               f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+            )
+            __database__.setEvidence(
+                type_evidence,
+                type_detection,
+                detection_info,
+                threat_level,
+                confidence,
+                description,
+                timestamp,
+                category,
+                source_target_tag=source_target_tag,
+                profileid=profileid,
+                twid=twid,
+                uid=uid,
+            )
+            return True
+
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
@@ -427,9 +473,12 @@ class Module(Module, multiprocessing.Process):
                     uid = flow['uid']
                     host = flow['host']
                     uri = flow['uri']
+                    daddr = flow['daddr']
                     timestamp = flow.get('stime', '')
                     user_agent = flow.get('user_agent', False)
                     request_body_len = flow.get('request_body_len')
+                    response_body_len = flow.get('response_body_len')
+                    method = flow.get('method')
                     self.check_suspicious_user_agents(
                         uid, host, uri, timestamp, user_agent, profileid, twid
                     )
@@ -458,15 +507,35 @@ class Module(Module, multiprocessing.Process):
                             and 'server-bag' not in user_agent)
                     ):
                         # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
-                        self.get_user_agent_info(user_agent, profileid)
+                        self.get_user_agent_info(
+                            user_agent,
+                            profileid
+                        )
 
                     if 'server-bag' in user_agent:
-                        self.extract_info_from_UA(user_agent, profileid)
+                        self.extract_info_from_UA(
+                            user_agent,
+                            profileid
+                        )
 
                     self.check_incompatible_user_agent(
-                        host, uri, timestamp, profileid, twid, uid
+                        host,
+                        uri,
+                        timestamp,
+                        profileid,
+                        twid,
+                        uid
                     )
 
+                    self.check_pastebin_downloads(
+                        daddr,
+                        response_body_len,
+                        method,
+                        profileid,
+                        twid,
+                        timestamp,
+                        uid
+                    )
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
