@@ -16,6 +16,8 @@ import sys
 import socket
 import validators
 from .set_evidence import Helper
+from slips_files.core.whitelist import Whitelist
+
 
 
 class Module(Module, multiprocessing.Process):
@@ -50,6 +52,7 @@ class Module(Module, multiprocessing.Process):
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
@@ -880,22 +883,52 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return False
 
-    def detect_incompatible_CN(self, daddr, server_name, issuer):
+    def detect_incompatible_CN(
+            self,
+            daddr,
+            server_name,
+            issuer,
+            profileid,
+            twid,
+            uid,
+            timestamp
+       ):
         """
         Detects if a certificate claims that it's CN (common name) belongs
         to an org that the domain doesn't belong to
         """
         if not issuer:
             return False
-        # cn = issuer.split(',')[0].split('=')[1]
+        found_org_in_cn = ''
         for org in utils.supported_orgs:
-            if org in cn:
-                # check that the domain belongs to that same org
-                if self.whitelist.is_ip_in_org(daddr, org):
-                    return False
+            if org not in issuer.lower():
+                continue
 
-                # check that the ip belongs to that same org
-                #todo
+            # save the org this domain/ip is claiming to belong to, to use it to set evidence later
+            found_org_in_cn = org
+
+            # check that the domain belongs to that same org
+            if self.whitelist.is_ip_in_org(daddr, org):
+                return False
+
+            # check that the ip belongs to that same org
+            if server_name and self.whitelist.is_domain_in_org(server_name, org):
+                return False
+
+        if not found_org_in_cn:
+            return False
+
+        # found one of our supported orgs in the cn but it doesn't belong to any of this org's
+        # domains or ips
+        self.helper.set_evidence_incompatible_CN(
+            found_org_in_cn,
+            timestamp,
+            daddr,
+            profileid,
+            twid,
+            uid
+        )
+
 
     def check_multiple_ssh_clients(
         self,
@@ -1356,16 +1389,12 @@ class Module(Module, multiprocessing.Process):
                         twid = data['twid']
                         daddr = flow['daddr']
                         saddr = profileid.split('_')[1]
-
+                        server_name = flow.get('server_name')   # returns None if not found
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
                             ip_identification = (
                                 __database__.getIPIdentification(ip)
                             )
-                            server_name = flow.get(
-                                'server_name'
-                            )   # returns None if not found
-                            # if server_name is not None or not empty
                             if not server_name:
                                 description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
@@ -1408,8 +1437,15 @@ class Module(Module, multiprocessing.Process):
                                     type_='ja3s',
                                     ioc=ja3s,
                                 )
-
-                        self.detect_incompatible_CN(daddr, server_name, issuer)
+                        self.detect_incompatible_CN(
+                            daddr,
+                            server_name,
+                            issuer,
+                            profileid,
+                            twid,
+                            uid,
+                            timestamp
+                        )
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':

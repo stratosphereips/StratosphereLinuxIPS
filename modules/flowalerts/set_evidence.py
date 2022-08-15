@@ -64,6 +64,35 @@ class Helper:
             uid=uid,
         )
 
+    def set_evidence_incompatible_CN(
+        self, org, timestamp, daddr, profileid, twid, uid
+    ):
+        """
+        :param prg: the org this ip/domain claims it belongs to
+        """
+        confidence = 0.9
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'srcip'
+        type_evidence = 'IncompatibleCN'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Incompatible certificate CN to IP: {daddr} {ip_identification} claiming to belong {org.capitalize()}.'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_DGA(self, nxdomains: int, stime, profileid, twid, uid):
         confidence = (1 / 100) * (nxdomains - 100) + 1
         confidence = round(confidence, 2)   # for readability
