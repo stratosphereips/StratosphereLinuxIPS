@@ -38,7 +38,7 @@ let profiles = function () {
                     $('td', nRow).css('background-color', '#FF8989')
                     break;
             }
-    }
+        }
     });
 
 
@@ -345,7 +345,7 @@ let profiles = function () {
                             { data: 'description'}
                         ]
                     });
-                    let link = "/hotkeys/evidence/" + profile + "/" + timewindow + "/" + row.data()["alert_id"]
+                    let link = "/hotkeys/evidence/" + active_profile + "/" + active_timewindow + "/" + row.data()["alert_id"]
                     evidence.ajax.url(link).load();
                     tr.addClass('shown');
                 }
