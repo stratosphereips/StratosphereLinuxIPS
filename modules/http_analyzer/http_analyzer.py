@@ -101,16 +101,19 @@ class Module(Module, multiprocessing.Process):
 
         for host in self.hosts:
             if (
-                contacted_host == host
-                or contacted_host == f'www.{host}'
+                (contacted_host == host
+                 or contacted_host == f'www.{host}')
                 and request_body_len == 0
             ):
                 try:
                     # this host has past connections, increate counter
-                    self.connections_counter[host] += 1
+                    uids, connections = self.connections_counter[host]
+                    connections +=1
+                    uids.append(uid)
+                    self.connections_counter[host] = (uids, connections)
                 except KeyError:
                     # first empty connection to this host
-                    self.connections_counter.update({host: 1})
+                    self.connections_counter.update({host: ([uid], 1)})
                 break
         else:
             # it's an http connection to a domain that isn't
@@ -118,7 +121,8 @@ class Module(Module, multiprocessing.Process):
             # ignore it
             return False
 
-        if self.connections_counter[host] == self.empty_connections_threshold:
+        uids, connections = self.connections_counter[host]
+        if connections == self.empty_connections_threshold:
             type_evidence = 'MultipleConnections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
@@ -137,7 +141,7 @@ class Module(Module, multiprocessing.Process):
                 category,
                 profileid=profileid,
                 twid=twid,
-                uid=uid,
+                uid=uids,
             )
             # reset the counter
             self.connections_counter[host] = 0
