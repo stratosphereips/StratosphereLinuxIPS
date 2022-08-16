@@ -76,40 +76,35 @@ let profiles = function () {
     }
 
 
+    return {
+        onclick_tws: function () {
             $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
                 let row = profiles_table.row(tr);
+
+                let profile_id = row.data()['profile']
+                let profile_id_dash = convertDotToDash(profile_id)
+                let table_id_tw = '#' + profile_id_dash
+
                 if (row.child.isShown()) {
+                    $(table_id_tw).DataTable().clear().destroy();
                     row.child.hide();
+                    tr.removeClass('shown');
                 }
                 else {
-                    let profileid = row.data()['profile']
-                    console.log(profileid)
-                    row.child(add_table_tws(profileid)).show();
-                    let table_id = "#" + profileid
-                    console.log(table_id)
-
-                    let table_tws = $(table_id).DataTable({
+                    row.child(add_table_tws(profile_id_dash)).show();
+                    let ajax_ljnk = '/hotkeys/tws/' + profile_id;
+                    let table_tws = $(table_id_tw).DataTable({
+                        "ajax":ajax_ljnk,
                         "bDestroy": true,
                         dom: custom_dom,
                         bInfo: false,
                         paging: false,
                         searching: false,
-                        scrollY: "25vh", // hardcoded length of opened datatable
                         columns: [
-                            {data: 'tw'}
-                        ],
-
-                        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
-                            switch(aData['blocked']){
-                                case true:
-                                    $('td', nRow).css('background-color', '#FF8989')
-                                    break;
-                            }
-                        }
+                            {data: 'name'}
+                        ]
                     });
-                    let link = '/hotkeys/' + profileid + "/tws"
-                    table_tws.ajax.url(link).load();
                     tr.addClass('shown');
                 }
             });
