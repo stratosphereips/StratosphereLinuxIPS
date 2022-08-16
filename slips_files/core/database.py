@@ -1796,6 +1796,23 @@ class Database(object):
                 return True
         return False
 
+    def set_flow_causing_evidence(self, uid, evidence_ID):
+        """
+        :param uid: can be a str or a list
+        """
+        if type(uid) == str:
+            uid = [uid]
+        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
+
+    def get_flows_causing_evidence(self, evidence_ID) -> list:
+        uids = self.r.hget("flows_causing_evidence", evidence_ID)
+        if not uids:
+            return []
+        else:
+            return json.loads(uids)
+
+
+
     def setEvidence(
         self,
         type_evidence,
@@ -1844,9 +1861,12 @@ class Database(object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
+        self.set_flow_causing_evidence(uid, evidence_ID)
+
+        srcip = profileid.split('_')[1]
         # if the ip we want to block is the same as the profileid,
         # make the evidence threat_level=info
-        if profileid.split('_')[1] in str(detection_info):
+        if srcip in str(detection_info):
             threat_level = 'info'
 
         if timestamp:
@@ -1912,8 +1932,7 @@ class Database(object):
         # change the score to = 1, and confidence = 1
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            ip = profileid.split('_')[1]
-            self.set_score_confidence(ip, 'critical', 1)
+            self.set_score_confidence(srcip, 'critical', 1)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
             self.set_score_confidence(detection_info, 'critical', 1)
