@@ -1916,6 +1916,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['software_type'],
             self.column_values['version.major'],
             self.column_values['version.minor'],
+            self.column_values['uid']
         )
         self.publish_to_new_software()
 

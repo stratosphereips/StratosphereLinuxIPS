@@ -914,8 +914,10 @@ class Module(Module, multiprocessing.Process):
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
+        # get the uid of the cached versions, and the uid of the current used versions
+        uids = [cached_ssh_versions['uid'], uid]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uid
+            saddr, cached_versions, current_versions, starttime, twid, uids
         )
         return True
 

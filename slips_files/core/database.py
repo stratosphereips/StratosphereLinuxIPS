@@ -417,15 +417,17 @@ class Database(object):
         self.r.hmset(profileid, {'User-agent': user_agent})
 
     def add_software_to_profile(
-        self, profileid, software, version_major, version_minor
+        self, profileid, software, version_major, version_minor, uid
     ):
         """
         Used to associate this profile with it's used software and version
+        :param uid:  uid of the flow using the given versions
         """
         sw_dict = {
             'software': software,
             'version-major': version_major,
             'version-minor': version_minor,
+            'uid': uid
         }
         self.r.hmset(profileid, {
             'used_software': json.dumps(sw_dict)
@@ -1837,9 +1839,12 @@ class Database(object):
         type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
         type_detection: the type of value causing the detection e.g. dport, dip, flow
         detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
-        threat_level: determine the importance of the evidence, available options are : info, low, medium, high, critical
-        confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
-        uid: needed to get the flow from the database
+        threat_level: determine the importance of the evidence, available options are:
+                        info, low, medium, high, critical
+        confidence: determine the confidence of the detection on a scale from 0 to 1.
+                        (How sure you are that this is what you say it is.)
+        uid: can be a single uid as a str, or a list of uids causing the evidence.
+                        needed to get the flow from the database.
         category: what is this evidence category according to IDEA categories
         conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
 
@@ -1862,6 +1867,10 @@ class Database(object):
         evidence_ID = str(uuid4())
 
         self.set_flow_causing_evidence(uid, evidence_ID)
+
+        # some evidence are caused by several uids, use the last one only
+        if type(uid) == list:
+            uid = uid[-1]
 
         srcip = profileid.split('_')[1]
         # if the ip we want to block is the same as the profileid,
