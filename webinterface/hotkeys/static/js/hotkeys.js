@@ -272,12 +272,6 @@ let profiles = function () {
 
     return {
 
-        set_profile_timewindow: function (pr, tw, tw_name) {
-            profile = pr;
-            timewindow = tw;
-            document.getElementById("active_profile_tw").innerText = "Selected: " + pr + " " + tw_name;
-        },
-
         update_hook: function(){
             update_hotkey()
         },
@@ -393,8 +387,7 @@ hotkeys.onclick_timeline_daddr();
 hotkeys.onclick_alerts();
 
 let hotkey_hook = {
-    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
-        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
+    'initialize_profile_timewindow': function () {
         hotkeys.update_hook();
     }
 }
