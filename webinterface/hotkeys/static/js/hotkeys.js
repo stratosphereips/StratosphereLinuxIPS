@@ -105,6 +105,15 @@ let profiles = function () {
                             {data: 'name'}
                         ]
                     });
+
+                    $(table_id_tw).on('click', 'tbody tr', function () {
+                        var row = table_tws.row($(this)).data();
+                        active_profile =  profiles_table.row(tr).data()["profile"]
+                        active_timewindow = row["tw"]
+                        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + row["name"];
+                        hotkey_hook.initialize_profile_timewindow()
+                     });
+
                     tr.addClass('shown');
                 }
             });
