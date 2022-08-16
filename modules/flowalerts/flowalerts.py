@@ -451,30 +451,33 @@ class Module(Module, multiprocessing.Process):
 
         try:
             # format of this dict is {profileid: [stime of first arpa query, stime eof second, etc..]}
-            self.dns_arpa_queries[profileid].append(stime)
+            timestamps, uids = self.dns_arpa_queries[profileid]
+            timestamps.append(stime)
+            uids.append(uid)
+            self.dns_arpa_queries[profileid] = (timestamps, uids)
         except KeyError:
             # first time for this profileid to perform an arpa query
-            self.dns_arpa_queries[profileid] = [stime]
+            self.dns_arpa_queries[profileid] = ([stime], [uid])
             return False
 
-        if len(self.dns_arpa_queries[profileid]) < self.arpa_scan_threshold:
+        if len(timestamps) < self.arpa_scan_threshold:
             # didn't reach the threshold yet
             return False
 
         # reached the threshold, did the 10 queries happen within 2 seconds?
         diff = utils.get_time_diff(
-            self.dns_arpa_queries[profileid][0],
-            self.dns_arpa_queries[profileid][-1]
+            timestamps[0],
+            timestamps[-1]
         )
         if diff > 2:
             # happened within more than 2 seconds
             return False
 
         self.helper.set_evidence_dns_arpa_scan(
-            self.arpa_scan_threshold, stime, profileid, twid, uid
+            self.arpa_scan_threshold, stime, profileid, twid, uids
         )
         # empty the list of arpa queries timestamps, we don't need thm anymore
-        self.dns_arpa_queries[profileid] = []
+        self.dns_arpa_queries[profileid] = ([], [])
         return True
 
     def is_well_known_org(self, ip):
