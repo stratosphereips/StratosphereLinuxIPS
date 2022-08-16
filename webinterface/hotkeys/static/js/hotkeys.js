@@ -60,6 +60,17 @@ let profiles = function () {
                 })
                 return open_string + data + close_string;
             };
+    function add_table_tws(table_id) {
+        let entry ='<table' + ' id="'+ table_id + '"' + ' class="table table-striped" >'
+        let exit = '</table>'
+        let head ="<thead>"+
+         "<tr>"+
+         "<th>TW</th>" +
+         "</tr>"+
+         "</thead>"
+        return (entry + head  + exit);
+    };
+
 
             $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
