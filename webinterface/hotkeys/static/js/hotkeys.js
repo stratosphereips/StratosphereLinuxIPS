@@ -375,9 +375,9 @@ let ipinfo = $('#ipinfo').DataTable({
 });
 
 
-let profile = profiles();
-profile.onclick_tws();
-profile.onclick_ips();
+let profile_handle = profiles();
+profile_handle.onclick_tws();
+profile_handle.onclick_ips();
 
 let hotkeys = operate_hotkeys();
 hotkeys.onclick_buttons();
