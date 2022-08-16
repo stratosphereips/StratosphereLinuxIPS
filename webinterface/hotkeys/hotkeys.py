@@ -102,7 +102,7 @@ class Hotkeys:
             'data': data
         }
 
-    def set_tws(self, profile_ip):
+    def set_tws(self, profileid):
         '''
         Set timewindows for selected profile
         :return:
@@ -111,10 +111,10 @@ class Hotkeys:
         data=[]
 
         # Fetch all profile TWs
-        tws = self.get_all_tw_with_ts("profile_"+ profile_ip)
+        tws = self.get_all_tw_with_ts("profile_" + profileid)
 
         # Fetch blocked tws
-        blockedTWs = self.db.hget('BlockedProfTW', "profile_"+profile_ip)
+        blockedTWs = self.db.hget('BlockedProfTW', "profile_"+profileid)
         if blockedTWs:
             blockedTWs = json.loads(blockedTWs)
 
@@ -167,7 +167,7 @@ class Hotkeys:
         """
 
         data = []
-        outtuples = self.db.hget(profile + '_' + timewindow, 'OutTuples')
+        outtuples = self.db.hget("profile_" + profile + '_' + timewindow, 'OutTuples')
         if outtuples:
             outtuples = json.loads(outtuples)
 
@@ -191,7 +191,7 @@ class Hotkeys:
         :return: (tuple, string, ip_info)
         """
         data = []
-        intuples = self.db.hget(profile + '_' + timewindow, 'InTuples')
+        intuples = self.db.hget("profile_" + profile + '_' + timewindow, 'InTuples')
         if intuples:
             intuples = json.loads(intuples)
             for key, value in intuples.items():
@@ -213,7 +213,7 @@ class Hotkeys:
         :return: list of timeline flows as set initially in database
         """
         data = []
-        timeline_flows = self.db.hgetall(profile + "_" + timewindow + "_flows")
+        timeline_flows = self.db.hgetall("profile_" + profile + "_" + timewindow + "_flows")
         if timeline_flows:
             for key, value in timeline_flows.items():
                 value = json.loads(value)
@@ -240,7 +240,7 @@ class Hotkeys:
         """
         data = []
 
-        timeline = self.db.zrange(profile + "_" + timewindow + "_timeline", 0, -1)
+        timeline = self.db.zrange("profile_" + profile + "_" + timewindow + "_timeline", 0, -1)
         if timeline:
 
             search_filter = search_filter.strip()
@@ -286,6 +286,7 @@ class Hotkeys:
         Set alerts for chosen profile and timewindow
         """
         data = []
+        profile = "profile_" + profile
         alerts = self.db.hget("alerts", profile)
 
         if alerts:
@@ -315,13 +316,13 @@ class Hotkeys:
         """
 
         data = []
-        alerts = self.db.hget("alerts", profile)
+        alerts = self.db.hget("alerts", "profile_" + profile)
 
         if alerts:
             alerts = json.loads(alerts)
             alerts_tw = alerts[timewindow]
             evidence_ID_list = alerts_tw[alert_id]
-            evidences = self.db.hget("evidence" + profile, timewindow)
+            evidences = self.db.hget("evidence" + "profile_" + profile, timewindow)
             evidences = json.loads(evidences)
 
             for evidence_ID in evidence_ID_list:
