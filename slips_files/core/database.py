@@ -2023,7 +2023,10 @@ class Database(object):
             if IDs and hash:
                 evidence_IDs = IDs.remove(evidence_ID)
                 alert_ID = f'{profileid}_{twid}_{hash}'
-                self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+                if evidence_IDs:
+                    self.set_evidence_causing_alert(
+                        profileid, twid, alert_ID, evidence_IDs
+                    )
 
         except KeyError:
             # alert not added to the 'alerts' key yet!
@@ -2893,7 +2896,6 @@ class Database(object):
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
         """
-        #  {"client":"SSH-2.0-OpenSSH_8.1","server":"SSH-2.0-OpenSSH_7.5p1 Debian-5","cipher_alg":"chacha20-pol y1305@openssh.com","mac_alg":"umac-64-etm@openssh.com","compression_alg":"zlib@openssh.com","kex_alg":"curve25519-sha256","host_key_alg":"ecdsa-sha2-nistp256","host_key":"de:04:98:42:1e:2a:06:86:5b:f0:5b:e3:65:9f:9d:aa"}
         data = {
             'uid': uid,
             'type': flowtype,

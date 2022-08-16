@@ -1139,14 +1139,14 @@ class Module(Module, multiprocessing.Process):
                         dport_name = appproto
                         if not dport_name:
                             dport_name = __database__.get_port_info(
-                                str(dport) + '/' + proto.lower()
+                                f'{dport}/{proto}'
                             )
                             if dport_name:
                                 dport_name = dport_name.upper()
                         # Consider only unknown services
                         else:
                             dport_name = dport_name.upper()
-                        # Consider only unknown services
+
                         if not dport_name:
                             # Connection to multiple ports to the destination IP
                             if profileid.split('_')[1] == saddr:
@@ -1181,6 +1181,7 @@ class Module(Module, multiprocessing.Process):
                                             f'Connection to multiple ports {dstports} of '
                                             f'Destination IP: {daddr}. {ip_identification}'
                                         )
+
                                         self.helper.set_evidence_for_connection_to_multiple_ports(
                                             profileid,
                                             twid,
