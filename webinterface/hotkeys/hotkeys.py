@@ -20,9 +20,6 @@ class Hotkeys:
         self.bp.add_url_rule("/info/<ip>", view_func=self.set_ip_info)
         self.bp.add_url_rule("/outtuples/<profile>/<timewindow>", view_func=self.set_outtuples)
         self.bp.add_url_rule("/intuples/<profile>/<timewindow>", view_func=self.set_intuples)
-        # TODO: decide and fix the graph
-        # self.bp.add_url_rule("/dstIP/<profile>/<timewindow>", view_func=self.set_DstIPflow)
-        # self.bp.add_url_rule("/DstPortsClientUDPNotEstablished", view_func=self.set_dstPortsClientUDPNotEstablished)
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>/<search_filter>", view_func=self.set_timeline)
@@ -160,39 +157,6 @@ class Hotkeys:
         return {
             'data': data
         }
-
-    # TODO: decide and fix the graph
-    # def set_DstIPflow(self, profile, timewindow):
-    #     """
-    #     Set flows per each destination IP
-    #     :param profile: active profile
-    #     :param timewindow: active timewindow
-    #     :return: data with flows per ip
-    #     """
-    #     dst_ips = json.loads(self.db.hget(profile + '_' + timewindow, 'DstIPs'))
-    #     data = []
-    #     id = 0
-    #     for ip, port in dst_ips.items():
-    #         data.append({"ip": ip, "flow": port})
-    #         id = id + 1
-    #
-    #     return {
-    #         'data': data
-    #     }
-
-    # TODO: decide and fix the graph
-    # def set_dstPortsClientUDPNotEstablished(self):
-    #
-    #     dst_ips = json.loads(self.db.hget('profile_192.168.2.16_timewindow1', 'DstPortsClientUDPNotEstablished'))
-    #     data = []
-    #     id = 0
-    #     for port, info in dst_ips.items():
-    #         data.append({"port": port, "info": info})
-    #         id = id + 1
-    #
-    #     return {
-    #         'data': data
-    #     }
 
     def set_outtuples(self, profile, timewindow):
         """
