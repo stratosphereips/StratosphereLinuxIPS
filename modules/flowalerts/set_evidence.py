@@ -383,7 +383,7 @@ class Helper:
         )
 
     def set_evidence_self_signed_certificates(
-        self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'
+        self, profileid, twid, ip, description, uid, timestamp
     ):
         """
         Set evidence for self signed certificates.

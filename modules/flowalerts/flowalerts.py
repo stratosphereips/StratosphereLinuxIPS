@@ -657,7 +657,8 @@ class Module(Module, multiprocessing.Process):
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN of an IP and its range. This DNS is meant not to have a connection later
+        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN
+        # of an IP and its range. This DNS is meant not to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
 
@@ -671,7 +672,8 @@ class Module(Module, multiprocessing.Process):
         ):
             return False
 
-        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
+        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain,
+        # and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
         # self.print(f'The DNS query to {domain} had as answers {answers} ')
@@ -1065,36 +1067,43 @@ class Module(Module, multiprocessing.Process):
                         )
 
                     # --- Detect Multiple Reconnection attempts ---
-                    key = saddr + '-' + daddr
+                    key = f'{saddr}-{daddr}'
                     if dport != 0 and origstate == 'REJ':
-
                         # add this conn to the stored number of reconnections
-                        current_reconnections = (
-                            __database__.getReconnectionsForTW(profileid, twid)
-                        )
-                        current_reconnections[key] = (
-                            current_reconnections.get(key, 0) + 1
-                        )
-                        __database__.setReconnections(
-                            profileid, twid, current_reconnections
-                        )
+                        current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
 
-                        if current_reconnections[key] >= 5:
+                        try:
+                            reconnections, uids = current_reconnections[key]
+                            reconnections += 1
+                            uids.append(uid)
+                            current_reconnections[key] = (reconnections, uids)
+                        except KeyError:
+                            current_reconnections[key] = (1, [uid])
+                            reconnections = 1
+
+                        if reconnections >= 5:
                             ip_identification = (
                                 __database__.getIPIdentification(daddr)
                             )
                             description = (
                                 f'Multiple reconnection attempts to Destination IP: {daddr} {ip_identification} '
-                                f'from IP: {saddr} reconnections: {current_reconnections[key]}'
+                                f'from IP: {saddr} reconnections: {reconnections}'
                             )
                             self.helper.set_evidence_for_multiple_reconnection_attempts(
                                 profileid,
                                 twid,
                                 daddr,
                                 description,
-                                uid,
+                                uids,
                                 timestamp,
                             )
+                            # reset the reconnection attempts of this src->dst
+                            current_reconnections[key] = (0, [])
+
+                        __database__.setReconnections(
+                            profileid, twid, current_reconnections
+                        )
+
 
                     # --- Detect Connection to port 0 ---
                     if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (
