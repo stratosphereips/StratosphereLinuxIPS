@@ -239,8 +239,8 @@ let profiles = function () {
     }
 
     function update_table(){
-        if(profile && timewindow){
-            let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+        if(active_profile && active_timewindow){
+            let link = "/hotkeys/" + active_hotkey_name + "/" + active_profile + "/" + active_timewindow
             active_hotkey_table.ajax.url(link).load();}
         document.getElementById(active_hotkey_name).style.display = "block"
     }
