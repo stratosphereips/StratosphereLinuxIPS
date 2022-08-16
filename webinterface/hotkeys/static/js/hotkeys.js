@@ -41,31 +41,7 @@ let profiles = function () {
     }
     });
 
-    return {
-        onclick_tws: function () {
 
-            function add_table_tws(profileid) {
-                let entry ='<table' + ' id="'+ profileid + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
-                let exit = '</table>'
-                return (entry  + exit);
-            };
-
-            function add_tws(profile_tws) {
-                const open_string = '<table class="table table-striped">'
-                const close_string = '</table>'
-                let data = ""
-                Object.entries(profile_tws.tws).forEach(([item, value]) => {
-                    let colored_item = ""
-                    if(value["blocked"]){
-                       colored_item = '<td style="background-color:#FF8989">' + value["name"] + '</td>'
-                    }
-                    else{
-                       colored_item = '<td style="background-color:#FFFFFF">' + value["name"] + '</td>'
-                    }
-                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ',' +"'" + value["name"] +"'" +')">' + colored_item + '</tr>';
-                })
-                return open_string + data + close_string;
-            };
     function add_table_tws(table_id) {
         let entry ='<table' + ' id="'+ table_id + '"' + ' class="table table-striped" >'
         let exit = '</table>'
