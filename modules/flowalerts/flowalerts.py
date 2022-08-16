@@ -997,6 +997,118 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
+    def detect_connection_to_multiple_ports(
+            self,
+            saddr,
+            proto,
+            state,
+            appproto,
+            dport,
+            timestamp,
+            profileid,
+            twid
+    ):
+        if not (
+            proto == 'tcp'
+            and state == 'Established'
+        ):
+            return
+
+        dport_name = appproto
+        if not dport_name:
+            dport_name = __database__.get_port_info(
+                f'{dport}/{proto}'
+            )
+
+        if dport_name:
+            # dport is known, we are considering only unknown services
+            return
+
+        # Connection to multiple ports to the destination IP
+        if profileid.split('_')[1] == saddr:
+            direction = 'Dst'
+            state = 'Established'
+            protocol = 'TCP'
+            role = 'Client'
+            type_data = 'IPs'
+
+            # get all the dst ips with established tcp connections
+            daddrs = (
+                __database__.getDataFromProfileTW(
+                    profileid,
+                    twid,
+                    direction,
+                    state,
+                    protocol,
+                    role,
+                    type_data,
+                )
+            )
+
+            # make sure we find established connections to this daddr
+            if daddr not in daddrs:
+                return
+
+            dstports = list(
+                daddrs[daddr]['dstports']
+            )
+            if len(dstports) <= 1:
+                retrun
+
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = (
+                f'Connection to multiple ports {dstports} of '
+                f'Destination IP: {daddr}. {ip_identification}'
+            )
+            uids = daddrs[daddr]['uids']
+            self.helper.set_evidence_for_connection_to_multiple_ports(
+                profileid,
+                twid,
+                daddr,
+                description,
+                uids,
+                timestamp,
+            )
+
+        # Connection to multiple port to the Source IP. Happens in the mode 'all'
+        elif profileid.split('_')[1] == daddr:
+            direction = 'Src'
+            state = 'Established'
+            protocol = 'TCP'
+            role = 'Server'
+            type_data = 'IPs'
+
+            # get all the src ips with established tcp connections
+            saddrs = (
+                __database__.getDataFromProfileTW(
+                    profileid,
+                    twid,
+                    direction,
+                    state,
+                    protocol,
+                    role,
+                    type_data,
+                )
+            )
+            dstports = list(
+                saddrs[saddr]['dstports']
+            )
+            if len(dstports) <= 1:
+                return
+
+            uids = saddrs[saddr]['uids']
+            description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
+
+            self.helper.set_evidence_for_connection_to_multiple_ports(
+                profileid,
+                twid,
+                daddr,
+                description,
+                uids,
+                timestamp,
+            )
+
+
     def run(self):
         utils.drop_root_privs()
         # Main loop function
@@ -1135,95 +1247,16 @@ class Module(Module, multiprocessing.Process):
                         )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
-                    if proto == 'tcp' and state == 'Established':
-                        dport_name = appproto
-                        if not dport_name:
-                            dport_name = __database__.get_port_info(
-                                f'{dport}/{proto}'
-                            )
-                            if dport_name:
-                                dport_name = dport_name.upper()
-                        # Consider only unknown services
-                        else:
-                            dport_name = dport_name.upper()
-
-                        if not dport_name:
-                            # Connection to multiple ports to the destination IP
-                            if profileid.split('_')[1] == saddr:
-                                direction = 'Dst'
-                                state = 'Established'
-                                protocol = 'TCP'
-                                role = 'Client'
-                                type_data = 'IPs'
-                                dst_IPs_ports = (
-                                    __database__.getDataFromProfileTW(
-                                        profileid,
-                                        twid,
-                                        direction,
-                                        state,
-                                        protocol,
-                                        role,
-                                        type_data,
-                                    )
-                                )
-                                # make sure we find established connections to this daddr
-                                if daddr in dst_IPs_ports:
-                                    dstports = list(
-                                        dst_IPs_ports[daddr]['dstports']
-                                    )
-                                    if len(dstports) > 1:
-                                        ip_identification = (
-                                            __database__.getIPIdentification(
-                                                daddr
-                                            )
-                                        )
-                                        description = (
-                                            f'Connection to multiple ports {dstports} of '
-                                            f'Destination IP: {daddr}. {ip_identification}'
-                                        )
-
-                                        self.helper.set_evidence_for_connection_to_multiple_ports(
-                                            profileid,
-                                            twid,
-                                            daddr,
-                                            description,
-                                            uid,
-                                            timestamp,
-                                        )
-
-                            # Connection to multiple port to the Source IP. Happens in the mode 'all'
-                            elif profileid.split('_')[1] == daddr:
-                                direction = 'Src'
-                                state = 'Established'
-                                protocol = 'TCP'
-                                role = 'Server'
-                                type_data = 'IPs'
-                                src_IPs_ports = (
-                                    __database__.getDataFromProfileTW(
-                                        profileid,
-                                        twid,
-                                        direction,
-                                        state,
-                                        protocol,
-                                        role,
-                                        type_data,
-                                    )
-                                )
-                                dstports = list(
-                                    src_IPs_ports[saddr]['dstports']
-                                )
-                                if len(dstports) > 1:
-                                    description = 'Connection to multiple ports {} of Source IP: {}'.format(
-                                        dstports, saddr
-                                    )
-                                    self.helper.set_evidence_for_connection_to_multiple_ports(
-                                        profileid,
-                                        twid,
-                                        daddr,
-                                        description,
-                                        uid,
-                                        timestamp,
-                                    )
+                    self.detect_connection_to_multiple_ports(
+                        saddr,
+                        proto,
+                        state,
+                        appproto,
+                        dport,
+                        timestamp,
+                        profileid,
+                        twid
+                    )
 
                     # --- Detect Data exfiltration ---
                     self.check_data_upload(profileid, twid)
