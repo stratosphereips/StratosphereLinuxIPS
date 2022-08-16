@@ -1106,42 +1106,42 @@ class Database(object):
             uid
         ):
         """
-        # - Update how many times each individual DstPort was contacted
-        # - Update the total flows sent by this ip
-        # - Update the total packets sent by this ip
-        # - Update the total bytes sent by this ip
-
+        #  Updates how many times each individual DstPort was contacted,
+        the total flows sent by this ip and their uids,
+        the total packets sent by this ip,
+        total bytes sent by this ip
         """
 
+        dport = str(dport)
+        dpkts = int(dpkts)
+        pkts = int(pkts)
+        totbytes = int(totbytes)
 
         try:
-            # update info about this ip
-            dport = str(dport)
-            dpkts = int(dpkts)
-
+            # update info about an existing ip
             ip_data = old_profileid_twid_data[ip]
             ip_data['totalflows'] += 1
-            ip_data['totalpkt'] += int(pkts)
-            ip_data['totalbytes'] += int(totbytes)
-
-            try:
+            ip_data['totalpkt'] += pkts
+            ip_data['totalbytes'] += totbytes
+            ip_data['uids'].append(uid)
+            if dport in ip_data['dstports']:
                 ip_data['dstports'][dport] += dpkts
-            except KeyError:
+            else:
                 ip_data['dstports'][dport] = dpkts
 
         except KeyError:
-            # First time for this ip
+            # First time seeing this ip
             ip_data = {
                 'totalflows': 1,
-                'totalpkt': int(pkts),
-                'totalbytes': int(totbytes),
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
                 'stime': starttime,
-                'uid': uid,
+                'uids': [uid],
                 'dstports': {dport: dpkts}
 
             }
-        old_profileid_twid_data[ip] = ip_data
 
+        old_profileid_twid_data[ip] = ip_data
         return old_profileid_twid_data
 
 
@@ -1165,11 +1165,11 @@ class Database(object):
 
         # Get the fields
         dport = columns['dport']
-        sport = columns['sport']
         totbytes = columns['bytes']
+        sport = columns['sport']
         sbytes = columns['sbytes']
-        pkts = columns['pkts']
         spkts = columns['spkts']
+        pkts = columns['pkts']
         dpkts = columns.get('dpkts', 0)
         state = columns['state']
         proto = columns['proto'].upper()
@@ -1179,7 +1179,17 @@ class Database(object):
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
 
-        # Depending if the traffic is going out or not, we are Client or Server
+        """
+        Depending if the traffic is going out or not, we are Client or Server
+        Client role means:
+            The profile corresponds to the src ip that received this flow
+            The dstip is here the one receiving data from your profile
+            So check the dst ip
+        Server role means:
+            The profile corresponds to the dst ip that received this flow
+            The srcip is here the one sending data to your profile
+            So check the src ip
+        """
         direction =  'Dst' if role == 'Client' else 'Src'
 
         #############
@@ -1195,14 +1205,7 @@ class Database(object):
             self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
             self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
 
-        # Client role means:
-        #     # The profile corresponds to the src ip that received this flow
-        #     # The dstip is here the one receiving data from your profile
-        #     # So check the dst ip
-        # Server role means:
-        #     # The profile corresponds to the dst ip that received this flow
-        #     # The srcip is here the one sending data to your profile
-        #     # So check the src ip
+
 
         self.update_times_contacted(ip, direction, profileid, twid)
 
@@ -1231,14 +1234,16 @@ class Database(object):
             uid
         )
 
-        data = json.dumps(profileid_twid_data)
-
         proto = proto.upper()
         key_name = (
             f'{direction}IPs{role}{proto}{summaryState}'
         )
         # Store this data in the profile hash
-        self.r.hset(profileid + self.separator + twid, key_name, data)
+        self.r.hset(
+            profileid + self.separator + twid,
+            key_name,
+            json.dumps(profileid_twid_data)
+        )
         return True
      
      
@@ -3674,30 +3679,11 @@ class Database(object):
             # outside of home_network when this param is given
             return False
         try:
-            self.print(
-                'Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(
-                    profileid,
-                    twid,
-                    direction,
-                    state,
-                    protocol,
-                    role,
-                    type_data,
-                ),
-                3,
-                0,
-            )
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
             data = self.r.hget(profileid + self.separator + twid, key)
             value = {}
             if data:
-                self.print(
-                    'Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(
-                        key, profileid, twid, data
-                    ), 3, 0,
-                )
-                # Convert the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
             elif not data:
