@@ -106,7 +106,7 @@ class Module(Module, multiprocessing.Process):
                 and request_body_len == 0
             ):
                 try:
-                    # this host has past connections, increate counter
+                    # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
                     connections +=1
                     uids.append(uid)
@@ -144,7 +144,7 @@ class Module(Module, multiprocessing.Process):
                 uid=uids,
             )
             # reset the counter
-            self.connections_counter[host] = 0
+            self.connections_counter[host] = ([], 0)
             return True
         return False
 
