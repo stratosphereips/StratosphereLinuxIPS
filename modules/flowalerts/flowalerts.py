@@ -940,22 +940,29 @@ class Module(Module, multiprocessing.Process):
         try:
             # make sure all domains are unique
             if query not in self.nxdomains[profileid_twid]:
-                self.nxdomains[profileid_twid].append(query)
+                queries, uids = self.nxdomains[profileid_twid]
+                queries.append(query)
+                uids.append(uid)
+                self.nxdomains[profileid_twid] = (queries, uids)
         except KeyError:
             # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: [query]})
+            self.nxdomains.update({profileid_twid: ([query], [uid])})
             return False
 
-        # every 10,15,20 .. etc. nxdomains, generate an alert.
-        number_of_nxdomains = len(self.nxdomains[profileid_twid])
+        # every 5 nxdomains, generate an alert.
+        queries, uids = self.nxdomains[profileid_twid]
+        number_of_nxdomains = len(queries)
         if (
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
             self.helper.set_evidence_DGA(
-                number_of_nxdomains, stime, profileid, twid, uid
+                number_of_nxdomains, stime, profileid, twid, uids
             )
+            # clear the list of alerted queries and uids
+            self.nxdomains[profileid_twid] = ([],[])
             return True
+
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
 
