@@ -1069,6 +1069,31 @@ class Database(object):
         self.publish('p2p_data_request', json.dumps(data_to_send))
 
 
+    def update_times_contacted(self, ip, direction, profileid, twid):
+        """
+        :param ip: the ip that we want to update the times we contacted
+        """
+
+        # Get the hash of the timewindow
+        profileid_twid = profileid + self.separator + twid
+
+        # Get the DstIPs data for this tw in this profile
+        # The format is {'1.1.1.1' :  3}
+        ips_contacted = self.r.hget(profileid_twid, direction + 'IPs')
+        if not ips_contacted:
+            ips_contacted = {}
+
+        try:
+            ips_contacted = json.loads(ips_contacted)
+            # Add 1 because we found this ip again
+            ips_contacted[ip] += 1
+        except (TypeError, KeyError):
+            # There was no previous data stored in the DB
+            ips_contacted[ip] = 1
+
+        ips_contacted = json.dumps(ips_contacted)
+        self.r.hset(profileid_twid, direction + 'IPs', str(ips_contacted))
+
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -1106,7 +1131,7 @@ class Database(object):
 
         # Depending if the traffic is going out or not, we are Client or Server
         direction =  'Dst' if role == 'Client' else 'Src'
-        
+
         #############
         # Store the Dst as IP address and notify in the channel
         # We send the obj but when accessed as str, it is automatically
@@ -1119,7 +1144,7 @@ class Database(object):
         if columns['state'] != 'OTH':
             self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
             self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
-            
+
         # Client role means:
         #     # The profile corresponds to the src ip that received this flow
         #     # The dstip is here the one receiving data from your profile
