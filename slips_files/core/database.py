@@ -1094,6 +1094,56 @@ class Database(object):
         ips_contacted = json.dumps(ips_contacted)
         self.r.hset(profileid_twid, direction + 'IPs', str(ips_contacted))
 
+    def update_ip_info(
+            self,
+            old_profileid_twid_data,
+            pkts,
+            dport,
+            dpkts,
+            totbytes,
+            ip,
+            starttime,
+            uid
+        ):
+        """
+        # - Update how many times each individual DstPort was contacted
+        # - Update the total flows sent by this ip
+        # - Update the total packets sent by this ip
+        # - Update the total bytes sent by this ip
+
+        """
+
+
+        try:
+            # update info about this ip
+            dport = str(dport)
+            dpkts = int(dpkts)
+
+            ip_data = old_profileid_twid_data[ip]
+            ip_data['totalflows'] += 1
+            ip_data['totalpkt'] += int(pkts)
+            ip_data['totalbytes'] += int(totbytes)
+
+            try:
+                ip_data['dstports'][dport] += dpkts
+            except KeyError:
+                ip_data['dstports'][dport] = dpkts
+
+        except KeyError:
+            # First time for this ip
+            ip_data = {
+                'totalflows': 1,
+                'totalpkt': int(pkts),
+                'totalbytes': int(totbytes),
+                'stime': starttime,
+                'uid': uid,
+                'dstports': {dport: dpkts}
+
+            }
+        old_profileid_twid_data[ip] = ip_data
+
+        return old_profileid_twid_data
+
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
