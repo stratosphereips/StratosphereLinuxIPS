@@ -71,6 +71,10 @@ let profiles = function () {
         return (entry + head  + exit);
     };
 
+    var convertDotToDash = function(string) {
+        return string.replace(/\./g,'_');
+    }
+
 
             $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
