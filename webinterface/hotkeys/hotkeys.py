@@ -46,6 +46,7 @@ class Hotkeys:
             tw_n = tw_tuple[0]
             tw_ts = tw_tuple[1]
             tw_date = self.ts_to_date(tw_ts)
+            dict_tws[tw_n]["tw"] = tw_n
             dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
             dict_tws[tw_n]["blocked"] = False  # needed to color profiles
         return dict_tws
@@ -108,7 +109,7 @@ class Hotkeys:
         :return:
         '''
 
-        data=[]
+        data = []
 
         # Fetch all profile TWs
         tws = self.get_all_tw_with_ts("profile_" + profileid)
@@ -118,11 +119,11 @@ class Hotkeys:
         if blockedTWs:
             blockedTWs = json.loads(blockedTWs)
 
-        for tw in blockedTWs:
-            tws[tw]['blocked'] = True
+            for tw in blockedTWs:
+                tws[tw]['blocked'] = True
 
-        for tw in tws:
-            data.append({"tw": tw["name"], "blocked": tw["blocked"]})
+        for tw_key, tw_value in tws.items():
+            data.append({"tw": tw_value["tw"],"name": tw_value["name"], "blocked": tw_value["blocked"]})
 
         return{
             "data": data
