@@ -16,8 +16,7 @@ class Hotkeys:
         # Routes should be set explicity, because Flask process self parameter in function wrong.
         self.bp.add_url_rule("/", view_func=self.index)
         self.bp.add_url_rule("/profiles_tws", view_func=self.set_profile_tws)
-        self.bp.add_url_rule("/<profileid>/tws", view_func=self.set_tws)
-
+        self.bp.add_url_rule("/tws/<profileid>", view_func=self.set_tws)
         self.bp.add_url_rule("/info/<ip>", view_func=self.set_ip_info)
         self.bp.add_url_rule("/outtuples/<profile>/<timewindow>", view_func=self.set_outtuples)
         self.bp.add_url_rule("/intuples/<profile>/<timewindow>", view_func=self.set_intuples)
