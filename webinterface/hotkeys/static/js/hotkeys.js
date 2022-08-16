@@ -3,6 +3,12 @@ const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 co
            "<'row'<'col-sm-12'tr>>" +
            "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
 
+let active_profile = '';
+let active_timewindow = '';
+let active_hotkey_name = 'timeline';
+let last_active_hotkey_name = 'timeline';
+let active_hotkey_table = null;
+
 
 /*
 Set profile and timewindow table.
@@ -130,11 +136,6 @@ let profiles = function () {
 }
 
  let operate_hotkeys = function () {
-    let profile = '';
-    let timewindow = '';
-    let active_hotkey_name = 'timeline';
-    let last_active_hotkey_name = 'timeline';
-    let active_hotkey_table = null;
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         destroy: true,
