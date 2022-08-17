@@ -1166,9 +1166,6 @@ class Database(object):
         # Get the fields
         dport = columns['dport']
         totbytes = columns['bytes']
-        sport = columns['sport']
-        sbytes = columns['sbytes']
-        spkts = columns['spkts']
         pkts = columns['pkts']
         dpkts = columns.get('dpkts', 0)
         state = columns['state']
@@ -1178,6 +1175,10 @@ class Database(object):
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
+        # sport = columns['sport']
+        # sbytes = columns['sbytes']
+        # spkts = columns['spkts']
+
 
         """
         Depending if the traffic is going out or not, we are Client or Server
@@ -1190,7 +1191,7 @@ class Database(object):
             The srcip is here the one sending data to your profile
             So check the src ip
         """
-        direction =  'Dst' if role == 'Client' else 'Src'
+        direction = 'Dst' if role == 'Client' else 'Src'
 
         #############
         # Store the Dst as IP address and notify in the channel
@@ -1204,7 +1205,6 @@ class Database(object):
         if columns['state'] != 'OTH':
             self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
             self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
-
 
 
         self.update_times_contacted(ip, direction, profileid, twid)
@@ -1370,103 +1370,84 @@ class Database(object):
         role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
         port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
         """
-        try:
-            # Extract variables from columns
-            dport = columns['dport']
-            sport = columns['sport']
-            totbytes = columns['bytes']
-            pkts = columns['pkts']
-            state = columns['state']
-            proto = columns['proto'].upper()
-            starttime = str(columns['starttime'])
-            uid = columns['uid']
-            # spkts = columns['spkts']
-            # dpkts = columns['dpkts']
-            # daddr = columns['daddr']
-            # saddr = columns['saddr']
-            # sbytes = columns['sbytes']
+        # Extract variables from columns
+        dport = columns['dport']
+        sport = columns['sport']
+        totbytes = int(columns['bytes'])
+        pkts = int(columns['pkts'])
+        state = columns['state']
+        proto = columns['proto'].upper()
+        starttime = str(columns['starttime'])
+        uid = columns['uid']
+        ip = str(ip_address)
+        # spkts = columns['spkts']
+        # dpkts = columns['dpkts']
+        # daddr = columns['daddr']
+        # saddr = columns['saddr']
+        # sbytes = columns['sbytes']
 
-            # Choose which port to use based if we were asked Dst or Src
-            if port_type == 'Dst':
-                port = str(dport)
-            elif port_type == 'Src':
-                port = str(sport)
-            # If we are the Client, we want to store the dstips only
-            # If we are the Server, we want to store the srcips only
-            # This is the only combination that makes sense.
-            if role == 'Client':
-                ip_key = 'dstips'
-            elif role == 'Server':
-                ip_key = 'srcips'
-            # Get the state. Established, NotEstablished
-            summaryState = __database__.getFinalStateFromFlags(state, pkts)
-            # Key
-            key_name = port_type + 'Ports' + role + proto + summaryState
-            # self.print('add_port(): As a {} storing info about {} port {} for {}.
-            # Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
-            prev_data = self.getDataFromProfileTW(
-                profileid, twid, port_type, summaryState, proto, role, 'Ports'
-            )
-            try:
-                innerdata = prev_data[port]
-                innerdata['totalflows'] += 1
-                innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] += int(totbytes)
-                temp_dstips = innerdata[ip_key]
-                try:
-                    temp_dstips[str(ip_address)]['pkts'] += int(pkts)
-                except KeyError:
-                    temp_dstips[str(ip_address)] = {}
-                    temp_dstips[str(ip_address)]['pkts'] = int(pkts)
-                    temp_dstips[str(ip_address)]['stime'] = str(starttime)
-                    temp_dstips[str(ip_address)]['uid'] = uid
-                innerdata[ip_key] = temp_dstips
-                prev_data[port] = innerdata
-                self.print(
-                    'add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(
-                        port, profileid, key_name, innerdata
-                    ),3,0,
-                )
-            except KeyError:
-                # First time for this flow
-                innerdata = {}
-                innerdata['totalflows'] = 1
-                innerdata['totalpkt'] = int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
-                temp_dstips = {}
-                temp_dstips[str(ip_address)] = {}
-                temp_dstips[str(ip_address)]['pkts'] = int(pkts)
-                temp_dstips[str(ip_address)]['stime'] = starttime
-                temp_dstips[str(ip_address)]['uid'] = uid
-                innerdata[ip_key] = temp_dstips
-                prev_data[port] = innerdata
-                self.print(
-                    'add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(
-                        port, profileid, key_name, innerdata
-                    ), 3, 0,
-                )
-            # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
-            # Convet the dictionary to json
-            data = json.dumps(prev_data)
-            self.print(
-                'add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(
-                    port, profileid, key_name, prev_data
-                ),3,0,
-            )
-            # Store this data in the profile hash
-            hash_key = profileid + self.separator + twid
-            self.r.hset(hash_key, key_name, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in add_port in database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+        # Choose which port to use based if we were asked Dst or Src
+        port = str(sport) if port_type == 'Src' else str(dport)
+
+        # If we are the Client, we want to store the dstips only
+        # If we are the Server, we want to store the srcips only
+        ip_key = 'srcips' if role == 'Server' else 'dstips'
+
+        # Get the state. Established, NotEstablished
+        summaryState = __database__.getFinalStateFromFlags(state, pkts)
+
+        old_profileid_twid_data = self.getDataFromProfileTW(
+            profileid,
+            twid,
+            port_type,
+            summaryState,
+            proto,
+            role,
+            'Ports'
+        )
+        port_data = old_profileid_twid_data[port]
+        key_name = f'{port_type}Ports{role}{proto}{summaryState}'
+
+        try:
+            # we already have info about this dport, update it
+            port_data['totalflows'] += 1
+            port_data['totalpkt'] += pkts
+            port_data['totalbytes'] += totbytes
+
+            if ip in port_data[ip_key]:
+                port_data[ip_key][ip]['pkts'] += pkts
+            else:
+                port_data[ip_key][ip] = {
+                    'pkts': pkts,
+                    'stime': starttime,
+                    'uid': uid
+                }
+
+        except KeyError:
+            # First time for this dport
+            port_data = {
+                'totalflows': 1,
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
+                ip_key: {
+                    ip: {
+                        'pkts': pkts,
+                        'stime': starttime,
+                        'uid': uid
+                    }
+                }
+            }
+
+        old_profileid_twid_data[port] = port_data
+        # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
+        # Convet the dictionary to json
+        data = json.dumps(old_profileid_twid_data)
+        # Store this data in the profile hash
+        hash_key = profileid + self.separator + twid
+        self.r.hset(hash_key, key_name, str(data))
+        # Mark the tw as modified
+        self.markProfileTWAsModified(profileid, twid, starttime)
+
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
