@@ -997,9 +997,65 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
+    def check_smtp_bruteforce(self, stime, saddr, daddr, profileid, twid, uid):
+
+        try:
+            timestamps, uids = self.smtp_bruteforce_cache[profileid]
+            timestamps.append(stime)
+            uids.append(uid)
+            self.smtp_bruteforce_cache[profileid] = (timestamps, uids)
+        except KeyError:
+            # first time for this profileid to make bad smtp login
+            self.smtp_bruteforce_cache.update(
+                {
+                    profileid: ([stime], [uid])
+                }
+            )
+
+        self.helper.set_evidence_bad_smtp_login(
+            saddr, daddr, stime, profileid, twid, uid
+        )
+
+        timestamps = self.smtp_bruteforce_cache[profileid][0]
+        uids = self.smtp_bruteforce_cache[profileid][1]
+
+        # check if 3 bad login attemps happened within 10 seconds or less
+        if not (
+            len(timestamps) == self.smtp_bruteforce_threshold
+        ):
+            return
+
+        # check if they happened within 10 seconds or less
+        diff = utils.get_time_diff(
+            timestamps[0],
+            timestamps[-1]
+        )
+
+        if diff > 10:
+            # remove the first login from cache so we can check the next 3 logins
+            self.smtp_bruteforce_cache[profileid][0].pop(0)
+            self.smtp_bruteforce_cache[profileid][1].pop(0)
+            return
+
+        self.helper.set_evidence_smtp_bruteforce(
+            saddr,
+            daddr,
+            stime,
+            profileid,
+            twid,
+            uids,
+            self.smtp_bruteforce_threshold,
+        )
+
+        # remove all 3 logins that caused this alert
+        self.smtp_bruteforce_cache[profileid] = ([],[])
+
+
+
     def detect_connection_to_multiple_ports(
             self,
             saddr,
+            daddr,
             proto,
             state,
             appproto,
@@ -1053,7 +1109,7 @@ class Module(Module, multiprocessing.Process):
                 daddrs[daddr]['dstports']
             )
             if len(dstports) <= 1:
-                retrun
+                return
 
             ip_identification = __database__.getIPIdentification(daddr)
             description = (
@@ -1249,6 +1305,7 @@ class Module(Module, multiprocessing.Process):
                     # --- Detect Connection to multiple ports (for RAT) ---
                     self.detect_connection_to_multiple_ports(
                         saddr,
+                        daddr,
                         proto,
                         state,
                         appproto,
@@ -1545,47 +1602,8 @@ class Module(Module, multiprocessing.Process):
                     last_reply = data.get('last_reply', False)
 
                     if 'bad smtp-auth user' in last_reply:
-                        try:
-                            self.smtp_bruteforce_cache[profileid].append(stime)
-                        except KeyError:
-                            # first time for this profileid to preform bad smtp login
-                            self.smtp_bruteforce_cache.update(
-                                {profileid: [stime]}
-                            )
-                        self.helper.set_evidence_bad_smtp_login(
-                            saddr, daddr, stime, profileid, twid, uid
-                        )
+                      self.check_smtp_bruteforce( stime, saddr, daddr, profileid, twid, uid )
 
-
-                        diff = utils.get_time_diff(
-                            self.smtp_bruteforce_cache[profileid][0],
-                            self.smtp_bruteforce_cache[profileid][-1]
-                        )
-                        # check if (3) bad login attemps happened
-                        if (
-                            len(self.smtp_bruteforce_cache[profileid])
-                            == self.smtp_bruteforce_threshold
-                        ):
-                            # check if they happened within 10 seconds or less
-                            diff = utils.get_time_diff(
-                                self.smtp_bruteforce_cache[profileid][0],
-                                self.smtp_bruteforce_cache[profileid][-1]
-                            )
-                            if diff <= 10:
-                                # remove all 3 logins that caused this alert
-                                self.smtp_bruteforce_cache[profileid] = []
-                                self.helper.set_evidence_smtp_bruteforce(
-                                    saddr,
-                                    daddr,
-                                    stime,
-                                    profileid,
-                                    twid,
-                                    uid,
-                                    self.smtp_bruteforce_threshold,
-                                )
-                            else:
-                                # remove the first element so we can check the next 3 logins
-                                self.smtp_bruteforce_cache[profileid].pop(0)
 
                 # --- Detect multiple used SSH versions ---
                 message = self.c9.get_message(timeout=self.timeout)

@@ -161,8 +161,8 @@ def test_binetflow(
             4,
             [
                 'SSL certificate validation failed with (certificate is not yet valid)',
-                'performing bad SMTP login to 80.75.42.226',
-                'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
+                'bad SMTP login to 80.75.42.226',
+                'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
                 'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
             ],
