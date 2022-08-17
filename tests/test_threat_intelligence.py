@@ -25,7 +25,7 @@ def test_parse_ti_file(outputQueue):
     dir_ = threatintel.path_to_local_threat_intelligence_data
     # get the first local threat intel file in local_data_files
     filename = os.listdir('modules/threat_intelligence/local_data_files')[0]
-    assert threatintel.parse_ti_file(dir_ + filename) == True
+    assert threatintel.parse_local_ti_file(dir_ + filename) == True
 
 
 def test_check_local_ti_files(outputQueue):
