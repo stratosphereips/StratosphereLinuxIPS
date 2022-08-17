@@ -454,16 +454,20 @@ class Module(Module, multiprocessing.Process):
 
         try:
             # format of this dict is {profileid: [stime of first arpa query, stime eof second, etc..]}
-            timestamps, uids = self.dns_arpa_queries[profileid]
+            timestamps, uids, domains_scanned = self.dns_arpa_queries[profileid]
             timestamps.append(stime)
             uids.append(uid)
-            self.dns_arpa_queries[profileid] = (timestamps, uids)
+            uids.append(uid)
+            domains_scanned.add(domain)
+            self.dns_arpa_queries[profileid] = (timestamps, uids, domains_scanned)
         except KeyError:
             # first time for this profileid to perform an arpa query
-            self.dns_arpa_queries[profileid] = ([stime], [uid])
+            self.dns_arpa_queries[profileid] = (
+                [stime], [uid], {domain}
+            )
             return False
 
-        if len(timestamps) < self.arpa_scan_threshold:
+        if len(domains_scanned) < self.arpa_scan_threshold:
             # didn't reach the threshold yet
             return False
 
@@ -479,8 +483,8 @@ class Module(Module, multiprocessing.Process):
         self.helper.set_evidence_dns_arpa_scan(
             self.arpa_scan_threshold, stime, profileid, twid, uids
         )
-        # empty the list of arpa queries timestamps, we don't need thm anymore
-        self.dns_arpa_queries[profileid] = ([], [])
+        # empty the list of arpa queries for this profile, we don't need them anymore
+        self.dns_arpa_queries.pop(profileid)
         return True
 
     def is_well_known_org(self, ip):
@@ -1580,7 +1584,7 @@ class Module(Module, multiprocessing.Process):
                             f'{port}/{proto}', service[0]
                         )
 
-                # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs ---
+                # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
                 message = self.c6.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
