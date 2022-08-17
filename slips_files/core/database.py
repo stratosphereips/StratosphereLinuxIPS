@@ -1520,7 +1520,7 @@ class Database(object):
                 if 'new' in state or 'established' in state:
                     return 'Established'
                 elif 'closed' in state:
-                    return 'NotEstablished'
+                    return 'Not Established'
                 # We have varius type of states depending on the type of flow.
                 # For Zeek
                 if (
@@ -1531,7 +1531,7 @@ class Database(object):
                     or 'SH' in state
                     or 'SHR' in state
                 ):
-                    return 'NotEstablished'
+                    return 'Not Established'
                 elif (
                     'S1' in state
                     or 'SF' in state
@@ -1597,7 +1597,7 @@ class Database(object):
                     SR_RA
                     SEC_RA
                     """
-                    return 'NotEstablished'
+                    return 'Not Established'
             except IndexError:
                 # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
                 if 'ECO' in pre:
@@ -1612,7 +1612,7 @@ class Database(object):
                 elif 'INT' in pre:
                     # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
                     # is no confirmation of what happened.
-                    return 'NotEstablished'
+                    return 'Not Established'
                 elif 'EST' in pre:
                     # TCP
                     return 'Established'
@@ -1621,7 +1621,7 @@ class Database(object):
                     # It can happen that is reseted being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
                     if int(pkts) <= 3:
-                        return 'NotEstablished'
+                        return 'Not Established'
                     else:
                         return 'Established'
                 elif 'FIN' in pre:
@@ -1629,7 +1629,7 @@ class Database(object):
                     # It can happen that is finished being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
                     if int(pkts) <= 3:
-                        return 'NotEstablished'
+                        return 'Not Established'
                     else:
                         return 'Established'
                 else:
@@ -1642,7 +1642,7 @@ class Database(object):
                     SEC_
                     SRPA_
                     """
-                    return 'NotEstablished'
+                    return 'Not Established'
             self.outputqueue.put(
                 '01|database|[DB] Funcion getFinalStateFromFlags() We didnt catch the state. We should never be here'
             )
