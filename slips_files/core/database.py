@@ -1123,7 +1123,7 @@ class Database(object):
             ip_data['totalflows'] += 1
             ip_data['totalpkt'] += pkts
             ip_data['totalbytes'] += totbytes
-            ip_data['uids'].append(uid)
+            ip_data['uid'].append(uid)
             if dport in ip_data['dstports']:
                 ip_data['dstports'][dport] += dpkts
             else:
@@ -1136,7 +1136,7 @@ class Database(object):
                 'totalpkt': pkts,
                 'totalbytes': totbytes,
                 'stime': starttime,
-                'uids': [uid],
+                'uid': [uid],
                 'dstports': {dport: dpkts}
 
             }

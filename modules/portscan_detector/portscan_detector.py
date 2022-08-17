@@ -111,14 +111,17 @@ class PortScanProcess(Module, multiprocessing.Process):
         role = 'Client'
         type_data = 'Ports'
         for protocol in ('TCP', 'UDP'):
-            data = __database__.getDataFromProfileTW(
+            not_established_dports = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
+            # import pprint
+            # pprint.pp(not_established_dports)
+
             # For each port, see if the amount is over the threshold
-            for dport in data.keys():
+            for dport in not_established_dports.keys():
                 # PortScan Type 2. Direction OUT
-                dstips = data[dport]['dstips']
-                # this is the list of dstips that have dns resolution, we will remove them from the dstips later
+                dstips = not_established_dports[dport]['dstips']
+                # this is the list of dstips that have dns resolution, we will remove them from the dstips
                 dstips_to_discard = []
                 # Remove dstips that have DNS resolution already
                 for dip in dstips:
@@ -146,13 +149,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dips % self.port_scan_minimum_dips_threshold == 0
                     and prev_amount_dips < amount_of_dips
                 ):
-                    # Get the total amount of pkts sent to the same port to all IPs
+                    # Get the total amount of pkts sent to the same port from all IPs
                     pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
-                    uid = next(iter(dstips.values()))[
+                    uids = next(iter(dstips.values()))[
                         'uid'
-                    ]   # first uid in the dictionary
+                    ]   # uids of first dip
                     timestamp = next(iter(dstips.values()))['stime']
-
 
                     if not self.alerted_once_horizontal_ps:
                         self.alerted_once_horizontal_ps = True
@@ -162,7 +164,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             protocol,
                             profileid,
                             twid,
-                            uid,
+                            uids,
                             dport,
                             amount_of_dips
                         )
@@ -175,7 +177,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 protocol,
                                 profileid,
                                 twid,
-                                uid,
+                                uids,
                                 dport,
                                 amount_of_dips
                             )
@@ -280,7 +282,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 protocol, \
                 profileid, \
                 twid, \
-                uid, \
+                uids, \
                 dport, \
                 amount_of_dips = evidence
             # wait 10s if a new evidence arrived
@@ -299,7 +301,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     protocol2, \
                     profileid2, \
                     twid, \
-                    uid, \
+                    uids2, \
                     dport2, \
                     amount_of_dips2 = new_evidence
 
@@ -313,6 +315,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # we shouldn't accumulate
                     amount_of_dips = amount_of_dips2
                     pkts_sent = pkts_sent2
+                    uids += uids2
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
@@ -328,7 +331,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 protocol,
                 profileid,
                 twid,
-                uid,
+                uids,
                 dport,
                 amount_of_dips
             )
