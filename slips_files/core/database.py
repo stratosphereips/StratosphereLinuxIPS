@@ -417,15 +417,17 @@ class Database(object):
         self.r.hmset(profileid, {'User-agent': user_agent})
 
     def add_software_to_profile(
-        self, profileid, software, version_major, version_minor
+        self, profileid, software, version_major, version_minor, uid
     ):
         """
         Used to associate this profile with it's used software and version
+        :param uid:  uid of the flow using the given versions
         """
         sw_dict = {
             'software': software,
             'version-major': version_major,
             'version-minor': version_minor,
+            'uid': uid
         }
         self.r.hmset(profileid, {
             'used_software': json.dumps(sw_dict)
@@ -1046,6 +1048,102 @@ class Database(object):
                 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
+    
+    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid):
+        data_to_send = {
+                'ip': str(ip),
+                'profileid': str(profileid),
+                'twid': str(twid),
+                'proto': str(proto),
+                'ip_state': 'dstip',
+                'stime': starttime,
+                'uid': uid,
+            }
+        self.publish(
+            'give_threat_intelligence', json.dumps(data_to_send)
+        )
+        
+        # ask other peers their opinion about this IP
+        cache_age = 1000
+        data_to_send.update({'cache_age': cache_age})
+        self.publish('p2p_data_request', json.dumps(data_to_send))
+
+
+    def update_times_contacted(self, ip, direction, profileid, twid):
+        """
+        :param ip: the ip that we want to update the times we contacted
+        """
+
+        # Get the hash of the timewindow
+        profileid_twid = profileid + self.separator + twid
+
+        # Get the DstIPs data for this tw in this profile
+        # The format is {'1.1.1.1' :  3}
+        ips_contacted = self.r.hget(profileid_twid, direction + 'IPs')
+        if not ips_contacted:
+            ips_contacted = {}
+
+        try:
+            ips_contacted = json.loads(ips_contacted)
+            # Add 1 because we found this ip again
+            ips_contacted[ip] += 1
+        except (TypeError, KeyError):
+            # There was no previous data stored in the DB
+            ips_contacted[ip] = 1
+
+        ips_contacted = json.dumps(ips_contacted)
+        self.r.hset(profileid_twid, direction + 'IPs', str(ips_contacted))
+
+    def update_ip_info(
+            self,
+            old_profileid_twid_data,
+            pkts,
+            dport,
+            dpkts,
+            totbytes,
+            ip,
+            starttime,
+            uid
+        ):
+        """
+        #  Updates how many times each individual DstPort was contacted,
+        the total flows sent by this ip and their uids,
+        the total packets sent by this ip,
+        total bytes sent by this ip
+        """
+
+        dport = str(dport)
+        dpkts = int(dpkts)
+        pkts = int(pkts)
+        totbytes = int(totbytes)
+
+        try:
+            # update info about an existing ip
+            ip_data = old_profileid_twid_data[ip]
+            ip_data['totalflows'] += 1
+            ip_data['totalpkt'] += pkts
+            ip_data['totalbytes'] += totbytes
+            ip_data['uid'].append(uid)
+            if dport in ip_data['dstports']:
+                ip_data['dstports'][dport] += dpkts
+            else:
+                ip_data['dstports'][dport] = dpkts
+
+        except KeyError:
+            # First time seeing this ip
+            ip_data = {
+                'totalflows': 1,
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
+                'stime': starttime,
+                'uid': [uid],
+                'dstports': {dport: dpkts}
+
+            }
+
+        old_profileid_twid_data[ip] = ip_data
+        return old_profileid_twid_data
+
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -1064,214 +1162,91 @@ class Database(object):
             3- Check if this IP has any detection in the threat intelligence
             module. The information is added by the module directly in the DB.
         """
-        try:
-            # Get the fields
-            dport = columns['dport']
-            sport = columns['sport']
-            totbytes = columns['bytes']
-            sbytes = columns['sbytes']
-            pkts = columns['pkts']
-            spkts = columns['spkts']
-            dpkts = columns.get('dpkts', 0)
-            state = columns['state']
-            proto = columns['proto'].upper()
-            daddr = columns['daddr']
-            saddr = columns['saddr']
-            uid = columns['uid']
-            starttime = str(columns['starttime'])
-            # Depending if the traffic is going out or not, we are Client or Server
-            # Set the type of ip as Dst if we are a client, or Src if we are a server
-            if role == 'Client':
-                # We are receving and adding a destination address and a dst port
-                type_host_key = 'Dst'
-            elif role == 'Server':
-                type_host_key = 'Src'
 
-            #############
-            # Store the Dst as IP address and notify in the channel
-            # We send the obj but when accessed as str, it is automatically
-            # converted to str
-            self.setNewIP(str(ip_as_obj))
+        # Get the fields
+        dport = columns['dport']
+        totbytes = columns['bytes']
+        pkts = columns['pkts']
+        dpkts = columns.get('dpkts', 0)
+        state = columns['state']
+        proto = columns['proto'].upper()
+        daddr = columns['daddr']
+        saddr = columns['saddr']
+        uid = columns['uid']
+        starttime = str(columns['starttime'])
+        ip = str(ip_as_obj)
+        # sport = columns['sport']
+        # sbytes = columns['sbytes']
+        # spkts = columns['spkts']
 
-            #############
-            # Try to find evidence for this ip, in case we need to report it
-            # Ask the threat intelligence modules, using a channel, that we need info about this IP
-            # The threat intelligence module will process it and store the info back in IPsInfo
-            # Therefore both ips will be checked for each flow
-            # Check destination ip
 
-            # BUT don't check if the state is OTH, since it means that we didnt see the true src ip and dst ip
-            if columns['state'] != 'OTH':
-                data_to_send = {
-                    'ip': str(daddr),
-                    'profileid': str(profileid),
-                    'twid': str(twid),
-                    'proto': str(proto),
-                    'ip_state': 'dstip',
-                    'stime': starttime,
-                    'uid': uid,
-                }
-                self.publish(
-                    'give_threat_intelligence', json.dumps(data_to_send)
-                )
-                # ask other peers their opinion about this IP
-                cache_age = 1000
-                data_to_send.update({'cache_age': cache_age})
-                self.publish('p2p_data_request', json.dumps(data_to_send))
+        """
+        Depending if the traffic is going out or not, we are Client or Server
+        Client role means:
+            The profile corresponds to the src ip that received this flow
+            The dstip is here the one receiving data from your profile
+            So check the dst ip
+        Server role means:
+            The profile corresponds to the dst ip that received this flow
+            The srcip is here the one sending data to your profile
+            So check the src ip
+        """
+        direction = 'Dst' if role == 'Client' else 'Src'
 
-                # Check source ip
-                data_to_send = {
-                    'ip': str(saddr),
-                    'profileid': str(profileid),
-                    'twid': str(twid),
-                    'proto': str(proto),
-                    'ip_state': 'srcip',
-                    'stime': starttime,
-                    'uid': uid,
-                }
+        #############
+        # Store the Dst as IP address and notify in the channel
+        # We send the obj but when accessed as str, it is automatically
+        # converted to str
+        self.setNewIP(ip)
 
-                self.publish(
-                    'give_threat_intelligence', json.dumps(data_to_send)
-                )
-                # ask other peers their opinion about this IP
-                cache_age = 1000
-                data_to_send.update({'cache_age': cache_age})
-                self.publish('p2p_data_request', json.dumps(data_to_send))
+        #############
 
-            # if role == 'Client':
-            #     # The profile corresponds to the src ip that received this flow
-            #     # The dstip is here the one receiving data from your profile
-            #     # So check the dst ip
-            #     pass
-            # elif role == 'Server':
-            #     # The profile corresponds to the dst ip that received this flow
-            #     # The srcip is here the one sending data to your profile
-            #     # So check the src ip
-            #     pass
+        # OTH means that we didnt see the true src ip and dst ip
+        if columns['state'] != 'OTH':
+            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
+            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
 
-            #############
-            # 1- Count the dstips, and store the dstip in the db of this profile+tw
-            self.print(
-                'add_ips(): As a {}, add the {} IP {} to profile {}, twid {}'.format(
-                    role, type_host_key, str(ip_as_obj), profileid, twid
-                ), 3, 0,
-            )
-            # Get the hash of the timewindow
-            hash_id = profileid + self.separator + twid
-            # Get the DstIPs data for this tw in this profile
-            # The format is data['1.1.1.1'] = 3
-            data = self.r.hget(hash_id, type_host_key + 'IPs')
-            if not data:
-                data = {}
-            try:
-                # Convert the json str to a dictionary
-                data = json.loads(data)
-                # Add 1 because we found this ip again
-                self.print(
-                    'add_ips(): Not the first time for this addr. Add 1 to {}'.format(
-                        str(ip_as_obj)
-                    ),
-                    3,
-                    0,
-                )
-                data[str(ip_as_obj)] += 1
-                # Convet the dictionary to json
-                data = json.dumps(data)
-            except (TypeError, KeyError):
-                # There was no previous data stored in the DB
-                self.print(
-                    'add_ips(): First time for addr {}. Count as 1'.format(
-                        str(ip_as_obj)
-                    ), 3, 0,
-                )
-                data[str(ip_as_obj)] = 1
-                # Convet the dictionary to json
-                data = json.dumps(data)
-            # Store the dstips in the dB
-            self.r.hset(hash_id, type_host_key + 'IPs', str(data))
-            #############
-            # 2- Store, for each ip:
-            # - Update how many times each individual DstPort was contacted
-            # - Update the total flows sent by this ip
-            # - Update the total packets sent by this ip
-            # - Update the total bytes sent by this ip
-            # Get the state. Established, NotEstablished
-            summaryState = self.getFinalStateFromFlags(state, pkts)
-            # Get the previous data about this key
-            prev_data = self.getDataFromProfileTW(
-                profileid,
-                twid,
-                type_host_key,
-                summaryState,
-                proto,
-                role,
-                'IPs',
-            )
-            try:
-                innerdata = prev_data[str(ip_as_obj)]
-                self.print(
-                    'add_ips(): Adding for dst port {}. PRE Data: {}'.format(
-                        dport, innerdata
-                    ), 3, 0,
-                )
-                # We had this port
-                # We need to add all the data
-                innerdata['totalflows'] += 1
-                innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] += int(totbytes)
-                # Store for each dstip, the dstports
-                temp_dstports = innerdata['dstports']
-                try:
-                    temp_dstports[str(dport)] += int(dpkts)
-                except KeyError:
-                    # First time for this ip in the inner dictionary
-                    temp_dstports[str(dport)] = int(dpkts)
-                innerdata['dstports'] = temp_dstports
-                prev_data[str(ip_as_obj)] = innerdata
-                self.print(
-                    'add_ips() Adding for dst port {}. POST Data: {}'.format(
-                        dport, innerdata
-                    ), 3, 0,
-                )
-            except KeyError:
-                # First time for this flow
-                innerdata = {}
-                innerdata['totalflows'] = 1
-                innerdata['totalpkt'] = int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
-                innerdata['stime'] = starttime
-                innerdata['uid'] = uid
-                temp_dstports = {}
-                temp_dstports[str(dport)] = int(dpkts)
-                innerdata['dstports'] = temp_dstports
-                self.print(
-                    'add_ips() First time for dst port {}. Data: {}'.format(
-                        dport, innerdata
-                    ), 3, 0,
-                )
-                prev_data[str(ip_as_obj)] = innerdata
-            ###########
-            # After processing all the features of the ip, store all the info in the database
-            # Convert the dictionary to json
-            data = json.dumps(prev_data)
-            # Create the key for storing
-            key_name = (
-                type_host_key + 'IPs' + role + proto.upper() + summaryState
-            )
-            # Store this data in the profile hash
-            self.r.hset(profileid + self.separator + twid, key_name, str(data))
-            return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in add_ips in database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            return False
 
+        self.update_times_contacted(ip, direction, profileid, twid)
+
+        # Get the state. Established, NotEstablished
+        summaryState = self.getFinalStateFromFlags(state, pkts)
+
+        # Get the previous data about this key
+        old_profileid_twid_data = self.getDataFromProfileTW(
+            profileid,
+            twid,
+            direction,
+            summaryState,
+            proto,
+            role,
+            'IPs',
+        )
+
+        profileid_twid_data = self.update_ip_info(
+            old_profileid_twid_data,
+            pkts,
+            dport,
+            dpkts,
+            totbytes, 
+            ip, 
+            starttime, 
+            uid
+        )
+
+        proto = proto.upper()
+        key_name = (
+            f'{direction}IPs{role}{proto}{summaryState}'
+        )
+        # Store this data in the profile hash
+        self.r.hset(
+            profileid + self.separator + twid,
+            key_name,
+            json.dumps(profileid_twid_data)
+        )
+        return True
+     
+     
     def refresh_data_tuples(self):
         """
         Go through all the tuples and refresh the data about the ipsinfo
@@ -1395,103 +1370,82 @@ class Database(object):
         role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
         port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
         """
-        try:
-            # Extract variables from columns
-            dport = columns['dport']
-            sport = columns['sport']
-            totbytes = columns['bytes']
-            pkts = columns['pkts']
-            state = columns['state']
-            proto = columns['proto'].upper()
-            starttime = str(columns['starttime'])
-            uid = columns['uid']
-            # spkts = columns['spkts']
-            # dpkts = columns['dpkts']
-            # daddr = columns['daddr']
-            # saddr = columns['saddr']
-            # sbytes = columns['sbytes']
+        # Extract variables from columns
+        dport = columns['dport']
+        sport = columns['sport']
+        totbytes = int(columns['bytes'])
+        pkts = int(columns['pkts'])
+        state = columns['state']
+        proto = columns['proto'].upper()
+        starttime = str(columns['starttime'])
+        uid = columns['uid']
+        ip = str(ip_address)
+        # spkts = columns['spkts']
+        # dpkts = columns['dpkts']
+        # daddr = columns['daddr']
+        # saddr = columns['saddr']
+        # sbytes = columns['sbytes']
 
-            # Choose which port to use based if we were asked Dst or Src
-            if port_type == 'Dst':
-                port = str(dport)
-            elif port_type == 'Src':
-                port = str(sport)
-            # If we are the Client, we want to store the dstips only
-            # If we are the Server, we want to store the srcips only
-            # This is the only combination that makes sense.
-            if role == 'Client':
-                ip_key = 'dstips'
-            elif role == 'Server':
-                ip_key = 'srcips'
-            # Get the state. Established, NotEstablished
-            summaryState = __database__.getFinalStateFromFlags(state, pkts)
-            # Key
-            key_name = port_type + 'Ports' + role + proto + summaryState
-            # self.print('add_port(): As a {} storing info about {} port {} for {}.
-            # Key: {}.'.format(role, port_type, port, profileid, key_name), 0, 3)
-            prev_data = self.getDataFromProfileTW(
-                profileid, twid, port_type, summaryState, proto, role, 'Ports'
-            )
-            try:
-                innerdata = prev_data[port]
-                innerdata['totalflows'] += 1
-                innerdata['totalpkt'] += int(pkts)
-                innerdata['totalbytes'] += int(totbytes)
-                temp_dstips = innerdata[ip_key]
-                try:
-                    temp_dstips[str(ip_address)]['pkts'] += int(pkts)
-                except KeyError:
-                    temp_dstips[str(ip_address)] = {}
-                    temp_dstips[str(ip_address)]['pkts'] = int(pkts)
-                    temp_dstips[str(ip_address)]['stime'] = str(starttime)
-                    temp_dstips[str(ip_address)]['uid'] = uid
-                innerdata[ip_key] = temp_dstips
-                prev_data[port] = innerdata
-                self.print(
-                    'add_port(): Adding this new info about port {} for {}. Key: {}. NewData: {}'.format(
-                        port, profileid, key_name, innerdata
-                    ),3,0,
-                )
-            except KeyError:
-                # First time for this flow
-                innerdata = {}
-                innerdata['totalflows'] = 1
-                innerdata['totalpkt'] = int(pkts)
-                innerdata['totalbytes'] = int(totbytes)
-                temp_dstips = {}
-                temp_dstips[str(ip_address)] = {}
-                temp_dstips[str(ip_address)]['pkts'] = int(pkts)
-                temp_dstips[str(ip_address)]['stime'] = starttime
-                temp_dstips[str(ip_address)]['uid'] = uid
-                innerdata[ip_key] = temp_dstips
-                prev_data[port] = innerdata
-                self.print(
-                    'add_port(): First time for port {} for {}. Key: {}. Data: {}'.format(
-                        port, profileid, key_name, innerdata
-                    ), 3, 0,
-                )
-            # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
-            # Convet the dictionary to json
-            data = json.dumps(prev_data)
-            self.print(
-                'add_port(): Storing info about port {} for {}. Key: {}. Data: {}'.format(
-                    port, profileid, key_name, prev_data
-                ),3,0,
-            )
-            # Store this data in the profile hash
-            hash_key = profileid + self.separator + twid
-            self.r.hset(hash_key, key_name, str(data))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in add_port in database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+        # Choose which port to use based if we were asked Dst or Src
+        port = str(sport) if port_type == 'Src' else str(dport)
+
+        # If we are the Client, we want to store the dstips only
+        # If we are the Server, we want to store the srcips only
+        ip_key = 'srcips' if role == 'Server' else 'dstips'
+
+        # Get the state. Established, NotEstablished
+        summaryState = __database__.getFinalStateFromFlags(state, pkts)
+
+        old_profileid_twid_data = self.getDataFromProfileTW(
+            profileid,
+            twid,
+            port_type,
+            summaryState,
+            proto,
+            role,
+            'Ports'
+        )
+        key_name = f'{port_type}Ports{role}{proto}{summaryState}'
+
+        try:
+            # we already have info about this dport, update it
+            port_data = old_profileid_twid_data[port]
+            port_data['totalflows'] += 1
+            port_data['totalpkt'] += pkts
+            port_data['totalbytes'] += totbytes
+
+            # if there's a conn from this ip on this port, add the pkts
+            if ip in port_data[ip_key]:
+                port_data[ip_key][ip]['pkts'] += pkts
+                port_data[ip_key][ip]['uid'].append(uid)
+            else:
+                port_data[ip_key][ip] = {
+                    'pkts': pkts,
+                    'stime': starttime,
+                    'uid': [uid]
+                }
+
+        except KeyError:
+            # First time for this dport
+            port_data = {
+                'totalflows': 1,
+                'totalpkt': pkts,
+                'totalbytes': totbytes,
+                ip_key: {
+                    ip: {
+                        'pkts': pkts,
+                        'stime': starttime,
+                        'uid': [uid]
+                    }
+                }
+            }
+
+        old_profileid_twid_data[port] = port_data
+        data = json.dumps(old_profileid_twid_data)
+        hash_key = profileid + self.separator + twid
+        self.r.hset(hash_key, key_name, str(data))
+        self.markProfileTWAsModified(profileid, twid, starttime)
+
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -1796,6 +1750,23 @@ class Database(object):
                 return True
         return False
 
+    def set_flow_causing_evidence(self, uid, evidence_ID):
+        """
+        :param uid: can be a str or a list
+        """
+        if type(uid) == str:
+            uid = [uid]
+        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
+
+    def get_flows_causing_evidence(self, evidence_ID) -> list:
+        uids = self.r.hget("flows_causing_evidence", evidence_ID)
+        if not uids:
+            return []
+        else:
+            return json.loads(uids)
+
+
+
     def setEvidence(
         self,
         type_evidence,
@@ -1820,9 +1791,12 @@ class Database(object):
         type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
         type_detection: the type of value causing the detection e.g. dport, dip, flow
         detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
-        threat_level: determine the importance of the evidence, available options are : info, low, medium, high, critical
-        confidence: determine the confidence of the detection on a scale from 0 to 1. (How sure you are that this is what you say it is.)
-        uid: needed to get the flow from the database
+        threat_level: determine the importance of the evidence, available options are:
+                        info, low, medium, high, critical
+        confidence: determine the confidence of the detection on a scale from 0 to 1.
+                        (How sure you are that this is what you say it is.)
+        uid: can be a single uid as a str, or a list of uids causing the evidence.
+                        needed to get the flow from the database.
         category: what is this evidence category according to IDEA categories
         conn_count: the number of packets/flows/nxdomains that formed this scan/sweep/DGA.
 
@@ -1844,9 +1818,16 @@ class Database(object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
+        self.set_flow_causing_evidence(uid, evidence_ID)
+
+        # some evidence are caused by several uids, use the last one only
+        if type(uid) == list:
+            uid = uid[-1]
+
+        srcip = profileid.split('_')[1]
         # if the ip we want to block is the same as the profileid,
         # make the evidence threat_level=info
-        if profileid.split('_')[1] in str(detection_info):
+        if srcip in str(detection_info):
             threat_level = 'info'
 
         if timestamp:
@@ -1912,8 +1893,7 @@ class Database(object):
         # change the score to = 1, and confidence = 1
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            ip = profileid.split('_')[1]
-            self.set_score_confidence(ip, 'critical', 1)
+            self.set_score_confidence(srcip, 'critical', 1)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
             self.set_score_confidence(detection_info, 'critical', 1)
@@ -1995,7 +1975,10 @@ class Database(object):
             if IDs and hash:
                 evidence_IDs = IDs.remove(evidence_ID)
                 alert_ID = f'{profileid}_{twid}_{hash}'
-                self.set_evidence_causing_alert(profileid, twid, alert_ID, evidence_IDs)
+                if evidence_IDs:
+                    self.set_evidence_causing_alert(
+                        profileid, twid, alert_ID, evidence_IDs
+                    )
 
         except KeyError:
             # alert not added to the 'alerts' key yet!
@@ -2867,7 +2850,6 @@ class Database(object):
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
         """
-        #  {"client":"SSH-2.0-OpenSSH_8.1","server":"SSH-2.0-OpenSSH_7.5p1 Debian-5","cipher_alg":"chacha20-pol y1305@openssh.com","mac_alg":"umac-64-etm@openssh.com","compression_alg":"zlib@openssh.com","kex_alg":"curve25519-sha256","host_key_alg":"ecdsa-sha2-nistp256","host_key":"de:04:98:42:1e:2a:06:86:5b:f0:5b:e3:65:9f:9d:aa"}
         data = {
             'uid': uid,
             'type': flowtype,
@@ -3678,30 +3660,11 @@ class Database(object):
             # outside of home_network when this param is given
             return False
         try:
-            self.print(
-                'Asked to get data from profile {}, {}, {}, {}, {}, {}, {}'.format(
-                    profileid,
-                    twid,
-                    direction,
-                    state,
-                    protocol,
-                    role,
-                    type_data,
-                ),
-                3,
-                0,
-            )
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
             data = self.r.hget(profileid + self.separator + twid, key)
             value = {}
             if data:
-                self.print(
-                    'Key: {}. Getting info for Profile {} TW {}. Data: {}'.format(
-                        key, profileid, twid, data
-                    ), 3, 0,
-                )
-                # Convert the dictionary to json
                 portdata = json.loads(data)
                 value = portdata
             elif not data:

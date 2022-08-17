@@ -540,7 +540,6 @@ class EvidenceProcess(multiprocessing.Process):
                     type_evidence = data.get(
                         'type_evidence'
                     )   # example: PortScan, ThreatIntelligence, etc..
-                    # evidence data
                     description = data.get('description')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
@@ -669,7 +668,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     f'Error: Evidence of type {type_evidence} has '
                                     f'an invalid threat level {threat_level}', 0, 1
                                 )
-                                self.print(f'Description: {description}')
+                                self.print(f'Description: {description}', 0, 1)
                                 threat_level = 0
 
                             # Compute the moving average of evidence

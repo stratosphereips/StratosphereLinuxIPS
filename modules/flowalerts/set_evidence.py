@@ -98,7 +98,7 @@ class Helper:
         confidence = round(confidence, 2)   # for readability
         threat_level = 'high'
         category = 'Intrusion.Botnet'
-        # the srcip performing all the dns queries
+        # the srcip doing all the dns queries
         type_detection = 'srcip'
         source_target_tag = 'OriginMalware'
         type_evidence = f'DGA-{nxdomains}-NXDOMAINs'
@@ -192,7 +192,7 @@ class Helper:
         category = 'Recon.Scanning'
         type_detection = 'srcip'
         type_evidence = 'DNS-ARPA-Scan'
-        description = f'performing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
+        description = f'doing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
         detection_info = profileid.split('_')[1]
 
         __database__.setEvidence(
@@ -412,7 +412,7 @@ class Helper:
         )
 
     def set_evidence_self_signed_certificates(
-        self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'
+        self, profileid, twid, ip, description, uid, timestamp
     ):
         """
         Set evidence for self signed certificates.
@@ -659,7 +659,7 @@ class Helper:
         detection_info = saddr
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
-            f'performing bad SMTP login to {daddr} {ip_identification}'
+            f'doing bad SMTP login to {daddr} {ip_identification}'
         )
 
         __database__.setEvidence(
@@ -692,7 +692,7 @@ class Helper:
         type_detection = 'srcip'
         type_evidence = 'SMTPLoginBruteforce'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
+        description = f'doing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
         detection_info = saddr
         conn_count = smtp_bruteforce_threshold
 
