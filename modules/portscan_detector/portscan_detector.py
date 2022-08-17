@@ -95,6 +95,16 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def check_horizontal_portscan(self, profileid, twid):
 
+        def get_uids():
+            """
+            returns all the uids of flows to this port
+            """
+            uids = []
+            for dip in dstips:
+                for uid in dstips[dip]['uid']:
+                     uids.append(uid)
+            return uids
+
         saddr = profileid.split(self.fieldseparator)[1]
         try:
             saddr_obj = ipaddress.ip_address(saddr)
@@ -102,7 +112,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # don't report port scans on the broadcast or multicast addresses
                 return False
         except ValueError:
-            # is an ipv6
+            # it's a mac
             pass
 
         # Get the list of dports that we connected as client using TCP not established
@@ -151,9 +161,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 ):
                     # Get the total amount of pkts sent to the same port from all IPs
                     pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
-                    uids = next(iter(dstips.values()))[
-                        'uid'
-                    ]   # uids of first dip
+
+                    uids: list = get_uids()
                     timestamp = next(iter(dstips.values()))['stime']
 
                     if not self.alerted_once_horizontal_ps:
@@ -182,6 +191,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 amount_of_dips
                             )
                         )
+
 
     def wait_for_vertical_scans(self):
         """
@@ -545,6 +555,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         detection_info = profileid.split('_')[1]
         source_target_tag = 'Recon'
         description = msg
+        # this one is detected by zeek so we can't track the uids causing it
         __database__.setEvidence(
             type_evidence,
             type_detection,
