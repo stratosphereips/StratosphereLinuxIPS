@@ -1405,22 +1405,24 @@ class Database(object):
             role,
             'Ports'
         )
-        port_data = old_profileid_twid_data[port]
         key_name = f'{port_type}Ports{role}{proto}{summaryState}'
 
         try:
             # we already have info about this dport, update it
+            port_data = old_profileid_twid_data[port]
             port_data['totalflows'] += 1
             port_data['totalpkt'] += pkts
             port_data['totalbytes'] += totbytes
 
+            # if there's a conn from this ip on this port, add the pkts
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]['pkts'] += pkts
+                port_data[ip_key][ip]['uid'].append(uid)
             else:
                 port_data[ip_key][ip] = {
                     'pkts': pkts,
                     'stime': starttime,
-                    'uid': uid
+                    'uid': [uid]
                 }
 
         except KeyError:
@@ -1433,19 +1435,15 @@ class Database(object):
                     ip: {
                         'pkts': pkts,
                         'stime': starttime,
-                        'uid': uid
+                        'uid': [uid]
                     }
                 }
             }
 
         old_profileid_twid_data[port] = port_data
-        # self.outputqueue.put('01|database|[DB] {} '.format(ip_address))
-        # Convet the dictionary to json
         data = json.dumps(old_profileid_twid_data)
-        # Store this data in the profile hash
         hash_key = profileid + self.separator + twid
         self.r.hset(hash_key, key_name, str(data))
-        # Mark the tw as modified
         self.markProfileTWAsModified(profileid, twid, starttime)
 
 
