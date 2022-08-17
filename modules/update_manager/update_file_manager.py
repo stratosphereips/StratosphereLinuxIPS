@@ -52,7 +52,7 @@ class UpdateFileManager:
         self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
         # to track how many times an ip is present in different blacklists
         self.ips_ctr = {}
-
+        self.first_time_reading_files = False
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -1435,6 +1435,11 @@ class UpdateFileManager:
                     )
 
     def print_duplicate_ip_summary(self):
+        if not self.first_time_reading_files:
+            # when we parse ti files for the first time, we have the info to print the summary
+            # when the ti files are already updated, from a previous run, we don't
+            return
+        
         ips = {
             'in 1 blacklist': 0,
             'in 2 blacklist': 0,
@@ -1494,6 +1499,9 @@ class UpdateFileManager:
                     # or the the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
                     continue
+                
+                # this run wasn't started with existing ti files in the db 
+                self.first_time_reading_files = True
 
                 self.log(
                     f'Downloading the remote file {file_to_download}'
