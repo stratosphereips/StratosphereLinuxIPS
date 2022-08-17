@@ -764,25 +764,27 @@ class LogsProcess(multiprocessing.Process):
                 last_profile_id = profileid
 
             # Create the file of the blocked profiles and TW
-            TWforProfileBlocked = __database__.getBlockedProfTW()
+            ProfileTWsBlocked = __database__.getAllBlockedProfTW()
             # Create the file of blocked data
-            if TWforProfileBlocked:
+            if ProfileTWsBlocked:
                 self.addDataToFile(
                     'Blocked.txt',
                     'Detections:\n',
                     file_mode='w+',
                     data_type='text',
                 )
-                for blocked in TWforProfileBlocked:
-                    self.addDataToFile(
-                        'Blocked.txt',
-                        '\t'
-                        + str(blocked).split('_')[1]
-                        + ': '
-                        + str(blocked).split('_')[2],
-                        file_mode='a+',
-                        data_type='json',
-                    )
+                for blockedProfile, blockedTWs in ProfileTWsBlocked.items():
+                    blockedTWs = json.loads(blockedTWs)
+                    for blockedTW in blockedTWs:
+                        self.addDataToFile(
+                            'Blocked.txt',
+                            '\t'
+                            + str(blockedProfile).split('_')[1]
+                            + ': '
+                            + str(blockedTW).split('_')[2],
+                            file_mode='a+',
+                            data_type='json',
+                        )
                     # self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
 
             # Create a file with information about the capture in general

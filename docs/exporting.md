@@ -7,7 +7,7 @@ For now the supported systems are:
 - Slack
 - TAXII Servers (STIX format)
 - Warden servers
-- suricata-like JSON format
+- IDEA JSON format
 - Logstash
 
 ## Slack
@@ -77,16 +77,6 @@ More details on how to [export to slack or TAXII server here](https://stratosphe
 
 
 By default Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) which is also a JSON format.
-
- 
-If you want to export Slips alerts in a simpler JSON format instead of IDEA0 format,
-change ```export_to``` variable to export to JSON, and Slips will automatically generate a 
-```exported_alerts.json``` containing all alerts it detects.
-
-
-    [ExportingAlerts]
-    export_to = [json]
-
 
 ## CESNET Sharing  
   

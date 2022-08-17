@@ -10,7 +10,6 @@ import sys
 import time
 import json
 import configparser
-from datetime import datetime
 
 
 class Module(Module, multiprocessing.Process):
@@ -80,17 +79,7 @@ class Module(Module, multiprocessing.Process):
 
     def process_timestamp(self, timestamp: float) -> str:
         if self.is_human_timestamp is True:
-            # human readable time
-            d = datetime.fromtimestamp(timestamp)
-            timestamp = '{0:04d}/{1:02d}/{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:06d}'.format(
-                d.year,
-                d.month,
-                d.day,
-                d.hour,
-                d.minute,
-                d.second,
-                d.microsecond,
-            )
+            timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
@@ -125,27 +114,28 @@ class Module(Module, multiprocessing.Process):
             allbytes = flow_dict['allbytes']
             if type(allbytes) != int:
                 allbytes = 0
-            allbytes_human = 0.0
 
-            # Convert the bytes into human readable
-            if int(allbytes) < 1024:
-                # In bytes
-                allbytes_human = '{:.2f}{}'.format(float(allbytes), 'b')
-            elif int(allbytes) > 1024 and int(allbytes) < 1048576:
-                # In Kb
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024, 'Kb'
-                )
-            elif int(allbytes) > 1048576 and int(allbytes) < 1073741824:
-                # In Mb
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024 / 1024, 'Mb'
-                )
-            elif int(allbytes) > 1073741824:
-                # In Bg
-                allbytes_human = '{:.2f}{}'.format(
-                    float(allbytes) / 1024 / 1024 / 1024, 'Gb'
-                )
+            # allbytes_human are sorted wrong in the interface, thus we sticked to original byte size.
+            # # Convert the bytes into human readable
+            # if int(allbytes) < 1024:
+            #     # In bytes
+            #     allbytes_human = '{:.2f}{}'.format(float(allbytes), 'b')
+            # elif int(allbytes) > 1024 and int(allbytes) < 1048576:
+            #     # In Kb
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024, 'Kb'
+            #     )
+            # elif int(allbytes) > 1048576 and int(allbytes) < 1073741824:
+            #     # In Mb
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024 / 1024, 'Mb'
+            #     )
+            # elif int(allbytes) > 1073741824:
+            #     # In Bg
+            #     allbytes_human = '{:.2f}{}'.format(
+            #         float(allbytes) / 1024 / 1024 / 1024, 'Gb'
+            #     )
+
             spkts = flow_dict['spkts']
             sbytes = flow_dict['sbytes']
             if type(sbytes) != int:
@@ -196,7 +186,7 @@ class Module(Module, multiprocessing.Process):
                         'warning': warning_empty,
                         'Sent': sbytes,
                         'Recv': allbytes - sbytes,
-                        'Tot': allbytes_human,
+                        'Tot': allbytes,
                         'Duration': dur,
                         'info' : '',
                         'critical warning': critical_warning_dport_name
@@ -234,7 +224,7 @@ class Module(Module, multiprocessing.Process):
                         'warning': warning_empty,
                         'Sent': sbytes,
                         'Recv': allbytes - sbytes,
-                        'Tot': allbytes_human,
+                        'Tot': allbytes,
                         'Duration': dur,
                         'info': '',
                         'critical warning': critical_warning_dport_name
@@ -281,7 +271,7 @@ class Module(Module, multiprocessing.Process):
                             'dport_name': dport_name,
                             'preposition': 'from',
                             'saddr': saddr,
-                            'Size': allbytes_human,
+                            'Size': allbytes,
                             'Duration': dur,
                         }
 
@@ -306,7 +296,7 @@ class Module(Module, multiprocessing.Process):
                     'dport_name': dport_name,
                     'preposition': 'from',
                     'saddr': saddr,
-                    'Size': allbytes_human,
+                    'Size': allbytes,
                     'Duration': dur,
                 }
             #################################

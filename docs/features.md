@@ -408,7 +408,7 @@ For now the supported systems are:
 - Slack
 - TAXII Servers (STIX format)
 - Warden servers
-- suricata-like JSON format
+- IDEA JSON format
 - Logstash
 
 
@@ -706,6 +706,8 @@ Available detection are:
 - Suspicious user agents
 - Incompatible user agents
 - Multiple user agents
+- Downloads from pastebin
+- DOS executable downloads
 
 #### Multiple empty connections
 
@@ -755,6 +757,18 @@ operating systems, an alert of type 'Multiple user agents' is made
 for example, if an IP is detected using a macOS user agent then an android user agent,
 slips detects this with 'low' threat level
 
+#### Pastebin downloads
+
+Some malware use pastebin as the host of their malicious payloads. 
+
+Slips detects downloads of files from pastebin with size > 12000. 
+
+When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
+
+
+#### DOS executable downloads
+
+Slips generates an evidence everytime there's a DOS executable download from an HTTP website.
 
 
 ### Leak Detector Module

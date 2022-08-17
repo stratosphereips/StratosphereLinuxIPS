@@ -1,7 +1,7 @@
 #!/bin/bash
 # clear the cache database
 ./slips.py -cc
-./slips.py --killall
+
 
 # run all unit tests, -n *5 means distribute tests on 5 different process
 # -s to see print statements as they are executed
@@ -24,6 +24,7 @@ python3 tests/destrctor.py
 # so it's better to know and fix the failing unit tests from the above
 # command before running the dataset tests
 # distribute on 3 workers only because every worker will be spawning 10+ processes
+
 python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
 ./slips.py --killall
 ./slips.py -cc

@@ -16,6 +16,8 @@ import sys
 import socket
 import validators
 from .set_evidence import Helper
+from slips_files.core.whitelist import Whitelist
+
 
 
 class Module(Module, multiprocessing.Process):
@@ -50,12 +52,13 @@ class Module(Module, multiprocessing.Process):
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
-        self.gateway = __database__.get_default_gateway()
+        self.gateway = __database__.get_gateway_ip()
         # Cache list of connections that we already checked in the timer
         # thread (we waited for the connection of these dns resolutions)
         self.connections_checked_in_dns_conn_timer_thread = []
@@ -66,8 +69,8 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_ssh_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
-        # In seconds
-        self.conn_without_dns_interface_wait_time = 1800
+        # In mins
+        self.conn_without_dns_interface_wait_time = 30
         # this dict will contain the number of nxdomains found in every profile
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
@@ -82,9 +85,6 @@ class Module(Module, multiprocessing.Process):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
-        # this list will have the flows to check after services.csv is read
-        self.unknown_ports_queue = []
-        self.ran_once = False
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -274,47 +274,7 @@ class Module(Module, multiprocessing.Process):
         # consider this port as unknown
         return False
 
-    def check_flows_in_queue(self):
-        """
-        flows are added to queue while services.csv is being read, now that it's read,
-        check if we have unknown ports
-        """
-        # services.csv is read, run  this func on all the flows in queue
-        for flow in self.unknown_ports_queue:
-            self.check_unknown_port(*flow)
-        self.unknown_ports_queue = []
-
-    def get_time_diff(self, start_time, end_time):
-        """
-        Both time should be epoch
-        Returs difference in minutes
-        """
-        diff = str(end_time - start_time)
-        # if there are days diff between the flows , diff will be something like 1 day, 17:25:57.458395
-        try:
-            # calculate the days difference
-            diff_in_days = int(
-                diff.split(', ')[0].split(' ')[0]
-            )
-            diff = diff.split(', ')[1]
-        except (IndexError, ValueError):
-            # no days different
-            diff = diff.split(', ')[0]
-            diff_in_days = 0
-
-        diff_in_hrs = int(diff.split(':')[0])
-        diff_in_mins = int(diff.split(':')[1])
-        # total diff in mins
-        diff_in_mins = (
-            24 * diff_in_days * 60
-            + diff_in_hrs * 60
-            + diff_in_mins
-        )
-        return diff_in_mins
-
     def check_data_upload(self, profileid, twid):
-
-
         def remove_ignored_ips(contacted_addresses):
             """
             remove IPs that we shouldn't alert about if they are most contacted
@@ -347,17 +307,16 @@ class Module(Module, multiprocessing.Process):
             flows_list.append(list(flow_dict.items())[0][1])
         # sort flows by ts
         flows_list = sorted(flows_list, key=lambda i: i['ts'])
-        # get first and last flow ts
-        time_of_first_flow = datetime.datetime.fromtimestamp(
-            flows_list[0]['ts']
-        )
-        time_of_last_flow = datetime.datetime.fromtimestamp(
-            flows_list[-1]['ts']
-        )
+
+        time_of_first_flow = flows_list[0]['ts']
+        time_of_last_flow = flows_list[-1]['ts']
 
         # get the time difference between them in seconds
-        diff_in_mins = self.get_time_diff(time_of_first_flow, time_of_last_flow)
-
+        diff_in_mins = utils.get_time_diff(
+            time_of_first_flow,
+            time_of_last_flow,
+            return_type='minutes'
+        )
         # we need the flows that happend in 20 mins span
         if diff_in_mins < 20:
             return
@@ -495,42 +454,39 @@ class Module(Module, multiprocessing.Process):
 
         try:
             # format of this dict is {profileid: [stime of first arpa query, stime eof second, etc..]}
-            self.dns_arpa_queries[profileid].append(stime)
+            timestamps, uids = self.dns_arpa_queries[profileid]
+            timestamps.append(stime)
+            uids.append(uid)
+            self.dns_arpa_queries[profileid] = (timestamps, uids)
         except KeyError:
             # first time for this profileid to perform an arpa query
-            self.dns_arpa_queries[profileid] = [stime]
+            self.dns_arpa_queries[profileid] = ([stime], [uid])
             return False
 
-        if len(self.dns_arpa_queries[profileid]) < self.arpa_scan_threshold:
+        if len(timestamps) < self.arpa_scan_threshold:
             # didn't reach the threshold yet
             return False
 
         # reached the threshold, did the 10 queries happen within 2 seconds?
-        diff = (
-            self.dns_arpa_queries[profileid][-1]
-            - self.dns_arpa_queries[profileid][0]
+        diff = utils.get_time_diff(
+            timestamps[0],
+            timestamps[-1]
         )
         if diff > 2:
             # happened within more than 2 seconds
             return False
 
         self.helper.set_evidence_dns_arpa_scan(
-            self.arpa_scan_threshold, stime, profileid, twid, uid
+            self.arpa_scan_threshold, stime, profileid, twid, uids
         )
         # empty the list of arpa queries timestamps, we don't need thm anymore
-        self.dns_arpa_queries[profileid] = []
+        self.dns_arpa_queries[profileid] = ([], [])
         return True
 
     def is_well_known_org(self, ip):
         """get the SNI, ASN, and  rDNS of the IP to check if it belongs
         to a well-known org"""
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-        )
+
         ip_data = __database__.getIPData(ip)
         try:
             ip_asn = ip_data['asn']['asnorg']
@@ -558,7 +514,7 @@ class Module(Module, multiprocessing.Process):
             rdns = False
 
         flow_domain = rdns or SNI
-        for org in supported_orgs:
+        for org in utils.supported_orgs:
             if ip_asn and ip_asn != 'Unknown':
                 org_asn = json.loads(__database__.get_org_info(org, 'asn'))
                 if org.lower() in ip_asn.lower() or ip_asn in org_asn:
@@ -594,7 +550,8 @@ class Module(Module, multiprocessing.Process):
                 org_domains = ''
 
             # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
-            org_ips = json.loads(__database__.get_org_info(org, 'IPs'))
+            org_ips = __database__.get_org_IPs(org)
+
             if '.' in ip:
                 first_octet = ip.split('.')[0]
                 ip_obj = ipaddress.IPv4Address(ip)
@@ -604,7 +561,7 @@ class Module(Module, multiprocessing.Process):
             else:
                 return False
             # organization IPs are sorted by first octet for faster search
-            for range in org_ips.get(first_octet, []):
+            for range in org_ips.get(first_octet, {}):
                 if ip_obj in ipaddress.ip_network(range):
                     return True
 
@@ -612,72 +569,72 @@ class Module(Module, multiprocessing.Process):
         self, daddr, twid, profileid, timestamp, uid
     ):
         """Checks if there's a flow to a dstip that has no cached DNS answer"""
-
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
         # if __database__.get_dhcp_servers(daddr):
         # continue
 
-        # to avoid false positives in case of an interface don't alert
-        # ConnectionWithoutDNS until 2 minutes has passed
+        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
+        # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
         if '-i' in sys.argv:
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
-            diff = now - start_time
-            diff = diff.seconds
-            if int(diff) < 120:
-                # less than 2 minutes have passed
+            diff = utils.get_time_diff(start_time, now, return_type='minutes')
+            if diff >= self.conn_without_dns_interface_wait_time:
+                # less than 2=30 minutes have passed
                 return False
 
         answers_dict = __database__.get_reverse_dns(daddr)
-        if not answers_dict:
-            # self.print(f'No DNS resolution in {answers_dict}')
-            # There is no DNS resolution, but it can be that Slips is
-            # still reading it from the files.
-            # To give time to Slips to read all the files and get all the flows
-            # don't alert a Connection Without DNS until 5 seconds has passed
-            # in real time from the time of this checking.
+        if answers_dict:
+            return False
+        # self.print(f'No DNS resolution in {answers_dict}')
+        # There is no DNS resolution, but it can be that Slips is
+        # still reading it from the files.
+        # To give time to Slips to read all the files and get all the flows
+        # don't alert a Connection Without DNS until 5 seconds has passed
+        # in real time from the time of this checking.
 
-            # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
-            # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
-            if uid not in self.connections_checked_in_conn_dns_timer_thread:
-                # comes here if we haven't started the timer thread for this connection before
-                # mark this connection as checked
-                self.connections_checked_in_conn_dns_timer_thread.append(uid)
-                params = [daddr, twid, profileid, timestamp, uid]
-                # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
-                # time {datetime.datetime.now()}')
-                timer = TimerThread(
-                    15, self.check_connection_without_dns_resolution, params
-                )
-                timer.start()
-            else:
-                # It means we already checked this conn with the Timer process
-                # (we waited 15 seconds for the dns to arrive after the connection was made)
-                # but still no dns resolution for it.
-                # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
-                if self.check_if_resolution_was_made_by_different_version(
-                        profileid, daddr
-                ):
-                    return False
+        # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
+        # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
+        if uid not in self.connections_checked_in_conn_dns_timer_thread:
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            self.connections_checked_in_conn_dns_timer_thread.append(uid)
+            params = [daddr, twid, profileid, timestamp, uid]
+            # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
-                if self.is_well_known_org(daddr):
-                    # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
-                    return False
-                # self.print(f'Alerting after timer conn without dns on {daddr},
-                self.helper.set_evidence_conn_without_dns(
-                    daddr, timestamp, profileid, twid, uid
+            # time {datetime.datetime.now()}')
+            timer = TimerThread(
+                15, self.check_connection_without_dns_resolution, params
+            )
+            timer.start()
+        else:
+            # It means we already checked this conn with the Timer process
+            # (we waited 15 seconds for the dns to arrive after the connection was made)
+            # but still no dns resolution for it.
+            # Sometimes the same computer makes requests using its ipv4 and ipv6 address, check if this is the case
+            if self.check_if_resolution_was_made_by_different_version(
+                    profileid, daddr
+            ):
+                return False
+
+            if self.is_well_known_org(daddr):
+                # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
+                return False
+            # self.print(f'Alerting after timer conn without dns on {daddr},
+            self.helper.set_evidence_conn_without_dns(
+                daddr, timestamp, profileid, twid, uid
+            )
+            # This UID will never appear again, so we can remove it and
+            # free some memory
+            try:
+                self.connections_checked_in_conn_dns_timer_thread.remove(
+                    uid
                 )
-                # This UID will never appear again, so we can remove it and
-                # free some memory
-                try:
-                    self.connections_checked_in_conn_dns_timer_thread.remove(
-                        uid
-                    )
-                except ValueError:
-                    pass
+            except ValueError:
+                pass
 
     def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
         """
@@ -703,7 +660,8 @@ class Module(Module, multiprocessing.Process):
         ## - All reverse dns resolutions
         ## - All .local domains
         ## - The wildcard domain *
-        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN of an IP and its range. This DNS is meant not to have a connection later
+        ## - Subdomains of cymru.com, since it is used by the ipwhois library in Slips to get the ASN
+        # of an IP and its range. This DNS is meant not to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
 
@@ -717,7 +675,8 @@ class Module(Module, multiprocessing.Process):
         ):
             return False
 
-        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain, and the next DNS resolution can be
+        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain,
+        # and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
         # self.print(f'The DNS query to {domain} had as answers {answers} ')
@@ -732,6 +691,8 @@ class Module(Module, multiprocessing.Process):
         if previous_data_for_domain:
             try:
                 previous_ips_for_domain = previous_data_for_domain['IPs']
+                if type(answers) == set:
+                    answers = list(answers)
                 answers.extend(previous_ips_for_domain)
             except KeyError:
                 pass
@@ -751,6 +712,8 @@ class Module(Module, multiprocessing.Process):
             # If no IPs are in the answer, we can not expect the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
+        # to avoid checking the same answer twice
+        answers = set(answers)
         for ip in answers:
             # self.print(f'Checking if we have a connection to ip {ip}')
             if ip in contacted_ips:
@@ -762,6 +725,12 @@ class Module(Module, multiprocessing.Process):
             # this is not a DNS without resolution
             return False
 
+        for ip in answers:
+            if self.check_if_connection_was_made_by_different_version(
+                    profileid, twid, ip
+            ):
+                return False
+
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
         # It can be that Slips is still reading it from the files. Lets check back in some time
@@ -771,7 +740,8 @@ class Module(Module, multiprocessing.Process):
             # mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
             params = [domain, answers, timestamp, profileid, twid, uid]
-            # self.print(f'Starting the timer to check on {domain}, uid {uid}. time {datetime.datetime.now()}')
+            # self.print(f'Starting the timer to check on {domain}, uid {uid}.
+            # time {datetime.datetime.now()}')
             timer = TimerThread(
                 15, self.check_dns_without_connection, params
             )
@@ -780,11 +750,6 @@ class Module(Module, multiprocessing.Process):
             # self.print(f'Alerting on {domain}, uid {uid}. time {datetime.datetime.now()}')
             # It means we already checked this dns with the Timer process
             # but still no connection for it.
-            for ip in answers:
-                if self.check_if_connection_was_made_by_different_version(
-                        profileid, twid, ip
-                ):
-                    return False
             self.helper.set_evidence_DNS_without_conn(
                 domain, timestamp, profileid, twid, uid
             )
@@ -923,12 +888,58 @@ class Module(Module, multiprocessing.Process):
             self.print(str(inst), 0, 1)
             return False
 
+    def detect_incompatible_CN(
+            self,
+            daddr,
+            server_name,
+            issuer,
+            profileid,
+            twid,
+            uid,
+            timestamp
+       ):
+        """
+        Detects if a certificate claims that it's CN (common name) belongs
+        to an org that the domain doesn't belong to
+        """
+        if not issuer:
+            return False
+        found_org_in_cn = ''
+        for org in utils.supported_orgs:
+            if org not in issuer.lower():
+                continue
+
+            # save the org this domain/ip is claiming to belong to, to use it to set evidence later
+            found_org_in_cn = org
+
+            # check that the domain belongs to that same org
+            if self.whitelist.is_ip_in_org(daddr, org):
+                return False
+
+            # check that the ip belongs to that same org
+            if server_name and self.whitelist.is_domain_in_org(server_name, org):
+                return False
+
+        if not found_org_in_cn:
+            return False
+
+        # found one of our supported orgs in the cn but it doesn't belong to any of this org's
+        # domains or ips
+        self.helper.set_evidence_incompatible_CN(
+            found_org_in_cn,
+            timestamp,
+            daddr,
+            profileid,
+            twid,
+            uid
+        )
+
+
     def check_multiple_ssh_clients(
         self,
         starttime,
         saddr,
         used_software,
-        unparsed_version,
         major_v,
         minor_v,
         twid,
@@ -945,10 +956,12 @@ class Module(Module, multiprocessing.Process):
         if not cached_ssh_versions:
             # we have no previous software info about this saddr in out db
             return False
+
         cached_software = cached_ssh_versions['software']
         if cached_software != used_software:
             # we need them both to be "SSH::CLIENT"
             return False
+
         cached_major_v = cached_ssh_versions['version-major']
         cached_minor_v = cached_ssh_versions['version-minor']
         cached_versions = f'{cached_major_v}_{cached_minor_v}'
@@ -956,8 +969,10 @@ class Module(Module, multiprocessing.Process):
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
+        # get the uid of the cached versions, and the uid of the current used versions
+        uids = [cached_ssh_versions['uid'], uid]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uid
+            saddr, cached_versions, current_versions, starttime, twid, uids
         )
         return True
 
@@ -980,22 +995,29 @@ class Module(Module, multiprocessing.Process):
         try:
             # make sure all domains are unique
             if query not in self.nxdomains[profileid_twid]:
-                self.nxdomains[profileid_twid].append(query)
+                queries, uids = self.nxdomains[profileid_twid]
+                queries.append(query)
+                uids.append(uid)
+                self.nxdomains[profileid_twid] = (queries, uids)
         except KeyError:
             # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: [query]})
+            self.nxdomains.update({profileid_twid: ([query], [uid])})
             return False
 
-        # every 10,15,20 .. etc. nxdomains, generate an alert.
-        number_of_nxdomains = len(self.nxdomains[profileid_twid])
+        # every 5 nxdomains, generate an alert.
+        queries, uids = self.nxdomains[profileid_twid]
+        number_of_nxdomains = len(queries)
         if (
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
             self.helper.set_evidence_DGA(
-                number_of_nxdomains, stime, profileid, twid, uid
+                number_of_nxdomains, stime, profileid, twid, uids
             )
+            # clear the list of alerted queries and uids
+            self.nxdomains[profileid_twid] = ([],[])
             return True
+
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
 
@@ -1024,6 +1046,174 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
+
+    def check_smtp_bruteforce(self, stime, saddr, daddr, profileid, twid, uid):
+
+        try:
+            timestamps, uids = self.smtp_bruteforce_cache[profileid]
+            timestamps.append(stime)
+            uids.append(uid)
+            self.smtp_bruteforce_cache[profileid] = (timestamps, uids)
+        except KeyError:
+            # first time for this profileid to make bad smtp login
+            self.smtp_bruteforce_cache.update(
+                {
+                    profileid: ([stime], [uid])
+                }
+            )
+
+        self.helper.set_evidence_bad_smtp_login(
+            saddr, daddr, stime, profileid, twid, uid
+        )
+
+        timestamps = self.smtp_bruteforce_cache[profileid][0]
+        uids = self.smtp_bruteforce_cache[profileid][1]
+
+        # check if 3 bad login attemps happened within 10 seconds or less
+        if not (
+            len(timestamps) == self.smtp_bruteforce_threshold
+        ):
+            return
+
+        # check if they happened within 10 seconds or less
+        diff = utils.get_time_diff(
+            timestamps[0],
+            timestamps[-1]
+        )
+
+        if diff > 10:
+            # remove the first login from cache so we can check the next 3 logins
+            self.smtp_bruteforce_cache[profileid][0].pop(0)
+            self.smtp_bruteforce_cache[profileid][1].pop(0)
+            return
+
+        self.helper.set_evidence_smtp_bruteforce(
+            saddr,
+            daddr,
+            stime,
+            profileid,
+            twid,
+            uids,
+            self.smtp_bruteforce_threshold,
+        )
+
+        # remove all 3 logins that caused this alert
+        self.smtp_bruteforce_cache[profileid] = ([],[])
+
+
+
+    def detect_connection_to_multiple_ports(
+            self,
+            saddr,
+            daddr,
+            proto,
+            state,
+            appproto,
+            dport,
+            timestamp,
+            profileid,
+            twid
+    ):
+        if not (
+            proto == 'tcp'
+            and state == 'Established'
+        ):
+            return
+
+        dport_name = appproto
+        if not dport_name:
+            dport_name = __database__.get_port_info(
+                f'{dport}/{proto}'
+            )
+
+        if dport_name:
+            # dport is known, we are considering only unknown services
+            return
+
+        # Connection to multiple ports to the destination IP
+        if profileid.split('_')[1] == saddr:
+            direction = 'Dst'
+            state = 'Established'
+            protocol = 'TCP'
+            role = 'Client'
+            type_data = 'IPs'
+
+            # get all the dst ips with established tcp connections
+            daddrs = (
+                __database__.getDataFromProfileTW(
+                    profileid,
+                    twid,
+                    direction,
+                    state,
+                    protocol,
+                    role,
+                    type_data,
+                )
+            )
+
+            # make sure we find established connections to this daddr
+            if daddr not in daddrs:
+                return
+
+            dstports = list(
+                daddrs[daddr]['dstports']
+            )
+            if len(dstports) <= 1:
+                return
+
+            ip_identification = __database__.getIPIdentification(daddr)
+            description = (
+                f'Connection to multiple ports {dstports} of '
+                f'Destination IP: {daddr}. {ip_identification}'
+            )
+            uids = daddrs[daddr]['uids']
+            self.helper.set_evidence_for_connection_to_multiple_ports(
+                profileid,
+                twid,
+                daddr,
+                description,
+                uids,
+                timestamp,
+            )
+
+        # Connection to multiple port to the Source IP. Happens in the mode 'all'
+        elif profileid.split('_')[1] == daddr:
+            direction = 'Src'
+            state = 'Established'
+            protocol = 'TCP'
+            role = 'Server'
+            type_data = 'IPs'
+
+            # get all the src ips with established tcp connections
+            saddrs = (
+                __database__.getDataFromProfileTW(
+                    profileid,
+                    twid,
+                    direction,
+                    state,
+                    protocol,
+                    role,
+                    type_data,
+                )
+            )
+            dstports = list(
+                saddrs[saddr]['dstports']
+            )
+            if len(dstports) <= 1:
+                return
+
+            uids = saddrs[saddr]['uids']
+            description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
+
+            self.helper.set_evidence_for_connection_to_multiple_ports(
+                profileid,
+                twid,
+                daddr,
+                description,
+                uids,
+                timestamp,
+            )
+
 
     def run(self):
         utils.drop_root_privs()
@@ -1084,54 +1274,54 @@ class Module(Module, multiprocessing.Process):
 
                     # --- Detect unknown destination ports ---
                     if dport:
-                        if not __database__.is_known_ports_read():
-                            self.unknown_ports_queue.append((dport, proto, daddr, profileid, twid, uid, timestamp))
-                        else:
-                            if not self.ran_once:
-                                self.check_flows_in_queue()
-                                self.ran_once = True
-
-                            self.check_unknown_port(
-                                dport,
-                                proto.lower(),
-                                daddr,
-                                profileid,
-                                twid,
-                                uid,
-                                timestamp,
-                            )
+                        self.check_unknown_port(
+                            dport,
+                            proto.lower(),
+                            daddr,
+                            profileid,
+                            twid,
+                            uid,
+                            timestamp,
+                        )
 
                     # --- Detect Multiple Reconnection attempts ---
-                    key = saddr + '-' + daddr
+                    key = f'{saddr}-{daddr}'
                     if dport != 0 and origstate == 'REJ':
-
                         # add this conn to the stored number of reconnections
-                        current_reconnections = (
-                            __database__.getReconnectionsForTW(profileid, twid)
-                        )
-                        current_reconnections[key] = (
-                            current_reconnections.get(key, 0) + 1
-                        )
-                        __database__.setReconnections(
-                            profileid, twid, current_reconnections
-                        )
+                        current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
 
-                        if current_reconnections[key] >= 5:
+                        try:
+                            reconnections, uids = current_reconnections[key]
+                            reconnections += 1
+                            uids.append(uid)
+                            current_reconnections[key] = (reconnections, uids)
+                        except KeyError:
+                            current_reconnections[key] = (1, [uid])
+                            reconnections = 1
+
+                        if reconnections >= 5:
                             ip_identification = (
                                 __database__.getIPIdentification(daddr)
                             )
                             description = (
                                 f'Multiple reconnection attempts to Destination IP: {daddr} {ip_identification} '
-                                f'from IP: {saddr} reconnections: {current_reconnections[key]}'
+                                f'from IP: {saddr} reconnections: {reconnections}'
                             )
                             self.helper.set_evidence_for_multiple_reconnection_attempts(
                                 profileid,
                                 twid,
                                 daddr,
                                 description,
-                                uid,
+                                uids,
                                 timestamp,
                             )
+                            # reset the reconnection attempts of this src->dst
+                            current_reconnections[key] = (0, [])
+
+                        __database__.setReconnections(
+                            profileid, twid, current_reconnections
+                        )
+
 
                     # --- Detect Connection to port 0 ---
                     if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (
@@ -1157,116 +1347,23 @@ class Module(Module, multiprocessing.Process):
                         and appproto != 'dns'
                         and not self.is_ignored_ip(daddr)
                     ):
-                        # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
-                        # until 30 minutes has passed
-                        # after starting slips because the dns may have happened before starting slips
-                        start_time = __database__.get_slips_start_time()
-                        internal_time = float(
-                            __database__.getSlipsInternalTime()
+
+                        self.check_connection_without_dns_resolution(
+                            daddr, twid, profileid, timestamp, uid
                         )
-                        internal_time = datetime.datetime.fromtimestamp(
-                            internal_time
-                        )
-                        diff_internal = internal_time - start_time
-                        diff_internal = diff_internal.seconds
-                        # self.print(f'Start: {start_time}, InternalTime: {internal_time} [diff {diff_internal}]. TH: {self.conn_without_dns_interface_wait_time}')
-                        if (
-                            int(diff_internal)
-                            >= self.conn_without_dns_interface_wait_time
-                        ):
-                            self.check_connection_without_dns_resolution(
-                                daddr, twid, profileid, timestamp, uid
-                            )
 
                     # --- Detect Connection to multiple ports (for RAT) ---
-                    if proto == 'tcp' and state == 'Established':
-                        dport_name = appproto
-                        if not dport_name:
-                            dport_name = __database__.get_port_info(
-                                str(dport) + '/' + proto.lower()
-                            )
-                            if dport_name:
-                                dport_name = dport_name.upper()
-                        # Consider only unknown services
-                        else:
-                            dport_name = dport_name.upper()
-                        # Consider only unknown services
-                        if not dport_name:
-                            # Connection to multiple ports to the destination IP
-                            if profileid.split('_')[1] == saddr:
-                                direction = 'Dst'
-                                state = 'Established'
-                                protocol = 'TCP'
-                                role = 'Client'
-                                type_data = 'IPs'
-                                dst_IPs_ports = (
-                                    __database__.getDataFromProfileTW(
-                                        profileid,
-                                        twid,
-                                        direction,
-                                        state,
-                                        protocol,
-                                        role,
-                                        type_data,
-                                    )
-                                )
-                                # make sure we find established connections to this daddr
-                                if daddr in dst_IPs_ports:
-                                    dstports = list(
-                                        dst_IPs_ports[daddr]['dstports']
-                                    )
-                                    if len(dstports) > 1:
-                                        ip_identification = (
-                                            __database__.getIPIdentification(
-                                                daddr
-                                            )
-                                        )
-                                        description = (
-                                            f'Connection to multiple ports {dstports} of '
-                                            f'Destination IP: {daddr}. {ip_identification}'
-                                        )
-                                        self.helper.set_evidence_for_connection_to_multiple_ports(
-                                            profileid,
-                                            twid,
-                                            daddr,
-                                            description,
-                                            uid,
-                                            timestamp,
-                                        )
-
-                            # Connection to multiple port to the Source IP. Happens in the mode 'all'
-                            elif profileid.split('_')[1] == daddr:
-                                direction = 'Src'
-                                state = 'Established'
-                                protocol = 'TCP'
-                                role = 'Server'
-                                type_data = 'IPs'
-                                src_IPs_ports = (
-                                    __database__.getDataFromProfileTW(
-                                        profileid,
-                                        twid,
-                                        direction,
-                                        state,
-                                        protocol,
-                                        role,
-                                        type_data,
-                                    )
-                                )
-                                dstports = list(
-                                    src_IPs_ports[saddr]['dstports']
-                                )
-                                if len(dstports) > 1:
-                                    description = 'Connection to multiple ports {} of Source IP: {}'.format(
-                                        dstports, saddr
-                                    )
-                                    self.helper.set_evidence_for_connection_to_multiple_ports(
-                                        profileid,
-                                        twid,
-                                        daddr,
-                                        description,
-                                        uid,
-                                        timestamp,
-                                    )
+                    self.detect_connection_to_multiple_ports(
+                        saddr,
+                        daddr,
+                        proto,
+                        state,
+                        appproto,
+                        dport,
+                        timestamp,
+                        profileid,
+                        twid
+                    )
 
                     # --- Detect Data exfiltration ---
                     self.check_data_upload(profileid, twid)
@@ -1399,20 +1496,17 @@ class Module(Module, multiprocessing.Process):
                         timestamp = flow['stime']
                         ja3 = flow.get('ja3', False)
                         ja3s = flow.get('ja3s', False)
+                        issuer = flow.get('issuer', False)
                         profileid = data['profileid']
                         twid = data['twid']
                         daddr = flow['daddr']
                         saddr = profileid.split('_')[1]
-
+                        server_name = flow.get('server_name')   # returns None if not found
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
                             ip_identification = (
                                 __database__.getIPIdentification(ip)
                             )
-                            server_name = flow.get(
-                                'server_name'
-                            )   # returns None if not found
-                            # if server_name is not None or not empty
                             if not server_name:
                                 description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
                             else:
@@ -1455,7 +1549,15 @@ class Module(Module, multiprocessing.Process):
                                     type_='ja3s',
                                     ioc=ja3s,
                                 )
-
+                        self.detect_incompatible_CN(
+                            daddr,
+                            server_name,
+                            issuer,
+                            profileid,
+                            twid,
+                            uid,
+                            timestamp
+                        )
                 # --- Learn ports that Zeek knows but Slips doesn't ---
                 message = self.c5.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
@@ -1497,7 +1599,10 @@ class Module(Module, multiprocessing.Process):
                     stime = data.get('stime', False)
 
                     # only check dns without connection if we have answers(we're sure the query is resolved)
-                    if answers:
+                    # sometimes we have 2 dns flows, 1 for ipv4 and 1 fo ipv6, both have the
+                    # same uid, this causes FP dns without connection,
+                    # so make sure we only check the uid once
+                    if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
                         self.check_dns_without_connection(
                             domain, answers, stime, profileid, twid, uid
                         )
@@ -1552,41 +1657,8 @@ class Module(Module, multiprocessing.Process):
                     last_reply = data.get('last_reply', False)
 
                     if 'bad smtp-auth user' in last_reply:
-                        try:
-                            self.smtp_bruteforce_cache[profileid].append(stime)
-                        except KeyError:
-                            # first time for this profileid to preform bad smtp login
-                            self.smtp_bruteforce_cache.update(
-                                {profileid: [stime]}
-                            )
-                        self.helper.set_evidence_bad_smtp_login(
-                            saddr, daddr, stime, profileid, twid, uid
-                        )
+                      self.check_smtp_bruteforce( stime, saddr, daddr, profileid, twid, uid )
 
-                        # check if (3) bad login attemps happened
-                        if (
-                            len(self.smtp_bruteforce_cache[profileid])
-                            == self.smtp_bruteforce_threshold
-                        ):
-                            # check if they happened within 10 seconds or less
-                            diff = int(
-                                self.smtp_bruteforce_cache[profileid][-1]
-                            ) - int(self.smtp_bruteforce_cache[profileid][0])
-                            if diff <= 10:
-                                # remove all 3 logins that caused this alert
-                                self.smtp_bruteforce_cache[profileid] = []
-                                self.helper.set_evidence_smtp_bruteforce(
-                                    saddr,
-                                    daddr,
-                                    stime,
-                                    profileid,
-                                    twid,
-                                    uid,
-                                    self.smtp_bruteforce_threshold,
-                                )
-                            else:
-                                # remove the first element so we can check the next 3 logins
-                                self.smtp_bruteforce_cache[profileid].pop(0)
 
                 # --- Detect multiple used SSH versions ---
                 message = self.c9.get_message(timeout=self.timeout)
@@ -1602,14 +1674,12 @@ class Module(Module, multiprocessing.Process):
                     software_type = flow.get('software_type', '')
                     if 'ssh' not in software_type.lower():
                         continue
-                    unparsed_version = flow.get('saddr', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
                     self.check_multiple_ssh_clients(
                         starttime,
                         saddr,
                         software_type,
-                        unparsed_version,
                         major_v,
                         minor_v,
                         twid,

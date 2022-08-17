@@ -15,8 +15,6 @@ def do_nothing(*args):
 
 
 # Main Class tests
-
-
 def create_Main_instance():
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)

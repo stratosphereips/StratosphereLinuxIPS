@@ -46,6 +46,7 @@ class InputProcess(multiprocessing.Process):
             config,
             packet_filter,
             zeek_or_bro,
+            zeek_folder,
             line_type,
             redis_port,
     ):
@@ -63,8 +64,7 @@ class InputProcess(multiprocessing.Process):
         # entire path
         self.given_path = input_information
         # filename only
-        self.given_file = self.given_path.split('/')[-1]
-        self.zeek_folder = f'./zeek_files_{self.given_file}/'
+        self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
         # Read the configuration
@@ -97,14 +97,6 @@ class InputProcess(multiprocessing.Process):
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
-        self.handle_signals()
-
-    def handle_signals(self):
-        # call shutdown_gracefully on sigterm
-        def sig_handler(sig, frame):
-            self.shutdown_gracefully()
-        # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
-        signal.signal(signal.SIGTERM, sig_handler)
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -168,11 +160,11 @@ class InputProcess(multiprocessing.Process):
 
     def stop_queues(self):
         """Stops the profiler and output queues"""
-
         self.profilerqueue.put('stop')
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.outputqueue.put(
             '02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n'.format(
-                self.lines, datetime.now().strftime('%Y-%m-%d--%H:%M:%S')
+                self.lines, now
             )
         )
         self.outputqueue.close()
@@ -318,9 +310,7 @@ class InputProcess(multiprocessing.Process):
                 if not cache_lines:
                     # Verify that we didn't have any new lines in the
                     # last 10 seconds. Seems enough for any network to have ANY traffic
-                    now = datetime.now()
-                    diff = now - last_updated_file_time
-                    diff = diff.seconds
+                    diff = utils.get_time_diff(last_updated_file_time, datetime.now())
                     if diff >= self.bro_timeout:
                         # It has been 10 seconds without any file
                         # being updated. So stop Zeek

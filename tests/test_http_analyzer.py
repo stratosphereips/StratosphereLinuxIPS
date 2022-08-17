@@ -56,7 +56,7 @@ def test_check_multiple_google_connections(outputQueue, database):
     assert found_detection == True
 
 
-def test_check_incompatible_user_agent(outputQueue, database):
+def test_get_ua_info_online(outputQueue, database):
     """
     tests get_user_agent_info and check_incompatible_user_agent
     """
@@ -66,11 +66,42 @@ def test_check_incompatible_user_agent(outputQueue, database):
         'AppleWebKit/605.1.15 (KHTML, like Gecko) '
         'Version/15.3 Safari/605.1.15'
     )
+    ua_info = http_analyzer.get_ua_info_online(safari_ua)
+    assert ua_info != False, 'Connection error'
+
+
+def test_get_user_agent_info(outputQueue, database):
+    """
+    tests the parsing and processing the ua found by the online query
+    """
+    http_analyzer = create_http_analyzer_instance(outputQueue)
+    safari_ua = (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+        'Version/15.3 Safari/605.1.15'
+    )
+    # add os_type , os_name and agent_name to the db
+    ua_info = http_analyzer.get_user_agent_info(safari_ua, profileid)
+    assert ua_info['os_type'] == 'Macintosh'
+    assert ua_info['browser'] == 'Safari'
+
+
+def test_check_incompatible_user_agent(outputQueue, database):
+    http_analyzer = create_http_analyzer_instance(outputQueue)
+    safari_ua = (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+        'Version/15.3 Safari/605.1.15'
+    )
     # add os_type , os_name and agent_name to the db
     http_analyzer.get_user_agent_info(safari_ua, profileid)
 
+    # set this profile's vendor to intel
     intel_oui = '00:13:20'
-    MAC_info = {'Vendor': 'Intel Corp', 'MAC': 'FF:FF:FF' + intel_oui}
+    MAC_info = {
+        'Vendor': 'Intel Corp',
+        'MAC': 'FF:FF:FF' + intel_oui
+    }
     database.add_mac_addr_to_profile(profileid, MAC_info)
 
     assert (
@@ -79,7 +110,6 @@ def test_check_incompatible_user_agent(outputQueue, database):
         )
         == True
     )
-
 
 def test_extract_info_from_UA(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)

@@ -28,7 +28,7 @@ class Module(Module, multiprocessing.Process):
     """
 
     name = 'exporting_alerts'
-    description = 'Export alerts to slack, STIX and json format'
+    description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, config, redis_port):
@@ -103,9 +103,6 @@ class Module(Module, multiprocessing.Process):
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = 0.00000001
-        # flag to open json file only once
-        self.is_json_file_opened = False
-        self.json_file_handle = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -348,45 +345,6 @@ class Module(Module, multiprocessing.Process):
                     0,
                 )
 
-    def export_to_json(self, evidence):
-        """Export alerts and flows to exported_alerts.json, a suricata like json format."""
-
-        if not self.is_json_file_opened:
-            self.json_file_handle = open('exported_alerts.json', 'a')
-            self.is_json_file_opened = True
-
-        profileid = evidence['profileid']
-        twid = evidence['twid']
-        uid = evidence['uid']
-        # get the original fllow that triggered this evidence
-        flow = __database__.get_flow(profileid, twid, uid)[uid]
-        # portscans aren't associated with 1 flow, so we don't have a uid or a flow for this alert, ignore #todo
-        if flow:
-            flow = json.loads(flow)
-            # suricata ts format: Date+T+Time
-            # toddo take the original timestamp or the current tiemstamp?
-            timestamp = str(datetime.datetime.now()).replace(' ', 'T')
-            line = {
-                'timestamp': timestamp,
-                'flow_id': uid,
-                'src_ip': flow.get('saddr'),
-                'src_port': flow.get('sport'),
-                'dest_ip': flow.get('daddr'),
-                'dest_port': flow.get('dport'),
-                'proto': flow.get('proto'),
-                'event_type': 'alert',
-                'alert': evidence['data']['description'],
-                'state': flow.get('state'),
-                'bytes_toserver': flow.get('sbytes'),
-                'pkts_toserver': flow.get('spkts'),
-            }
-            if flow.get('label') != 'unknown':
-                line.update({'label': flow.get('label')})
-            line = str(line)
-            self.json_file_handle.write(f'{line}\n')
-            return True
-        return False
-
     def shutdown_gracefully(self):
         # We need to publish to taxii server before stopping
         if 'stix' in self.export_to:
@@ -437,8 +395,6 @@ class Module(Module, multiprocessing.Process):
                             exported_to_stix = self.export_to_STIX(msg_to_send)
                             if not exported_to_stix:
                                 self.print('Problem in export_to_STIX()', 0, 3)
-                        if 'json' in self.export_to:
-                            self.export_to_json(evidence)
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True

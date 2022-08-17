@@ -29,13 +29,30 @@ class UpdateFileManager:
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
-        self.today = time.time()
         # don't store iocs older than 1 week
-        self.interval = 604800
-        self.whitelist = Whitelist(outputqueue, config)
+        self.interval = 7
+        self.whitelist = Whitelist(outputqueue, config, redis_port)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
-
+        # if any keyword of the following is present in a line
+        # then this line should be ignored by slips
+        # either a not supported ioc type or a header line etc.
+        # make sure the header keywords are lowercase because
+        # we convert lines to lowercase when comparing
+        self.header_keywords = (
+            'type',
+            'first_seen_utc',
+            'ip_v4',
+            '"domain"',
+            '#"type"',
+            '#fields',
+            'number',
+            'atom_type',
+        )
+        self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
+        # to track how many times an ip is present in different blacklists
+        self.ips_ctr = {}
+        self.first_time_reading_files = False
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -272,9 +289,6 @@ class UpdateFileManager:
                         __database__.set_port_info(
                             f'{str(port)}/{proto}', name
                         )
-                # mark this file as read so that flowalerts
-                # can start generating unknown ports alerts
-                __database__.mark_known_ports_as_read()
 
             # Store the new hash of file in the database
             file_info = {'hash': self.new_hash}
@@ -871,52 +885,13 @@ class UpdateFileManager:
             print(traceback.format_exc())
             return False
 
-    def detect_data_type(self, data):
-        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
-
-        data = data.strip()
-        try:
-            ipaddress.IPv4Address(data)
-            # Is IPv4!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            pass
-        # Is it ipv6?
-        try:
-            ipaddress.IPv6Address(data)
-            # Is IPv6!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # It does not look as IP address.
-            pass
-
-        try:
-            ipaddress.ip_network(data)
-            return 'ip_range'
-        except ValueError:
-            pass
-
-        if validators.domain(data):
-            return 'domain'
-        # some ti files have / at the end of domains, remove it
-        if data.endswith('/'):
-            data = data[:-1]
-        domain = data
-        if domain.startswith('http://'):
-            data = data[7:]
-        if domain.startswith('https://'):
-            data = data[8:]
-        if validators.domain(data):
-            return 'domain'
-
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
-        # to support
+        # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
         filename = ti_file_path.split('/')[-1]
         malicious_domains_dict = {}
-        pattern = "%Y-%m-%dT%H:%M:%S"
         with open(ti_file_path) as feed:
             self.print(
                 f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
@@ -929,15 +904,12 @@ class UpdateFileManager:
 
             for ioc in file:
                 date = ioc['InsertDate']
-                epoch_date = int(
-                    time.mktime(
-                        time.strptime(
-                            date,
-                            pattern
-                        )
-                    )
+                diff = utils.get_time_diff(
+                    date,
+                    time.time(),
+                    return_type='days'
                 )
-                diff = self.today - epoch_date
+
                 if diff > self.interval:
                     continue
                 domain = ioc['DomainAddress']
@@ -955,22 +927,163 @@ class UpdateFileManager:
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
+    def get_description_column(self, header):
+        """
+        Given the first line of a TI file (header line), try to get the index of the description column
+        """
+        description_keywords = ('desc', 'collect', 'malware', 'tags_str', 'source' )
+        for column in header.split(','):
+            for keyword in description_keywords:
+                if keyword in column:
+                    description_column = header.split(',').index(
+                        column
+                    )
+                    return description_column
+
+    def is_ignored_line(self, line) -> bool:
+        """
+        Returns True if a comment, a blank line, or an unsupported IoC
+        """
+        if (
+            line.startswith('#')
+            or line.startswith(';')
+            or line.isspace()
+            or len(line) < 3
+        ):
+            return True
+
+        for keyword in self.header_keywords + self.ignored_IoCs:
+            if keyword in line.lower():
+                # we should ignore this line
+                return True
+
+    def parse_line(self, line, file_path) -> tuple:
+        """
+        :param file_path: path of the ti fil;e that contains the given line
+        Parse the given line and return the amount of columns it has,
+        a list of the line fields, and the separator it's using
+        """
+        # Separate the lines like CSV, either by commas or tabs
+        separators = ('#', ',', ';', '\t')
+        for separator in separators:
+            if separator in line:
+                # lines and descriptions in this feed are separated with ',' , so we get
+                # an invalid number of columns
+                if 'OCD-Datalak' in file_path:
+                    # the valid line
+                    new_line = line.split('Z,')[0]
+                    # replace every ',' from the description
+                    description = line.split('Z,', 1)[1].replace(
+                        ', ', ''
+                    )
+                    line = new_line + ',' + description
+
+                # get a list of every field in the line e.g [ioc, description, date]
+                line_fields = line.split(separator)
+                amount_of_columns = len(line_fields)
+                sep = separator
+                break
+        else:
+            # no separator of the above was found
+            if '0.0.0.0 ' in line:
+                sep = ' '
+                # anudeepND/blacklist file
+                line_fields = [
+                    line[line.index(' ') + 1 :].replace('\n', '')
+                ]
+                amount_of_columns = 1
+            else:
+                sep = '\t'
+                line_fields = line.split(sep)
+                amount_of_columns = len(line_fields)
+
+        return amount_of_columns, line_fields, sep
+
+
+    def get_data_column(self, amount_of_columns, line_fields, file_path):
+        """
+        Get the first column that is an IPv4, IPv6 or domain
+        :param file_path: path of the ti file that contains the given fields
+        """
+        for column_idx in range(amount_of_columns):
+            # Check if we support this type.
+            data_type = utils.detect_data_type(line_fields[column_idx])
+            # found a supported type
+            if data_type:
+                return column_idx
+        else:
+            # Some unknown string and we cant detect the type of it
+            # can't find a column that contains an ioc
+            self.print(
+                f'Error while reading the TI file {file_path}.'
+                f' Could not find a column with an IP or domain',
+                0, 1,
+            )
+            return 'Error'
+
+    def extract_ioc_from_line(self, line, line_fields, separator, data_column, description_column, file_path) -> tuple:
+        """
+        Returns the ip/ip range/domain and it's description from the given line
+        """
+        if '0.0.0.0 ' in line:
+            # anudeepND/blacklist file
+            data = line[line.index(' ') + 1 :].replace('\n', '')
+        else:
+            line_fields = line.split(separator)
+            # get the ioc
+            data = line_fields[data_column].strip()
+
+        # get the description of this line
+        try:
+            description = line_fields[description_column].strip()
+        except (IndexError, UnboundLocalError):
+            self.print(
+                f'IndexError Description column: '
+                f'{description_column}. Line: {line} in '
+                f'{file_path}', 0, 1,
+            )
+            return False, False
+
+        self.print(
+            '\tRead Data {}: {}'.format(data, description), 3, 0
+        )
+        return data, description
+    
+    def add_to_ip_ctr(self, ip, blacklist):
+        """
+        keep track of how many times an ip was there in all blacklists
+        :param blacklist: t make sure we don't count the ip twice in the same blacklist
+        """
+        blacklist =  os.path.basename(blacklist)
+        if (
+            ip in self.ips_ctr
+            and
+            blacklist not in self.ips_ctr['blacklists']
+        ):
+            self.ips_ctr[ip]['times_found'] += 1
+            self.ips_ctr[ip]['blacklists'].append(blacklist)
+        else:
+            self.ips_ctr[ip] = {
+                'times_found': 1,
+                'blacklists': [blacklist]
+            }
+
+    
     def parse_ti_feed(
-            self, link_to_download, malicious_data_path: str
+            self, link_to_download, ti_file_path: str
     ) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc across files
         :param link_to_download: this link that has the IOCs we're currently parsing, used for getting the threat_level
-        :param malicious_data_path: this is the path where the saved file from the link is downloaded
+        :param ti_file_path: this is the path where the saved file from the link is downloaded
         """
 
         try:
-
             # Check if the file has any content
             try:
-                filesize = os.path.getsize(malicious_data_path)
+                filesize = os.path.getsize(ti_file_path)
             except FileNotFoundError:
                 # happens inntegration tests, another instance of slips deleted the file
                 return False
@@ -981,135 +1094,46 @@ class UpdateFileManager:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
-            with open(malicious_data_path) as feed:
+            # to support nsec/full-results-2019-05-15.json
+            if 'json' in ti_file_path:
+                return self.parse_json_ti_feed(
+                    link_to_download, ti_file_path
+                )
+
+
+            with open(ti_file_path) as feed:
                 self.print(
-                    f'Reading next lines in the file {malicious_data_path} '
+                    f'Reading next lines in the file {ti_file_path} '
                     f'for IoC', 3, 0,
                 )
-                # to support nsec/full-results-2019-05-15.json
-                if 'json' in malicious_data_path:
-                    self.parse_json_ti_feed(
-                        link_to_download, malicious_data_path
-                    )
-                    return True
 
                 # Remove comments and find the description column if possible
                 description_column = None
-                # if any keyword of the following is present in a line
-                # then this line should be ignored by slips
-                # either a not supported ioc type or a header line etc.
-                # make sure the header keywords are lowercase because
-                # we convert lines to lowercase when comparing
-                header_keywords = (
-                    'type',
-                    'first_seen_utc',
-                    'ip_v4',
-                    '"domain"',
-                    '#"type"',
-                    '#fields',
-                    'number',
-                    'atom_type',
-                )
-                ignored_IoCs = ('email', 'url', 'file_hash', 'file')
 
-                while True:
-                    line = feed.readline()
-                    if not line:
-                        break
-                    # Try to find the line that has column names
-                    for keyword in header_keywords:
+                while line := feed.readline():
+                    # Try to find the line that has coluself.mn names
+                    for keyword in self.header_keywords:
                         if line.startswith(keyword):
                             # looks like the column names, search where is the description column
-                            for column in line.split(','):
-                                if (
-                                    column.lower().startswith('desc')
-                                    or 'malware' in column
-                                    or 'tags_str' in column
-                                    or 'collect' in column
-                                ):
-                                    description_column = line.split(',').index(
-                                        column
-                                    )
-                                    break
-
-                    # make sure the next line is not a header, a comment or an unsupported IoC type
-                    process_line = True
-                    if (
-                        line.startswith('#')
-                        or line.startswith(';')
-                        or line.isspace()
-                        or len(line) < 3
-                    ):
-                        continue
-                    for keyword in header_keywords + ignored_IoCs:
-                        if keyword in line.lower():
-                            # we should ignore this line
-                            process_line = False
+                            description_column = self.get_description_column(line)
                             break
 
-                    if process_line:
+                    if not self.is_ignored_line(line):
                         break
 
-                # Find in which column is the important info in this TI file (domain or ip)
                 # Store the current position of the TI file
                 current_file_position = feed.tell()
                 line = line.replace('\n', '').replace('"', '')
 
-                # Separate the lines like CSV, either by commas or tabs
-                separators = ('#', ',', ';', '\t')
-                for separator in separators:
-                    if separator in line:
-                        # lines and descriptions in this feed are separated with ',' , so we get
-                        # an invalid number of columns
-                        if 'OCD-Datalak' in malicious_data_path:
-                            # the valid line
-                            new_line = line.split('Z,')[0]
-                            # replace every ',' from the description
-                            description = line.split('Z,', 1)[1].replace(
-                                ', ', ''
-                            )
-                            line = new_line + ',' + description
-
-                        # get a list of every field in the line e.g [ioc, description, date]
-                        line_fields = line.split(separator)
-                        amount_of_columns = len(line_fields)
-                        break
-                else:
-                    # no separator of the above was found
-                    if '0.0.0.0 ' in line:
-                        # anudeepND/blacklist file
-                        line_fields = [
-                            line[line.index(' ') + 1 :].replace('\n', '')
-                        ]
-                        amount_of_columns = 1
-                    else:
-                        separator = '\t'
-                        line_fields = line.split(separator)
-                        amount_of_columns = len(line_fields)
+                amount_of_columns, line_fields, separator = self.parse_line(line, ti_file_path)
 
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
-
-                data_column = None
-                # Search the first column that is an IPv4, IPv6 or domain
-                for column_idx in range(amount_of_columns):
-                    # Check if we support this type.
-                    data_type = self.detect_data_type(line_fields[column_idx])
-                    # found a supported type
-                    if data_type:
-                        data_column = column_idx
-                        break
-                # don't use if not data_column, it may be 0
-                if data_column == None:
-                    # Some unknown string and we cant detect the type of it
-                    # can't find a column that contains an ioc
-                    self.print(
-                        f'Error while reading the TI file {malicious_data_path}.'
-                        f' Could not find a column with an IP or domain',
-                        0, 1,
-                    )
+                data_column = self.get_data_column(amount_of_columns, line_fields, ti_file_path)
+                if data_column == 'False':  # don't use if not becayuse it may be 0
                     return False
+
                 # Now that we read the first line, go back so we can process it
                 feed.seek(current_file_position)
 
@@ -1122,74 +1146,50 @@ class UpdateFileManager:
                     # domain,www.netspy.net,NetSpy
 
                     # skip comments and headers
-                    if line.startswith('#') or line.startswith(';'):
+                    if self.is_ignored_line(line):
                         continue
 
-                    if 'OCD-Datalak' in malicious_data_path:
+                    if 'OCD-Datalak' in ti_file_path:
                         # the valid line
                         new_line = line.split('Z,')[0]
                         # replace every ',' from the description
                         description = line.split('Z,', 1)[1].replace(', ', '')
                         line = new_line + ',' + description
 
-                    # skip unsupported IoC types
-                    process_line = True
-                    for keyword in ignored_IoCs:
-                        if keyword in line.lower():
-                            process_line = False
-
-                    if not process_line:
-                        continue
-
                     line = line.replace('\n', '').replace('"', '')
 
-                    if '0.0.0.0 ' in line:
-                        # anudeepND/blacklist file
-                        data = line[line.index(' ') + 1 :].replace('\n', '')
-                    else:
-                        line_fields = line.split(separator)
-                        # get the ioc
-                        data = line_fields[data_column].strip()
+                    data, description = self.extract_ioc_from_line(line,
+                                                                   line_fields,
+                                                                   separator,
+                                                                   data_column,
+                                                                   description_column,
+                                                                   ti_file_path)
+
+                    if not data and not description:
+                        return False
 
                     # some ti files have new lines in the middle of the file, ignore them
                     if len(data) < 3:
                         continue
 
-                    # get the description of this line
-                    try:
-                        description = line_fields[description_column].strip()
-                    except (IndexError, UnboundLocalError):
-                        description = ''
-                        self.print(
-                            f'IndexError Description column: '
-                            f'{description_column}. Line: {line} in '
-                            f'{malicious_data_path}', 0, 1,
-                        )
-                        return False
+                    data_file_name = ti_file_path.split('/')[-1]
 
-                    self.print(
-                        '\tRead Data {}: {}'.format(data, description), 3, 0
-                    )
-
-                    data_file_name = malicious_data_path.split('/')[-1]
-
-                    # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
-                    data_type = self.detect_data_type(data)
+                    data_type = utils.detect_data_type(data)
                     if data_type == None:
                         self.print(
                             'The data {} is not valid. It was found in {}.'.format(
-                                data, malicious_data_path
+                                data, ti_file_path
                             ), 0, 1,
                         )
                         continue
                     if data_type == 'domain':
+                        # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
                         try:
                             # we already have info about this domain?
                             old_domain_info = json.loads(
                                 malicious_domains_dict[str(data)]
                             )
-                            # if the domain appeared twice in the same blacklist, don't add the blacklist name twice
-                            # or calculate the max threat_level
+                            # if the domain appeared twice in the same blacklist,  skip it
                             if data_file_name in old_domain_info['source']:
                                 continue
                             # append the new blacklist name to the current one
@@ -1241,7 +1241,9 @@ class UpdateFileManager:
                             or ip_obj.is_link_local
                         ):
                             continue
+
                         try:
+                            self.add_to_ip_ctr(data, ti_file_path)
                             # we already have info about this ip?
                             old_ip_info = json.loads(
                                 malicious_ips_dict[str(data)]
@@ -1296,7 +1298,6 @@ class UpdateFileManager:
                             __database__.set_score_confidence(
                                 data, threat_level, 1
                             )
-
                     elif data_type == 'ip_range':
                         # make sure we're not blacklisting a private or multicast ip range
                         # get network address from range
@@ -1381,32 +1382,39 @@ class UpdateFileManager:
             self.print(traceback.format_exc(), 0, 1)
             return False
 
-    def check_if_update_org(self, org, file):
+    def check_if_update_org(self, file):
         cached_hash = __database__.get_TI_file_info(file).get('hash','')
         if utils.get_hash_from_file(file) != cached_hash:
             return True
 
+
+    def get_whitelisted_orgs(self) -> list:
+        self.whitelist.read_whitelist()
+        whitelisted_orgs: dict = __database__.get_whitelist('organizations')
+        whitelisted_orgs: list = list(whitelisted_orgs.keys())
+        return whitelisted_orgs
+
+
     def update_org_files(self):
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-            )
+        # update whitelisted orgs in whitelist.conf, we may not have info about all of them
+        whitelisted_orgs: list = self.get_whitelisted_orgs()
+        # remove the once we have info about
+        not_supported_orgs = [org for org in whitelisted_orgs if org not in utils.supported_orgs]
+        for org in not_supported_orgs:
+            self.whitelist.load_org_IPs(org)
 
-
-        for org in supported_orgs:
+        # update org we have local into about
+        for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f'{org}_asn')
             org_domains = os.path.join(self.org_info_path, f'{org}_domains')
-            if self.check_if_update_org(org, org_ips):
+            if self.check_if_update_org(org_ips):
                 self.whitelist.load_org_IPs(org)
 
-            if self.check_if_update_org(org, org_domains):
+            if self.check_if_update_org(org_domains):
                 self.whitelist.load_org_domains(org)
 
-            if self.check_if_update_org(org, org_asn):
+            if self.check_if_update_org(org_asn):
                 self.whitelist.load_org_asn(org)
 
             for file in (org_ips, org_domains, org_asn):
@@ -1425,6 +1433,33 @@ class UpdateFileManager:
                         f'An error occurred while updating {file}. Updating '
                         f'was aborted.', 0, 1,
                     )
+
+    def print_duplicate_ip_summary(self):
+        if not self.first_time_reading_files:
+            # when we parse ti files for the first time, we have the info to print the summary
+            # when the ti files are already updated, from a previous run, we don't
+            return
+        
+        ips = {
+            'in 1 blacklist': 0,
+            'in 2 blacklist': 0,
+            'in 3 blacklist': 0,
+        }
+        ips_in_1_bl = 0
+        ips_in_2_bl = 0
+        ips_in_3_bl = 0
+        for ip, ip_info in self.ips_ctr.items():
+            blacklists_ip_appeard_in = ip_info['times_found']
+            if blacklists_ip_appeard_in == 1:
+                ips_in_1_bl += 1
+            elif blacklists_ip_appeard_in == 2:
+                ips_in_2_bl += 1
+            elif blacklists_ip_appeard_in == 3:
+                ips_in_3_bl += 1
+
+        self.print(f'Number of IPs that appeared in 1 blacklist: {ips_in_1_bl}')
+        self.print(f'Number of IPs that appeared in 2 blacklists: {ips_in_2_bl}')
+        self.print(f'Number of IPs that appeared in 3 blacklists: {ips_in_3_bl}')
 
     async def update(self) -> bool:
         """
@@ -1464,6 +1499,9 @@ class UpdateFileManager:
                     # or the the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
                     continue
+                
+                # this run wasn't started with existing ti files in the db 
+                self.first_time_reading_files = True
 
                 self.log(
                     f'Downloading the remote file {file_to_download}'
@@ -1497,6 +1535,8 @@ class UpdateFileManager:
                 pass
 
             self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+
+            self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False

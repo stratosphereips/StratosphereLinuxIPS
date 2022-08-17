@@ -1,5 +1,6 @@
 # Must imports
 from slips_files.core.database import __database__
+from slips_files.common.slips_utils import utils
 
 # Your imports
 import json
@@ -63,12 +64,41 @@ class Helper:
             uid=uid,
         )
 
+    def set_evidence_incompatible_CN(
+        self, org, timestamp, daddr, profileid, twid, uid
+    ):
+        """
+        :param prg: the org this ip/domain claims it belongs to
+        """
+        confidence = 0.9
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'srcip'
+        type_evidence = 'IncompatibleCN'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Incompatible certificate CN to IP: {daddr} {ip_identification} claiming to belong {org.capitalize()}.'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_DGA(self, nxdomains: int, stime, profileid, twid, uid):
         confidence = (1 / 100) * (nxdomains - 100) + 1
         confidence = round(confidence, 2)   # for readability
         threat_level = 'high'
         category = 'Intrusion.Botnet'
-        # the srcip performing all the dns queries
+        # the srcip doing all the dns queries
         type_detection = 'srcip'
         source_target_tag = 'OriginMalware'
         type_evidence = f'DGA-{nxdomains}-NXDOMAINs'
@@ -131,14 +161,14 @@ class Helper:
         start_time = __database__.get_slips_start_time()
         now = time.time()
         confidence = 0.8
-        if type(start_time) == datetime.datetime:
-            if '-i' in sys.argv and (now - start_time.timestamp() < 18000):
+        if '-i' in sys.argv:
+            diff = utils.get_time_diff(start_time, now, return_type='hours')
+            if diff < 5:
                 confidence = 0.1
-        elif '-i' in sys.argv and (now - start_time < 18000):
-            confidence = 0.1
+
 
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'a connection without DNS resolution to IP: {daddr}. {ip_identification}'
+        description = f'a connection without DNS resolution to IP: {daddr} {ip_identification}'
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -162,7 +192,7 @@ class Helper:
         category = 'Recon.Scanning'
         type_detection = 'srcip'
         type_evidence = 'DNS-ARPA-Scan'
-        description = f'performing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
+        description = f'doing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
         detection_info = profileid.split('_')[1]
 
         __database__.setEvidence(
@@ -364,7 +394,9 @@ class Helper:
         ip_identification = __database__.getIPIdentification(ip)
         # get the duration in minutes
         duration = int(duration / 60)
-        description = f'Long Connection. Connection to: {ip} {ip_identification} took {duration} mins'
+        srcip = profileid.split('_')[1]
+        description = f'Long Connection. Connection from {srcip} to destination address: {ip} ' \
+                      f'{ip_identification} took {duration} mins'
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -380,7 +412,7 @@ class Helper:
         )
 
     def set_evidence_self_signed_certificates(
-        self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'
+        self, profileid, twid, ip, description, uid, timestamp
     ):
         """
         Set evidence for self signed certificates.
@@ -600,8 +632,7 @@ class Helper:
         )
         description = f'possible data upload. {total_mbytes} MBs sent to {most_contacted_daddr} '
         description += f'IP contacted {times_contacted} times in the past 1h. {ip_identification}'
-        timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
-
+        timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -628,7 +659,7 @@ class Helper:
         detection_info = saddr
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
-            f'performing bad SMTP login to {daddr} {ip_identification}'
+            f'doing bad SMTP login to {daddr} {ip_identification}'
         )
 
         __database__.setEvidence(
@@ -661,7 +692,7 @@ class Helper:
         type_detection = 'srcip'
         type_evidence = 'SMTPLoginBruteforce'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
+        description = f'doing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
         detection_info = saddr
         conn_count = smtp_bruteforce_threshold
 

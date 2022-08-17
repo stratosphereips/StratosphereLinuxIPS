@@ -6,7 +6,7 @@ from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
-from ..CESNET.warden_client import Client, read_cfg, Error, format_timestamp
+from ..CESNET.warden_client import Client, read_cfg
 import os
 import json
 import time
@@ -183,6 +183,7 @@ class Module(Module, multiprocessing.Process):
                 source_target_tag,
                 port,
                 proto,
+                ID
             )
 
             # remove private ips from the alert

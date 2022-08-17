@@ -16,8 +16,8 @@ import socket
 import requests
 import json
 from contextlib import redirect_stdout
-
-# todo add to conda env
+import subprocess
+import re
 
 
 class Module(Module, multiprocessing.Process):
@@ -43,6 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
+        self.c4 = __database__.subscribe('new_dhcp')
         self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
@@ -263,11 +264,50 @@ class Module(Module, multiprocessing.Process):
         return data
 
     # MAC functions
+
+    def get_vendor_online(self, mac_addr):
+        # couldn't find vendor using offline db, search online
+        url = 'https://api.macvendors.com'
+        try:
+            response = requests.get(f'{url}/{mac_addr}', timeout=5)
+            if response.status_code == 200:
+                # this onnline db returns results in an array like str [{results}],
+                # make it json
+                if vendor:= response.text:
+                    return vendor
+            return False
+                # If there is no match in the online database,
+                # you will receive an empty response with a status code of HTTP/1.1 204 No Content
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            json.decoder.JSONDecodeError,
+        ):
+            return False
+
+
+    def get_vendor_offline(self, mac_addr):
+        oui = mac_addr[:8].upper()
+        # parse the mac db and search for this oui
+        self.mac_db.seek(0)
+        while True:
+            line = self.mac_db.readline()
+            if line == '':
+                # reached the end of file without finding the vendor
+                # set the vendor to unknown to avoid searching for it again
+                return False
+
+            if oui in line:
+                line = json.loads(line)
+                vendor = line['companyName']
+                return vendor
+
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         # sourcery skip: remove-redundant-pass
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
+
         if (
             not hasattr(self, 'mac_db')
             or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
@@ -279,46 +319,19 @@ class Module(Module, multiprocessing.Process):
         if MAC_vendor := __database__.get_mac_vendor_from_profile(profileid):
             return True
 
-        MAC_info = {'MAC': mac_addr}
+        MAC_info = {
+            'MAC': mac_addr
+        }
+
         if host_name:
             MAC_info['host_name'] = host_name
-        oui = mac_addr[:8].upper()
-        # parse the mac db and search for this oui
-        self.mac_db.seek(0)
-        while True:
-            line = self.mac_db.readline()
-            if line == '':
-                # reached the end of file without finding the vendor
-                # set the vendor to unknown to avoid searching for it again
-                MAC_info['Vendor'] = 'Unknown'
-                break
 
-            if oui in line:
-                line = json.loads(line)
-                vendor = line['companyName']
-                MAC_info['Vendor'] = vendor
-                break
-
-        if MAC_info['Vendor'] == 'Unknown':
-            # couldn't find vendor using offline db, search online
-            url = 'https://api.macvendors.com'
-            try:
-                response = requests.get(f'{url}/{mac_addr}', timeout=5)
-                if response.status_code == 200:
-                    # this onnline db returns results in an array like str [{results}],
-                    # make it json
-                    if vendor:= response.text:
-                        MAC_info['Vendor'] = vendor
-                else:
-                    # If there is no match in the online database,
-                    # you will receive an empty response with a status code of HTTP/1.1 204 No Content
-                    pass
-            except (
-                requests.exceptions.ReadTimeout,
-                requests.exceptions.ConnectionError,
-                json.decoder.JSONDecodeError,
-            ):
-                pass
+        if vendor:= self.get_vendor_offline(mac_addr):
+            MAC_info['Vendor'] = vendor
+        elif vendor:= self.get_vendor_online(mac_addr):
+            MAC_info['Vendor'] = vendor
+        else:
+            MAC_info['Vendor'] = 'Unknown'
 
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)
@@ -375,13 +388,12 @@ class Module(Module, multiprocessing.Process):
 
         today = datetime.datetime.now()
 
-        # calculate age
-        day = today.day - creation_date.day
-        month = today.month - creation_date.month
-        year = today.year - creation_date.year
+        age = utils.get_time_diff(
+            creation_date,
+            today,
+            return_type='days'
+        )
 
-        # get the age in days
-        age = (year * 365) + (month * 30) + day
         __database__.setInfoForDomains(domain, {'Age': age})
         return age
 
@@ -394,6 +406,60 @@ class Module(Module, multiprocessing.Process):
             self.mac_db.close()
         # confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+
+    # GW
+    def get_gateway_using_ip_route(self):
+        """
+        Tries to get the default gateway IP address using ip route
+        """
+        gateway = False
+        if platform.system() == 'Darwin':
+            route_default_result = subprocess.check_output(
+                ['route', 'get', 'default']
+            ).decode()
+            try:
+                gateway = re.search(
+                    r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
+                    route_default_result,
+                ).group(0)
+            except AttributeError:
+                pass
+
+        elif platform.system() == 'Linux':
+            route_default_result = re.findall(
+                r"([\w.][\w.]*'?\w?)",
+                subprocess.check_output(['ip', 'route']).decode(),
+            )
+            gateway = route_default_result[2]
+        return gateway
+
+
+    def get_gateway_MAC(self, gw_ip):
+        """
+        Gets MAC from arp.log or from arp tables
+        """
+        # In case of a zeek dir or a pcap,
+        # check if we saved the mac of this gw_ip. whenever we see an arp.log we save the ip and the mac
+        MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
+        if MAC:
+            __database__.set_default_gateway('MAC', MAC)
+            return MAC
+
+        # we don't have it in arp.log
+        if not '-i' in sys.argv:
+            # no mac in arp.log and can't use arp table, so no way to get the MAC
+            return
+
+        # get it using arp table
+        cmd = "arp -a"
+        output = subprocess.check_output(cmd.split()).decode()
+        for line in output:
+            if gw_ip in line:
+                MAC = line.split()[-4]
+                __database__.set_default_gateway('MAC', MAC)
+                return MAC
+
+
 
     def run(self):
         utils.drop_root_privs()
@@ -469,6 +535,29 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
+
+
+                message = self.c4.get_message(timeout=self.timeout)
+                # if timewindows are not updated for a long time (see at logsProcess.py),
+                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_dhcp'):
+                    # this channel will only get 1 msg if we have dhcp.log
+                    message = json.loads(message['data'])
+                    server_addr = message.get('server_addr', False)
+                    # uid = message.get('uid', False)
+                    # client_addr = message.get('client_addr', False)
+                    # profileid = message.get('profileid', False)
+                    # twid = message.get('twid', False)
+                    # ts = message.get('ts', False)
+                    # override the gw in the db since we have an dhcp
+
+                    __database__.set_default_gateway("IP", server_addr)
+                    self.get_gateway_MAC(server_addr)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

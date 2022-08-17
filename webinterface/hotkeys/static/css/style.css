@@ -1,0 +1,32 @@
+#profiles tr
+{
+    cursor: pointer;
+}
+#table_timeline_flows tr td:nth-child(3):hover,
+table tr th:nth-child(3):hover
+{cursor:pointer;}
+
+#table_timeline_flows tr td:nth-child(5):hover,
+table tr th:nth-child(5):hover
+{cursor:pointer;}
+
+#table_timeline tr td:nth-child(4):hover,
+table tr th:nth-child(4):hover
+{cursor:pointer;}
+
+.dataTables_wrapper .dataTables_filter{
+    float: left;
+}
+.dataTables_wrapper .dataTables_length{
+    float: right;
+}
+
+.table_profiles{
+border-radius: 15px;
+height: 100vh;
+width: 160px;
+border-style: solid;}
+
+.table_ipinfo{
+border-radius: 15px;
+border-style: solid;}

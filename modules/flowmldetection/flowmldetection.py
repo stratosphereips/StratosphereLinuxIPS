@@ -3,15 +3,12 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database import __database__
 from slips_files.common.slips_utils import utils
-import sys
 import configparser
-import time
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
 import pandas as pd
 import json
-import platform
 import datetime
 
 # Only for debbuging
@@ -429,7 +426,7 @@ class Module(Module, multiprocessing.Process):
         type_evidence = 'MaliciousFlow'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
-        timestamp = datetime.datetime.now().strftime('%d/%m/%Y-%H:%M:%S')
+        timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
         __database__.setEvidence(
             type_evidence,
             type_detection,
