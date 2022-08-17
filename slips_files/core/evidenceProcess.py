@@ -497,6 +497,17 @@ class EvidenceProcess(multiprocessing.Process):
                 tw_evidence.pop(ID, None)
         return tw_evidence
 
+    def delete_whitelisted_evidence(self, evidence):
+        """
+        delete the hash of all whitelisted evidence from the given dict of evidence ids
+        """
+
+        res = {}
+        for evidence_ID, evidence_info in evidence.items():
+            if not __database__.is_whitelisted_evidence(evidence_ID):
+                res[evidence_ID] = evidence_info
+        return res
+
     def get_evidence_for_tw(self, profileid, twid):
         # Get all the evidence for the TW
         tw_evidence = __database__.getEvidenceForTW(
@@ -505,8 +516,9 @@ class EvidenceProcess(multiprocessing.Process):
         if not tw_evidence:
             return False
 
-        tw_evidence = json.loads(tw_evidence)
+        tw_evidence: dict = json.loads(tw_evidence)
         tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
+        tw_evidence = self.delete_whitelisted_evidence(tw_evidence)
         return tw_evidence
 
     def run(self):
@@ -566,7 +578,6 @@ class EvidenceProcess(multiprocessing.Process):
                             profileid, twid, evidence_ID
                         )
                         continue
-
 
                     # Format the time to a common style given multiple type of time variables
                     # flow_datetime = utils.format_timestamp(timestamp)
