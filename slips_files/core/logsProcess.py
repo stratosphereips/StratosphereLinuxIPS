@@ -272,8 +272,7 @@ class LogsProcess(multiprocessing.Process):
                         state = flow.get('state', '')
                         critical_warning = flow.get('critical warning', '')
                         trusted = flow.get('Trusted', '')
-                        if state == 'notestablished':
-                            state = 'not established'
+                        if state.lower() == 'not established':
                             if 'UDP' in dport:
                                 state = 'not answered'
                         to_print += f'{ts} : {dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'
