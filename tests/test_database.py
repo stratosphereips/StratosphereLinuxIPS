@@ -164,8 +164,8 @@ def test_add_port(outputQueue):
     database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
     hash_key = profileid + '_' + twid
     added_ports = database.r.hgetall(hash_key)
-    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
-    assert test_ip in added_ports['DstPortsServerTCPEstablished']
+    assert 'DstPortsServerTCPNot Established' in added_ports.keys()
+    assert test_ip in added_ports['DstPortsServerTCPNot Established']
 
 
 def test_setEvidence(outputQueue):
