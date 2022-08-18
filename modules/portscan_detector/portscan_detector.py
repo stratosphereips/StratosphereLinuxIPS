@@ -117,15 +117,13 @@ class PortScanProcess(Module, multiprocessing.Process):
 
         # Get the list of dports that we connected as client using TCP not established
         direction = 'Dst'
-        state = 'NotEstablished'
+        state = 'Not Established'
         role = 'Client'
         type_data = 'Ports'
         for protocol in ('TCP', 'UDP'):
             not_established_dports = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
-            # import pprint
-            # pprint.pp(not_established_dports)
 
             # For each port, see if the amount is over the threshold
             for dport in not_established_dports.keys():
@@ -468,7 +466,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Get the list of dstips that we connected as client using TCP not
         # established, and their ports
         direction = 'Dst'
-        state = 'NotEstablished'
+        state = 'Not Established'
         role = 'Client'
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}.
