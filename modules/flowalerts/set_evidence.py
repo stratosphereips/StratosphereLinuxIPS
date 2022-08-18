@@ -64,12 +64,41 @@ class Helper:
             uid=uid,
         )
 
+    def set_evidence_incompatible_CN(
+        self, org, timestamp, daddr, profileid, twid, uid
+    ):
+        """
+        :param prg: the org this ip/domain claims it belongs to
+        """
+        confidence = 0.9
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'srcip'
+        type_evidence = 'IncompatibleCN'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Incompatible certificate CN to IP: {daddr} {ip_identification} claiming to belong {org.capitalize()}.'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_DGA(self, nxdomains: int, stime, profileid, twid, uid):
         confidence = (1 / 100) * (nxdomains - 100) + 1
         confidence = round(confidence, 2)   # for readability
         threat_level = 'high'
         category = 'Intrusion.Botnet'
-        # the srcip performing all the dns queries
+        # the srcip doing all the dns queries
         type_detection = 'srcip'
         source_target_tag = 'OriginMalware'
         type_evidence = f'DGA-{nxdomains}-NXDOMAINs'
@@ -163,7 +192,7 @@ class Helper:
         category = 'Recon.Scanning'
         type_detection = 'srcip'
         type_evidence = 'DNS-ARPA-Scan'
-        description = f'performing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
+        description = f'doing DNS ARPA scan. Scanned {arpa_scan_threshold} hosts within 2 seconds.'
         detection_info = profileid.split('_')[1]
 
         __database__.setEvidence(
@@ -383,7 +412,7 @@ class Helper:
         )
 
     def set_evidence_self_signed_certificates(
-        self, profileid, twid, ip, description, uid, timestamp, ip_state='ip'
+        self, profileid, twid, ip, description, uid, timestamp
     ):
         """
         Set evidence for self signed certificates.
@@ -630,7 +659,7 @@ class Helper:
         detection_info = saddr
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
-            f'performing bad SMTP login to {daddr} {ip_identification}'
+            f'doing bad SMTP login to {daddr} {ip_identification}'
         )
 
         __database__.setEvidence(
@@ -663,7 +692,7 @@ class Helper:
         type_detection = 'srcip'
         type_evidence = 'SMTPLoginBruteforce'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'performing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
+        description = f'doing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
         detection_info = saddr
         conn_count = smtp_bruteforce_threshold
 

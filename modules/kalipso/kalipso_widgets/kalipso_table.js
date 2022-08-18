@@ -97,10 +97,8 @@ class Table{
                             var row = []
                             if(index==0){row.push(twid)}
                             else{row.push('')}
-
-                            var key_dict = JSON.parse(key)
-                            var key_values = Object.values(key_dict).join(':')
-                            var evidence_final = '{bold}'+color.green(key_values)+'{/bold}'+" "+evidence["description"]+'\n'
+                            var evidence_dict = JSON.parse(evidence)
+                            var evidence_final = evidence_dict["description"]+'\n'
 
                             row.push(evidence_final);
                             evidence_data.push(row)

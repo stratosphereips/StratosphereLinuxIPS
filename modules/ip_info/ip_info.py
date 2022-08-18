@@ -264,11 +264,50 @@ class Module(Module, multiprocessing.Process):
         return data
 
     # MAC functions
+
+    def get_vendor_online(self, mac_addr):
+        # couldn't find vendor using offline db, search online
+        url = 'https://api.macvendors.com'
+        try:
+            response = requests.get(f'{url}/{mac_addr}', timeout=5)
+            if response.status_code == 200:
+                # this onnline db returns results in an array like str [{results}],
+                # make it json
+                if vendor:= response.text:
+                    return vendor
+            return False
+                # If there is no match in the online database,
+                # you will receive an empty response with a status code of HTTP/1.1 204 No Content
+        except (
+            requests.exceptions.ReadTimeout,
+            requests.exceptions.ConnectionError,
+            json.decoder.JSONDecodeError,
+        ):
+            return False
+
+
+    def get_vendor_offline(self, mac_addr):
+        oui = mac_addr[:8].upper()
+        # parse the mac db and search for this oui
+        self.mac_db.seek(0)
+        while True:
+            line = self.mac_db.readline()
+            if line == '':
+                # reached the end of file without finding the vendor
+                # set the vendor to unknown to avoid searching for it again
+                return False
+
+            if oui in line:
+                line = json.loads(line)
+                vendor = line['companyName']
+                return vendor
+
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         # sourcery skip: remove-redundant-pass
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
+
         if (
             not hasattr(self, 'mac_db')
             or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
@@ -280,46 +319,19 @@ class Module(Module, multiprocessing.Process):
         if MAC_vendor := __database__.get_mac_vendor_from_profile(profileid):
             return True
 
-        MAC_info = {'MAC': mac_addr}
+        MAC_info = {
+            'MAC': mac_addr
+        }
+
         if host_name:
             MAC_info['host_name'] = host_name
-        oui = mac_addr[:8].upper()
-        # parse the mac db and search for this oui
-        self.mac_db.seek(0)
-        while True:
-            line = self.mac_db.readline()
-            if line == '':
-                # reached the end of file without finding the vendor
-                # set the vendor to unknown to avoid searching for it again
-                MAC_info['Vendor'] = 'Unknown'
-                break
 
-            if oui in line:
-                line = json.loads(line)
-                vendor = line['companyName']
-                MAC_info['Vendor'] = vendor
-                break
-
-        if MAC_info['Vendor'] == 'Unknown':
-            # couldn't find vendor using offline db, search online
-            url = 'https://api.macvendors.com'
-            try:
-                response = requests.get(f'{url}/{mac_addr}', timeout=5)
-                if response.status_code == 200:
-                    # this onnline db returns results in an array like str [{results}],
-                    # make it json
-                    if vendor:= response.text:
-                        MAC_info['Vendor'] = vendor
-                else:
-                    # If there is no match in the online database,
-                    # you will receive an empty response with a status code of HTTP/1.1 204 No Content
-                    pass
-            except (
-                requests.exceptions.ReadTimeout,
-                requests.exceptions.ConnectionError,
-                json.decoder.JSONDecodeError,
-            ):
-                pass
+        if vendor:= self.get_vendor_offline(mac_addr):
+            MAC_info['Vendor'] = vendor
+        elif vendor:= self.get_vendor_online(mac_addr):
+            MAC_info['Vendor'] = vendor
+        else:
+            MAC_info['Vendor'] = 'Unknown'
 
         # either we found the vendor or not, store the mac of this ip to the db
         __database__.add_mac_addr_to_profile(profileid, MAC_info)

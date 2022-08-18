@@ -63,6 +63,19 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
+    def fix_json_packet(self, json_packet):
+        """
+        in very large pcaps, tshark gets killed before it's done processing,
+        but the first packet info is printed in a corrupted json format
+        this function fixes the printed packet
+        """
+        json_packet = json_packet.replace("Killed", '')
+        json_packet += '}]'
+        try:
+            return json.loads(json_packet)
+        except json.decoder.JSONDecodeError:
+            return False
+
     def get_packet_info(self, offset: int):
         """
         Parse pcap and determine the packet at this offset
@@ -103,7 +116,13 @@ class Module(Module, multiprocessing.Process):
                         stderr=open('/dev/null', 'w'),
                     )
                     json_packet = result.stdout.decode('utf-8')
-                    if json_packet := json.loads(json_packet):
+
+                    try:
+                        json_packet = json.loads(json_packet)
+                    except json.decoder.JSONDecodeError:
+                        json_packet = self.fix_json_packet(json_packet)
+
+                    if json_packet:
                         # sometime tshark can't find the desired packet?
                         json_packet = json_packet[0]['_source']['layers']
 
@@ -147,7 +166,6 @@ class Module(Module, multiprocessing.Process):
         # author = meta.get('author')
         # reference = meta.get('reference')
         # organization = meta.get('organization')
-
         for match in strings:
             offset, string_found = match[0], match[1]
             # we now know there's a match at offset x, we need to know offset x belongs to which packet

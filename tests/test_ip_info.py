@@ -9,14 +9,14 @@ def do_nothing(*args):
     pass
 
 
-def create_IP_Info_instance(outputQueue):
+def create_ip_info_instance(outputQueue):
     """Create an instance of ip_info.py
     needed by every other test in this file"""
     config = configparser.ConfigParser()
-    IP_Info = Module(outputQueue, config, 6380)
+    ip_info = Module(outputQueue, config, 6380)
     # override the self.print function to avoid broken pipes
-    IP_Info.print = do_nothing
-    return IP_Info
+    ip_info.print = do_nothing
+    return ip_info
 
 
 def create_ASN_Info_instance():
@@ -39,6 +39,13 @@ def test_get_asn_info_from_geolite(database):
     }
 
 
+def test_get_asn_online(database):
+    ASN_info = create_ASN_Info_instance()
+    ip = '104.18.7.29'
+    found_info = ASN_info.get_asn_online(ip)
+    assert found_info != {'asn': {'asnorg': 'Unknown'}}, 'Connection Error'
+    assert found_info['asn']['asnorg'] == 'AS13335 Cloudflare, Inc.', 'Server Error'
+
 def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
     assert ASN_info.cache_ip_range('8.8.8.8') == True
@@ -54,34 +61,48 @@ def test_get_cached_asn(database):
 
 
 def test_get_rdns(outputQueue, database):
-    IP_Info = create_IP_Info_instance(outputQueue)
+    ip_info = create_ip_info_instance(outputQueue)
     # check an ip that we know has a rdns
-    assert IP_Info.get_rdns('99.81.154.45') == {
+    assert ip_info.get_rdns('99.81.154.45') == {
         'reverse_dns': 'ec2-99-81-154-45.eu-west-1.compute.amazonaws.com'
     }
     # test  RDNS info not found
-    assert IP_Info.get_rdns('0.0.0.0') == False
+    assert ip_info.get_rdns('0.0.0.0') == False
 
 
 # GEOIP unit tests
 
 
 def test_get_geocountry(outputQueue, database):
-    IP_Info = create_IP_Info_instance(outputQueue)
-    assert IP_Info.get_geocountry('153.107.41.230') == {
+    ip_info = create_ip_info_instance(outputQueue)
+    assert ip_info.get_geocountry('153.107.41.230') == {
         'geocountry': 'Australia'
     }
-    assert IP_Info.get_geocountry('23.188.195.255') == {
+    assert ip_info.get_geocountry('23.188.195.255') == {
         'geocountry': 'Unknown'
     }
 
 
-# MAC unit tests
+# MAC vendor unit tests
+def test_get_vendor_offline(outputQueue, database):
+    ip_info = create_ip_info_instance(outputQueue)
+    mac_addr = '08:00:27:7f:09:e1'
+    found_info = ip_info.get_vendor_offline(mac_addr)
+    assert found_info == 'Pcs Systemtechnik GmbH'
+
+
+def test_get_vendor_online(outputQueue, database):
+    ip_info = create_ip_info_instance(outputQueue)
+    mac_addr = '08:00:27:7f:09:e1'
+    found_info = ip_info.get_vendor_online(mac_addr).lower()
+    assert found_info == 'Pcs Systemtechnik GmbH'.lower(), 'Error connecting to server'
+
+
 def test_get_vendor(outputQueue, database):
-    IP_Info = create_IP_Info_instance(outputQueue)
+    ip_info = create_ip_info_instance(outputQueue)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'
-    mac_info = IP_Info.get_vendor(mac_addr, host_name, profileid)
+    mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
     assert mac_info != False
-    assert mac_info['Vendor'] == 'Pcs Systemtechnik GmbH'
+    assert mac_info['Vendor'].lower() == 'Pcs Systemtechnik GmbH'.lower()

@@ -161,10 +161,11 @@ def test_binetflow(
             4,
             [
                 'SSL certificate validation failed with (certificate is not yet valid)',
-                'performing bad SMTP login to 80.75.42.226',
-                'performing SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
+                'bad SMTP login to 80.75.42.226',
+                'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
                 'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
+                'Incompatible certificate CN'
             ],
             'sample_zeek_files/',
             6661,
@@ -280,7 +281,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
-    assert profiles > 90
+    assert profiles > 60
 
     log_file = output_dir + alerts_file
     assert (is_evidence_present(log_file, expected_evidence)

@@ -15,6 +15,13 @@ class Utils(object):
     name = 'utils'
     description = 'Common functions used by different modules of slips.'
     authors = ['Alya Gomaa']
+    supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+        )
 
     def __init__(self):
         self.home_network_ranges = (
@@ -50,12 +57,11 @@ class Utils(object):
 
     def detect_data_type(self, data):
         """Detects if incoming data is ipv4, ipv6, domain or ip range"""
-
         data = data.strip()
         try:
             ipaddress.ip_address(data)
             return 'ip'
-        except ipaddress.AddressValueError:
+        except (ipaddress.AddressValueError, ValueError):
             pass
 
         try:
@@ -85,44 +91,6 @@ class Utils(object):
         if validators.domain(data):
             return 'domain'
 
-
-    def detect_data_type(self, data):
-        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
-
-        data = data.strip()
-        try:
-            ipaddress.IPv4Address(data)
-            # Is IPv4!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            pass
-        # Is it ipv6?
-        try:
-            ipaddress.IPv6Address(data)
-            # Is IPv6!
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # It does not look as IP address.
-            pass
-
-        try:
-            ipaddress.ip_network(data)
-            return 'ip_range'
-        except ValueError:
-            pass
-
-        if validators.domain(data):
-            return 'domain'
-        # some ti files have / at the end of domains, remove it
-        if data.endswith('/'):
-            data = data[:-1]
-        domain = data
-        if domain.startswith('http://'):
-            data = data[7:]
-        if domain.startswith('https://'):
-            data = data[8:]
-        if validators.domain(data):
-            return 'domain'
 
     def drop_root_privs(self):
         """
@@ -257,6 +225,9 @@ class Utils(object):
         IPs.append(public_ip)
         return IPs
 
+    def convert_to_mb(self, bytes):
+        return int(bytes)/(10**6)
+
     def get_hash_from_file(self, filename):
         """
         Compute the sha256 hash of a file
@@ -383,7 +354,7 @@ class Utils(object):
             IDEA_dict['Source'][0].update({'MAC': [srcip]})
 
         # update the srcip description if specified in the evidence
-        if source_target_tag:
+        if source_target_tag:   # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
             # for example: this will be 'Botnet' in case of C&C alerts not C&C,
             # because it describes the source ip
             IDEA_dict['Source'][0].update({'Type': [source_target_tag]})

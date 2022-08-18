@@ -50,7 +50,9 @@ class UpdateFileManager:
             'atom_type',
         )
         self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
-
+        # to track how many times an ip is present in different blacklists
+        self.ips_ctr = {}
+        self.first_time_reading_files = False
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -287,9 +289,6 @@ class UpdateFileManager:
                         __database__.set_port_info(
                             f'{str(port)}/{proto}', name
                         )
-                # mark this file as read so that flowalerts
-                # can start generating unknown ports alerts
-                __database__.mark_known_ports_as_read()
 
             # Store the new hash of file in the database
             file_info = {'hash': self.new_hash}
@@ -1049,22 +1048,42 @@ class UpdateFileManager:
             '\tRead Data {}: {}'.format(data, description), 3, 0
         )
         return data, description
+    
+    def add_to_ip_ctr(self, ip, blacklist):
+        """
+        keep track of how many times an ip was there in all blacklists
+        :param blacklist: t make sure we don't count the ip twice in the same blacklist
+        """
+        blacklist =  os.path.basename(blacklist)
+        if (
+            ip in self.ips_ctr
+            and
+            blacklist not in self.ips_ctr['blacklists']
+        ):
+            self.ips_ctr[ip]['times_found'] += 1
+            self.ips_ctr[ip]['blacklists'].append(blacklist)
+        else:
+            self.ips_ctr[ip] = {
+                'times_found': 1,
+                'blacklists': [blacklist]
+            }
 
+    
     def parse_ti_feed(
-            self, link_to_download, malicious_data_path: str
+            self, link_to_download, ti_file_path: str
     ) -> bool:
         """
         Read all the files holding IP addresses and a description and put the
         info in a large dict.
         This also helps in having unique ioc across files
         :param link_to_download: this link that has the IOCs we're currently parsing, used for getting the threat_level
-        :param malicious_data_path: this is the path where the saved file from the link is downloaded
+        :param ti_file_path: this is the path where the saved file from the link is downloaded
         """
 
         try:
             # Check if the file has any content
             try:
-                filesize = os.path.getsize(malicious_data_path)
+                filesize = os.path.getsize(ti_file_path)
             except FileNotFoundError:
                 # happens inntegration tests, another instance of slips deleted the file
                 return False
@@ -1076,15 +1095,15 @@ class UpdateFileManager:
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
             # to support nsec/full-results-2019-05-15.json
-            if 'json' in malicious_data_path:
+            if 'json' in ti_file_path:
                 return self.parse_json_ti_feed(
-                    link_to_download, malicious_data_path
+                    link_to_download, ti_file_path
                 )
 
 
-            with open(malicious_data_path) as feed:
+            with open(ti_file_path) as feed:
                 self.print(
-                    f'Reading next lines in the file {malicious_data_path} '
+                    f'Reading next lines in the file {ti_file_path} '
                     f'for IoC', 3, 0,
                 )
 
@@ -1106,12 +1125,12 @@ class UpdateFileManager:
                 current_file_position = feed.tell()
                 line = line.replace('\n', '').replace('"', '')
 
-                amount_of_columns, line_fields, separator = self.parse_line(line, malicious_data_path)
+                amount_of_columns, line_fields, separator = self.parse_line(line, ti_file_path)
 
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
-                data_column = self.get_data_column(amount_of_columns, line_fields, malicious_data_path)
+                data_column = self.get_data_column(amount_of_columns, line_fields, ti_file_path)
                 if data_column == 'False':  # don't use if not becayuse it may be 0
                     return False
 
@@ -1130,7 +1149,7 @@ class UpdateFileManager:
                     if self.is_ignored_line(line):
                         continue
 
-                    if 'OCD-Datalak' in malicious_data_path:
+                    if 'OCD-Datalak' in ti_file_path:
                         # the valid line
                         new_line = line.split('Z,')[0]
                         # replace every ',' from the description
@@ -1144,7 +1163,7 @@ class UpdateFileManager:
                                                                    separator,
                                                                    data_column,
                                                                    description_column,
-                                                                   malicious_data_path)
+                                                                   ti_file_path)
 
                     if not data and not description:
                         return False
@@ -1153,13 +1172,13 @@ class UpdateFileManager:
                     if len(data) < 3:
                         continue
 
-                    data_file_name = malicious_data_path.split('/')[-1]
+                    data_file_name = ti_file_path.split('/')[-1]
 
                     data_type = utils.detect_data_type(data)
                     if data_type == None:
                         self.print(
                             'The data {} is not valid. It was found in {}.'.format(
-                                data, malicious_data_path
+                                data, ti_file_path
                             ), 0, 1,
                         )
                         continue
@@ -1222,7 +1241,9 @@ class UpdateFileManager:
                             or ip_obj.is_link_local
                         ):
                             continue
+
                         try:
+                            self.add_to_ip_ctr(data, ti_file_path)
                             # we already have info about this ip?
                             old_ip_info = json.loads(
                                 malicious_ips_dict[str(data)]
@@ -1361,32 +1382,39 @@ class UpdateFileManager:
             self.print(traceback.format_exc(), 0, 1)
             return False
 
-    def check_if_update_org(self, org, file):
+    def check_if_update_org(self, file):
         cached_hash = __database__.get_TI_file_info(file).get('hash','')
         if utils.get_hash_from_file(file) != cached_hash:
             return True
 
+
+    def get_whitelisted_orgs(self) -> list:
+        self.whitelist.read_whitelist()
+        whitelisted_orgs: dict = __database__.get_whitelist('organizations')
+        whitelisted_orgs: list = list(whitelisted_orgs.keys())
+        return whitelisted_orgs
+
+
     def update_org_files(self):
-        supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-            )
+        # update whitelisted orgs in whitelist.conf, we may not have info about all of them
+        whitelisted_orgs: list = self.get_whitelisted_orgs()
+        # remove the once we have info about
+        not_supported_orgs = [org for org in whitelisted_orgs if org not in utils.supported_orgs]
+        for org in not_supported_orgs:
+            self.whitelist.load_org_IPs(org)
 
-
-        for org in supported_orgs:
+        # update org we have local into about
+        for org in utils.supported_orgs:
             org_ips = os.path.join(self.org_info_path, org)
             org_asn = os.path.join(self.org_info_path, f'{org}_asn')
             org_domains = os.path.join(self.org_info_path, f'{org}_domains')
-            if self.check_if_update_org(org, org_ips):
+            if self.check_if_update_org(org_ips):
                 self.whitelist.load_org_IPs(org)
 
-            if self.check_if_update_org(org, org_domains):
+            if self.check_if_update_org(org_domains):
                 self.whitelist.load_org_domains(org)
 
-            if self.check_if_update_org(org, org_asn):
+            if self.check_if_update_org(org_asn):
                 self.whitelist.load_org_asn(org)
 
             for file in (org_ips, org_domains, org_asn):
@@ -1405,6 +1433,33 @@ class UpdateFileManager:
                         f'An error occurred while updating {file}. Updating '
                         f'was aborted.', 0, 1,
                     )
+
+    def print_duplicate_ip_summary(self):
+        if not self.first_time_reading_files:
+            # when we parse ti files for the first time, we have the info to print the summary
+            # when the ti files are already updated, from a previous run, we don't
+            return
+        
+        ips = {
+            'in 1 blacklist': 0,
+            'in 2 blacklist': 0,
+            'in 3 blacklist': 0,
+        }
+        ips_in_1_bl = 0
+        ips_in_2_bl = 0
+        ips_in_3_bl = 0
+        for ip, ip_info in self.ips_ctr.items():
+            blacklists_ip_appeard_in = ip_info['times_found']
+            if blacklists_ip_appeard_in == 1:
+                ips_in_1_bl += 1
+            elif blacklists_ip_appeard_in == 2:
+                ips_in_2_bl += 1
+            elif blacklists_ip_appeard_in == 3:
+                ips_in_3_bl += 1
+
+        self.print(f'Number of IPs that appeared in 1 blacklist: {ips_in_1_bl}')
+        self.print(f'Number of IPs that appeared in 2 blacklists: {ips_in_2_bl}')
+        self.print(f'Number of IPs that appeared in 3 blacklists: {ips_in_3_bl}')
 
     async def update(self) -> bool:
         """
@@ -1444,6 +1499,9 @@ class UpdateFileManager:
                     # or the the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
                     continue
+                
+                # this run wasn't started with existing ti files in the db 
+                self.first_time_reading_files = True
 
                 self.log(
                     f'Downloading the remote file {file_to_download}'
@@ -1477,6 +1535,8 @@ class UpdateFileManager:
                 pass
 
             self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
+
+            self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False

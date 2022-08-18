@@ -19,7 +19,7 @@ import ast
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'threatintelligence1'
-    description = 'Check if the srcIP or dstIP are in a malicious list of IPs'
+    description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
     def __init__(self, outputqueue, config, redis_port):
@@ -59,7 +59,6 @@ class Module(Module, multiprocessing.Process):
                 except KeyError:
                     # first time seeing this octect
                     self.cached_ipv6_ranges[first_octet] = [range]
-
 
     def __read_configuration(self):
         """Read the configuration file for what we need"""
@@ -233,10 +232,10 @@ class Module(Module, multiprocessing.Process):
             return True
         return False
 
-    def parse_ti_file(self, ti_file_path: str) -> bool:
+    def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """
         Read all the files holding IP addresses and a description and store in the db.
-        This also helps iexcept Excen having unique ioc across files
+        This also helps in having unique ioc across files
         Returns nothing, but the dictionary should be filled
         :param ti_file_path: full path_to local threat intel file
         """
@@ -451,7 +450,7 @@ class Module(Module, multiprocessing.Process):
                     self.parse_ja3_file(full_path_to_file)
                 else:
                     # Load updated data to the database
-                    self.parse_ti_file(full_path_to_file)
+                    self.parse_local_ti_file(full_path_to_file)
 
                 # Store the new etag and time of file in the database
                 malicious_file_info = {'hash': new_hash}

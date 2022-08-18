@@ -417,6 +417,7 @@ class Module(Module, multiprocessing.Process):
 
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
+        # don't move this to utils, this is the only module that supports urls
         if validators.url(ioc):
             return 'url'
 

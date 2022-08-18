@@ -95,6 +95,16 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def check_horizontal_portscan(self, profileid, twid):
 
+        def get_uids():
+            """
+            returns all the uids of flows to this port
+            """
+            uids = []
+            for dip in dstips:
+                for uid in dstips[dip]['uid']:
+                     uids.append(uid)
+            return uids
+
         saddr = profileid.split(self.fieldseparator)[1]
         try:
             saddr_obj = ipaddress.ip_address(saddr)
@@ -102,7 +112,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # don't report port scans on the broadcast or multicast addresses
                 return False
         except ValueError:
-            # is an ipv6
+            # it's a mac
             pass
 
         # Get the list of dports that we connected as client using TCP not established
@@ -111,14 +121,17 @@ class PortScanProcess(Module, multiprocessing.Process):
         role = 'Client'
         type_data = 'Ports'
         for protocol in ('TCP', 'UDP'):
-            data = __database__.getDataFromProfileTW(
+            not_established_dports = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
+            # import pprint
+            # pprint.pp(not_established_dports)
+
             # For each port, see if the amount is over the threshold
-            for dport in data.keys():
+            for dport in not_established_dports.keys():
                 # PortScan Type 2. Direction OUT
-                dstips = data[dport]['dstips']
-                # this is the list of dstips that have dns resolution, we will remove them from the dstips later
+                dstips = not_established_dports[dport]['dstips']
+                # this is the list of dstips that have dns resolution, we will remove them from the dstips
                 dstips_to_discard = []
                 # Remove dstips that have DNS resolution already
                 for dip in dstips:
@@ -146,13 +159,11 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dips % self.port_scan_minimum_dips_threshold == 0
                     and prev_amount_dips < amount_of_dips
                 ):
-                    # Get the total amount of pkts sent to the same port to all IPs
+                    # Get the total amount of pkts sent to the same port from all IPs
                     pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
-                    uid = next(iter(dstips.values()))[
-                        'uid'
-                    ]   # first uid in the dictionary
-                    timestamp = next(iter(dstips.values()))['stime']
 
+                    uids: list = get_uids()
+                    timestamp = next(iter(dstips.values()))['stime']
 
                     if not self.alerted_once_horizontal_ps:
                         self.alerted_once_horizontal_ps = True
@@ -162,7 +173,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                             protocol,
                             profileid,
                             twid,
-                            uid,
+                            uids,
                             dport,
                             amount_of_dips
                         )
@@ -175,11 +186,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 protocol,
                                 profileid,
                                 twid,
-                                uid,
+                                uids,
                                 dport,
                                 amount_of_dips
                             )
                         )
+
 
     def wait_for_vertical_scans(self):
         """
@@ -280,7 +292,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 protocol, \
                 profileid, \
                 twid, \
-                uid, \
+                uids, \
                 dport, \
                 amount_of_dips = evidence
             # wait 10s if a new evidence arrived
@@ -299,7 +311,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     protocol2, \
                     profileid2, \
                     twid, \
-                    uid, \
+                    uids2, \
                     dport2, \
                     amount_of_dips2 = new_evidence
 
@@ -313,6 +325,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # we shouldn't accumulate
                     amount_of_dips = amount_of_dips2
                     pkts_sent = pkts_sent2
+                    uids += uids2
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
@@ -328,7 +341,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 protocol,
                 profileid,
                 twid,
-                uid,
+                uids,
                 dport,
                 amount_of_dips
             )
@@ -445,9 +458,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         if pkts_sent > 10:
             confidence = 1
         elif pkts_sent == 0:
-            # if the sum of all pkts sent TO these IPs on these dports
-            # are 0, then this is not a portscan
-            raise ValueError
+            return 0.3
         else:
             # Between threshold and 10 pkts compute a kind of linear grow
             confidence = pkts_sent / 10.0
@@ -544,6 +555,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         detection_info = profileid.split('_')[1]
         source_target_tag = 'Recon'
         description = msg
+        # this one is detected by zeek so we can't track the uids causing it
         __database__.setEvidence(
             type_evidence,
             type_detection,

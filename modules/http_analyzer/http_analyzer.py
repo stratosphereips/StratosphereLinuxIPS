@@ -101,16 +101,19 @@ class Module(Module, multiprocessing.Process):
 
         for host in self.hosts:
             if (
-                contacted_host == host
-                or contacted_host == f'www.{host}'
+                (contacted_host == host
+                 or contacted_host == f'www.{host}')
                 and request_body_len == 0
             ):
                 try:
-                    # this host has past connections, increate counter
-                    self.connections_counter[host] += 1
+                    # this host has past connections, add to counter
+                    uids, connections = self.connections_counter[host]
+                    connections +=1
+                    uids.append(uid)
+                    self.connections_counter[host] = (uids, connections)
                 except KeyError:
                     # first empty connection to this host
-                    self.connections_counter.update({host: 1})
+                    self.connections_counter.update({host: ([uid], 1)})
                 break
         else:
             # it's an http connection to a domain that isn't
@@ -118,7 +121,8 @@ class Module(Module, multiprocessing.Process):
             # ignore it
             return False
 
-        if self.connections_counter[host] == self.empty_connections_threshold:
+        uids, connections = self.connections_counter[host]
+        if connections == self.empty_connections_threshold:
             type_evidence = 'MultipleConnections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
@@ -137,10 +141,10 @@ class Module(Module, multiprocessing.Process):
                 category,
                 profileid=profileid,
                 twid=twid,
-                uid=uid,
+                uid=uids,
             )
             # reset the counter
-            self.connections_counter[host] = 0
+            self.connections_counter[host] = ([], 0)
             return True
         return False
 
@@ -159,8 +163,6 @@ class Module(Module, multiprocessing.Process):
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        if not twid:
-            twid = ''
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -175,6 +177,8 @@ class Module(Module, multiprocessing.Process):
             twid=twid,
             uid=uid,
         )
+
+
 
     def check_incompatible_user_agent(
         self, host, uri, timestamp, profileid, twid, uid
@@ -248,35 +252,19 @@ class Module(Module, multiprocessing.Process):
 
                     return True
 
-    def get_user_agent_info(self, user_agent, profileid):
+
+    def get_ua_info_online(self, user_agent):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
-        returns a dict with
         """
-        # some zeek http flows don't have a user agent field
-        if not user_agent:
-            return False
-        # don't make a request again if we already have a user agent associated with this profile
-        if __database__.get_user_agent_from_profile(profileid) != None:
-            # this profile already has a user agent
-            return False
-
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
-        UA_info = {
-            'user_agent': user_agent,
-            'os_type' : '',
-            'os_name': ''
-        }
+
         try:
             response = requests.get(url)
             if response.status_code != 200 or not response.text:
                raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
-            __database__.add_user_agent_to_profile(
-                profileid, json.dumps(UA_info)
-            )
             return False
-
 
         # returns the following
         # {"agent_type":"Browser","agent_name":"Internet Explorer","agent_version":"8.0",
@@ -287,31 +275,54 @@ class Module(Module, multiprocessing.Process):
         except json.decoder.JSONDecodeError:
             # unexpected server response
             return False
-        # the above website returns unknown if it has no info about this UA,
-        # remove the 'unknown' from the string before storing in the db
-        os_type = (
-            json_response.get('os_type', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
-        os_name = (
-            json_response.get('os_name', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
-        browser = (
-            json_response.get('agent_name', '')
-            .replace('unknown', '')
-            .replace('  ', '')
-        )
+        return json_response
 
-        UA_info.update(
-            {
-                'os_name': os_name,
-                'os_type': os_type,
-                'browser': browser,
-            }
-        )
+    def get_user_agent_info(self, user_agent, profileid):
+        """
+        Get OS and browser info about a user agent
+        """
+        # some zeek http flows don't have a user agent field
+        if not user_agent:
+            return False
+        # don't make a request again if we already have a user agent associated with this profile
+        if __database__.get_user_agent_from_profile(profileid) != None:
+            # this profile already has a user agent
+            return False
+
+        UA_info = {
+            'user_agent': user_agent,
+            'os_type' : '',
+            'os_name': ''
+        }
+
+        ua_info = self.get_ua_info_online(user_agent)
+        if ua_info:
+            # the above website returns unknown if it has no info about this UA,
+            # remove the 'unknown' from the string before storing in the db
+            os_type = (
+                ua_info.get('os_type', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+            os_name = (
+                ua_info.get('os_name', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+            browser = (
+                ua_info.get('agent_name', '')
+                .replace('unknown', '')
+                .replace('  ', '')
+            )
+
+            UA_info.update(
+                {
+                    'os_name': os_name,
+                    'os_type': os_type,
+                    'browser': browser,
+                }
+            )
+
         __database__.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
@@ -399,6 +410,92 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
+    def check_pastebin_downloads(
+            self,
+            daddr,
+            response_body_len,
+            method,
+            profileid,
+            twid,
+            timestamp,
+            uid
+    ):
+        try:
+            response_body_len = int(response_body_len)
+        except ValueError:
+            return False
+
+        ip_identification = __database__.getIPIdentification(daddr)
+        if ('pastebin' in ip_identification
+            and response_body_len > 12000
+            and method == 'GET'):
+            type_detection = 'dstip'
+            source_target_tag = 'Malware'
+            detection_info = daddr
+            type_evidence = 'PastebinDownload'
+            threat_level = 'info'
+            category = 'Anomaly.Behaviour'
+            confidence = 1
+            response_body_len = utils.convert_to_mb(response_body_len)
+            description = (
+               f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+            )
+            __database__.setEvidence(
+                type_evidence,
+                type_detection,
+                detection_info,
+                threat_level,
+                confidence,
+                description,
+                timestamp,
+                category,
+                source_target_tag=source_target_tag,
+                profileid=profileid,
+                twid=twid,
+                uid=uid,
+            )
+            return True
+
+    def detect_binary_downloads(
+            self,
+            resp_mime_types,
+            daddr,
+            host,
+            uri,
+            timestamp,
+            profileid,
+            twid,
+            uid
+    ):
+        if resp_mime_types and 'application/x-dosexec' not in resp_mime_types:
+            return False
+
+        type_detection = 'dstdomain'
+        source_target_tag = 'Malware'
+        detection_info = f'{host}{uri}'
+        type_evidence = 'DOSExecutableDownload'
+        threat_level = 'low'
+        category = 'Information'
+        confidence = 1
+        description = (
+            f'DOS executable binary download from IP: {daddr} {detection_info}'
+        )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
@@ -420,9 +517,14 @@ class Module(Module, multiprocessing.Process):
                     uid = flow['uid']
                     host = flow['host']
                     uri = flow['uri']
+                    daddr = flow['daddr']
                     timestamp = flow.get('stime', '')
                     user_agent = flow.get('user_agent', False)
                     request_body_len = flow.get('request_body_len')
+                    response_body_len = flow.get('response_body_len')
+                    method = flow.get('method')
+                    resp_mime_types = flow.get('resp_mime_types')
+
                     self.check_suspicious_user_agents(
                         uid, host, uri, timestamp, user_agent, profileid, twid
                     )
@@ -451,13 +553,47 @@ class Module(Module, multiprocessing.Process):
                             and 'server-bag' not in user_agent)
                     ):
                         # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
-                        self.get_user_agent_info(user_agent, profileid)
+                        self.get_user_agent_info(
+                            user_agent,
+                            profileid
+                        )
 
                     if 'server-bag' in user_agent:
-                        self.extract_info_from_UA(user_agent, profileid)
+                        self.extract_info_from_UA(
+                            user_agent,
+                            profileid
+                        )
 
                     self.check_incompatible_user_agent(
-                        host, uri, timestamp, profileid, twid, uid
+                        host,
+                        uri,
+                        timestamp,
+                        profileid,
+                        twid,
+                        uid
+                    )
+
+                    self.check_pastebin_downloads(
+                        daddr,
+                        response_body_len,
+                        method,
+                        profileid,
+                        twid,
+                        timestamp,
+                        uid
+                    )
+
+
+
+                    self.detect_binary_downloads(
+                        resp_mime_types,
+                        daddr,
+                        host,
+                        uri,
+                        timestamp,
+                        profileid,
+                        twid,
+                        uid
                     )
 
             except KeyboardInterrupt:
