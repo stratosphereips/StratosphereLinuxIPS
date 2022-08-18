@@ -40,7 +40,7 @@ class Redis{
 
     /*Get blocked IPs and timewindows.*/
   	getBlockedIPsTWs(){
-  		return new Promise((resolve,reject)=>{this.BlockedIPsTWs.smembers("BlockedProfTW",(err,reply)=>{
+  		return new Promise((resolve,reject)=>{this.BlockedIPsTWs.hgetall("BlockedProfTW",(err,reply)=>{
   			if(err){console.log("Error in the retrieving blocked IPs and timewindows. Error: ",err);reject(err)}
   			else{resolve(reply)}
   		});})
