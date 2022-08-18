@@ -497,6 +497,18 @@ class EvidenceProcess(multiprocessing.Process):
                 tw_evidence.pop(ID, None)
         return tw_evidence
 
+    def delete_whitelisted_evidence(self, evidence):
+        """
+        delete the hash of all whitelisted evidence from the given dict of evidence ids
+        """
+
+        res = {}
+        for evidence_ID, evidence_info in evidence.items():
+            if not __database__.is_whitelisted_evidence(evidence_ID):
+                res[evidence_ID] = evidence_info
+        return res
+
+
     def get_evidence_for_tw(self, profileid, twid):
         # Get all the evidence for the TW
         tw_evidence = __database__.getEvidenceForTW(
@@ -505,9 +517,51 @@ class EvidenceProcess(multiprocessing.Process):
         if not tw_evidence:
             return False
 
-        tw_evidence = json.loads(tw_evidence)
+        tw_evidence: dict = json.loads(tw_evidence)
         tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
+        tw_evidence = self.delete_whitelisted_evidence(tw_evidence)
         return tw_evidence
+
+
+    def get_evidence_threat_level(self, tw_evidence):
+        accumulated_threat_level = 0.0
+        # to store all the ids causing this alerts in the database
+        self.IDs_causing_an_alert = []
+        for evidence in tw_evidence.values():
+            # Deserialize evidence
+            evidence = json.loads(evidence)
+            # type_detection = evidence.get('type_detection')
+            # detection_info = evidence.get('detection_info')
+            type_evidence = evidence.get('type_evidence')
+            confidence = float(evidence.get('confidence'))
+            threat_level = evidence.get('threat_level')
+            description = evidence.get('description')
+            ID = evidence.get('ID')
+            self.IDs_causing_an_alert.append(ID)
+            # each threat level is a string, get the numerical value of it
+            try:
+                threat_level = utils.threat_levels[
+                    threat_level.lower()
+                ]
+            except KeyError:
+                self.print(
+                    f'Error: Evidence of type {type_evidence} has '
+                    f'an invalid threat level {threat_level}', 0, 1
+                )
+                self.print(f'Description: {description}', 0, 1)
+                threat_level = 0
+
+            # Compute the moving average of evidence
+            new_threat_level = threat_level * confidence
+            self.print(
+                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
+            )
+            accumulated_threat_level += new_threat_level
+            self.print(
+                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
+            )
+        return accumulated_threat_level
+
 
     def run(self):
         # add metadata to alerts.log
@@ -566,7 +620,6 @@ class EvidenceProcess(multiprocessing.Process):
                             profileid, twid, evidence_ID
                         )
                         continue
-
 
                     # Format the time to a common style given multiple type of time variables
                     # flow_datetime = utils.format_timestamp(timestamp)
@@ -641,45 +694,12 @@ class EvidenceProcess(multiprocessing.Process):
                     # profiles for attackers
                     if tw_evidence:
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
-                        
+
                         # The accumulated threat level is for all the types of evidence for this profile
-                        accumulated_threat_level = 0.0
+                        accumulated_threat_level = self.get_evidence_threat_level(tw_evidence)
 
-                        # to store all the ids causing this alerts in the database
-                        IDs_causing_an_alert = []
-                        for evidence in tw_evidence.values():
-                            # Deserialize evidence
-                            evidence = json.loads(evidence)
-                            type_detection = evidence.get('type_detection')
-                            detection_info = evidence.get('detection_info')
-                            type_evidence = evidence.get('type_evidence')
-                            confidence = float(evidence.get('confidence'))
-                            threat_level = evidence.get('threat_level')
-                            description = evidence.get('description')
-                            ID = evidence.get('ID')
-                            IDs_causing_an_alert.append(ID)
-                            # each threat level is a string, get the numerical value of it
-                            try:
-                                threat_level = utils.threat_levels[
-                                    threat_level.lower()
-                                ]
-                            except KeyError:
-                                self.print(
-                                    f'Error: Evidence of type {type_evidence} has '
-                                    f'an invalid threat level {threat_level}', 0, 1
-                                )
-                                self.print(f'Description: {description}', 0, 1)
-                                threat_level = 0
 
-                            # Compute the moving average of evidence
-                            new_threat_level = threat_level * confidence
-                            self.print(
-                                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
-                            )
-                            accumulated_threat_level += new_threat_level
-                            self.print(
-                                f'\t\tAccumulated Threat Level: {accumulated_threat_level}', 3, 0,
-                            )
+                        #todo get details of last evidence
 
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration
@@ -705,7 +725,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     profileid,
                                     twid,
                                     alert_ID,
-                                    IDs_causing_an_alert
+                                    self.IDs_causing_an_alert
                                 )
                                 __database__.publish('new_alert', alert_ID)
 
