@@ -56,114 +56,77 @@ class UpdateFileManager:
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
+        def get(section, value, default_value):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError, TypeError, ValueError
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
+
+        self.update_period = get('threatintelligence', 'malicious_data_update_period', 86400)
         try:
-            # update period
-            self.update_period = self.config.get(
-                'threatintelligence', 'malicious_data_update_period'
-            )
             self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError, TypeError, ValueError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+        except(NameError, TypeError, ValueError):
             self.update_period = 86400   # 1 day
-        try:
-            # Read the path to where to store and read the malicious files
-            self.path_to_threat_intelligence_data = self.config.get(
-                'threatintelligence',
-                'download_path_for_remote_threat_intelligence',
-            )
-            self.path_to_threat_intelligence_data = self.sanitize(
+
+        self.update_period = get(
+            'threatintelligence',
+            'download_path_for_remote_threat_intelligence',
+            'modules/threat_intelligence/remote_data_files/'
+        )
+        self.path_to_threat_intelligence_data = self.sanitize(
                 self.path_to_threat_intelligence_data
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = (
-                'modules/threat_intelligence/remote_data_files/'
-            )
+        )
+
         if not os.path.exists(self.path_to_threat_intelligence_data):
             os.mkdir(self.path_to_threat_intelligence_data)
 
-        try:
-            # Read the list of URLs to download. Convert to list
-            self.ti_feed_tuples = self.config.get(
-                'threatintelligence', 'ti_files'
-            ).split('\n')
+        self.ti_feed_tuples = get('threatintelligence', 'ti_files', '')
+        if self.ti_feed_tuples:
+            self.ti_feed_tuples.split('\n')
             self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+        else:
             self.url_feeds = {}
 
-        try:
-            # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feed_tuples = self.config.get(
-                'threatintelligence', 'ja3_feeds'
-            ).split('\n')
+        self.ja3_feed_tuples = get('threatintelligence', 'ja3_feeds', '')
+        if self.ja3_feed_tuples:
+            self.ja3_feed_tuples.split('\n')
             self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+        else:
             self.ja3_feeds = {}
 
-        try:
-            # Read the list of ja3 feeds to download. Convert to list
-            self.ssl_feed_tuples = self.config.get(
-                'threatintelligence', 'ssl_feeds'
-            ).split('\n')
+        self.ssl_feed_tuples = get('threatintelligence', 'ssl_feeds', '')
+        if self.ssl_feed_tuples:
+            self.ssl_feed_tuples.split('\n')
             self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+        else:
             self.ssl_feeds = {}
 
-        try:
-            # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get(
-                'threatintelligence', 'RiskIQ_credentials_path'
-            )
+        RiskIQ_credentials_path = get('threatintelligence', 'RiskIQ_credentials_path', '')
+        self.riskiq_email = None
+        self.riskiq_key = None
+        if RiskIQ_credentials_path:
             with open(RiskIQ_credentials_path, 'r') as f:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
-                if len(self.riskiq_key) != 64:
-                    raise NameError
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            FileNotFoundError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.riskiq_email = None
-            self.riskiq_key = None
 
+
+        self.riskiq_update_period = get('threatintelligence', 'update_period', 604800)  # 1 week
+        self.riskiq_update_period = float(self.riskiq_update_period)
         try:
-            # riskiq update period
-            self.riskiq_update_period = self.config.get(
-                'threatintelligence', 'update_period'
-            )
             self.riskiq_update_period = float(self.riskiq_update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.riskiq_update_period = 604800   # 1 week
+        except(NameError, TypeError, ValueError):
+            self.riskiq_update_period = 604800   # 1 day
+
 
     def get_feed_properties(self, feeds):
         """
