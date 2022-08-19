@@ -363,6 +363,10 @@ class UpdateFileManager:
                 if not response:
                     return False
 
+                if 'maclookup' in file_to_download:
+                    # no need to check the e-tag
+                    return response
+
                 # Get what files are stored in cache db and their E-TAG to compare with current files
                 data = __database__.get_TI_file_info(file_name_to_download)
                 old_e_tag = data.get('e-tag', '')
@@ -1023,7 +1027,7 @@ class UpdateFileManager:
             '\tRead Data {}: {}'.format(data, description), 3, 0
         )
         return data, description
-    
+
     def add_to_ip_ctr(self, ip, blacklist):
         """
         keep track of how many times an ip was there in all blacklists
@@ -1043,7 +1047,7 @@ class UpdateFileManager:
                 'blacklists': [blacklist]
             }
 
-    
+
     def parse_ti_feed(
             self, link_to_download, ti_file_path: str
     ) -> bool:
@@ -1414,7 +1418,7 @@ class UpdateFileManager:
             # when we parse ti files for the first time, we have the info to print the summary
             # when the ti files are already updated, from a previous run, we don't
             return
-        
+
         ips = {
             'in 1 blacklist': 0,
             'in 2 blacklist': 0,
@@ -1436,6 +1440,18 @@ class UpdateFileManager:
         self.print(f'Number of IPs that appeared in 2 blacklists: {ips_in_2_bl}')
         self.print(f'Number of IPs that appeared in 3 blacklists: {ips_in_3_bl}')
 
+    def update_mac_db(self, response):
+        if response.status_code != 200:
+            return
+
+        path_to_mac_db = 'databases/macaddr-db.json'
+
+        with open(path_to_mac_db, 'w') as mac_db:
+            mac_db.write(json.loads(json.dumps(response.text, indent=4)))
+        # todo the basename doesn't make sense
+        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
+
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1455,8 +1471,10 @@ class UpdateFileManager:
             # self.update_ports_info()
             # self.update_org_files()
 
-            # ############### Update slips local files ################
-            s
+            ############### Update slips local files ################
+            if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
+                self.update_mac_db(response)
+
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
