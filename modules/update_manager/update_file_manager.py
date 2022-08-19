@@ -72,6 +72,21 @@ class UpdateFileManager:
                 # configuration file specified
                 return default_value
 
+        def read_riskiq_creds(RiskIQ_credentials_path):
+            self.riskiq_email = None
+            self.riskiq_key = None
+
+            if not RiskIQ_credentials_path:
+                return
+
+            RiskIQ_credentials_path  = os.path.join(os.getcwd(), RiskIQ_credentials_path)
+            if not os.path.exists(RiskIQ_credentials_path):
+                return
+
+            with open(RiskIQ_credentials_path, 'r') as f:
+                self.riskiq_email = f.readline().replace('\n', '')
+                self.riskiq_key = f.readline().replace('\n', '')
+
         self.update_period = get('threatintelligence', 'malicious_data_update_period', 86400)
         try:
             self.update_period = float(self.update_period)
@@ -91,32 +106,27 @@ class UpdateFileManager:
 
         self.ti_feed_tuples = get('threatintelligence', 'ti_files', '')
         if self.ti_feed_tuples:
-            self.ti_feed_tuples.split('\n')
+            self.ti_feed_tuples = self.ti_feed_tuples.split('\n')
             self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
         else:
             self.url_feeds = {}
 
         self.ja3_feed_tuples = get('threatintelligence', 'ja3_feeds', '')
         if self.ja3_feed_tuples:
-            self.ja3_feed_tuples.split('\n')
+            self.ja3_feed_tuples = self.ja3_feed_tuples.split('\n')
             self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
         else:
             self.ja3_feeds = {}
 
         self.ssl_feed_tuples = get('threatintelligence', 'ssl_feeds', '')
         if self.ssl_feed_tuples:
-            self.ssl_feed_tuples.split('\n')
+            self.ssl_feed_tuples = self.ssl_feed_tuples.split('\n')
             self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
         else:
             self.ssl_feeds = {}
 
         RiskIQ_credentials_path = get('threatintelligence', 'RiskIQ_credentials_path', '')
-        self.riskiq_email = None
-        self.riskiq_key = None
-        if RiskIQ_credentials_path:
-            with open(RiskIQ_credentials_path, 'r') as f:
-                self.riskiq_email = f.readline().replace('\n', '')
-                self.riskiq_key = f.readline().replace('\n', '')
+        read_riskiq_creds(RiskIQ_credentials_path)
 
 
         self.riskiq_update_period = get('threatintelligence', 'update_period', 604800)  # 1 week
@@ -127,7 +137,6 @@ class UpdateFileManager:
             self.riskiq_update_period = 604800
 
         self.mac_db_update_period = get('threatintelligence', 'mac_db_update', 1209600)  # 2 weeks
-        self.mac_db_update_period = float(self.mac_db_update_period)
         try:
             self.mac_db_update_period = float(self.mac_db_update_period)
         except(NameError, TypeError, ValueError):
@@ -328,7 +337,7 @@ class UpdateFileManager:
         Returns the response if the file is old and needs to be updated
         """
         file_name_to_download = file_to_download.split('/')[-1]
-        # Get last timeupdate of the file
+        # Get the last time this file was updated
         data = __database__.get_TI_file_info(file_name_to_download)
         try:
             last_update = data['time']
@@ -338,13 +347,12 @@ class UpdateFileManager:
 
         now = time.time()
 
-        # we have 2 types of remote files, JA3 feeds and TI feeds
-        ################### Checking JA3 feeds ######################
-        # did update_period pass since last time we updated?
-        if 'risk' in file_to_download and last_update + update_period < now:
-            return True
-        ################### Checkign TI feeds ######################
         if last_update + update_period < now:
+            if (
+                'risk' in file_to_download
+            ):
+                return True
+
             # Update only if the e-tag is different
             try:
                 file_name_to_download = file_to_download.split('/')[-1]
@@ -402,6 +410,7 @@ class UpdateFileManager:
         else:
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1
+
         return False
 
     def get_e_tag(self, response):
