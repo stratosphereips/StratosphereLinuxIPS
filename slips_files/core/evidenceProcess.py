@@ -562,6 +562,10 @@ class EvidenceProcess(multiprocessing.Process):
             )
         return accumulated_threat_level
 
+    def get_last_evidence_ID(self, tw_evidence):
+        last_evidence_ID = list(tw_evidence.keys())[-1]
+        return last_evidence_ID
+
 
     def run(self):
         # add metadata to alerts.log
@@ -698,9 +702,7 @@ class EvidenceProcess(multiprocessing.Process):
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = self.get_evidence_threat_level(tw_evidence)
 
-
-                        #todo get details of last evidence
-
+                        ID = self.get_last_evidence_ID(tw_evidence)
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration
                         # is attacks per minute
@@ -818,11 +820,11 @@ class EvidenceProcess(multiprocessing.Process):
                 self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 return True
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.outputqueue.put(
-                    f'01|[Evidence] Error in the Evidence Process line {exception_line}'
-                )
-                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|[Evidence] {}'.format(inst))
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.outputqueue.put(
+            #         f'01|[Evidence] Error in the Evidence Process line {exception_line}'
+            #     )
+            #     self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+            #     self.outputqueue.put('01|[Evidence] {}'.format(inst))
+            #     return True
