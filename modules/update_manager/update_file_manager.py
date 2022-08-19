@@ -1446,8 +1446,10 @@ class UpdateFileManager:
 
         path_to_mac_db = 'databases/macaddr-db.json'
 
+        # write to filee the info as 1 json per line
+        mac_info = response.text.replace(']','').replace('[','').replace(',{','\n{')
         with open(path_to_mac_db, 'w') as mac_db:
-            mac_db.write(json.loads(json.dumps(response.text, indent=4)))
+            mac_db.write(mac_info)
         # todo the basename doesn't make sense
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
