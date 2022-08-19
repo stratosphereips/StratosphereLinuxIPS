@@ -131,7 +131,7 @@ def test_check_dns_arpa_scan(outputQueue, database):
     # make 10 different arpa scans
     for ts in arange(0, 1, 1 / 10):
         is_arpa_scan = flowalerts.check_dns_arpa_scan(
-            'example.in-addr.arpa', timestamp + ts, profileid, twid, uid
+            f'{ts}example.in-addr.arpa', timestamp + ts, profileid, twid, uid
         )
 
     assert is_arpa_scan == True
