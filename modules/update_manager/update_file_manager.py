@@ -78,7 +78,7 @@ class UpdateFileManager:
         except(NameError, TypeError, ValueError):
             self.update_period = 86400   # 1 day
 
-        self.update_period = get(
+        self.path_to_threat_intelligence_data = get(
             'threatintelligence',
             'download_path_for_remote_threat_intelligence',
             'modules/threat_intelligence/remote_data_files/'
@@ -86,7 +86,6 @@ class UpdateFileManager:
         self.path_to_threat_intelligence_data = self.sanitize(
                 self.path_to_threat_intelligence_data
         )
-
         if not os.path.exists(self.path_to_threat_intelligence_data):
             os.mkdir(self.path_to_threat_intelligence_data)
 
@@ -125,7 +124,17 @@ class UpdateFileManager:
         try:
             self.riskiq_update_period = float(self.riskiq_update_period)
         except(NameError, TypeError, ValueError):
-            self.riskiq_update_period = 604800   # 1 day
+            self.riskiq_update_period = 604800
+
+        self.mac_db_update_period = get('threatintelligence', 'mac_db_update', 1209600)  # 2 weeks
+        self.mac_db_update_period = float(self.mac_db_update_period)
+        try:
+            self.mac_db_update_period = float(self.mac_db_update_period)
+        except(NameError, TypeError, ValueError):
+            self.mac_db_update_period = 1209600
+
+        self.mac_db_link = get('threatintelligence', 'mac_db', '')
+        self.mac_db_link = self.sanitize(self.mac_db_link)
 
 
     def get_feed_properties(self, feeds):
@@ -311,7 +320,7 @@ class UpdateFileManager:
         """
         return response.headers.get('Last-Modified', False)
 
-    def __check_if_update(self, file_to_download: str):
+    def __check_if_update(self, file_to_download: str, update_period):
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
@@ -328,12 +337,6 @@ class UpdateFileManager:
             last_update = float('-inf')
 
         now = time.time()
-
-        update_period = (
-            self.riskiq_update_period
-            if 'risk' in file_to_download
-            else self.update_period
-        )
 
         # we have 2 types of remote files, JA3 feeds and TI feeds
         ################### Checking JA3 feeds ######################
@@ -1443,7 +1446,8 @@ class UpdateFileManager:
             # self.update_ports_info()
             # self.update_org_files()
 
-
+            # ############### Update slips local files ################
+            s
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
@@ -1456,7 +1460,7 @@ class UpdateFileManager:
                 file_to_download = file_to_download.strip()
                 file_to_download = self.sanitize(file_to_download)
 
-                response = self.__check_if_update(file_to_download)
+                response = self.__check_if_update(file_to_download, self.update_period)
                 if not response:
                     # failed to get the response, either a server problem
                     # or the the file is up to date so the response isn't needed
@@ -1482,7 +1486,7 @@ class UpdateFileManager:
             if (
                 self.riskiq_email
                 and self.riskiq_key
-                and self.__check_if_update('riskiq_domains')
+                and self.__check_if_update('riskiq_domains', self.riskiq_update_period)
             ):
                 self.log(f'Updating RiskIQ domains')
                 if self.update_riskiq_feed():
