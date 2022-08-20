@@ -572,7 +572,7 @@ class Main:
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
-    def save_the_db():
+    def save_the_db(self):
         # Create a new dir to store backups
         backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
         try:

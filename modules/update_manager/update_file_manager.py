@@ -1490,24 +1490,23 @@ class UpdateFileManager:
                 file_to_download = self.sanitize(file_to_download)
 
                 response = self.__check_if_update(file_to_download, self.update_period)
-                if not response:
+                if response:
                     # failed to get the response, either a server problem
-                    # or the the file is up to date so the response isn't needed
+                    # or the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
-                    continue
-                
-                # this run wasn't started with existing ti files in the db 
-                self.first_time_reading_files = True
 
-                self.log(
-                    f'Downloading the remote file {file_to_download}'
-                )
-                # every function call to update_TI_file is now running concurrently instead of serially
-                # so when a server's taking a while to give us the TI feed, we proceed
-                # to download the next file instead of being idle
-                task = asyncio.create_task(
-                    self.update_TI_file(file_to_download, response)
-                )
+                    # this run wasn't started with existing ti files in the db
+                    self.first_time_reading_files = True
+
+                    self.log(
+                        f'Downloading the remote file {file_to_download}'
+                    )
+                    # every function call to update_TI_file is now running concurrently instead of serially
+                    # so when a server's taking a while to give us the TI feed, we proceed
+                    # to download the next file instead of being idle
+                    task = asyncio.create_task(
+                        self.update_TI_file(file_to_download, response)
+                    )
 
             ############### Update RiskIQ domains ################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
