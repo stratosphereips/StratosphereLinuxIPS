@@ -1,25 +1,14 @@
-# Ths is a template module for you to copy and create your own slips module
-# Instructions
-# 1. Create a new folder on ./modules with the name of your template. Example:
-#    mkdir modules/anomaly_detector
-# 2. Copy this template file in that folder.
-#    cp modules/template/template.py modules/anomaly_detector/anomaly_detector.py
-# 3. Make it a module
-#    touch modules/template/__init__.py
-# 4. Change the name of the module, description and author in the variables
-# 5. The file name of the python module (template.py) MUST be the same as the name of the folder (template)
-# 6. The variable 'name' MUST have the public name of this module. This is used to ignore the module
-# 7. The name of the class MUST be 'Module', do not change it.
-
 # Must imports
-from slips.common.abstracts import Module
+from slips_files.common.abstracts import Module
+from slips_files.common.slips_utils import utils
 import multiprocessing
-from slips.core.database import __database__
+from slips_files.core.database import __database__
 import platform
+import sys
 
 # Your imports
-import pandas as pd # todo add pandas to install.sh
-import pickle # todo add pickle to install.sh
+import pandas as pd
+import pickle
 from pyod.models.pca import PCA
 import json
 import os
@@ -29,65 +18,50 @@ import time
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'anomaly-detection'
-    description = 'An anomaly detector for conn.log files of zeek/bro'
+    description = 'Anomaly detector for zeek conn.log files'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config):
+    def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
         self.config = config
         self.mode = self.config.get('parameters', 'anomaly_detection_mode').lower()
-        # Start the DB
-        __database__.start(self.config)
+        __database__.start(self.config, redis_port)
         self.c2 = __database__.subscribe('new_flow')
         self.c3 = __database__.subscribe('tw_closed')
-        # Set the timeout based on the platform. This is because the
-        # pyredis lib does not have officially recognized the
-        # timeout=None as it works in only macos and timeout=-1 as it only works in linux
-        if platform.system() == 'Darwin':
-            # macos
-            self.timeout = None
-        elif platform.system() == 'Linux':
-            # linux
-            self.timeout = None
-        else:
-            # Other systems
-            self.timeout = None
+        self.timeout = 0.0000001
         self.is_first_run = True
         self.current_srcip = ''
         self.dataframes = {}
-        self.saving_thread = threading.Thread(target=self.save_models_thread,
-                         daemon=True)
+        self.saving_thread = threading.Thread(
+            target=self.save_models_thread,
+            daemon=True
+        )
         self.thread_started = False
         self.models_path = 'modules/anomaly-detection/models/'
 
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by
-        taking all the prcocesses into account
-
-        Input
-         verbose: is the minimum verbosity level required for this text to
-         be printed
-         debug: is the minimum debugging level required for this text to be
-         printed
-         text: text to print. Can include format like 'Test {}'.format('here')
-
-        If not specified, the minimum verbosity level required is 1, and the
-        minimum debugging level is 0
+        Slips then decides how, when and where to print this text by taking all the processes into account
+        :param verbose:
+            0 - don't print
+            1 - basic operation/proof of work
+            2 - log I/O operations and filenames
+            3 - log database/profile/timewindow changes
+        :param debug:
+            0 - don't print
+            1 - print exceptions
+            2 - unsupported and unhandled types (cases that may cause errors)
+            3 - red warnings that needs examination - developer warnings
+        :param text: text to print. Can include format like 'Test {}'.format('here')
         """
 
-        vd_text = str(int(verbose) * 10 + int(debug))
-        self.outputqueue.put(vd_text + '|' + self.name + '|[' + self.name + '] ' + str(text))
+        levels = f'{verbose}{debug}'
+        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def save_models_thread(self):
         """ Saves models to disk every 1h """
-
         while True:
             time.sleep(60*60)
             self.save_models()
@@ -114,6 +88,10 @@ class Module(Module, multiprocessing.Process):
                 pickle.dump(clf, model)
         self.print('Done.')
 
+    def shutdown_gracefully(self):
+        # Confirm that the module is done processing
+        __database__.publish('finished_modules', self.name)
+
     def get_model(self) -> str:
         """
         Find the correct model to use for testing depending on the current source ip
@@ -138,15 +116,15 @@ class Module(Module, multiprocessing.Process):
                         self.saving_thread.start()
                         self.thread_started = True
 
-                    message_c3 = self.c3.get_message(timeout=self.timeout)
-                    if message_c3['data'] == 'stop_process':
+                    msg = self.c3.get_message(timeout=self.timeout)
+                    if msg and msg['data'] == 'stop_process':
                         # train and save the models before exiting
                         self.save_models()
-                        # Confirm that the module is done processing
-                        __database__.publish('finished_modules', self.name)
+                        self.shutdown_gracefully()
                         return True
-                    if message_c3 and message_c3['channel'] == 'tw_closed' and message_c3["type"] == "message":
-                        data = message_c3["data"]
+
+                    if utils.is_msg_intended_for(msg, 'tw_closed'):
+                        data = msg["data"]
                         if type(data) == str:
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
@@ -201,16 +179,22 @@ class Module(Module, multiprocessing.Process):
                             bro_df['dur'] = bro_df['dur'].fillna(0).astype('float64')
                             self.is_first_run = False
                 elif 'test' in self.mode:
-                    message_c2 = self.c2.get_message(timeout=self.timeout)
-                    if message_c2['data'] == 'stop_process':
+                    msg = self.c2.get_message(timeout=self.timeout)
+                    if msg and msg['data'] == 'stop_process':
+                        self.shutdown_gracefully()
                         return True
-                    if message_c2 and message_c2['channel'] == 'new_flow' and message_c2["type"] == "message":
-                        data = message_c2["data"]
+
+                    if utils.is_msg_intended_for(msg, 'new_flow'):
+                        data = msg["data"]
                         if type(data) == str:
-                            # Check if there's modules to test or not
-                            if not os.path.isdir(self.models_path) or not os.listdir(self.models_path) :
-                                self.print("No models found! Please train first. https://stratospherelinuxips.readthedocs.io/en/develop/")
+                            # Check if there's models to test or not
+                            if (not os.path.isdir(self.models_path)
+                                    or not os.listdir(self.models_path)):
+                                self.print("No models found! "
+                                           "Please train first. "
+                                           "https://stratospherelinuxips.readthedocs.io/en/develop/")
                                 return True
+
                             data = json.loads(data)
                             profileid = data['profileid']
                             twid = data['twid']
@@ -254,13 +238,15 @@ class Module(Module, multiprocessing.Process):
                     #  ignore this module
                     return True
                 else:
-                    self.print(f"{self.mode} is not a valid mode, available options are: training or testing. anomaly-detection module stopping.")
+                    self.print(f"{self.mode} is not a valid mode, available options are: "
+                               f"training or testing. anomaly-detection module stopping.")
                     return True
             except KeyboardInterrupt:
-                # On KeyboardInterrupt, slips.py sends a stop_process msg to all modules, so continue to receive it
-                continue
+                self.shutdown_gracefully()
+                return False
             except Exception as inst:
-                self.print('Problem on the run()', 0, 1)
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
