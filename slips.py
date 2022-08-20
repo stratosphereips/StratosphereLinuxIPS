@@ -86,10 +86,10 @@ class Main:
         self.zeek_folder = f'./zeek_files_{without_ext}/'
 
 
-    def read_configuration(self, config, section, name):
+    def read_configuration(self, section, name):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
         try:
-            return config.get(section, name)
+            return self.config.get(section, name)
         except (
             configparser.NoOptionError,
             configparser.NoSectionError,
@@ -354,7 +354,7 @@ class Main:
         Detailed logs are the ones created by logsProcess
         """
         do_logs = self.read_configuration(
-            self.config, 'parameters', 'create_log_files'
+            'parameters', 'create_log_files'
         )
         # if -l is provided or create_log_files is yes then we will create log files
         if self.args.createlogfiles or do_logs == 'yes':
@@ -561,8 +561,6 @@ class Main:
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
-
-
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
@@ -594,7 +592,7 @@ class Main:
             # we don't want to kill this process
             try:
                 self.PIDs.pop('slips.py')
-                self.PIDs.pop('EvidenceProcess')
+                evidence_proc_pid = self.PIDs.pop('EvidenceProcess')
             except KeyError:
                 pass
             slips_processes = len(list(self.PIDs.keys()))
@@ -652,21 +650,33 @@ class Main:
                                 print(
                                     f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
                                 )
-                        max_loops -= 1
-                        # after reaching the max_loops and before killing the modules that aren't finished,
-                        # make sure we're not in the middle of processing
-                        if len(self.PIDs) > 0 and max_loops < 2:
-                            if not warning_printed:
+
                                 # some modules publish in finished_modules channel before slips.py starts listening,
                                 # but they finished gracefully.
                                 # remove already stopped modules from PIDs dict
+                                already_stopped_modules = []
                                 for module, pid in self.PIDs.items():
                                     try:
                                         # signal 0 is used to check if the pid exists
                                         os.kill(int(pid), 0)
                                     except ProcessLookupError:
                                         # pid doesn't exist because module already stopped
-                                        finished_modules.append(module)
+                                        # to be able to remove it's pid from the dict
+                                        already_stopped_modules.append(module)
+
+                                for module in already_stopped_modules:
+                                    self.PIDs.pop(module)
+                                    finished_modules.append(module)
+                                    module += ' ' * (20 - len(module))
+                                    modules_left = len(list(self.PIDs.keys()))
+                                    print(
+                                        f'\t\033[1;32;40m{module}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
+                                    )
+                        max_loops -= 1
+                        # after reaching the max_loops and before killing the modules that aren't finished,
+                        # make sure we're not in the middle of processing
+                        if len(self.PIDs) > 0 and max_loops < 2:
+                            if not warning_printed:
 
                                 # exclude the module that are already stopped from the pending modules
                                 pending_modules = [
@@ -709,10 +719,7 @@ class Main:
                     )
             # evidence process should be the last process to exit, so it can print detections of the
             # modules that are still processing
-            try:
-                os.kill(int(self.PIDs['EvidenceProcess']), signal.SIGINT)
-            except KeyError:
-                pass
+            os.kill(int(evidence_proc_pid), signal.SIGINT)
 
             # save redis database if '-s' is specified
             if self.args.save:
@@ -1230,6 +1237,9 @@ class Main:
         self.args = parser.parse_args()
 
     def read_conf_file(self):
+        """
+        sets self.config
+        """
         # don't use '%' for interpolation.
         self.config = configparser.ConfigParser(interpolation=None)
         try:
@@ -1303,10 +1313,10 @@ class Main:
 
     def get_disabled_modules(self) -> list:
         to_ignore = self.read_configuration(
-            self.config, 'modules', 'disable'
+            'modules', 'disable'
         )
         use_p2p = self.read_configuration(
-            self.config, 'P2P', 'use_p2p'
+            'P2P', 'use_p2p'
         )
 
         if not to_ignore:
@@ -1886,7 +1896,6 @@ class Main:
                 )
 
             self.enable_metadata = self.read_configuration(
-                                                self.config,
                                                 'parameters',
                                                 'metadata_dir'
                                                 )
