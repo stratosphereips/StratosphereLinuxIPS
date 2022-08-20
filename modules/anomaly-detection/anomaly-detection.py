@@ -70,6 +70,9 @@ class Module(Module, multiprocessing.Process):
         """ Train and save trained models to disk """
 
         self.print('Saving models to disk...')
+        # make sure there's a dir to save the models to
+        if not os.path.isdir(self.models_path):
+            os.mkdir(self.models_path)
         for srcip, bro_df in self.dataframes.items():
             if not bro_df:
                 continue
@@ -81,9 +84,7 @@ class Module(Module, multiprocessing.Process):
             X_train = X_train.values
             # Fit the model to the train data
             clf.fit(X_train)
-            # make sure there's a dir to save the models to
-            if not os.path.isdir(self.models_path):
-                os.mkdir(self.models_path)
+
             # save the model to disk
             path_to_df = self.models_path + srcip
             with open(path_to_df, 'wb') as model:
