@@ -71,6 +71,8 @@ class Module(Module, multiprocessing.Process):
 
         self.print('Saving models to disk...')
         for srcip, bro_df in self.dataframes.items():
+            if not bro_df:
+                continue
             # Add the columns from the log file that we know are numbers. This is only for conn.log files.
             X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
             # PCA. Good and fast!
@@ -106,6 +108,20 @@ class Module(Module, multiprocessing.Process):
             # return a random model
             return self.models_path + model_name
 
+    def normalize_col_with_no_data(self, column, type):
+        """
+        Replace the rows without data (with '-') with 0.
+        Even though this may add a bias in the algorithms,
+        is better than not using the lines.
+        Also fill the no values with 0
+        Finally put a type to each column
+        """
+        try:
+            self.bro_df[column].replace('-', '0', inplace=True)  # orig_bytes
+            self.bro_df[column] = self.bro_df[column].fillna(0).astype(type)
+        except KeyError:
+            pass
+
     def run(self):
         # Main loop function
         while True:
@@ -129,55 +145,50 @@ class Module(Module, multiprocessing.Process):
                             # data example: profile_192.168.1.1_timewindow1
                             data = data.split('_')
                             self.new_srcip = data[1]
+
                             # make sure it is not first run so we don't save an empty model to disk
-                            if self.is_first_run == False and self.current_srcip != self.new_srcip:
+                            if not self.is_first_run and self.current_srcip != self.new_srcip:
                                 # srcip changed
                                 self.current_srcip = self.new_srcip
                                 try:
                                     # there is a dataframe for this src ip, append to it
-                                    bro_df = self.dataframes[self.current_srcip]
+                                    self.bro_df = self.dataframes[self.current_srcip]
                                 except KeyError:
                                     # there's no saved df for this ip, save it
-                                    self.dataframes[self.current_srcip] = bro_df
+                                    self.dataframes[self.current_srcip] = None
                                     # empty the current dataframe so we can create a new one for the new srcip
-                                    bro_df = None
+                                    self.bro_df = None
+
                             profileid = f'{data[0]}_{data[1]}'
                             twid = data[2]
                             # get all flows in the tw
                             flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
-                            # flows is a dict of uids and keys and actual flows as values
+                            if not flows: continue
+
+                            # flows is a dict {uid: serialized flow dict}
                             for flow in flows.values():
                                 flow = json.loads(flow)
                                 try:
                                     # Is there a dataframe? append to it
-                                    bro_df = bro_df.append(flow, ignore_index=True)
+                                    self.bro_df = self.bro_df.append(flow, ignore_index=True)
                                 except (UnboundLocalError, AttributeError):
                                     # There's no dataframe, create one
                                     # current srcip will be used as the model name
                                     self.current_srcip = data[1]
-                                    bro_df = pd.DataFrame(flow, index=[0])
+                                    self.bro_df = pd.DataFrame(flow, index=[0])
+
                             # In case you need a label, due to some models being able to work in a
                             # semisupervized mode, then put it here. For now everything is
                             # 'normal', but we are not using this for detection
-                            bro_df['label'] = 'normal'
-                            # Replace the rows without data (with '-') with 0.
-                            # Even though this may add a bias in the algorithms,
-                            # is better than not using the lines.
-                            # Also fill the no values with 0
-                            # Finally put a type to each column
-                            bro_df['sbytes'].replace('-', '0', inplace=True)  # orig_bytes
-                            bro_df['sbytes'] = bro_df['sbytes'].fillna(0).astype('int32')
-                            bro_df['dbytes'].replace('-', '0', inplace=True)  # resp_bytes
-                            bro_df['dbytes'] = bro_df['dbytes'].fillna(0).astype('int32')
-                            bro_df['dpkts'].replace('-', '0', inplace=True)
-                            bro_df['dpkts'] = bro_df['dpkts'].fillna(0).astype('int32')  # resp_packets
-                            bro_df['orig_ip_bytes'].replace('-', '0', inplace=True)
-                            bro_df['orig_ip_bytes'] = bro_df['orig_ip_bytes'].fillna(0).astype('int32')
-                            bro_df['resp_ip_bytes'].replace('-', '0', inplace=True)
-                            bro_df['resp_ip_bytes'] = bro_df['resp_ip_bytes'].fillna(0).astype('int32')
-                            bro_df['dur'].replace('-', '0', inplace=True)
-                            bro_df['dur'] = bro_df['dur'].fillna(0).astype('float64')
+                            self.bro_df['label'] = 'normal'
+                            self.normalize_col_with_no_data('sbytes', 'int32')
+                            self.normalize_col_with_no_data('dbytes', 'int32')
+                            self.normalize_col_with_no_data('orig_ip_bytes', 'int32')
+                            self.normalize_col_with_no_data('dpkts', 'int32')
+                            self.normalize_col_with_no_data('resp_ip_bytes', 'int32')
+                            self.normalize_col_with_no_data('dur', 'float64')
                             self.is_first_run = False
+
                 elif 'test' in self.mode:
                     msg = self.c2.get_message(timeout=self.timeout)
                     if msg and msg['data'] == 'stop_process':
