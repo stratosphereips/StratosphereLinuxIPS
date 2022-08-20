@@ -86,7 +86,7 @@ class Main:
         self.zeek_folder = f'./zeek_files_{without_ext}/'
 
 
-    def read_configuration(self, section, name):
+    def read_configuration(self, section, name, default_value):
         """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
         try:
             return self.config.get(section, name)
@@ -94,9 +94,10 @@ class Main:
             configparser.NoOptionError,
             configparser.NoSectionError,
             NameError,
+            ValueError
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
-            return False
+            return default_value
 
     def get_host_ip(self):
         """
@@ -354,7 +355,7 @@ class Main:
         Detailed logs are the ones created by logsProcess
         """
         do_logs = self.read_configuration(
-            'parameters', 'create_log_files'
+            'parameters', 'create_log_files', 'no'
         )
         # if -l is provided or create_log_files is yes then we will create log files
         if self.args.createlogfiles or do_logs == 'yes':
@@ -390,16 +391,11 @@ class Main:
         Adds local network to slips-conf.zeek
         """
 
-        # get home network from slips.conf
-        try:
-            home_network = self.config.get('parameters', 'home_network')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            home_network = utils.home_network_ranges
+        home_network = self.read_configuration(
+            'parameters',
+            'home_network',
+            utils.home_network_ranges
+        )
 
         zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
         # add local sites if not there
@@ -512,7 +508,11 @@ class Main:
         config_file = self.args.config or 'slips.conf'
         shutil.copy(config_file, metadata_dir)
         # Add a copy of whitelist.conf
-        whitelist = self.config.get('parameters', 'whitelist_path')
+        whitelist = self.read_configuration(
+            'parameters', 'whitelist_path', 'whitelist.conf'
+        )
+
+
         shutil.copy(whitelist, metadata_dir)
 
         branch_info = utils.get_branch_info()
@@ -755,22 +755,16 @@ class Main:
             __database__.disable_redis_snapshots()
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
-            try:
-                store_a_copy_of_zeek_files = self.config.get(
-                    'parameters', 'store_a_copy_of_zeek_files'
-                )
-                store_a_copy_of_zeek_files = (
-                    False
-                    if 'no' in store_a_copy_of_zeek_files.lower()
-                    else True
-                )
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                store_a_copy_of_zeek_files = False
+            store_a_copy_of_zeek_files = self.read_configuration(
+                'parameters', 'store_a_copy_of_zeek_files', 'no'
+            )
+            store_a_copy_of_zeek_files = (
+                False
+                if 'no' in store_a_copy_of_zeek_files.lower()
+                else True
+            )
+
+
             if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
                 # this is where the copy will be stored
                 dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
@@ -781,20 +775,12 @@ class Main:
 
             # if delete_zeek_files is set to yes in slips.conf,
             # delete the whole zeek_files
-            try:
-                delete_zeek_files = self.config.get(
-                    'parameters', 'delete_zeek_files'
-                )
-                delete_zeek_files = (
-                    False if 'no' in delete_zeek_files.lower() else True
-                )
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                delete_zeek_files = True
+            delete_zeek_files = self.read_configuration(
+                'parameters', 'delete_zeek_files', 'no'
+            )
+            delete_zeek_files = (
+                False if 'no' in delete_zeek_files.lower() else True
+            )
 
             if delete_zeek_files:
                 shutil.rmtree('zeek_files')
@@ -1313,10 +1299,10 @@ class Main:
 
     def get_disabled_modules(self) -> list:
         to_ignore = self.read_configuration(
-            'modules', 'disable'
+            'modules', 'disable', False
         )
         use_p2p = self.read_configuration(
-            'P2P', 'use_p2p'
+            'P2P', 'use_p2p', 'no'
         )
 
         if not to_ignore:
@@ -1330,7 +1316,7 @@ class Main:
         )
         # Ignore exporting alerts module if export_to is empty
         export_to = (
-            self.config.get('ExportingAlerts', 'export_to')
+            self.read_configuration('ExportingAlerts', 'export_to', '[]')
                 .rstrip('][')
                 .replace(' ', '')
                 .lower()
@@ -1349,11 +1335,11 @@ class Main:
             to_ignore.append('p2ptrust')
 
         # ignore CESNET sharing module if send and receive are are disabled in slips.conf
-        send_to_warden = self.config.get(
-            'CESNET', 'send_alerts'
+        send_to_warden = self.read_configuration(
+            'CESNET', 'send_alerts', 'no'
         ).lower()
-        receive_from_warden = self.config.get(
-            'CESNET', 'receive_alerts'
+        receive_from_warden = self.read_configuration(
+            'CESNET', 'receive_alerts', 'no'
         ).lower()
         if 'no' in send_to_warden and 'no' in receive_from_warden:
             to_ignore.append('CESNET')
@@ -1625,20 +1611,7 @@ class Main:
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose == None:
-            # Read the verbosity from the config
-            try:
-                self.args.verbose = int(
-                    self.config.get('parameters', 'verbose')
-                )
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-            ):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                # By default, 1
-                self.args.verbose = 1
+            self.args.verbose = int(self.read_configuration('parameters', 'verbose', 1))
 
         # Limit any verbosity to > 0
         if self.args.verbose < 1:
@@ -1646,20 +1619,9 @@ class Main:
 
         # Any debuggsity passed as parameter overrides the configuration. Only check its value
         if self.args.debug == None:
-            # Read the debug from the config
-            try:
-                self.args.debug = int(
-                    self.config.get('parameters', 'debug')
-                )
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-            ):
-                # There is a conf, but there is no option, or no section or no configuration file specified
-                # By default, 0
-                self.args.debug = 0
+            self.args.debug = int(
+                self.read_configuration('parameters', 'debug', 0)
+            )
 
         # Limit any debuggisity to > 0
         if self.args.debug < 0:
@@ -1897,7 +1859,8 @@ class Main:
 
             self.enable_metadata = self.read_configuration(
                                                 'parameters',
-                                                'metadata_dir'
+                                                'metadata_dir',
+                                                'no'
                                                 )
 
             if 'yes' in self.enable_metadata.lower():
