@@ -493,10 +493,21 @@ class Main:
         update_manager.update_org_files()
 
 
-    def add_metadata(self):
+    def add_metadata(self, end_date):
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
         """
+        if not 'yes' in self.enable_metadata.lower():
+            return
+
+        # add slips end date in the metadata dir
+        try:
+            with open(self.info_path, 'a') as f:
+                f.write(f'Slips end date: {end_date}\n')
+        except (NameError, AttributeError):
+            # slips is shut down before enable_metadata is read from slips.conf
+            pass
+
         metadata_dir = os.path.join(self.args.output, 'metadata')
         try:
             os.mkdir(metadata_dir)
@@ -561,10 +572,109 @@ class Main:
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
+    def save_the_db():
+        # Create a new dir to store backups
+        backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
+        try:
+            os.mkdir(backups_dir)
+        except FileExistsError:
+            pass
+        # The name of the interface/pcap/nfdump/binetflow used is in self.input_information
+        # if the input is a zeek dir, remove the / at the end
+        if self.input_information.endswith('/'):
+            self.input_information = self.input_information[:-1]
+        # We need to separate it from the path
+        self.input_information = os.path.basename(self.input_information)
+        # Remove the extension from the filename
+        try:
+            self.input_information = self.input_information[
+                : self.input_information.index('.')
+            ]
+        except ValueError:
+            # it's a zeek dir
+            pass
+        # Give the exact path to save(), this is where our saved .rdb backup will be
+        rdb_filepath = os.path.join(backups_dir, self.input_information)
+        __database__.save(rdb_filepath)
+        # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
+        print(
+            '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
+        )
+
+    def store_zeek_dir_copy(self):
+        store_a_copy_of_zeek_files = self.read_configuration(
+            'parameters', 'store_a_copy_of_zeek_files', 'no'
+        )
+        store_a_copy_of_zeek_files = (
+            False
+            if 'no' in store_a_copy_of_zeek_files.lower()
+            else True
+        )
+        if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
+            # this is where the copy will be stored
+            dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
+            copy_tree(self.zeek_folder, dest_zeek_dir)
+            print(
+                f'[Main] Stored a copy of zeek files to {dest_zeek_dir}'
+            )
+
+    def delete_zeek_files(self):
+        delete = self.read_configuration(
+            'parameters', 'delete_zeek_files', 'no'
+        )
+        delete = (
+            False if 'no' in delete.lower() else True
+        )
+
+        if delete:
+            shutil.rmtree('zeek_files')
+
+    def print_stopped_module(self, module):
+        # all text printed in green should be wrapped in the following
+        GREEN_s = '\033[1;32;40m'
+        GREEN_e = '\033[00m'
+        modules_left = len(list(self.PIDs.keys()))
+        # to vertically align them when printing
+        module += ' ' * (20 - len(module))
+        print(
+            f'\t{GREEN_s}{module}{GREEN_e} \tStopped. '
+            f'{GREEN_s}{modules_left}{GREEN_e} left.'
+        )
+
+    def get_already_stopped_modules(self):
+        already_stopped_modules = []
+        for module, pid in self.PIDs.items():
+            try:
+                # signal 0 is used to check if the pid exists
+                os.kill(int(pid), 0)
+            except ProcessLookupError:
+                # pid doesn't exist because module already stopped
+                # to be able to remove it's pid from the dict
+                already_stopped_modules.append(module)
+        return already_stopped_modules
+
+    def warn_about_pending_modules(self, finished_modules):
+        # exclude the module that are already stopped from the pending modules
+        pending_modules = [
+            module
+            for module in list(self.PIDs.keys())
+            if module not in finished_modules
+        ]
+        if not len(pending_modules):
+            return
+        print(
+            f'\n[Main] The following modules are busy working on your data.'
+            f'\n\n{pending_modules}\n\n'
+            'You can wait for them to finish, or you can '
+            'press CTRL-C again to force-kill.\n'
+        )
+        return True
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
         """
+
 
         try:
             if not self.args.stopdaemon:
@@ -572,16 +682,8 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            now = utils.convert_format(datetime.now(), utils.alerts_format)
-            __database__.set_input_metadata({'analysis_end': now})
-            # add slips end date in the metadata dir
-            try:
-                if 'yes' in self.enable_metadata.lower():
-                    with open(self.info_path, 'a') as f:
-                        f.write(f'Slips end date: {now}\n')
-            except (NameError, AttributeError):
-                # slips is shut down before enable_metadata is read from slips.conf
-                pass
+            end_date = utils.convert_format(datetime.now(), utils.alerts_format)
+            __database__.set_input_metadata({'analysis_end': end_date})
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
@@ -590,25 +692,22 @@ class Main:
             self.PIDs = __database__.get_PIDs()
 
             # we don't want to kill this process
-            try:
-                self.PIDs.pop('slips.py')
-                evidence_proc_pid = self.PIDs.pop('EvidenceProcess')
-            except KeyError:
-                pass
-            slips_processes = len(list(self.PIDs.keys()))
-
+            self.PIDs.pop('slips.py', None)
+            evidence_proc_pid = self.PIDs.pop('EvidenceProcess', None)
             self.stop_core_processes()
 
             # only print that modules are still running once
             warning_printed = False
 
             # timeout variable so we don't loop forever
-            # give slips enough time to close all modules - make sure all modules aren't considered 'busy' when slips stops
+            # give slips enough time to close all modules - make sure
+            # all modules aren't considered 'busy' when slips stops
             max_loops = 430
             # loop until all loaded modules are finished
             if not self.args.stopdaemon:
                 # in the case of -S, slips doesn't even start the modules,
                 # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
+                slips_processes = len(list(self.PIDs.keys()))
                 try:
                     while (
                         len(finished_modules) < slips_processes and max_loops != 0
@@ -617,14 +716,11 @@ class Main:
                         try:
                             message = self.c1.get_message(timeout=0.00000001)
                         except NameError:
-                            # Sometimes the c1 variable does not exist yet. So just force the shutdown
-                            message = {
-                                'data': 'dummy_value_not_stopprocess',
-                                'channel': 'finished_modules',
-                            }
+                            continue
 
                         if message and message['data'] == 'stop_process':
                             continue
+
                         if utils.is_msg_intended_for(message, 'finished_modules'):
                             # all modules must reply with their names in this channel after
                             # receiving the stop_process msg
@@ -641,63 +737,30 @@ class Main:
                                 # remove module from the list of opened pids
                                 self.PIDs.pop(module_name, None)
 
-
-                                modules_left = len(list(self.PIDs.keys()))
-                                # to vertically align them when printing
-                                module_name = module_name + ' ' * (
-                                    20 - len(module_name)
-                                )
-                                print(
-                                    f'\t\033[1;32;40m{module_name}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
-                                )
+                                self.print_stopped_module(module_name)
 
                                 # some modules publish in finished_modules channel before slips.py starts listening,
                                 # but they finished gracefully.
                                 # remove already stopped modules from PIDs dict
-                                already_stopped_modules = []
-                                for module, pid in self.PIDs.items():
-                                    try:
-                                        # signal 0 is used to check if the pid exists
-                                        os.kill(int(pid), 0)
-                                    except ProcessLookupError:
-                                        # pid doesn't exist because module already stopped
-                                        # to be able to remove it's pid from the dict
-                                        already_stopped_modules.append(module)
-
-                                for module in already_stopped_modules:
+                                for module in self.get_already_stopped_modules():
                                     self.PIDs.pop(module)
                                     finished_modules.append(module)
-                                    module += ' ' * (20 - len(module))
-                                    modules_left = len(list(self.PIDs.keys()))
-                                    print(
-                                        f'\t\033[1;32;40m{module}\033[00m \tStopped. \033[1;32;40m{modules_left}\033[00m left.'
-                                    )
+                                    self.print_stopped_module(module)
+
                         max_loops -= 1
                         # after reaching the max_loops and before killing the modules that aren't finished,
-                        # make sure we're not in the middle of processing
+                        # make sure we're not processing
                         if len(self.PIDs) > 0 and max_loops < 2:
-                            if not warning_printed:
+                            if not warning_printed and self.warn_about_pending_modules(finished_modules):
+                                warning_printed = True
 
-                                # exclude the module that are already stopped from the pending modules
-                                pending_modules = [
-                                    module
-                                    for module in list(self.PIDs.keys())
-                                    if module not in finished_modules
-                                ]
-                                if len(pending_modules) > 0:
-                                    print(
-                                        f'\n[Main] The following modules are busy working on your data.'
-                                        f'\n\n{pending_modules}\n\n'
-                                        'You can wait for them to finish, or you can press CTRL-C again to force-kill.\n'
-                                    )
-                                    warning_printed = True
                             # -P flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
                             if not self.args.port:
                                 # delay killing unstopped modules
                                 max_loops += 1
-                                continue
+
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)
                     # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
@@ -706,91 +769,40 @@ class Main:
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
-            for unstopped_proc, pid in self.PIDs.items():
-                unstopped_proc = unstopped_proc + ' ' * (
-                    20 - len(unstopped_proc)
-                )
+            PIDs = self.PIDs.copy()
+            for module, pid in PIDs.items():
                 try:
                     os.kill(int(pid), 9)
-                    print(f'\t\033[1;32;40m{unstopped_proc}\033[00m \tKilled.')
                 except ProcessLookupError:
-                    print(
-                        f'\t\033[1;32;40m{unstopped_proc}\033[00m \tAlready stopped.'
-                    )
+                    pass
+                self.PIDs.pop(module, None)
+                self.print_stopped_module(module)
+
             # evidence process should be the last process to exit, so it can print detections of the
             # modules that are still processing
             os.kill(int(evidence_proc_pid), signal.SIGINT)
 
             # save redis database if '-s' is specified
             if self.args.save:
-                # Create a new dir to store backups
-                backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
-                try:
-                    os.mkdir(backups_dir)
-                except FileExistsError:
-                    pass
-                # The name of the interface/pcap/nfdump/binetflow used is in self.input_information
-                # if the input is a zeek dir, remove the / at the end
-                if self.input_information.endswith('/'):
-                    self.input_information = self.input_information[:-1]
-                # We need to separate it from the path
-                self.input_information = os.path.basename(self.input_information)
-                # Remove the extension from the filename
-                try:
-                    self.input_information = self.input_information[
-                        : self.input_information.index('.')
-                    ]
-                except ValueError:
-                    # it's a zeek dir
-                    pass
-                # Give the exact path to save(), this is where our saved .rdb backup will be
-                rdb_filepath = os.path.join(backups_dir, self.input_information)
-                __database__.save(rdb_filepath)
-                # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
-                print(
-                    '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
-                )
+                self.save_the_db()
 
             # make sure that redis isn't saving snapshots whether -s is given or not
             __database__.disable_redis_snapshots()
 
-            # if store_a_copy_of_zeek_files is set to yes in slips.conf, copy the whole zeek_files dir to the output dir
-            store_a_copy_of_zeek_files = self.read_configuration(
-                'parameters', 'store_a_copy_of_zeek_files', 'no'
-            )
-            store_a_copy_of_zeek_files = (
-                False
-                if 'no' in store_a_copy_of_zeek_files.lower()
-                else True
-            )
-
-
-            if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
-                # this is where the copy will be stored
-                dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
-                copy_tree(self.zeek_folder, dest_zeek_dir)
-                print(
-                    f'[Main] Stored a copy of zeek files to {dest_zeek_dir}'
-                )
+            # if store_a_copy_of_zeek_files is set to yes in slips.conf,
+            # copy the whole zeek_files dir to the output dir
+            self.store_zeek_dir_copy()
 
             # if delete_zeek_files is set to yes in slips.conf,
-            # delete the whole zeek_files
-            delete_zeek_files = self.read_configuration(
-                'parameters', 'delete_zeek_files', 'no'
-            )
-            delete_zeek_files = (
-                False if 'no' in delete_zeek_files.lower() else True
-            )
-
-            if delete_zeek_files:
-                shutil.rmtree('zeek_files')
+            # delete zeek_files/ dir
+            self.delete_zeek_files()
 
             if self.mode == 'daemonized':
                 profilesLen = str(__database__.getProfilesLen())
                 print(f'Total Number of Profiles in DB: {profilesLen}.')
                 self.daemon.stop()
+
             os._exit(-1)
-            return True
         except KeyboardInterrupt:
             return False
 
@@ -1864,7 +1876,7 @@ class Main:
                                                 )
 
             if 'yes' in self.enable_metadata.lower():
-                self.info_path = self.add_metadata()
+                self.info_path = self.add_metadata(end_date)
 
             hostIP = self.store_host_ip()
 
