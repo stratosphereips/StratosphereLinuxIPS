@@ -31,6 +31,7 @@ blinker
 exclusiveprocess
 setuptools
 pytest-dependency
+pyod
 whois
 wheel
 flask
