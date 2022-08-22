@@ -183,11 +183,10 @@ class Module(Module, multiprocessing.Process):
         if self.BOT_TOKEN is '':
             # The file is empty
             self.print(
-                "Can't find SLACK_BOT_TOKEN in modules/exporting_alerts/slack_bot_token_secret.",
-                0,
-                2,
+                f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
             )
             return False
+
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
             response = slack_client.chat_postMessage(
@@ -196,12 +195,14 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text=self.sensor_name + ': ' + msg_to_send,
             )
+            return True
+
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response[
                 'error'
             ], 'Problem while exporting to slack.'   # str like 'invalid_auth', 'channel_not_found'
-        return True
+            return False
 
     def push_to_TAXII_server(self):
         """
@@ -313,7 +314,7 @@ class Module(Module, multiprocessing.Process):
             # for example 127.0.0.1:443:tcp
             # Get the ip
             detection_info = detection_info.split(':')[0]
-        ioc_type = self.get_ioc_type(detection_info)
+        ioc_type = utils.detect_data_type(detection_info)
         if ioc_type is 'ip':
             pattern = "[ip-addr:value = '{}']".format(detection_info)
         elif ioc_type is 'domain':
@@ -388,44 +389,43 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        # Main loop function
         while True:
             try:
                 message_c1 = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
-                if message_c1['data'] == 'stop_process':
+
+                if message_c1 and message_c1['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if message_c1['channel'] == 'evidence_added':
-                    if type(message_c1['data']) == str:
-                        evidence = json.loads(message_c1['data'])
-                        description = evidence['description']
-                        if 'slack' in self.export_to:
-                            sent_to_slack = self.send_to_slack(description)
-                            if not sent_to_slack:
-                                self.print('Problem in send_to_slack()', 0, 3)
-                        if 'stix' in self.export_to:
-                            msg_to_send = (
-                                evidence['type_evidence'],
-                                evidence['type_detection'],
-                                evidence['detection_info'],
-                                description,
+
+                if utils.is_msg_intended_for(message_c1, 'evidence_added'):
+                    evidence = json.loads(message_c1['data'])
+                    description = evidence['description']
+
+                    if 'slack' in self.export_to:
+                        self.send_to_slack(description)
+
+                    if 'stix' in self.export_to:
+                        msg_to_send = (
+                            evidence['type_evidence'],
+                            evidence['type_detection'],
+                            evidence['detection_info'],
+                            description,
+                        )
+                        # This thread is responsible for waiting n seconds before each push to the stix server
+                        # it starts the timer when the first alert happens
+                        # push_delay should be an int when slips is running using -i
+                        if (
+                            self.is_thread_created is False
+                            and '-i' in sys.argv
+                        ):
+                            # this thread is started only once
+                            _thread.start_new_thread(
+                                self.send_to_server, ()
                             )
-                            # This thread is responsible for waiting n seconds before each push to the stix server
-                            # it starts the timer when the first alert happens
-                            # push_delay should be an int when slips is running using -i
-                            if (
-                                self.is_thread_created is False
-                                and '-i' in sys.argv
-                            ):
-                                # this thread is started only once
-                                _thread.start_new_thread(
-                                    self.send_to_server, ()
-                                )
-                                self.is_thread_created = True
-                            exported_to_stix = self.export_to_STIX(msg_to_send)
-                            if not exported_to_stix:
-                                self.print('Problem in export_to_STIX()', 0, 3)
+                            self.is_thread_created = True
+                        exported_to_stix = self.export_to_STIX(msg_to_send)
+                        if not exported_to_stix:
+                            self.print('Problem in export_to_STIX()', 0, 3)
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
