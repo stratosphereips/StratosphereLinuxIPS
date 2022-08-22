@@ -81,6 +81,7 @@ let profiles = function () {
                         "bDestroy": true,
                         dom: custom_dom,
                         bInfo: false,
+                        ordering: false,
                         paging: false,
                         searching: false,
                         columns: [
