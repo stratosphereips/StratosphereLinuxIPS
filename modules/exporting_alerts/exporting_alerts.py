@@ -38,6 +38,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('evidence_added')
         # Get config variables
         self.read_configuration()
+        self.get_slack_token()
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         self.is_thread_created = False
@@ -119,6 +120,20 @@ class Module(Module, multiprocessing.Process):
             self.jwt_auth_url = get(
                 'exporting_alerts', 'jwt_auth_url'
             )
+
+    def get_slack_token(self):
+        if not hasattr(self, 'slack_token_filepath'):
+            return False
+        # slack_bot_token_secret should contain your slack token only
+        try:
+            with open(self.slack_token_filepath, 'r') as f:
+                self.BOT_TOKEN = f.read()
+        except FileNotFoundError:
+            self.print(
+                'Please add slack bot token to modules/exporting_alerts/slack_bot_token_secret. Stopping.'
+            )
+            # Stop the module
+            __database__.publish('export_alert', 'stop_process')
 
     def print(self, text, verbose=1, debug=0):
         """
