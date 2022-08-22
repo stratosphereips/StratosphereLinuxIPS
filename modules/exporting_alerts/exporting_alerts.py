@@ -18,8 +18,7 @@ import time
 import _thread
 import sys
 import validators
-import datetime
-
+import configparser
 
 class Module(Module, multiprocessing.Process):
     """
@@ -33,76 +32,93 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
         self.config = config
-        # Start the DB
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('evidence_added')
-        # slack_bot_token_secret should contain your slack token only
-        try:
-            with open(
-                'modules/exporting_alerts/slack_bot_token_secret', 'r'
-            ) as f:
-                self.BOT_TOKEN = f.read()
-        except FileNotFoundError:
-            self.print(
-                'Please add slack bot token to modules/exporting_alerts/slack_bot_token_secret. Stopping.'
-            )
-            # Stop the module
-            __database__.publish('export_alert', 'stop_process')
-        # Get config vaeriables
-        # Available options ['slack','stix']
-        self.export_to = self.config.get('exporting_alerts', 'export_to')
-        # convert to list
-        self.export_to = self.export_to.strip('][').replace(' ', '').split(',')
-        # Convert to lowercase
-        self.export_to = [option.lower() for option in self.export_to]
-        self.slack_channel_name = self.config.get(
-            'exporting_alerts', 'slack_channel_name'
-        )
-        self.sensor_name = self.config.get('exporting_alerts', 'sensor_name')
-        self.TAXII_server = self.config.get('exporting_alerts', 'TAXII_server')
-        # taxii server port
-        self.port = self.config.get('exporting_alerts', 'port')
-        self.use_https = self.config.get('exporting_alerts', 'use_https')
-        if self.use_https.lower() == 'true':
-            self.use_https = True
-        elif self.use_https.lower() == 'false':
-            self.use_https = False
-        self.discovery_path = self.config.get(
-            'exporting_alerts', 'discovery_path'
-        )
-        self.inbox_path = self.config.get('exporting_alerts', 'inbox_path')
-        # push delay exists -> create thread that waits
-        # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
-        try:
-            self.push_delay = int(
-                self.config.get('exporting_alerts', 'push_delay')
-            )
-        except:
-            # Here means that push_delay is None in slips.conf(default value).
-            # we set it to export to the server every 1h by default
-            self.push_delay = 60 * 60
-        self.collection_name = self.config.get(
-            'exporting_alerts', 'collection_name'
-        )
-        self.taxii_username = self.config.get(
-            'exporting_alerts', 'taxii_username'
-        )
-        self.taxii_password = self.config.get(
-            'exporting_alerts', 'taxii_password'
-        )
-        self.jwt_auth_url = self.config.get('exporting_alerts', 'jwt_auth_url')
+        # Get config variables
+        self.read_configuration()
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = 0.00000001
+
+    def read_configuration(self):
+        """Read the configuration file for what we need"""
+
+        def get(section, value, default_value=False):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
+
+        # Available options ['slack','stix']
+        self.export_to = get('exporting_alerts', 'export_to', False)
+        if self.export_to:
+            self.export_to = self.export_to\
+                .strip('][')\
+                .replace(' ', '')\
+                .lower()\
+                .split(',')
+
+        if 'slack' in self.export_to:
+            self.slack_token_filepath = get(
+                'exporting_alerts',
+                'slack_api_path',
+            )
+            self.slack_channel_name = get(
+                'exporting_alerts',
+                'slack_channel_name',
+                False)
+            self.sensor_name = get(
+                'exporting_alerts',
+                'sensor_name'
+            )
+
+        if 'stix' in self.export_to:
+            self.TAXII_server = get('exporting_alerts',
+                                    'TAXII_server')
+            # taxii server port
+            self.port = get('exporting_alerts',
+                            'port')
+            self.use_https = get('exporting_alerts',
+                                 'use_https', 'false')
+            self.use_https = True  if self.use_https.lower() == 'true' else False
+            self.discovery_path = get('exporting_alerts',
+                                      'discovery_path')
+            self.inbox_path = get('exporting_alerts',
+                                  'inbox_path')
+            # push delay exists -> create thread that waits
+            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
+            self.push_delay = get('exporting_alerts',
+                                  'push_delay',
+                                  60*60)
+            self.collection_name = get(
+                'exporting_alerts',
+                'collection_name'
+            )
+            self.taxii_username = get(
+                'exporting_alerts',
+                'taxii_username'
+            )
+            self.taxii_password = get(
+                'exporting_alerts', 'taxii_password'
+            )
+            self.jwt_auth_url = get(
+                'exporting_alerts', 'jwt_auth_url'
+            )
 
     def print(self, text, verbose=1, debug=0):
         """
