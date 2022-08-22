@@ -26,6 +26,9 @@ class Hotkeys:
         self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
         self.bp.add_url_rule("/evidence/<profile>/<timewindow>/<alert_id>", view_func=self.set_evidence)
 
+    # ----------------------------------------
+    # HELPER FUNCTIONS
+    # ----------------------------------------
     def ts_to_date(self, ts, seconds=False):
         if seconds:
             return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S.%f')
@@ -43,9 +46,6 @@ class Hotkeys:
             dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
             dict_tws[tw_n]["blocked"] = False  # needed to color profiles
         return dict_tws
-
-    def index(self):
-        return render_template('hotkeys.html', title='Slips')
 
     def get_ip_info(self, ip):
         """
@@ -81,6 +81,14 @@ class Hotkeys:
                     "down_file": down_file, "ref_file": ref_file,
                     "com_file": com_file}
         return data
+
+    # ----------------------------------------
+    # ROUTE FUNCTIONS
+    # ----------------------------------------
+
+    def index(self):
+        return render_template('hotkeys.html', title='Slips')
+
 
     def set_ip_info(self, ip):
         '''
