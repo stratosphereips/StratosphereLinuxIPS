@@ -18,8 +18,7 @@ import time
 import _thread
 import sys
 import validators
-import datetime
-
+import configparser
 
 class Module(Module, multiprocessing.Process):
     """
@@ -33,20 +32,101 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
         self.config = config
-        # Start the DB
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('evidence_added')
+        # Get config variables
+        self.read_configuration()
+        self.get_slack_token()
+        # This bundle should be created once and we should append all indicators to it
+        self.is_bundle_created = False
+        self.is_thread_created = False
+        # To avoid duplicates in STIX_data.json
+        self.added_ips = set()
+        self.timeout = 0.00000001
+
+    def read_configuration(self):
+        """Read the configuration file for what we need"""
+
+        def get(section, value, default_value=False):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError,
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
+
+        # Available options ['slack','stix']
+        self.export_to = get('exporting_alerts', 'export_to', False)
+        if self.export_to:
+            self.export_to = self.export_to\
+                .strip('][')\
+                .replace(' ', '')\
+                .lower()\
+                .split(',')
+
+        if 'slack' in self.export_to:
+            self.slack_token_filepath = get(
+                'exporting_alerts',
+                'slack_api_path',
+            )
+            self.slack_channel_name = get(
+                'exporting_alerts',
+                'slack_channel_name',
+                False)
+            self.sensor_name = get(
+                'exporting_alerts',
+                'sensor_name'
+            )
+
+        if 'stix' in self.export_to:
+            self.TAXII_server = get('exporting_alerts',
+                                    'TAXII_server')
+            # taxii server port
+            self.port = get('exporting_alerts',
+                            'port')
+            self.use_https = get('exporting_alerts',
+                                 'use_https', 'false')
+            self.use_https = True  if self.use_https.lower() == 'true' else False
+            self.discovery_path = get('exporting_alerts',
+                                      'discovery_path')
+            self.inbox_path = get('exporting_alerts',
+                                  'inbox_path')
+            # push delay exists -> create thread that waits
+            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
+            self.push_delay = get('exporting_alerts',
+                                  'push_delay',
+                                  60*60)
+            self.collection_name = get(
+                'exporting_alerts',
+                'collection_name'
+            )
+            self.taxii_username = get(
+                'exporting_alerts',
+                'taxii_username'
+            )
+            self.taxii_password = get(
+                'exporting_alerts', 'taxii_password'
+            )
+            self.jwt_auth_url = get(
+                'exporting_alerts', 'jwt_auth_url'
+            )
+
+    def get_slack_token(self):
+        if not hasattr(self, 'slack_token_filepath'):
+            return False
         # slack_bot_token_secret should contain your slack token only
         try:
-            with open(
-                'modules/exporting_alerts/slack_bot_token_secret', 'r'
-            ) as f:
+            with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
         except FileNotFoundError:
             self.print(
@@ -54,55 +134,6 @@ class Module(Module, multiprocessing.Process):
             )
             # Stop the module
             __database__.publish('export_alert', 'stop_process')
-        # Get config vaeriables
-        # Available options ['slack','stix']
-        self.export_to = self.config.get('exporting_alerts', 'export_to')
-        # convert to list
-        self.export_to = self.export_to.strip('][').replace(' ', '').split(',')
-        # Convert to lowercase
-        self.export_to = [option.lower() for option in self.export_to]
-        self.slack_channel_name = self.config.get(
-            'exporting_alerts', 'slack_channel_name'
-        )
-        self.sensor_name = self.config.get('exporting_alerts', 'sensor_name')
-        self.TAXII_server = self.config.get('exporting_alerts', 'TAXII_server')
-        # taxii server port
-        self.port = self.config.get('exporting_alerts', 'port')
-        self.use_https = self.config.get('exporting_alerts', 'use_https')
-        if self.use_https.lower() == 'true':
-            self.use_https = True
-        elif self.use_https.lower() == 'false':
-            self.use_https = False
-        self.discovery_path = self.config.get(
-            'exporting_alerts', 'discovery_path'
-        )
-        self.inbox_path = self.config.get('exporting_alerts', 'inbox_path')
-        # push delay exists -> create thread that waits
-        # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
-        try:
-            self.push_delay = int(
-                self.config.get('exporting_alerts', 'push_delay')
-            )
-        except:
-            # Here means that push_delay is None in slips.conf(default value).
-            # we set it to export to the server every 1h by default
-            self.push_delay = 60 * 60
-        self.collection_name = self.config.get(
-            'exporting_alerts', 'collection_name'
-        )
-        self.taxii_username = self.config.get(
-            'exporting_alerts', 'taxii_username'
-        )
-        self.taxii_password = self.config.get(
-            'exporting_alerts', 'taxii_password'
-        )
-        self.jwt_auth_url = self.config.get('exporting_alerts', 'jwt_auth_url')
-        # This bundle should be created once and we should append all indicators to it
-        self.is_bundle_created = False
-        self.is_thread_created = False
-        # To avoid duplicates in STIX_data.json
-        self.added_ips = set()
-        self.timeout = 0.00000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -152,11 +183,10 @@ class Module(Module, multiprocessing.Process):
         if self.BOT_TOKEN is '':
             # The file is empty
             self.print(
-                "Can't find SLACK_BOT_TOKEN in modules/exporting_alerts/slack_bot_token_secret.",
-                0,
-                2,
+                f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
             )
             return False
+
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
             response = slack_client.chat_postMessage(
@@ -165,12 +195,14 @@ class Module(Module, multiprocessing.Process):
                 # Sensor name is set in slips.conf
                 text=self.sensor_name + ': ' + msg_to_send,
             )
+            return True
+
         except SlackApiError as e:
             # You will get a SlackApiError if "ok" is False
             assert e.response[
                 'error'
             ], 'Problem while exporting to slack.'   # str like 'invalid_auth', 'channel_not_found'
-        return True
+            return False
 
     def push_to_TAXII_server(self):
         """
@@ -282,7 +314,7 @@ class Module(Module, multiprocessing.Process):
             # for example 127.0.0.1:443:tcp
             # Get the ip
             detection_info = detection_info.split(':')[0]
-        ioc_type = self.get_ioc_type(detection_info)
+        ioc_type = utils.detect_data_type(detection_info)
         if ioc_type is 'ip':
             pattern = "[ip-addr:value = '{}']".format(detection_info)
         elif ioc_type is 'domain':
@@ -357,44 +389,43 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        # Main loop function
         while True:
             try:
                 message_c1 = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
-                if message_c1['data'] == 'stop_process':
+
+                if message_c1 and message_c1['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if message_c1['channel'] == 'evidence_added':
-                    if type(message_c1['data']) == str:
-                        evidence = json.loads(message_c1['data'])
-                        description = evidence['description']
-                        if 'slack' in self.export_to:
-                            sent_to_slack = self.send_to_slack(description)
-                            if not sent_to_slack:
-                                self.print('Problem in send_to_slack()', 0, 3)
-                        if 'stix' in self.export_to:
-                            msg_to_send = (
-                                evidence['type_evidence'],
-                                evidence['type_detection'],
-                                evidence['detection_info'],
-                                description,
+
+                if utils.is_msg_intended_for(message_c1, 'evidence_added'):
+                    evidence = json.loads(message_c1['data'])
+                    description = evidence['description']
+
+                    if 'slack' in self.export_to:
+                        self.send_to_slack(description)
+
+                    if 'stix' in self.export_to:
+                        msg_to_send = (
+                            evidence['type_evidence'],
+                            evidence['type_detection'],
+                            evidence['detection_info'],
+                            description,
+                        )
+                        # This thread is responsible for waiting n seconds before each push to the stix server
+                        # it starts the timer when the first alert happens
+                        # push_delay should be an int when slips is running using -i
+                        if (
+                            self.is_thread_created is False
+                            and '-i' in sys.argv
+                        ):
+                            # this thread is started only once
+                            _thread.start_new_thread(
+                                self.send_to_server, ()
                             )
-                            # This thread is responsible for waiting n seconds before each push to the stix server
-                            # it starts the timer when the first alert happens
-                            # push_delay should be an int when slips is running using -i
-                            if (
-                                self.is_thread_created is False
-                                and '-i' in sys.argv
-                            ):
-                                # this thread is started only once
-                                _thread.start_new_thread(
-                                    self.send_to_server, ()
-                                )
-                                self.is_thread_created = True
-                            exported_to_stix = self.export_to_STIX(msg_to_send)
-                            if not exported_to_stix:
-                                self.print('Problem in export_to_STIX()', 0, 3)
+                            self.is_thread_created = True
+                        exported_to_stix = self.export_to_STIX(msg_to_send)
+                        if not exported_to_stix:
+                            self.print('Problem in export_to_STIX()', 0, 3)
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
