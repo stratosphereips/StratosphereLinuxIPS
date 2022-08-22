@@ -424,8 +424,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
-                        f'Total {amount_of_dports} dst ports of protocol {protocol}. '
-                        f'Not Established. Tot pkts sent all ports: {pkts_sent}. '
+                        f'Total {amount_of_dports} dst {protocol} ports were scanned. '
+                        f'Not established. Tot pkts sent to all ports: {pkts_sent}. '
                         f'Confidence: {confidence}'
                     )
         __database__.setEvidence(
