@@ -409,13 +409,24 @@ $('#table_timeline_filter_button').click(function(){
 
 
 function KeyPress(e) {
-      var evtobj = window.event? event : e
+      let evtobj = window.event? event : e
       if (evtobj.keyCode == 78 && evtobj.ctrlKey){
+      var table = $('#192_168_2_16').DataTable();
+      console.log(active_timewindow)
+      var allData = table.rows().data();
+      allData.each(function (value, index) {
+          if ((value.tw).localeCompare(active_timewindow) == 0){
+             console.log(active_timewindow, "active next ", value.tw)
+             $(table.row(index+1).node()).addClass('row_selected');
+             active_timewindow = table.row(index+1).data()["tw"]
+          }
+      });
 //      var tableIndexes = profiles.rows().indexes();
 //var curRowIndex = tableIndexes.indexOf(row);
 //alert(tableIndexes, curRowIndex);
 //var nextRow =  tableIndexes[curRowIndex + 1];
         alert("IJDIDEJ")
+//        alert(tableIndexes)
       }
 }
 
