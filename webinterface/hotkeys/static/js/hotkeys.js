@@ -107,7 +107,12 @@ let profiles = function () {
                 let url = '/hotkeys/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
+        },
+
+        get_profiles_table: function(){
+            return profiles_table;
         }
+
     }
 }
 
