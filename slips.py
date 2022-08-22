@@ -1320,7 +1320,7 @@ class Main:
         )
         # Ignore exporting alerts module if export_to is empty
         export_to = (
-            self.config.get('ExportingAlerts', 'export_to')
+            self.config.get('exporting_alerts', 'export_to')
                 .rstrip('][')
                 .replace(' ', '')
                 .lower()
