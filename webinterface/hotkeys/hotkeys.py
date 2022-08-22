@@ -31,13 +31,6 @@ class Hotkeys:
             return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S.%f')
         return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
 
-    def format_tw(self, profile, tw, seconds=False):
-        tw_tuple = self.db.zrange("tws" + profile, 0, -1, withscores=True)
-        tw_n = tw_tuple[0]
-        tw_ts = tw_tuple[1]
-        tw_date = self.ts_to_date(tw_ts)
-        return "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
-
     def get_all_tw_with_ts(self, profileid):
         tws = self.db.zrange("tws" + profileid, 0, -1, withscores=True)
         dict_tws = defaultdict(dict)
