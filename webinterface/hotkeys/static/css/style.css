@@ -37,6 +37,11 @@ border-style: solid;}
     background: none;
 }
 
+
+tr.row_selected td{
+background-color:rgba(116, 206, 80, 1) !important;
+}
+
 .table-hover > tbody > tr:hover > td,
 .table-hover > tbody > tr:hover > th {
     background-color: #CFF5FF;
