@@ -388,8 +388,12 @@ to search for Geolocation.
 Slips is shipped with an offline database ```databases/macaddress-db.json``` for 
 MAC address vendor mapping.
 
-This database is a combination of 2 different online databases, but the format of them
-is changed to a format slips understands and to reduce the size of the db.
+Slips updates this database by default every 2 weeks using the following online db
+
+https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
+
+You can change how often this db is updated by changing the value of
+```mac_db_update``` in ```slips.conf```.
 
 Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
 database using the OUI.

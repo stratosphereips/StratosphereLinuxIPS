@@ -56,114 +56,95 @@ class UpdateFileManager:
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
-        try:
-            # update period
-            self.update_period = self.config.get(
-                'threatintelligence', 'malicious_data_update_period'
-            )
-            self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError, TypeError, ValueError):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400   # 1 day
-        try:
-            # Read the path to where to store and read the malicious files
-            self.path_to_threat_intelligence_data = self.config.get(
-                'threatintelligence',
-                'download_path_for_remote_threat_intelligence',
-            )
-            self.path_to_threat_intelligence_data = self.sanitize(
-                self.path_to_threat_intelligence_data
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_threat_intelligence_data = (
-                'modules/threat_intelligence/remote_data_files/'
-            )
-        if not os.path.exists(self.path_to_threat_intelligence_data):
-            os.mkdir(self.path_to_threat_intelligence_data)
+        def get(section, value, default_value):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
+                configparser.NoOptionError,
+                configparser.NoSectionError,
+                NameError, TypeError, ValueError
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
 
-        try:
-            # Read the list of URLs to download. Convert to list
-            self.ti_feed_tuples = self.config.get(
-                'threatintelligence', 'ti_files'
-            ).split('\n')
-            self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.url_feeds = {}
-
-        try:
-            # Read the list of ja3 feeds to download. Convert to list
-            self.ja3_feed_tuples = self.config.get(
-                'threatintelligence', 'ja3_feeds'
-            ).split('\n')
-            self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ja3_feeds = {}
-
-        try:
-            # Read the list of ja3 feeds to download. Convert to list
-            self.ssl_feed_tuples = self.config.get(
-                'threatintelligence', 'ssl_feeds'
-            ).split('\n')
-            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ssl_feeds = {}
-
-        try:
-            # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get(
-                'threatintelligence', 'RiskIQ_credentials_path'
-            )
-            with open(RiskIQ_credentials_path, 'r') as f:
-                self.riskiq_email = f.readline().replace('\n', '')
-                self.riskiq_key = f.readline().replace('\n', '')
-                if len(self.riskiq_key) != 64:
-                    raise NameError
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            FileNotFoundError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
+        def read_riskiq_creds(RiskIQ_credentials_path):
             self.riskiq_email = None
             self.riskiq_key = None
 
+            if not RiskIQ_credentials_path:
+                return
+
+            RiskIQ_credentials_path  = os.path.join(os.getcwd(), RiskIQ_credentials_path)
+            if not os.path.exists(RiskIQ_credentials_path):
+                return
+
+            with open(RiskIQ_credentials_path, 'r') as f:
+                self.riskiq_email = f.readline().replace('\n', '')
+                self.riskiq_key = f.readline().replace('\n', '')
+
+        self.update_period = get('threatintelligence', 'malicious_data_update_period', 86400)
         try:
-            # riskiq update period
-            self.riskiq_update_period = self.config.get(
-                'threatintelligence', 'update_period'
-            )
+            self.update_period = float(self.update_period)
+        except(NameError, TypeError, ValueError):
+            self.update_period = 86400   # 1 day
+
+        self.path_to_threat_intelligence_data = get(
+            'threatintelligence',
+            'download_path_for_remote_threat_intelligence',
+            'modules/threat_intelligence/remote_data_files/'
+        )
+        self.path_to_threat_intelligence_data = self.sanitize(
+                self.path_to_threat_intelligence_data
+        )
+        if not os.path.exists(self.path_to_threat_intelligence_data):
+            os.mkdir(self.path_to_threat_intelligence_data)
+
+        self.ti_feed_tuples = get('threatintelligence', 'ti_files', '')
+        if self.ti_feed_tuples:
+            self.ti_feed_tuples = self.ti_feed_tuples.split('\n')
+            self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
+        else:
+            self.url_feeds = {}
+
+        self.ja3_feed_tuples = get('threatintelligence', 'ja3_feeds', '')
+        if self.ja3_feed_tuples:
+            self.ja3_feed_tuples = self.ja3_feed_tuples.split('\n')
+            self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
+        else:
+            self.ja3_feeds = {}
+
+        self.ssl_feed_tuples = get('threatintelligence', 'ssl_feeds', '')
+        if self.ssl_feed_tuples:
+            self.ssl_feed_tuples = self.ssl_feed_tuples.split('\n')
+            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+        else:
+            self.ssl_feeds = {}
+
+        RiskIQ_credentials_path = get('threatintelligence', 'RiskIQ_credentials_path', '')
+        read_riskiq_creds(RiskIQ_credentials_path)
+
+
+        self.riskiq_update_period = get('threatintelligence', 'update_period', 604800)  # 1 week
+        self.riskiq_update_period = float(self.riskiq_update_period)
+        try:
             self.riskiq_update_period = float(self.riskiq_update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.riskiq_update_period = 604800   # 1 week
+        except(NameError, TypeError, ValueError):
+            self.riskiq_update_period = 604800
+
+        self.mac_db_update_period = get('threatintelligence', 'mac_db_update', 1209600)  # 2 weeks
+        try:
+            self.mac_db_update_period = float(self.mac_db_update_period)
+        except(NameError, TypeError, ValueError):
+            self.mac_db_update_period = 1209600
+
+        self.mac_db_link = get('threatintelligence', 'mac_db', '')
+        self.mac_db_link = self.sanitize(self.mac_db_link)
+
 
     def get_feed_properties(self, feeds):
         """
@@ -348,7 +329,7 @@ class UpdateFileManager:
         """
         return response.headers.get('Last-Modified', False)
 
-    def __check_if_update(self, file_to_download: str):
+    def __check_if_update(self, file_to_download: str, update_period):
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
@@ -356,7 +337,7 @@ class UpdateFileManager:
         Returns the response if the file is old and needs to be updated
         """
         file_name_to_download = file_to_download.split('/')[-1]
-        # Get last timeupdate of the file
+        # Get the last time this file was updated
         data = __database__.get_TI_file_info(file_name_to_download)
         try:
             last_update = data['time']
@@ -366,19 +347,12 @@ class UpdateFileManager:
 
         now = time.time()
 
-        update_period = (
-            self.riskiq_update_period
-            if 'risk' in file_to_download
-            else self.update_period
-        )
-
-        # we have 2 types of remote files, JA3 feeds and TI feeds
-        ################### Checking JA3 feeds ######################
-        # did update_period pass since last time we updated?
-        if 'risk' in file_to_download and last_update + update_period < now:
-            return True
-        ################### Checkign TI feeds ######################
         if last_update + update_period < now:
+            if (
+                'risk' in file_to_download
+            ):
+                return True
+
             # Update only if the e-tag is different
             try:
                 file_name_to_download = file_to_download.split('/')[-1]
@@ -388,6 +362,10 @@ class UpdateFileManager:
                 response = self.download_file(file_to_download)
                 if not response:
                     return False
+
+                if 'maclookup' in file_to_download:
+                    # no need to check the e-tag
+                    return response
 
                 # Get what files are stored in cache db and their E-TAG to compare with current files
                 data = __database__.get_TI_file_info(file_name_to_download)
@@ -436,6 +414,7 @@ class UpdateFileManager:
         else:
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1
+
         return False
 
     def get_e_tag(self, response):
@@ -1048,7 +1027,7 @@ class UpdateFileManager:
             '\tRead Data {}: {}'.format(data, description), 3, 0
         )
         return data, description
-    
+
     def add_to_ip_ctr(self, ip, blacklist):
         """
         keep track of how many times an ip was there in all blacklists
@@ -1068,7 +1047,7 @@ class UpdateFileManager:
                 'blacklists': [blacklist]
             }
 
-    
+
     def parse_ti_feed(
             self, link_to_download, ti_file_path: str
     ) -> bool:
@@ -1439,7 +1418,7 @@ class UpdateFileManager:
             # when we parse ti files for the first time, we have the info to print the summary
             # when the ti files are already updated, from a previous run, we don't
             return
-        
+
         ips = {
             'in 1 blacklist': 0,
             'in 2 blacklist': 0,
@@ -1461,6 +1440,20 @@ class UpdateFileManager:
         self.print(f'Number of IPs that appeared in 2 blacklists: {ips_in_2_bl}')
         self.print(f'Number of IPs that appeared in 3 blacklists: {ips_in_3_bl}')
 
+    def update_mac_db(self, response):
+        if response.status_code != 200:
+            return
+
+        path_to_mac_db = 'databases/macaddr-db.json'
+
+        # write to filee the info as 1 json per line
+        mac_info = response.text.replace(']','').replace('[','').replace(',{','\n{')
+        with open(path_to_mac_db, 'w') as mac_db:
+            mac_db.write(mac_info)
+        # todo the basename doesn't make sense
+        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
+
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1480,6 +1473,9 @@ class UpdateFileManager:
             # self.update_ports_info()
             # self.update_org_files()
 
+            ############### Update slips local files ################
+            if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
+                self.update_mac_db(response)
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
@@ -1493,25 +1489,24 @@ class UpdateFileManager:
                 file_to_download = file_to_download.strip()
                 file_to_download = self.sanitize(file_to_download)
 
-                response = self.__check_if_update(file_to_download)
-                if not response:
+                response = self.__check_if_update(file_to_download, self.update_period)
+                if response:
                     # failed to get the response, either a server problem
-                    # or the the file is up to date so the response isn't needed
+                    # or the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
-                    continue
-                
-                # this run wasn't started with existing ti files in the db 
-                self.first_time_reading_files = True
 
-                self.log(
-                    f'Downloading the remote file {file_to_download}'
-                )
-                # every function call to update_TI_file is now running concurrently instead of serially
-                # so when a server's taking a while to give us the TI feed, we proceed
-                # to download the next file instead of being idle
-                task = asyncio.create_task(
-                    self.update_TI_file(file_to_download, response)
-                )
+                    # this run wasn't started with existing ti files in the db
+                    self.first_time_reading_files = True
+
+                    self.log(
+                        f'Downloading the remote file {file_to_download}'
+                    )
+                    # every function call to update_TI_file is now running concurrently instead of serially
+                    # so when a server's taking a while to give us the TI feed, we proceed
+                    # to download the next file instead of being idle
+                    task = asyncio.create_task(
+                        self.update_TI_file(file_to_download, response)
+                    )
 
             ############### Update RiskIQ domains ################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
@@ -1519,7 +1514,7 @@ class UpdateFileManager:
             if (
                 self.riskiq_email
                 and self.riskiq_key
-                and self.__check_if_update('riskiq_domains')
+                and self.__check_if_update('riskiq_domains', self.riskiq_update_period)
             ):
                 self.log(f'Updating RiskIQ domains')
                 if self.update_riskiq_feed():
