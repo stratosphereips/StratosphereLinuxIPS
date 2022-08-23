@@ -795,7 +795,7 @@ class Main:
                 self.save_the_db()
 
             # make sure that redis isn't saving snapshots whether -s is given or not
-            __database__.disable_redis_snapshots()
+            __database__.disable_redis_persistence()
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
@@ -1009,7 +1009,7 @@ class Main:
             open_servers:dict = self.print_open_redis_servers()
             if not open_servers:
                 self.terminate_slips()
-                
+
             server_to_close = input()
             # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == '0':
@@ -1414,7 +1414,7 @@ class Main:
             redis_port = 6379
             self.input_information = self.args.db
             __database__.connect_to_redis_server(redis_port)
-            __database__.enable_redis_snapshots()
+            __database__.enable_redis_persistence()
             #todo see why the dumps.rdb isn't loaded in 6379
             redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
             self.log_redis_server_PID(redis_port, redis_pid)
@@ -1422,7 +1422,7 @@ class Main:
             print(
                 f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
             )
-            __database__.disable_redis_snapshots()
+            __database__.disable_redis_persistence()
 
         self.terminate_slips()
 
@@ -1749,9 +1749,9 @@ class Main:
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
             if self.args.save:
-                __database__.enable_redis_snapshots()
-            else:
-                __database__.disable_redis_snapshots()
+                # it's disabled by default
+                __database__.enable_redis_persistence()
+
 
             if self.mode == 'daemonized':
                 std_files = {
