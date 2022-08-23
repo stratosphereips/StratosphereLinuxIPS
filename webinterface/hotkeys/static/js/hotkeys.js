@@ -90,10 +90,20 @@ let profiles = function () {
                     });
 
                     $(table_id_tw).on('click', 'tbody tr', function () {
-                        var row = table_tws.row($(this)).data();
+                        let row = table_tws.row($(this))
+                        let rowData = row.data();
+                        let rowIndex = row.index();
+                        let t = $(table_id_tw).DataTable();
+                        if(active_tw_id){
+                          $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
+
+                        }
+                        active_tw_id = table_id_tw
+                        active_timewindow_index = rowIndex;
+                        $(t.row(rowIndex).node()).addClass('row_selected');
                         active_profile =  profiles_table.row(tr).data()["profile"]
-                        active_timewindow = row["tw"]
-                        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + row["name"];
+                        active_timewindow = rowData["tw"]
+                        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + rowData["name"];
                         hotkey_hook.initialize_profile_timewindow()
                      });
 
