@@ -493,20 +493,12 @@ class Main:
         update_manager.update_org_files()
 
 
-    def add_metadata(self, end_date):
+    def add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
         """
         if not 'yes' in self.enable_metadata.lower():
             return
-
-        # add slips end date in the metadata dir
-        try:
-            with open(self.info_path, 'a') as f:
-                f.write(f'Slips end date: {end_date}\n')
-        except (NameError, AttributeError):
-            # slips is shut down before enable_metadata is read from slips.conf
-            pass
 
         metadata_dir = os.path.join(self.args.output, 'metadata')
         try:
@@ -670,6 +662,23 @@ class Main:
         )
         return True
 
+    def set_analysis_end_date(self):
+        """
+        Add the analysis end date to the metadata file and
+        the db for the web inerface to display
+        """
+
+        end_date = utils.convert_format(datetime.now(), utils.alerts_format)
+        __database__.set_input_metadata({'analysis_end': end_date})
+        if 'yes' in self.enable_metadata.lower():
+            # add slips end date in the metadata dir
+            try:
+                with open(self.info_path, 'a') as f:
+                    f.write(f'Slips end date: {end_date}\n')
+            except (NameError, AttributeError):
+                # slips is shut down before enable_metadata is read from slips.conf
+                pass
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
@@ -682,8 +691,7 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            end_date = utils.convert_format(datetime.now(), utils.alerts_format)
-            __database__.set_input_metadata({'analysis_end': end_date})
+            self.set_analysis_end_date()
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
@@ -1876,7 +1884,7 @@ class Main:
                                                 )
 
             if 'yes' in self.enable_metadata.lower():
-                self.info_path = self.add_metadata(end_date)
+                self.info_path = self.add_metadata()
 
             hostIP = self.store_host_ip()
 
