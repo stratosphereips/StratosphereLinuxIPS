@@ -418,25 +418,27 @@ $('#table_timeline_filter_button').click(function(){
 
 
 function KeyPress(e) {
-      let evtobj = window.event? event : e
-      if (evtobj.keyCode == 78 && evtobj.ctrlKey){
-      var table = $('#192_168_2_16').DataTable();
-      console.log(active_timewindow)
-      var allData = table.rows().data();
-      allData.each(function (value, index) {
-          if ((value.tw).localeCompare(active_timewindow) == 0){
-             console.log(active_timewindow, "active next ", value.tw)
-             $(table.row(index+1).node()).addClass('row_selected');
-             active_timewindow = table.row(index+1).data()["tw"]
-          }
-      });
-//      var tableIndexes = profiles.rows().indexes();
-//var curRowIndex = tableIndexes.indexOf(row);
-//alert(tableIndexes, curRowIndex);
-//var nextRow =  tableIndexes[curRowIndex + 1];
-        alert("IJDIDEJ")
-//        alert(tableIndexes)
-      }
+    let evtobj = window.event? event : e
+    if (evtobj.keyCode == 78 && evtobj.ctrlKey){
+        var table = $(active_tw_id).DataTable();
+        $(table.row(active_timewindow_index).node()).removeClass('row_selected');
+        if(active_timewindow_index == table.data().count() - 1){
+            active_timewindow_index = 0
+        }
+        active_timewindow_index += 1
+        $(table.row(active_timewindow_index).node()).addClass('row_selected');
+        active_timewindow = table.row(active_timewindow_index).data()["tw"]
+    }
+    if (evtobj.keyCode == 80 && evtobj.ctrlKey){
+        var table = $(active_tw_id).DataTable();
+        $(table.row(active_timewindow_index).node()).removeClass('row_selected');
+        if(active_timewindow_index == 0){
+            active_timewindow_index = table.data().count()
+        }
+        active_timewindow_index -= 1;
+        $(table.row(active_timewindow_index).node()).addClass('row_selected');
+        active_timewindow = table.row(active_timewindow_index).data()["tw"]
+    }
 }
 
 document.onkeydown = KeyPress;
