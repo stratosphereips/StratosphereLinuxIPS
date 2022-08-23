@@ -5,6 +5,8 @@ const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 co
 
 let active_profile = '';
 let active_timewindow = '';
+let active_timewindow_index = 0;
+let active_tw_id = "";
 let active_hotkey_name = 'timeline';
 let last_active_hotkey_name = 'timeline';
 let active_hotkey_table = null;
