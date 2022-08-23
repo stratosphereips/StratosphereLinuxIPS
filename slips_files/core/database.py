@@ -271,8 +271,9 @@ class Database(object):
                     'client-output-buffer-limit',
                     'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
                 )
+                self.disable_redis_persistence()
 
-                if self.deletePrevdb and not '-S' in sys.argv:
+                if self.deletePrevdb and not '-s' in sys.argv:
                     self.r.flushdb()
 
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
@@ -354,13 +355,14 @@ class Database(object):
             return True
         return False
 
-    def disable_redis_snapshots(self):
+    def disable_redis_persistence(self):
         """
         disable redis persistence and snapshotting
         """
         self.r.config_set('save', '')
+        self.r.config_set('appendonly', 'no')
 
-    def enable_redis_snapshots(self):
+    def enable_redis_persistence(self):
         """
         Set redis to save a snapshot every 60s to 900s
         This is redis default behaviour, but slips disables it by default,
@@ -374,6 +376,9 @@ class Database(object):
         #   In the example below the behaviour will be to save:
         #   after 60 sec if at least 10000 keys changed
         self.r.config_set('save', '60 10000')
+        # AOF persistence logs every write operation received by the server,
+        # that will be played again at server startup
+        self.r.config_set('appendonly', 'yes')
 
     def addProfile(self, profileid, starttime, duration):
         """
