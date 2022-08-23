@@ -80,7 +80,6 @@ let profiles = function () {
                         "ajax":ajax_ljnk,
                         "bDestroy": true,
                         dom: custom_dom,
-                        select: true,
                         bInfo: false,
                         ordering: false,
                         paging: false,
