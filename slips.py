@@ -1177,14 +1177,14 @@ class Main:
             '--save',
             action='store_true',
             required=False,
-            help='Save the analysed file db to disk. Requires root access.',
+            help='Save the analysed file db to disk.',
         )
         parser.add_argument(
             '-d',
             '--db',
             action='store',
             required=False,
-            help='Read an analysed file (rdb) from disk. Requires root access.',
+            help='Read an analysed file (rdb) from disk.',
         )
         parser.add_argument(
             '-D',
@@ -1572,15 +1572,8 @@ class Main:
                 self.shutdown_gracefully()
 
         # Check if user want to save and load a db at the same time
-        if self.args.save:
-            # make sure slips is running as root
-            if os.geteuid() != 0:
-                print(
-                    'Slips needs to be run as root to save the database. Stopping.'
-                )
-                self.terminate_slips()
-            if self.args.db:
-                print("Can't use -s and -b together")
+        if self.args.save and self.args.db:
+                print("Can't use -s and -d together")
                 self.terminate_slips()
 
     def set_input_metadata(self):
@@ -1753,9 +1746,6 @@ class Main:
 
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
-            if self.args.save:
-                # it's disabled by default
-                __database__.enable_redis_persistence()
 
 
             if self.mode == 'daemonized':
