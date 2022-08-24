@@ -88,6 +88,34 @@ class Database(object):
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
+        # redis appendonly
+        self.set_redis_options()
+
+    def set_redis_options(self):
+        """
+        Sets the default slips options,
+         when using a different port we override it with -p
+        """
+        self.redis_options=\
+            {
+                'port': 6379,
+                'daemonize': 'yes',
+                'client-output-buffer-limit': 'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
+                'stop-writes-on-bgsave-error': 'no',
+                'save': '',
+                'appendonly': 'no'
+            }
+        if '-s' in sys.argv:
+            self.redis_options.update({
+                'save': '60 10000',
+                'appendonly': 'yes'
+            })
+
+        with open(self.redis_conf_file, 'w') as f:
+            for option, val in self.redis_options.items():
+                f.write(f'{option} {val}\n')
+
+
 
     def get_redis_server_PID(self, redis_port):
         """
@@ -3872,9 +3900,9 @@ class Database(object):
         redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
-            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb' \
-                      f' && {self.sudo} rm dump.rdb'
+            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
             os.system(command)
+            os.remove(redis_db_path)
             print(f'[Main] Database saved to {backup_file}.rdb')
             return True
 
@@ -3905,19 +3933,13 @@ class Database(object):
             return False
 
         try:
-            redis_options = {
-                'port': 32850,
-                'daemonize': 'yes',
-                'save': '""',
-                'appendonly':'no',
-                'client-output-buffer-limit': 'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
-                'stop-writes-on-bgsave-error': 'no',
+            self.redis_options.update({
                 'dbfilename': os.path.basename(backup_file),
                 'dir': os.path.dirname(backup_file)
-            }
+            })
 
             with open(self.redis_conf_file, 'w') as f:
-                for option, val in redis_options.items():
+                for option, val in self.redis_options.items():
                     f.write(f'{option} {val}\n')
 
             # Stop the server first in order for redis to load another db
