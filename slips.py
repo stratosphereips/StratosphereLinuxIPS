@@ -441,7 +441,7 @@ class Main:
 
     def close_all_ports(self):
         """
-        Closes all the redis ports
+        Closes all the redis ports  in logfile and in slips supported range of ports
         """
         if not hasattr(self, 'open_servers_PIDs'):
             self.get_open_redis_servers()
@@ -453,11 +453,14 @@ class Main:
 
 
         # closes all the ports in slips supported range of ports
-        for port in range(self.start_port, self.end_port + 1):
+        slips_supported_range = [port for port in range(self.start_port, self.end_port + 1)]
+        slips_supported_range.append(6379)
+        for port in slips_supported_range:
             pid = self.get_pid_of_redis_server(port)
             if pid:
                 self.flush_redis_server(pid=pid)
                 self.kill_redis_server(pid)
+
 
         # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
         print(f"Successfully closed all open redis servers")
@@ -1002,12 +1005,8 @@ class Main:
             # fill the dict
             self.get_open_redis_servers()
 
-        # if len(self.open_servers_PIDs) == 0:
-        #     print('No unused open servers to kill.')
-        #     sys.exit(-1)
-        #     return
         try:
-            # open_servers {1: (port,pid),...}}
+            # open_servers {counter: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
             if not open_servers:
                 self.terminate_slips()
@@ -1017,7 +1016,8 @@ class Main:
             if server_to_close == '0':
                 self.close_all_ports()
 
-            if len(open_servers) > 0:
+            elif len(open_servers) > 0:
+                # close the given server number
                 try:
                     pid = open_servers[int(server_to_close)][1]
                     port = open_servers[int(server_to_close)][0]
@@ -1030,6 +1030,7 @@ class Main:
                     self.remove_server_from_log(port)
                 except (KeyError, ValueError):
                     print(f"Invalid input {server_to_close}")
+
         except KeyboardInterrupt:
             pass
         self.terminate_slips()
@@ -1727,6 +1728,10 @@ class Main:
             else:
                 self.redis_port = 6379
 
+            # log the PID of the started redis-server
+            redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
+            self.log_redis_server_PID(self.redis_port, redis_pid)
+
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
@@ -1747,6 +1752,8 @@ class Main:
             )
             # this process starts the db
             output_process.start()
+            __database__.store_process_PID('OutputProcess', int(output_process.pid))
+
 
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
@@ -1771,10 +1778,6 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-            # log the PID of the started redis-server
-            redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
-            __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
             self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
             self.print(f'Started main program [PID {self.pid}]', 1, 0)
