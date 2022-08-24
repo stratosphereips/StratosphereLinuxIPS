@@ -957,11 +957,12 @@ class Main:
             return False
         return True
 
-    def remove_old_logline(self):
+    def remove_old_logline(self, redis_port):
         """
-        The only line with 6379 should be the last line, remove all the ones above
+        This function should be called after adding a new duplicate line with redis_port
+        The only line with redis_port will be the last line, remove all the ones above
         """
-        redis_port = str(6379)
+        redis_port = str(redis_port)
         tmpfile = 'tmp_running_slips_log.txt'
         with open(self.running_logfile, 'r') as logfile:
             with open(tmpfile, 'w') as tmp:
@@ -1270,7 +1271,7 @@ class Main:
 
         if redis_port == 6379:
             # remove the old logline using this port
-            self.remove_old_logline()
+            self.remove_old_logline(6379)
 
     def set_mode(self, mode, daemon=''):
         """
@@ -1404,13 +1405,17 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
+            # to be able to use running_slips_info later as a non-root user,
+            # we shouldn't modify it as root
+            utils.drop_root_privs()
             redis_port = 32850
-            self.input_information = self.args.db
+            self.input_information = os.path.basename(self.args.db)
             __database__.connect_to_redis_server(redis_port)
 
             redis_pid = __database__.get_redis_server_PID(redis_port)
-            self.zeek_folder = ''
+            self.zeek_folder = '""'
             self.log_redis_server_PID(redis_port, redis_pid)
+            self.remove_old_logline(redis_port)
 
             print(
                 f'{self.args.db} loaded successfully.\n'
