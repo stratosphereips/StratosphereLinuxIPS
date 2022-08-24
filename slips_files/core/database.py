@@ -1044,7 +1044,7 @@ class Database(object):
                 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
-    
+
     def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid):
         data_to_send = {
                 'ip': str(ip),
@@ -1058,7 +1058,7 @@ class Database(object):
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
-        
+
         # ask other peers their opinion about this IP
         cache_age = 1000
         data_to_send.update({'cache_age': cache_age})
@@ -1224,9 +1224,9 @@ class Database(object):
             pkts,
             dport,
             dpkts,
-            totbytes, 
-            ip, 
-            starttime, 
+            totbytes,
+            ip,
+            starttime,
             uid
         )
 
@@ -1241,8 +1241,8 @@ class Database(object):
             json.dumps(profileid_twid_data)
         )
         return True
-     
-     
+
+
     def refresh_data_tuples(self):
         """
         Go through all the tuples and refresh the data about the ipsinfo
@@ -1874,7 +1874,7 @@ class Database(object):
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
-        
+
         self.r.hset(
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
@@ -3887,7 +3887,7 @@ class Database(object):
 
     def load(self, backup_file: str) -> bool:
         """
-        Load the db from disk to the db on port 6379
+        Load the db from disk to the db on port 32850
         backup_file should be the full path of the .rdb
         """
         # do not use self.print here! the outputqueue isn't initialized yet
@@ -3899,47 +3899,38 @@ class Database(object):
         # Check if valid .rdb file
         command = 'file ' + backup_file
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        # Get command output
         file_type = result.stdout.decode('utf-8')
-        # Check if valid redis database
         if not 'Redis' in file_type:
             print(
-                '{} is not a valid redis database file.'.format(backup_file)
+                f'{backup_file} is not a valid redis database file.'
             )
             return False
 
-
-        # Locate the default path of redis dump.rdb
-        if platform.system() == 'Darwin':
-            redis_dir = '/opt/homebrew/var/db/redis'
-        else:
-            command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
-            redis_dir = subprocess.getoutput(command)
-            if 'dir /var/lib/redis' in redis_dir:
-                redis_dir = '/var/lib/redis'
-            else:
-                # Get the exact path without spaces
-                redis_dir = redis_dir[redis_dir.index(' ') + 1:]
-
-        # All modules throw redis.exceptions.ConnectionError when we stop
-        # the redis-server so we need to close all channels first
-        # We won't need them since we're loading a db that's already been analyzed
-        self.publish_stop()
-        # Stop the server first in order for redis to load another db
-        os.system(self.sudo + 'service redis-server stop')
-        # Copy out saved db to the dump.rdb (the db redis uses by default)
         try:
-            command = (
-                self.sudo + 'cp ' + backup_file + ' ' + redis_dir + '/dump.rdb'
-            )
-            os.system(command)
+            redis_options = {
+                'port': 32850,
+                'daemonize': 'yes',
+                'save': '""',
+                'appendonly':'no',
+                'client-output-buffer-limit': 'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
+                'stop-writes-on-bgsave-error': 'no',
+                'dbfilename': os.path.basename(backup_file),
+                'dir': os.path.dirname(backup_file)
+            }
+
+            with open(self.redis_conf_file, 'w') as f:
+                for option, val in redis_options.items():
+                    f.write(f'{option} {val}\n')
+
+            # Stop the server first in order for redis to load another db
+            os.system(self.sudo + 'service redis-server stop')
+
             # Start the server again
-            # os.system(self.sudo + 'service redis-server start')
-            os.system('redis-server --daemonize yes > /dev/null 2>&1')
+            os.system('redis-server redis.conf')
             return True
         except:
             self.print(
-                f'Error loading the database {backup_file} to {redis_dir}'
+                f'Error loading the database {backup_file}.'
             )
             return False
 

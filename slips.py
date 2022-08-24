@@ -167,7 +167,7 @@ class Main:
             except Exception as ex:
                 # only try to open redi-server once.
                 if tries == 2:
-                    print('[Main] Problem starting redis cache database. Stopping')
+                    print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
                     self.terminate_slips()
                     return False
 
@@ -1101,7 +1101,7 @@ class Main:
             action='store',
             required=False,
             type=int,
-            help='Verbosity level. This logs more info about slips.',
+            help='Verbosity level. This logs more info about Slips.',
         )
         parser.add_argument(
             '-e',
@@ -1118,7 +1118,7 @@ class Main:
             metavar='<file>',
             action='store',
             required=False,
-            help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.',
+            help='Read a Zeek dir, Argus binetflow, pcapfile or nfdump.',
         )
         parser.add_argument(
             '-i',
@@ -1141,15 +1141,7 @@ class Main:
             action='store',
             required=False,
             type=str,
-            help='packet filter for Zeek. BPF style.',
-        )
-        parser.add_argument(
-            '-G',
-            '--gui',
-            help='Use the GUI interface.',
-            required=False,
-            default=False,
-            action='store_true',
+            help="Packet filter for Zeek. BPF style.",
         )
         parser.add_argument(
             '-cc',
@@ -1180,21 +1172,21 @@ class Main:
             action='store',
             required=False,
             default=self.alerts_default_path,
-            help='Store alerts.json and alerts.txt in the provided folder.',
+            help='Store alerts.json and alerts.txt in the given folder.',
         )
         parser.add_argument(
             '-s',
             '--save',
             action='store_true',
             required=False,
-            help='To Save redis db to disk. Requires root access.',
+            help='Save the analysed file db to disk. Requires root access.',
         )
         parser.add_argument(
             '-d',
             '--db',
             action='store',
             required=False,
-            help='To read a redis (rdb) saved file. Requires root access.',
+            help='Read an analysed file (rdb) from disk. Requires root access.',
         )
         parser.add_argument(
             '-D',
@@ -1202,7 +1194,7 @@ class Main:
             required=False,
             default=False,
             action='store_true',
-            help='run slips in daemon mode, not interactive',
+            help='Run slips in daemon mode',
         )
         parser.add_argument(
             '-S',
@@ -1406,6 +1398,7 @@ class Main:
         input_type = 'stdin'
         return input_type, line_type.lower()
 
+
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
@@ -1414,18 +1407,20 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
-            redis_port = 6379
-            self.input_information = self.args.db
-            __database__.connect_to_redis_server(redis_port)
-            __database__.enable_redis_persistence()
-            #todo see why the dumps.rdb isn't loaded in 6379
-            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
-            self.log_redis_server_PID(redis_port, redis_pid)
+            # redis_port = 6379
+            # self.input_information = self.args.db
+            # __database__.connect_to_redis_server(redis_port)
+            # __database__.enable_redis_persistence()
+            # __database__.r.config_set('appendonly', 'no')
+            # redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+            # self.zeek_folder = ''
+            # self.log_redis_server_PID(redis_port, redis_pid)
 
             print(
-                f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
+                f'{self.args.db} loaded successfully.\n'
+                f'Run ./kalipso.sh and choose port 32850'
             )
-            __database__.disable_redis_persistence()
+            # __database__.disable_redis_persistence()
 
         self.terminate_slips()
 
