@@ -87,6 +87,7 @@ class Database(object):
         self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
+        self.redis_conf_file = 'redis.conf'
 
     def get_redis_server_PID(self, slips_mode, redis_port):
         """
@@ -122,7 +123,7 @@ class Database(object):
         try:
             # start the redis server
             os.system(
-                f'redis-server --port {port} --daemonize yes > /dev/null 2>&1'
+                f'redis-server redis.conf --port {port} --daemonize yes > /dev/null 2>&1'
             )
 
             # db 0 changes everytime we run slips
@@ -263,23 +264,12 @@ class Database(object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-                self.r.config_set(
-                    'client-output-buffer-limit',
-                    'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
-                )
-                self.rcache.config_set(
-                    'client-output-buffer-limit',
-                    'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
-                )
-                self.disable_redis_persistence()
 
                 if self.deletePrevdb and not '-s' in sys.argv:
                     self.r.flushdb()
 
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
-                self.r.config_set('stop-writes-on-bgsave-error', 'no')
-                self.rcache.config_set('stop-writes-on-bgsave-error', 'no')
                 # Even if the DB is not deleted. We need to delete some temp data
                 # Zeek_files
                 self.r.delete('zeekfiles')
@@ -368,6 +358,7 @@ class Database(object):
         This is redis default behaviour, but slips disables it by default,
         to be able to rn several slips instances
         """
+        #TODO do we still need those?
         #   save <seconds> <changes>
         #
         #   Will save the DB if both the given number of seconds and the given
