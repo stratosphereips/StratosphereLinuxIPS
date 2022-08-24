@@ -443,17 +443,13 @@ class Main:
         """
         Closes all the redis ports
         """
+        if not hasattr(self, 'open_servers_PIDs'):
+            self.get_open_redis_servers()
 
         # close all ports in logfile
-        failed_to_close = 0
         for pid in self.open_servers_PIDs:
-            if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
-                port = self.open_servers_PIDs[pid]
-                # self.remove_server_from_log(port)
-            else:
-                failed_to_close += 1
-        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
-        # print(f'Successfully closed {killed_servers} redis servers.')
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
 
 
         # closes all the ports in slips supported range of ports
@@ -510,12 +506,11 @@ class Main:
         # Add a copy of slips.conf
         config_file = self.args.config or 'slips.conf'
         shutil.copy(config_file, metadata_dir)
+
         # Add a copy of whitelist.conf
         whitelist = self.read_configuration(
             'parameters', 'whitelist_path', 'whitelist.conf'
         )
-
-
         shutil.copy(whitelist, metadata_dir)
 
         branch_info = utils.get_branch_info()
@@ -523,6 +518,7 @@ class Main:
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
+
         now = datetime.now()
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
@@ -683,8 +679,6 @@ class Main:
         """
         Wait for all modules to confirm that they're done processing and then shutdown
         """
-
-
         try:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
@@ -842,7 +836,9 @@ class Main:
         Returns a dict {counter: (used_port,pid) }
         """
         open_servers = {}
-        print(f"[0] Close all servers")
+        to_print = f"Choose which one to kill [0,1,2 etc..]\n" \
+                   f"[0] Close all servers\n"
+        there_are_ports_to_print = False
         try:
             with open(self.running_logfile, 'r') as f:
                 line_number = 0
@@ -857,12 +853,19 @@ class Main:
                     line_number += 1
                     line = line.split(',')
                     file, port, pid = line[1], line[2], line[3]
-                    print(f"[{line_number}] {file} - port {port}")
+                    there_are_ports_to_print = True
+                    to_print += f"[{line_number}] {file} - port {port}\n"
                     open_servers[line_number] = (port, pid)
-                return open_servers
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
             return False
+
+        if there_are_ports_to_print:
+            print(to_print)
+        else:
+            print(f"No open redis servers in {self.running_logfile}")
+
+        return open_servers
 
 
     def get_port_of_redis_server(self, pid: str):
@@ -1004,7 +1007,6 @@ class Main:
         #     sys.exit(-1)
         #     return
         try:
-            print(f"Choose which one to kill [0,1,2 etc..]\n")
             # open_servers {1: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
             if not open_servers:
