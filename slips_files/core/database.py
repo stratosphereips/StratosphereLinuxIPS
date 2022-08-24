@@ -89,9 +89,8 @@ class Database(object):
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
 
-    def get_redis_server_PID(self, slips_mode, redis_port):
+    def get_redis_server_PID(self, redis_port):
         """
-        :param slips_mode: daemonized or interactive
         get the PID of the redis server started on the given redis_port
         retrns the pid
         """
@@ -178,8 +177,7 @@ class Database(object):
         self.r.set("mode", slips_mode)
 
     def close_redis_server(self, redis_port):
-        slips_mode = self.r.get("mode")
-        server_pid = self.get_redis_server_PID(slips_mode, redis_port)
+        server_pid = self.get_redis_server_PID( redis_port)
         if server_pid != 'Not found':
             os.kill(int(server_pid), signal.SIGKILL)
 

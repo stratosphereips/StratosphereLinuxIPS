@@ -966,11 +966,8 @@ class Main:
         with open(self.running_logfile, 'r') as logfile:
             with open(tmpfile, 'w') as tmp:
                 all_lines = logfile.read().splitlines()
-                # the only one that should have 6379
-                last_line = all_lines[-1]
                 # we want to delete the old log line containing this port
                 # but leave the new one (the last one)
-
                 for line in all_lines[:-1]:
                     if redis_port not in line:
                         tmp.write(f'{line}\n')
@@ -1407,18 +1404,17 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
-            # redis_port = 6379
-            # self.input_information = self.args.db
-            # __database__.connect_to_redis_server(redis_port)
-            # __database__.enable_redis_persistence()
-            # __database__.r.config_set('appendonly', 'no')
-            # redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
-            # self.zeek_folder = ''
-            # self.log_redis_server_PID(redis_port, redis_pid)
+            redis_port = 32850
+            self.input_information = self.args.db
+            __database__.connect_to_redis_server(redis_port)
+
+            redis_pid = __database__.get_redis_server_PID(redis_port)
+            self.zeek_folder = ''
+            self.log_redis_server_PID(redis_port, redis_pid)
 
             print(
                 f'{self.args.db} loaded successfully.\n'
-                f'Run ./kalipso.sh and choose port 32850'
+                f'Run ./kalipso.sh and choose port {redis_port}'
             )
             # __database__.disable_redis_persistence()
 
@@ -1724,7 +1720,7 @@ class Main:
                 self.redis_port = 6379
 
             # log the PID of the started redis-server
-            redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
+            redis_pid = __database__.get_redis_server_PID(self.redis_port)
             self.log_redis_server_PID(self.redis_port, redis_pid)
 
 
