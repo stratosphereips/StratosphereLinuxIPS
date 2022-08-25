@@ -544,7 +544,7 @@ class Main:
             pass
 
         if self.mode == 'daemonized':
-            # when using -D,we kill the processes because
+            # when using -D, we kill the processes because
             # the queues are not there yet to send stop msgs
             for process in ('OutputProcess',
                             'ProfilerProcess',
@@ -698,12 +698,10 @@ class Main:
             finished_modules = []
             # get dict of PIDs spawned by slips
             self.PIDs = __database__.get_PIDs()
-
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
             evidence_proc_pid = self.PIDs.pop('EvidenceProcess', None)
             self.stop_core_processes()
-
             # only print that modules are still running once
             warning_printed = False
 
@@ -791,13 +789,13 @@ class Main:
 
             try:
                 os.kill(int(evidence_proc_pid), signal.SIGINT)
-            except (ValueError,TypeError):
+            except (ValueError, TypeError):
                 # slips is stopped before evidence process started
                 pass
+
             # save redis database if '-s' is specified
             if self.args.save:
                 self.save_the_db()
-
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
@@ -810,6 +808,10 @@ class Main:
             if self.mode == 'daemonized':
                 profilesLen = __database__.getProfilesLen()
                 self.daemon.print(f'Total Number of Profiles in DB: {profilesLen}.')
+                # if slips finished normally without stopping the daemon with -S
+                # then we need to delete the pidfile
+                self.daemon.delete_pidfile()
+                __database__.r.flushdb()
 
 
             os._exit(-1)
