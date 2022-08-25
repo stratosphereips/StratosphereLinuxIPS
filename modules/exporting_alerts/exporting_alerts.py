@@ -382,8 +382,9 @@ class Module(Module, multiprocessing.Process):
         if 'stix' in self.export_to:
             self.push_to_TAXII_server()
 
-        if self.json_file_handle:
+        if hasattr(self, 'json_file_handle'):
             self.json_file_handle.close()
+
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
