@@ -1545,7 +1545,7 @@ class Main:
             self.terminate_slips()
 
         # Check if redis server running
-        if self.check_redis_database() is False:
+        if not self.args.killall and self.check_redis_database() is False:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
