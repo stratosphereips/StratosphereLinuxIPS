@@ -1409,8 +1409,7 @@ class Main:
             redis_port = 32850
             self.input_information = os.path.basename(self.args.db)
             __database__.connect_to_redis_server(redis_port)
-
-            redis_pid = __database__.get_redis_server_PID(redis_port)
+            redis_pid = self.get_pid_of_redis_server(redis_port)
             self.zeek_folder = '""'
             self.log_redis_server_PID(redis_port, redis_pid)
             self.remove_old_logline(redis_port)

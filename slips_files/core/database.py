@@ -126,27 +126,13 @@ class Database(object):
         get the PID of the redis server started on the given redis_port
         retrns the pid
         """
-        # log the pid of the redis server using this port
-        redis_pid = 'Not found'
-        # On modern systems, the netstat utility comes pre-installed,
-        # this can be done using psutil but it needs root on macos
-        command = f'netstat -peanut'
-        result = subprocess.run(command.split(), capture_output=True)
-        # Get command output
-        cmd_output = result.stdout.decode('utf-8').splitlines()
-
-        for line in cmd_output:
-            if f':{redis_port}' in line and 'redis-server' in line:
-                line = re.split(r'\s{2,}', line)
-                # get the substring that has the pid
-                try:
-                    redis_pid = line[-1]
-                    _ = redis_pid.index('/')
-                except ValueError:
-                    redis_pid = line[-2]
-                redis_pid = redis_pid.split('/')[0]
-                break
-        return redis_pid
+        cmd = 'ps aux | grep redis-server'
+        cmd_output = os.popen(cmd).read()
+        for line in cmd_output.splitlines():
+            if str(redis_port) in line:
+                pid = line.split()[1]
+                return pid
+        return False
 
 
     def connect_to_redis_server(self, port: str):
@@ -210,7 +196,7 @@ class Database(object):
 
     def close_redis_server(self, redis_port):
         server_pid = self.get_redis_server_PID( redis_port)
-        if server_pid != 'Not found':
+        if server_pid:
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
