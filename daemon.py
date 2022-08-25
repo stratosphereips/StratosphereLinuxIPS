@@ -54,6 +54,7 @@ class Daemon():
         """
         prepare the path of stderr, stdout, logsfile
         """
+
         self.stderr = os.path.join(output_dir, self.stderr)
         self.stdout = os.path.join(output_dir, self.stdout)
         self.logsfile = os.path.join(output_dir, self.logsfile)
@@ -101,7 +102,6 @@ class Daemon():
     def prepare_output_dir(self):
         if '-o' in sys.argv:
             self.prepare_std_streams(self.slips.args.output)
-
         else:
             # if we have acess to '/var/log/slips/' store the logfiles there, if not , store it in the output/ dir
             try:
@@ -242,11 +242,11 @@ class Daemon():
                     ):
                         continue
                     line = line.split(',')
-                    is_daemon = bool(line[6])
+                    is_daemon = bool(line[7])
                     if not is_daemon:
                         continue
-                    pid, port, zeek_folder, output_dir, save_the_db = line[3], line[2], line[4], line[5], line[-1]
-                    return (pid, port, zeek_folder, output_dir, save_the_db)
+                    port, output_dir, slips_pid  = line[2], line[5], line[6]
+                    return (port, output_dir, slips_pid)
         except FileNotFoundError:
             # file removed after daemon started
             self.print(f"Warning: {self.slips.running_logfile} is not found. Can't get daemon info."
@@ -258,7 +258,7 @@ class Daemon():
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
         # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
         try:
-            os.kill(self.pid, SIGTERM)
+            os.kill(int(self.pid), SIGTERM)
         except ProcessLookupError:
             # daemon was killed manually
             pass
@@ -271,7 +271,10 @@ class Daemon():
         info = self.get_last_opened_daemon_info()
         if not info:
             return
-        self.pid, port, zeek_folder, output_dir, save_the_db = info
+        port, output_dir, self.pid = info
+        self.stderr = 'errors.log'
+        self.stdout = 'slips.log'
+        self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
         __database__.start(self.config, port)
         self.slips.c1 = __database__.subscribe('finished_modules')
