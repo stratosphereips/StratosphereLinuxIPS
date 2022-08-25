@@ -8,7 +8,7 @@
 python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" -n 7 -p no:warnings -vv -s
 
 # run db and daemon tests serially/using 1 worker
-python3  -m pytest tests/test_database.py -p no:warnings -vv -s
+python3  -m pytest tests/test_database.py -p no:warnings -vv
 
 # running serially because slips only supports running 1 daemon at a time
 python3  -m pytest tests/test_daemon.py -p no:warnings -vv
