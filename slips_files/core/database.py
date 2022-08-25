@@ -88,7 +88,6 @@ class Database(object):
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
-        # redis appendonly
         self.set_redis_options()
 
     def set_redis_options(self):
@@ -106,6 +105,12 @@ class Database(object):
                 'appendonly': 'no'
             }
         if '-s' in sys.argv:
+            #   Will save the DB if both the given number of seconds and the given
+            #   number of write operations against the DB occurred.
+            #   In the example below the behaviour will be to save:
+            #   after 60 sec if at least 10000 keys changed
+            #   AOF persistence logs every write operation received by the server,
+            #   that will be played again at server startup
             self.redis_options.update({
                 'save': '60 10000',
                 'appendonly': 'yes'
@@ -150,7 +155,7 @@ class Database(object):
         try:
             # start the redis server
             os.system(
-                f'redis-server redis.conf --port {port} --daemonize yes > /dev/null 2>&1'
+                f'redis-server redis.conf --port {port}'
             )
 
             # db 0 changes everytime we run slips
@@ -189,7 +194,7 @@ class Database(object):
             time.sleep(1)
             self.r.client_list()
             return True
-        except redis.exceptions.ConnectionError:
+        except redis.exceptions.ConnectionError as ex:
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
@@ -282,6 +287,7 @@ class Database(object):
         """Start the DB. Allow it to read the conf"""
         self.config = config
         self.read_configuration()
+
         # Read values from the configuration file
         try:
             if not hasattr(self, 'r'):
@@ -303,8 +309,8 @@ class Database(object):
             self.setSlipsInternalTime(0)
             while self.get_slips_start_time() is None:
                 self.set_slips_start_time()
-        except redis.exceptions.ConnectionError:
-            print(f"[DB] Can't connect to redis on port {redis_port}")
+        except redis.exceptions.ConnectionError as ex:
+            print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
 
 
     def print(self, text, verbose=1, debug=0):
@@ -370,32 +376,6 @@ class Database(object):
         if ip_obj in ipaddress.ip_network(self.home_network):
             return True
         return False
-
-    def disable_redis_persistence(self):
-        """
-        disable redis persistence and snapshotting
-        """
-        self.r.config_set('save', '')
-        self.r.config_set('appendonly', 'no')
-
-    def enable_redis_persistence(self):
-        """
-        Set redis to save a snapshot every 60s to 900s
-        This is redis default behaviour, but slips disables it by default,
-        to be able to rn several slips instances
-        """
-        #TODO do we still need those?
-        #   save <seconds> <changes>
-        #
-        #   Will save the DB if both the given number of seconds and the given
-        #   number of write operations against the DB occurred.
-        #
-        #   In the example below the behaviour will be to save:
-        #   after 60 sec if at least 10000 keys changed
-        self.r.config_set('save', '60 10000')
-        # AOF persistence logs every write operation received by the server,
-        # that will be played again at server startup
-        self.r.config_set('appendonly', 'yes')
 
     def addProfile(self, profileid, starttime, duration):
         """

@@ -791,8 +791,6 @@ class Main:
             if self.args.save:
                 self.save_the_db()
 
-            # make sure that redis isn't saving snapshots whether -s is given or not
-            __database__.disable_redis_persistence()
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
