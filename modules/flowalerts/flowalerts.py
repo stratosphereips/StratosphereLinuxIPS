@@ -1170,7 +1170,7 @@ class Module(Module, multiprocessing.Process):
                 f'Connection to multiple ports {dstports} of '
                 f'Destination IP: {daddr}. {ip_identification}'
             )
-            uids = daddrs[daddr]['uids']
+            uids = daddrs[daddr]['uid']
             self.helper.set_evidence_for_connection_to_multiple_ports(
                 profileid,
                 twid,
@@ -1206,7 +1206,7 @@ class Module(Module, multiprocessing.Process):
             if len(dstports) <= 1:
                 return
 
-            uids = saddrs[saddr]['uids']
+            uids = saddrs[saddr]['uid']
             description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
 
             self.helper.set_evidence_for_connection_to_multiple_ports(
