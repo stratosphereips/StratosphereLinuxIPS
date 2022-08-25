@@ -1716,7 +1716,8 @@ class Main:
                 self.redis_port = 6379
 
             # log the PID of the started redis-server
-            redis_pid = __database__.get_redis_server_PID(self.redis_port)
+            # redis_pid = __database__.get_redis_server_PID(self.redis_port)
+            redis_pid = self.get_pid_of_redis_server(self.redis_port)
             self.log_redis_server_PID(self.redis_port, redis_pid)
 
 
