@@ -666,7 +666,11 @@ class Main:
         Add the analysis end date to the metadata file and
         the db for the web inerface to display
         """
-
+        self.enable_metadata = self.read_configuration(
+                                                'parameters',
+                                                'metadata_dir',
+                                                'no'
+                                                )
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
         __database__.set_input_metadata({'analysis_end': end_date})
         if 'yes' in self.enable_metadata.lower():
@@ -675,7 +679,6 @@ class Main:
                 with open(self.info_path, 'a') as f:
                     f.write(f'Slips end date: {end_date}\n')
             except (NameError, AttributeError):
-                # slips is shut down before enable_metadata is read from slips.conf
                 pass
 
     def shutdown_gracefully(self):
@@ -785,8 +788,12 @@ class Main:
 
             # evidence process should be the last process to exit, so it can print detections of the
             # modules that are still processing
-            os.kill(int(evidence_proc_pid), signal.SIGINT)
 
+            try:
+                os.kill(int(evidence_proc_pid), signal.SIGINT)
+            except (ValueError,TypeError):
+                # slips is stopped before evidence process started
+                pass
             # save redis database if '-s' is specified
             if self.args.save:
                 self.save_the_db()
@@ -801,9 +808,9 @@ class Main:
             self.delete_zeek_files()
 
             if self.mode == 'daemonized':
-                profilesLen = str(__database__.getProfilesLen())
-                print(f'Total Number of Profiles in DB: {profilesLen}.')
-                self.daemon.stop()
+                profilesLen = __database__.getProfilesLen()
+                self.daemon.print(f'Total Number of Profiles in DB: {profilesLen}.')
+
 
             os._exit(-1)
         except KeyboardInterrupt:
@@ -1258,12 +1265,13 @@ class Main:
                     '# This file contains a list of used redis ports.\n'
                     '# Once a server is killed, it will be removed from this file.\n'
                     'Date, File or interface, Used port, Server PID,'
-                    ' Output Zeek Dir, Logs Dir, Is Daemon, Save the DB\n'
+                    ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
                 )
 
             f.write(
                 f'{now},{self.input_information},{redis_port},'
                 f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                f'{os.getpid()},'
                 f'{bool(self.args.daemon)},{self.args.save}\n'
             )
 
