@@ -3942,6 +3942,7 @@ class Database(object):
                 for option, val in self.redis_options.items():
                     f.write(f'{option} {val}\n')
 
+            self.print(f"Stopping redis server requires root access")
             # Stop the server first in order for redis to load another db
             os.system(self.sudo + 'service redis-server stop')
 
