@@ -39,7 +39,6 @@ import importlib
 import errno
 import subprocess
 import re
-import random
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
@@ -173,7 +172,7 @@ class Main:
 
                 print('[Main] Starting redis cache database..')
                 os.system(
-                    f'redis-server --daemonize yes  > /dev/null 2>&1'
+                    f'redis-server redis.conf --daemonize yes  > /dev/null 2>&1'
                 )
                 # give the server time to start
                 time.sleep(1)
