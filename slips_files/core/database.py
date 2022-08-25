@@ -295,9 +295,11 @@ class Database(object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-
-                if self.deletePrevdb and not '-s' in sys.argv:
+                if self.deletePrevdb and not '-S' in sys.argv:
+                    # when stopping the daemon, don't flush bc we need to get the pids
+                    # to close slips files
                     self.r.flushdb()
+
                 self.r.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
                 self.rcache.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
