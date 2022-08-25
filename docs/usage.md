@@ -247,9 +247,11 @@ You can load it again using ```-d```, For example:
 
 ```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
 
-And then use ```./kalipso``` and select the entry on port 6379 to view the loaded database.
+And then use ```./kalipso``` and select the entry on port 32850 to view the loaded database.
 
 This feature isn't supported in docker due to problems with redis in docker.
+
+Slips will ask for root access when saving the db to be able to restart the redis service.
 
 _DISCLAIMER_: When saving the database you will see the following
 warning 

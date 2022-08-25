@@ -311,7 +311,7 @@ class Module(Module, multiprocessing.Process):
         time_of_first_flow = flows_list[0]['ts']
         time_of_last_flow = flows_list[-1]['ts']
 
-        # get the time difference between them in seconds
+        # get the time difference between them in mins
         diff_in_mins = utils.get_time_diff(
             time_of_first_flow,
             time_of_last_flow,

@@ -167,7 +167,7 @@ class Main:
             except Exception as ex:
                 # only try to open redi-server once.
                 if tries == 2:
-                    print('[Main] Problem starting redis cache database. Stopping')
+                    print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
                     self.terminate_slips()
                     return False
 
@@ -441,27 +441,26 @@ class Main:
 
     def close_all_ports(self):
         """
-        Closes all the redis ports
+        Closes all the redis ports  in logfile and in slips supported range of ports
         """
+        if not hasattr(self, 'open_servers_PIDs'):
+            self.get_open_redis_servers()
 
         # close all ports in logfile
-        failed_to_close = 0
         for pid in self.open_servers_PIDs:
-            if self.flush_redis_server(pid=pid) and self.kill_redis_server(pid):
-                port = self.open_servers_PIDs[pid]
-                # self.remove_server_from_log(port)
-            else:
-                failed_to_close += 1
-        killed_servers: int = len(self.open_servers_PIDs.keys()) - failed_to_close
-        # print(f'Successfully closed {killed_servers} redis servers.')
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
 
 
         # closes all the ports in slips supported range of ports
-        for port in range(self.start_port, self.end_port + 1):
+        slips_supported_range = [port for port in range(self.start_port, self.end_port + 1)]
+        slips_supported_range.append(6379)
+        for port in slips_supported_range:
             pid = self.get_pid_of_redis_server(port)
             if pid:
                 self.flush_redis_server(pid=pid)
                 self.kill_redis_server(pid)
+
 
         # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
         print(f"Successfully closed all open redis servers")
@@ -493,20 +492,12 @@ class Main:
         update_manager.update_org_files()
 
 
-    def add_metadata(self, end_date):
+    def add_metadata(self):
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
         """
         if not 'yes' in self.enable_metadata.lower():
             return
-
-        # add slips end date in the metadata dir
-        try:
-            with open(self.info_path, 'a') as f:
-                f.write(f'Slips end date: {end_date}\n')
-        except (NameError, AttributeError):
-            # slips is shut down before enable_metadata is read from slips.conf
-            pass
 
         metadata_dir = os.path.join(self.args.output, 'metadata')
         try:
@@ -518,12 +509,11 @@ class Main:
         # Add a copy of slips.conf
         config_file = self.args.config or 'slips.conf'
         shutil.copy(config_file, metadata_dir)
+
         # Add a copy of whitelist.conf
         whitelist = self.read_configuration(
             'parameters', 'whitelist_path', 'whitelist.conf'
         )
-
-
         shutil.copy(whitelist, metadata_dir)
 
         branch_info = utils.get_branch_info()
@@ -531,6 +521,7 @@ class Main:
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
+
         now = datetime.now()
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
@@ -670,20 +661,34 @@ class Main:
         )
         return True
 
+    def set_analysis_end_date(self):
+        """
+        Add the analysis end date to the metadata file and
+        the db for the web inerface to display
+        """
+
+        end_date = utils.convert_format(datetime.now(), utils.alerts_format)
+        __database__.set_input_metadata({'analysis_end': end_date})
+        if 'yes' in self.enable_metadata.lower():
+            # add slips end date in the metadata dir
+            try:
+                with open(self.info_path, 'a') as f:
+                    f.write(f'Slips end date: {end_date}\n')
+            except (NameError, AttributeError):
+                # slips is shut down before enable_metadata is read from slips.conf
+                pass
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing and then shutdown
         """
-
-
         try:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
             print('Stopping Slips')
 
             # set analysis end date
-            end_date = utils.convert_format(datetime.now(), utils.alerts_format)
-            __database__.set_input_metadata({'analysis_end': end_date})
+            self.set_analysis_end_date()
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
@@ -786,8 +791,6 @@ class Main:
             if self.args.save:
                 self.save_the_db()
 
-            # make sure that redis isn't saving snapshots whether -s is given or not
-            __database__.disable_redis_snapshots()
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
@@ -834,7 +837,9 @@ class Main:
         Returns a dict {counter: (used_port,pid) }
         """
         open_servers = {}
-        print(f"[0] Close all servers")
+        to_print = f"Choose which one to kill [0,1,2 etc..]\n" \
+                   f"[0] Close all servers\n"
+        there_are_ports_to_print = False
         try:
             with open(self.running_logfile, 'r') as f:
                 line_number = 0
@@ -849,12 +854,19 @@ class Main:
                     line_number += 1
                     line = line.split(',')
                     file, port, pid = line[1], line[2], line[3]
-                    print(f"[{line_number}] {file} - port {port}")
+                    there_are_ports_to_print = True
+                    to_print += f"[{line_number}] {file} - port {port}\n"
                     open_servers[line_number] = (port, pid)
-                return open_servers
         except FileNotFoundError:
             print(f"{self.running_logfile} is not found. Can't get open redis servers. Stopping.")
             return False
+
+        if there_are_ports_to_print:
+            print(to_print)
+        else:
+            print(f"No open redis servers in {self.running_logfile}")
+
+        return open_servers
 
 
     def get_port_of_redis_server(self, pid: str):
@@ -943,20 +955,18 @@ class Main:
             return False
         return True
 
-    def remove_old_logline(self):
+    def remove_old_logline(self, redis_port):
         """
-        The only line with 6379 should be the last line, remove all the ones above
+        This function should be called after adding a new duplicate line with redis_port
+        The only line with redis_port will be the last line, remove all the ones above
         """
-        redis_port = str(6379)
+        redis_port = str(redis_port)
         tmpfile = 'tmp_running_slips_log.txt'
         with open(self.running_logfile, 'r') as logfile:
             with open(tmpfile, 'w') as tmp:
                 all_lines = logfile.read().splitlines()
-                # the only one that should have 6379
-                last_line = all_lines[-1]
                 # we want to delete the old log line containing this port
                 # but leave the new one (the last one)
-
                 for line in all_lines[:-1]:
                     if redis_port not in line:
                         tmp.write(f'{line}\n')
@@ -991,23 +1001,19 @@ class Main:
             # fill the dict
             self.get_open_redis_servers()
 
-        # if len(self.open_servers_PIDs) == 0:
-        #     print('No unused open servers to kill.')
-        #     sys.exit(-1)
-        #     return
         try:
-            print(f"Choose which one to kill [0,1,2 etc..]\n")
-            # open_servers {1: (port,pid),...}}
+            # open_servers {counter: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
             if not open_servers:
                 self.terminate_slips()
-                
+
             server_to_close = input()
             # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == '0':
                 self.close_all_ports()
 
-            if len(open_servers) > 0:
+            elif len(open_servers) > 0:
+                # close the given server number
                 try:
                     pid = open_servers[int(server_to_close)][1]
                     port = open_servers[int(server_to_close)][0]
@@ -1020,6 +1026,7 @@ class Main:
                     self.remove_server_from_log(port)
                 except (KeyError, ValueError):
                     print(f"Invalid input {server_to_close}")
+
         except KeyboardInterrupt:
             pass
         self.terminate_slips()
@@ -1090,7 +1097,7 @@ class Main:
             action='store',
             required=False,
             type=int,
-            help='Verbosity level. This logs more info about slips.',
+            help='Verbosity level. This logs more info about Slips.',
         )
         parser.add_argument(
             '-e',
@@ -1107,7 +1114,7 @@ class Main:
             metavar='<file>',
             action='store',
             required=False,
-            help='read a Zeek folder, Argus binetflow, pcapfile or nfdump.',
+            help='Read a Zeek dir, Argus binetflow, pcapfile or nfdump.',
         )
         parser.add_argument(
             '-i',
@@ -1130,15 +1137,7 @@ class Main:
             action='store',
             required=False,
             type=str,
-            help='packet filter for Zeek. BPF style.',
-        )
-        parser.add_argument(
-            '-G',
-            '--gui',
-            help='Use the GUI interface.',
-            required=False,
-            default=False,
-            action='store_true',
+            help="Packet filter for Zeek. BPF style.",
         )
         parser.add_argument(
             '-cc',
@@ -1169,21 +1168,21 @@ class Main:
             action='store',
             required=False,
             default=self.alerts_default_path,
-            help='Store alerts.json and alerts.txt in the provided folder.',
+            help='Store alerts.json and alerts.txt in the given folder.',
         )
         parser.add_argument(
             '-s',
             '--save',
             action='store_true',
             required=False,
-            help='To Save redis db to disk. Requires root access.',
+            help='Save the analysed file db to disk.',
         )
         parser.add_argument(
             '-d',
             '--db',
             action='store',
             required=False,
-            help='To read a redis (rdb) saved file. Requires root access.',
+            help='Read an analysed file (rdb) from disk.',
         )
         parser.add_argument(
             '-D',
@@ -1191,7 +1190,7 @@ class Main:
             required=False,
             default=False,
             action='store_true',
-            help='run slips in daemon mode, not interactive',
+            help='Run slips in daemon mode',
         )
         parser.add_argument(
             '-S',
@@ -1270,7 +1269,7 @@ class Main:
 
         if redis_port == 6379:
             # remove the old logline using this port
-            self.remove_old_logline()
+            self.remove_old_logline(6379)
 
     def set_mode(self, mode, daemon=''):
         """
@@ -1395,6 +1394,7 @@ class Main:
         input_type = 'stdin'
         return input_type, line_type.lower()
 
+
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
@@ -1403,18 +1403,23 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
-            redis_port = 6379
-            self.input_information = self.args.db
+            # to be able to use running_slips_info later as a non-root user,
+            # we shouldn't modify it as root
+            utils.drop_root_privs()
+            redis_port = 32850
+            self.input_information = os.path.basename(self.args.db)
             __database__.connect_to_redis_server(redis_port)
-            __database__.enable_redis_snapshots()
-            #todo see why the dumps.rdb isn't loaded in 6379
-            redis_pid = __database__.get_redis_server_PID(self.mode, redis_port)
+
+            redis_pid = __database__.get_redis_server_PID(redis_port)
+            self.zeek_folder = '""'
             self.log_redis_server_PID(redis_port, redis_pid)
+            self.remove_old_logline(redis_port)
 
             print(
-                f'{self.args.db} loaded successfully. Run ./kalipso.sh and choose port 6379'
+                f'{self.args.db} loaded successfully.\n'
+                f'Run ./kalipso.sh and choose port {redis_port}'
             )
-            __database__.disable_redis_snapshots()
+            # __database__.disable_redis_persistence()
 
         self.terminate_slips()
 
@@ -1565,15 +1570,8 @@ class Main:
                 self.shutdown_gracefully()
 
         # Check if user want to save and load a db at the same time
-        if self.args.save:
-            # make sure slips is running as root
-            if os.geteuid() != 0:
-                print(
-                    'Slips needs to be run as root to save the database. Stopping.'
-                )
-                self.terminate_slips()
-            if self.args.db:
-                print("Can't use -s and -b together")
+        if self.args.save and self.args.db:
+                print("Can't use -s and -d together")
                 self.terminate_slips()
 
     def set_input_metadata(self):
@@ -1717,6 +1715,10 @@ class Main:
             else:
                 self.redis_port = 6379
 
+            # log the PID of the started redis-server
+            redis_pid = __database__.get_redis_server_PID(self.redis_port)
+            self.log_redis_server_PID(self.redis_port, redis_pid)
+
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
@@ -1737,13 +1739,12 @@ class Main:
             )
             # this process starts the db
             output_process.start()
+            __database__.store_process_PID('OutputProcess', int(output_process.pid))
+
 
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()
-            if self.args.save:
-                __database__.enable_redis_snapshots()
-            else:
-                __database__.disable_redis_snapshots()
+
 
             if self.mode == 'daemonized':
                 std_files = {
@@ -1761,10 +1762,6 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-            # log the PID of the started redis-server
-            redis_pid = __database__.get_redis_server_PID(self.mode, self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
-            __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
             self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
             self.print(f'Started main program [PID {self.pid}]', 1, 0)
@@ -1876,7 +1873,7 @@ class Main:
                                                 )
 
             if 'yes' in self.enable_metadata.lower():
-                self.info_path = self.add_metadata(end_date)
+                self.info_path = self.add_metadata()
 
             hostIP = self.store_host_ip()
 

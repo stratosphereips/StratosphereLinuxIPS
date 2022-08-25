@@ -352,7 +352,7 @@ class Helper:
         detection_info = saddr
         type_evidence = f'SSHSuccessful-by-{saddr}'
         threat_level = 'info'
-        confidence = 0.5
+        confidence = 0.8
         category = 'Infomation'
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
