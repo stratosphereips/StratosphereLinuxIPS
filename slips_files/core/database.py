@@ -99,7 +99,6 @@ class Database(object):
             {
                 'port': 6379,
                 'daemonize': 'yes',
-                'client-output-buffer-limit': 'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
                 'stop-writes-on-bgsave-error': 'no',
                 'save': '',
                 'appendonly': 'no'
@@ -155,7 +154,7 @@ class Database(object):
         try:
             # start the redis server
             os.system(
-                f'redis-server redis.conf --port {port}'
+                f'redis-server redis.conf --port {port}  > /dev/null 2>&1'
             )
 
             # db 0 changes everytime we run slips
@@ -299,7 +298,8 @@ class Database(object):
 
                 if self.deletePrevdb and not '-s' in sys.argv:
                     self.r.flushdb()
-
+                self.r.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
+                self.rcache.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
                 # Even if the DB is not deleted. We need to delete some temp data
