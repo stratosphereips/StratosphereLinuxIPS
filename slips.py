@@ -679,6 +679,7 @@ class Main:
                     f.write(f'Slips end date: {end_date}\n')
             except (NameError, AttributeError):
                 pass
+        return end_date
 
     def shutdown_gracefully(self):
         """
@@ -690,7 +691,10 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            self.set_analysis_end_date()
+            ends_date = self.set_analysis_end_date()
+            start_time = __database__.get_slips_start_time()
+            analysis_time = utils.get_time_diff(start_time, ends_date, return_type='minutes')
+            print(f'[Main] Analysis finished in {analysis_time} minutes')
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
