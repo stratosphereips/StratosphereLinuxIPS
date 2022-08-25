@@ -179,7 +179,7 @@ class Main:
                 tries += 1
 
 
-    def generate_random_redis_port(self):
+    def get_random_redis_port(self):
         """
         Keeps trying to connect to random generated ports until we're connected.
         returns the used port
@@ -1714,7 +1714,7 @@ class Main:
             if self.args.port:
                 self.redis_port = int(self.args.port)
             elif self.args.multiinstance:
-                self.redis_port = self.generate_random_redis_port()
+                self.redis_port = self.get_random_redis_port()
                 if not self.redis_port:
                     # all ports are unavailable
                     inp = input("Press Enter to close all ports.\n")
