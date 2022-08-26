@@ -634,7 +634,6 @@ The list below contains all connections made by Slips
 http://useragentstring.com -> For getting user agent info if no info was found in Zeek
 https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-http://asnlookup.com/api/lookup -> For getting ASN info about whitelisted organizations if no info was found in slips_files/
 http://ipinfo.io/json -> For getting your public IP
 https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
 

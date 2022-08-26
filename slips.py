@@ -39,7 +39,6 @@ import importlib
 import errno
 import subprocess
 import re
-import random
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
@@ -173,14 +172,14 @@ class Main:
 
                 print('[Main] Starting redis cache database..')
                 os.system(
-                    f'redis-server --daemonize yes  > /dev/null 2>&1'
+                    f'redis-server redis.conf --daemonize yes  > /dev/null 2>&1'
                 )
                 # give the server time to start
                 time.sleep(1)
                 tries += 1
 
 
-    def generate_random_redis_port(self):
+    def get_random_redis_port(self):
         """
         Keeps trying to connect to random generated ports until we're connected.
         returns the used port
@@ -544,7 +543,7 @@ class Main:
             pass
 
         if self.mode == 'daemonized':
-            # when using -D,we kill the processes because
+            # when using -D, we kill the processes because
             # the queues are not there yet to send stop msgs
             for process in ('OutputProcess',
                             'ProfilerProcess',
@@ -666,7 +665,11 @@ class Main:
         Add the analysis end date to the metadata file and
         the db for the web inerface to display
         """
-
+        self.enable_metadata = self.read_configuration(
+                                                'parameters',
+                                                'metadata_dir',
+                                                'no'
+                                                )
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
         __database__.set_input_metadata({'analysis_end': end_date})
         if 'yes' in self.enable_metadata.lower():
@@ -675,8 +678,8 @@ class Main:
                 with open(self.info_path, 'a') as f:
                     f.write(f'Slips end date: {end_date}\n')
             except (NameError, AttributeError):
-                # slips is shut down before enable_metadata is read from slips.conf
                 pass
+        return end_date
 
     def shutdown_gracefully(self):
         """
@@ -688,19 +691,20 @@ class Main:
             print('Stopping Slips')
 
             # set analysis end date
-            self.set_analysis_end_date()
+            ends_date = self.set_analysis_end_date()
+            start_time = __database__.get_slips_start_time()
+            analysis_time = utils.get_time_diff(start_time, ends_date, return_type='minutes')
+            print(f'[Main] Analysis finished in {analysis_time} minutes')
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
             finished_modules = []
             # get dict of PIDs spawned by slips
             self.PIDs = __database__.get_PIDs()
-
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
             evidence_proc_pid = self.PIDs.pop('EvidenceProcess', None)
             self.stop_core_processes()
-
             # only print that modules are still running once
             warning_printed = False
 
@@ -785,12 +789,16 @@ class Main:
 
             # evidence process should be the last process to exit, so it can print detections of the
             # modules that are still processing
-            os.kill(int(evidence_proc_pid), signal.SIGINT)
+
+            try:
+                os.kill(int(evidence_proc_pid), signal.SIGINT)
+            except (ValueError, TypeError):
+                # slips is stopped before evidence process started
+                pass
 
             # save redis database if '-s' is specified
             if self.args.save:
                 self.save_the_db()
-
 
             # if store_a_copy_of_zeek_files is set to yes in slips.conf,
             # copy the whole zeek_files dir to the output dir
@@ -801,9 +809,13 @@ class Main:
             self.delete_zeek_files()
 
             if self.mode == 'daemonized':
-                profilesLen = str(__database__.getProfilesLen())
-                print(f'Total Number of Profiles in DB: {profilesLen}.')
-                self.daemon.stop()
+                profilesLen = __database__.getProfilesLen()
+                self.daemon.print(f'Total Number of Profiles in DB: {profilesLen}.')
+                # if slips finished normally without stopping the daemon with -S
+                # then we need to delete the pidfile
+                self.daemon.delete_pidfile()
+                __database__.r.flushdb()
+
 
             os._exit(-1)
         except KeyboardInterrupt:
@@ -1258,12 +1270,13 @@ class Main:
                     '# This file contains a list of used redis ports.\n'
                     '# Once a server is killed, it will be removed from this file.\n'
                     'Date, File or interface, Used port, Server PID,'
-                    ' Output Zeek Dir, Logs Dir, Is Daemon, Save the DB\n'
+                    ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
                 )
 
             f.write(
                 f'{now},{self.input_information},{redis_port},'
                 f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                f'{os.getpid()},'
                 f'{bool(self.args.daemon)},{self.args.save}\n'
             )
 
@@ -1531,7 +1544,7 @@ class Main:
             self.terminate_slips()
 
         # Check if redis server running
-        if self.check_redis_database() is False:
+        if not self.args.killall and self.check_redis_database() is False:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
@@ -1704,7 +1717,7 @@ class Main:
             if self.args.port:
                 self.redis_port = int(self.args.port)
             elif self.args.multiinstance:
-                self.redis_port = self.generate_random_redis_port()
+                self.redis_port = self.get_random_redis_port()
                 if not self.redis_port:
                     # all ports are unavailable
                     inp = input("Press Enter to close all ports.\n")

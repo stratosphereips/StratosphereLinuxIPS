@@ -415,7 +415,7 @@ class EvidenceProcess(multiprocessing.Process):
                 hostname = f'({hostname})'
 
             alert_to_print = (
-                f'{Fore.RED}IP {srcip} {hostname} detected as infected in timewindow {twid_num} '
+                f'{Fore.RED}IP {srcip} {hostname} detected as malicious in timewindow {twid_num} '
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
             )
         except Exception as inst:

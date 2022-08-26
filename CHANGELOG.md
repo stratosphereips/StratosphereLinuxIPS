@@ -9,7 +9,7 @@
 - Added redis.conf for special redis configurations when running slips
 - Fix saving and loading the database
 - Fix running several slips instances
-- 
+- Remove support for whitelisting an unsupported org by slips
 
 -0.9.3
 * Slips
