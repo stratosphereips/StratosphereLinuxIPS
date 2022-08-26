@@ -6,10 +6,12 @@
 - Detect downloads from pastebin with size > 0.012 MBs
 - Detect DOS executable downloads from http websites
 - Update the mac db automatically
-- Added redis.conf for special redis configurations when running slips
+- Add redis.conf for special redis configurations when running slips
 - Fix saving and loading the database
 - Fix running several slips instances
 - Remove support for whitelisting an unsupported org by slips
+- Fix exporting alerts to Slack
+- Fix -killall argument behaviour
 
 -0.9.3
 * Slips
