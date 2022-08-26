@@ -877,11 +877,13 @@ Slips uses online databases to query information about many different things, fo
 
 The list below contains all connections made by Slips
 
-http://useragentstring.com -> For getting user agent info if no info was found in Zeek
-https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
-http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-http://ipinfo.io/json -> For getting your public IP
-https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
+useragentstring.com -> For getting user agent info if no info was found in Zeek
+macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
+ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
+ipinfo.io/json -> For getting your public IP
+virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
+cymru.com -> For getting the range of a specific IP to cache the ASN of this range. TXT DNS queries are made to this domain.
+
 
 By default, slips whitelists alerts from or to any of the above domains, witch means that if an alert was detected 
 to one of the above alerts, slips does not detect it assuming it's a false positive and the connection was made 
