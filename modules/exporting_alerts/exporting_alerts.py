@@ -193,7 +193,7 @@ class Module(Module, multiprocessing.Process):
                 # Channel name is set in slips.conf
                 channel=self.slack_channel_name,
                 # Sensor name is set in slips.conf
-                text=self.sensor_name + ': ' + msg_to_send,
+                text=f'{self.sensor_name}: {msg_to_send}',
             )
             return True
 
@@ -239,9 +239,8 @@ class Module(Module, multiprocessing.Process):
         else:
             # Comes here if it cant find inbox in services
             self.print(
-                "Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",
-                0,
-                2,
+                "Server doesn't have inbox available. "
+                "Exporting STIX_data.json is cancelled.", 0,2,
             )
             return False
         # Get the data that we want to send
@@ -401,9 +400,11 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message_c1, 'evidence_added'):
                     evidence = json.loads(message_c1['data'])
                     description = evidence['description']
+                    ID = evidence['ID']
 
                     if 'slack' in self.export_to:
-                        self.send_to_slack(description)
+                        if not __database__.is_whitelisted_evidence(ID):
+                            self.send_to_slack(description)
 
                     if 'stix' in self.export_to:
                         msg_to_send = (
