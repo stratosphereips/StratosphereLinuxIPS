@@ -35,7 +35,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         self.config = config
         __database__.start(self.config, redis_port)
-        self.c1 = __database__.subscribe('evidence_added')
+        self.c1 = __database__.subscribe('export_evidence')
         # Get config variables
         self.read_configuration()
         self.get_slack_token()
@@ -391,20 +391,18 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
         while True:
             try:
-                message_c1 = self.c1.get_message(timeout=self.timeout)
+                msg = self.c1.get_message(timeout=self.timeout)
 
-                if message_c1 and message_c1['data'] == 'stop_process':
+                if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message_c1, 'evidence_added'):
-                    evidence = json.loads(message_c1['data'])
+                if utils.is_msg_intended_for(msg, 'export_evidence'):
+                    evidence = json.loads(msg['data'])
                     description = evidence['description']
-                    ID = evidence['ID']
 
                     if 'slack' in self.export_to:
-                        if not __database__.is_whitelisted_evidence(ID):
-                            self.send_to_slack(description)
+                        self.send_to_slack(description)
 
                     if 'stix' in self.export_to:
                         msg_to_send = (
