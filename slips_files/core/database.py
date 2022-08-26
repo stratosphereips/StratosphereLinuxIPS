@@ -1040,13 +1040,13 @@ class Database(object):
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
 
-    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid):
+    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state):
         data_to_send = {
                 'ip': str(ip),
                 'profileid': str(profileid),
                 'twid': str(twid),
                 'proto': str(proto),
-                'ip_state': 'dstip',
+                'ip_state': ip_state,
                 'stime': starttime,
                 'uid': uid,
             }
@@ -1194,8 +1194,8 @@ class Database(object):
 
         # OTH means that we didnt see the true src ip and dst ip
         if columns['state'] != 'OTH':
-            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
-            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
+            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip')
+            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid, 'dstip')
 
 
         self.update_times_contacted(ip, direction, profileid, twid)
@@ -2803,7 +2803,7 @@ class Database(object):
         self.publish('new_url', to_send)
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
-        # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        # Check if the host domain is detected by the threat intelligence.
         data_to_send = {
             'host': host,
             'profileid': str(profileid),
@@ -2884,6 +2884,7 @@ class Database(object):
             'twid': str(twid),
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip'
 
         }
         data_to_send = json.dumps(data_to_send)
