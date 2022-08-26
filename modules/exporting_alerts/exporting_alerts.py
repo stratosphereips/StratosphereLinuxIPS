@@ -401,9 +401,10 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message_c1, 'evidence_added'):
                     evidence = json.loads(message_c1['data'])
                     description = evidence['description']
-
                     if 'slack' in self.export_to:
-                        self.send_to_slack(description)
+                        srcip = evidence['profileid'].split("_")[-1]
+                        msg_to_send = f'Src IP {srcip} Detected {description}'
+                        self.send_to_slack(msg_to_send)
 
                     if 'stix' in self.export_to:
                         msg_to_send = (
