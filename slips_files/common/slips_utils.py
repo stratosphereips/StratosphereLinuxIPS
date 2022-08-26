@@ -102,6 +102,7 @@ class Utils(object):
                 res += f'{sec} seconds '
                 if sec == 1: res=res[:-2] + ' '
 
+            if res.endswith(' '): res=res[:-1]
             return res
 
         # width is a combination of days mins and seconds
