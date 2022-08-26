@@ -78,6 +78,8 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
+                self.twid_width = utils.get_tw_width(self.config)
+
 
     def prepare_zeek_output_dir(self):
         from pathlib import Path
@@ -810,7 +812,7 @@ class Main:
 
             if self.mode == 'daemonized':
                 profilesLen = __database__.getProfilesLen()
-                self.daemon.print(f'Total Number of Profiles in DB: {profilesLen}.')
+                self.daemon.print(f'Total analyzed IPs: {profilesLen}.')
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.daemon.delete_pidfile()
@@ -1932,9 +1934,9 @@ class Main:
                 if self.mode != 'daemonized' and self.input_type != 'stdin':
                     now = utils.convert_format(datetime.now(), utils.alerts_format)
                     print(
-                        f'Total Number of Profiles in DB so '
+                        f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
-                        f'Modified Profiles in the last TW: {amount_of_modified}. '
+                        f'IPs sending traffic in the last {self.twid_width}: {amount_of_modified}. '
                         f'({now})',
                         end='\r',
                     )
