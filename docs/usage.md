@@ -398,6 +398,9 @@ If ```home_network``` is not defined, Slips uses all ranges ```'192.168.0.0/16, 
 
 When the ```home_network``` parameter is set, slips creates profiles only for ips inside the home network, check the analysis direction below.
 
+The ```home_network``` parameter also supports one host as an argument, which is written like this ```192.168.2.16/32```.
+When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
+
 **Analysis Direction**
 
 
