@@ -35,7 +35,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         self.config = config
         __database__.start(self.config, redis_port)
-        self.c1 = __database__.subscribe('evidence_added')
+        self.c1 = __database__.subscribe('export_evidence')
         # Get config variables
         self.read_configuration()
         self.get_slack_token()
@@ -193,7 +193,7 @@ class Module(Module, multiprocessing.Process):
                 # Channel name is set in slips.conf
                 channel=self.slack_channel_name,
                 # Sensor name is set in slips.conf
-                text=self.sensor_name + ': ' + msg_to_send,
+                text=f'{self.sensor_name}: {msg_to_send}',
             )
             return True
 
@@ -239,9 +239,8 @@ class Module(Module, multiprocessing.Process):
         else:
             # Comes here if it cant find inbox in services
             self.print(
-                "Server doesn't have inbox available. Exporting STIX_data.json is cancelled.",
-                0,
-                2,
+                "Server doesn't have inbox available. "
+                "Exporting STIX_data.json is cancelled.", 0,2,
             )
             return False
         # Get the data that we want to send
@@ -392,14 +391,14 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
         while True:
             try:
-                message_c1 = self.c1.get_message(timeout=self.timeout)
+                msg = self.c1.get_message(timeout=self.timeout)
 
-                if message_c1 and message_c1['data'] == 'stop_process':
+                if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message_c1, 'evidence_added'):
-                    evidence = json.loads(message_c1['data'])
+                if utils.is_msg_intended_for(msg, 'export_evidence'):
+                    evidence = json.loads(msg['data'])
                     description = evidence['description']
                     if 'slack' in self.export_to:
                         srcip = evidence['profileid'].split("_")[-1]

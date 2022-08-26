@@ -989,9 +989,13 @@ class Module(Module, multiprocessing.Process):
         alerts when 10 15 20 etc. nxdomains are found
         """
 
+
+        # don't count nxdomains to cymru.com as DGA as they're made
+        # by slips to get the range of an ip
         if (
             not 'NXDOMAIN' in rcode_name
             or 'in-addr.arpa' in query
+            or 'cymru.com' in query
             or query.endswith('.local')
         ):
             return False

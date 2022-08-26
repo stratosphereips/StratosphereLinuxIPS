@@ -1729,9 +1729,6 @@ class Main:
             else:
                 self.redis_port = 6379
 
-
-
-
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
@@ -1801,9 +1798,7 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-
             logs_dir = self.setup_detailed_logs(LogsProcess)
-
 
             self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
@@ -1849,8 +1844,6 @@ class Main:
 
             self.c1 = __database__.subscribe('finished_modules')
 
-            # Input process
-            # Create the input process and start it
             inputProcess = InputProcess(
                 self.outputqueue,
                 self.profilerProcessQueue,
@@ -1873,6 +1866,7 @@ class Main:
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
+
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
