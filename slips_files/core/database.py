@@ -65,6 +65,7 @@ class Database(object):
         'new_software',
         'p2p_data_request',
         'remove_old_files',
+        'export_evidence'
     }
 
     """ Database object management """
