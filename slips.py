@@ -1714,10 +1714,7 @@ class Main:
             else:
                 self.redis_port = 6379
 
-            # log the PID of the started redis-server
-            # redis_pid = __database__.get_redis_server_PID(self.redis_port)
-            redis_pid = self.get_pid_of_redis_server(self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
+
 
 
             # Output thread. outputprocess should be created first because it handles
@@ -1741,6 +1738,10 @@ class Main:
             output_process.start()
             __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
+            # log the PID of the started redis-server
+            # should be here after we're sure that the server was started
+            redis_pid = self.get_pid_of_redis_server(self.redis_port)
+            self.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
             self.set_input_metadata()

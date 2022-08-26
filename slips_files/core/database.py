@@ -297,6 +297,7 @@ class Database(object):
                 self.set_slips_start_time()
         except redis.exceptions.ConnectionError as ex:
             print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
+            return False
 
 
     def print(self, text, verbose=1, debug=0):
