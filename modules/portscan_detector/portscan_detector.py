@@ -117,18 +117,25 @@ class PortScanProcess(Module, multiprocessing.Process):
 
         # Get the list of dports that we connected as client using TCP not established
         direction = 'Dst'
-        state = 'Not Established'
         role = 'Client'
         type_data = 'Ports'
+        # for state in ('Established', 'Not Established'):
         for protocol in ('TCP', 'UDP'):
-            not_established_dports = __database__.getDataFromProfileTW(
+
+            state = 'Established'
+            dports = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
 
+            state = 'Not Established'
+            dports.update(__database__.getDataFromProfileTW(
+                profileid, twid, direction, state, protocol, role, type_data
+            ))
+
             # For each port, see if the amount is over the threshold
-            for dport in not_established_dports.keys():
+            for dport in dports.keys():
                 # PortScan Type 2. Direction OUT
-                dstips = not_established_dports[dport]['dstips']
+                dstips = dports[dport]['dstips']
                 # this is the list of dstips that have dns resolution, we will remove them from the dstips
                 dstips_to_discard = []
                 # Remove dstips that have DNS resolution already
@@ -466,20 +473,26 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Get the list of dstips that we connected as client using TCP not
         # established, and their ports
         direction = 'Dst'
-        state = 'Not Established'
         role = 'Client'
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
         type_evidence = 'PortScanType1'
         for protocol in ('TCP', 'UDP'):
-            data = __database__.getDataFromProfileTW(
+            state = 'Established'
+            dstips = __database__.getDataFromProfileTW(
                 profileid, twid, direction, state, protocol, role, type_data
             )
+
+            state = 'Not Established'
+            dstips.update(__database__.getDataFromProfileTW(
+                profileid, twid, direction, state, protocol, role, type_data
+            ))
+
             # For each dstip, see if the amount of ports connections is over the threshold
-            for dstip in data.keys():
+            for dstip in dstips.keys():
                 ### PortScan Type 1. Direction OUT
-                dstports: dict = data[dstip]['dstports']
+                dstports: dict = dstips[dstip]['dstports']
                 amount_of_dports = len(dstports)
                 cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
                 prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
@@ -497,8 +510,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 ):
                     # Get the total amount of pkts sent to the same port to all IPs
                     pkts_sent = sum(dstports[dport] for dport in dstports)
-                    uid = data[dstip]['uid']
-                    timestamp = data[dstip]['stime']
+                    uid = dstips[dstip]['uid']
+                    timestamp = dstips[dstip]['stime']
 
                     if not self.alerted_once_vertical_ps:
                         self.alerted_once_vertical_ps = True
