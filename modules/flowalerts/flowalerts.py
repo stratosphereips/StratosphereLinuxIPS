@@ -374,12 +374,15 @@ class Module(Module, multiprocessing.Process):
                         return True
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp
+            self, dport, proto, daddr, profileid, twid, uid, timestamp, origstate
     ):
         """
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if origstate != 'Established':
+            # detect unknown ports on established conns only
+            return
 
         portproto = f'{dport}/{proto}'
         if port_info := __database__.get_port_info(portproto):
@@ -1286,6 +1289,7 @@ class Module(Module, multiprocessing.Process):
                             twid,
                             uid,
                             timestamp,
+                            origstate
                         )
 
                     # --- Detect Multiple Reconnection attempts ---
