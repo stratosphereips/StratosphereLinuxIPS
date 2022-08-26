@@ -1289,8 +1289,8 @@ class Module(Module, multiprocessing.Process):
                         )
 
                     # --- Detect Multiple Reconnection attempts ---
-                    key = f'{saddr}-{daddr}'
-                    if dport != 0 and origstate == 'REJ':
+                    key = f'{saddr}-{daddr}-{dport}'
+                    if origstate == 'REJ':
                         # add this conn to the stored number of reconnections
                         current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
 
