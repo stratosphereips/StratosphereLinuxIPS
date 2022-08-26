@@ -382,7 +382,7 @@ class Module(Module, multiprocessing.Process):
         """
         if origstate != 'Established':
             # detect unknown ports on established conns only
-            return
+            return False
 
         portproto = f'{dport}/{proto}'
         if port_info := __database__.get_port_info(portproto):

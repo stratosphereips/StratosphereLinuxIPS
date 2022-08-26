@@ -119,73 +119,53 @@ class PortScanProcess(Module, multiprocessing.Process):
         direction = 'Dst'
         role = 'Client'
         type_data = 'Ports'
-        # for state in ('Established', 'Not Established'):
-        for protocol in ('TCP', 'UDP'):
+        for state in ('Established', 'Not Established'):
+            for protocol in ('TCP', 'UDP'):
+                dports = __database__.getDataFromProfileTW(
+                    profileid, twid, direction, state, protocol, role, type_data
+                )
 
-            state = 'Established'
-            dports = __database__.getDataFromProfileTW(
-                profileid, twid, direction, state, protocol, role, type_data
-            )
+                # For each port, see if the amount is over the threshold
+                for dport in dports.keys():
+                    # PortScan Type 2. Direction OUT
+                    dstips = dports[dport]['dstips']
+                    # this is the list of dstips that have dns resolution, we will remove them from the dstips
+                    dstips_to_discard = []
+                    # Remove dstips that have DNS resolution already
+                    for dip in dstips:
+                        dns_resolution = __database__.get_reverse_dns(dip)
+                        dns_resolution = dns_resolution.get('domains', [])
+                        if dns_resolution:
+                            dstips_to_discard.append(dip)
+                    # remove the resolved dstips from dstips dict
+                    for ip in dstips_to_discard:
+                        dstips.pop(ip)
 
-            state = 'Not Established'
-            dports.update(__database__.getDataFromProfileTW(
-                profileid, twid, direction, state, protocol, role, type_data
-            ))
+                    amount_of_dips = len(dstips)
+                    # If we contacted more than 3 dst IPs on this port with not established
+                    # connections, we have evidence.
 
-            # For each port, see if the amount is over the threshold
-            for dport in dports.keys():
-                # PortScan Type 2. Direction OUT
-                dstips = dports[dport]['dstips']
-                # this is the list of dstips that have dns resolution, we will remove them from the dstips
-                dstips_to_discard = []
-                # Remove dstips that have DNS resolution already
-                for dip in dstips:
-                    dns_resolution = __database__.get_reverse_dns(dip)
-                    dns_resolution = dns_resolution.get('domains', [])
-                    if dns_resolution:
-                        dstips_to_discard.append(dip)
-                # remove the resolved dstips from dstips dict
-                for ip in dstips_to_discard:
-                    dstips.pop(ip)
+                    cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
+                    prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
+                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
 
-                amount_of_dips = len(dstips)
-                # If we contacted more than 3 dst IPs on this port with not established
-                # connections, we have evidence.
+                    # We detect a scan every Threshold. So, if threshold is 3,
+                    # we detect when there are 3, 6, 9, 12, etc. dips per port.
+                    # The idea is that after X dips we detect a connection. And then
+                    # we 'reset' the counter until we see again X more.
+                    if (
+                        amount_of_dips % self.port_scan_minimum_dips_threshold == 0
+                        and prev_amount_dips < amount_of_dips
+                    ):
+                        # Get the total amount of pkts sent to the same port from all IPs
+                        pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
 
-                cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
-                prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
-                # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
+                        uids: list = get_uids()
+                        timestamp = next(iter(dstips.values()))['stime']
 
-                # We detect a scan every Threshold. So, if threshold is 3,
-                # we detect when there are 3, 6, 9, 12, etc. dips per port.
-                # The idea is that after X dips we detect a connection. And then
-                # we 'reset' the counter until we see again X more.
-                if (
-                    amount_of_dips % self.port_scan_minimum_dips_threshold == 0
-                    and prev_amount_dips < amount_of_dips
-                ):
-                    # Get the total amount of pkts sent to the same port from all IPs
-                    pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
-
-                    uids: list = get_uids()
-                    timestamp = next(iter(dstips.values()))['stime']
-
-                    if not self.alerted_once_horizontal_ps:
-                        self.alerted_once_horizontal_ps = True
-                        self.set_evidence_horizontal_portscan(
-                            timestamp,
-                            pkts_sent,
-                            protocol,
-                            profileid,
-                            twid,
-                            uids,
-                            dport,
-                            amount_of_dips
-                        )
-                    else:
-                        # after alerting once, wait 10s to see if more packets/flows are coming
-                        self.pending_horizontal_ps_evidence.put(
-                            (
+                        if not self.alerted_once_horizontal_ps:
+                            self.alerted_once_horizontal_ps = True
+                            self.set_evidence_horizontal_portscan(
                                 timestamp,
                                 pkts_sent,
                                 protocol,
@@ -195,7 +175,20 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 dport,
                                 amount_of_dips
                             )
-                        )
+                        else:
+                            # after alerting once, wait 10s to see if more packets/flows are coming
+                            self.pending_horizontal_ps_evidence.put(
+                                (
+                                    timestamp,
+                                    pkts_sent,
+                                    protocol,
+                                    profileid,
+                                    twid,
+                                    uids,
+                                    dport,
+                                    amount_of_dips
+                                )
+                            )
 
 
     def wait_for_vertical_scans(self):
@@ -478,57 +471,39 @@ class PortScanProcess(Module, multiprocessing.Process):
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
         type_evidence = 'PortScanType1'
-        for protocol in ('TCP', 'UDP'):
-            state = 'Established'
-            dstips = __database__.getDataFromProfileTW(
-                profileid, twid, direction, state, protocol, role, type_data
-            )
+        for state in ('Not Established', 'Established'):
+            for protocol in ('TCP', 'UDP'):
+                dstips = __database__.getDataFromProfileTW(
+                    profileid, twid, direction, state, protocol, role, type_data
+                )
 
-            state = 'Not Established'
-            dstips.update(__database__.getDataFromProfileTW(
-                profileid, twid, direction, state, protocol, role, type_data
-            ))
+                # For each dstip, see if the amount of ports connections is over the threshold
+                for dstip in dstips.keys():
+                    ### PortScan Type 1. Direction OUT
+                    dstports: dict = dstips[dstip]['dstports']
+                    amount_of_dports = len(dstports)
+                    cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
+                    prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
+                    # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
+                    # prev_amount_dports, amount_of_dports))
 
-            # For each dstip, see if the amount of ports connections is over the threshold
-            for dstip in dstips.keys():
-                ### PortScan Type 1. Direction OUT
-                dstports: dict = dstips[dstip]['dstports']
-                amount_of_dports = len(dstports)
-                cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
-                prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
-                # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
-                # prev_amount_dports, amount_of_dports))
+                    # We detect a scan every Threshold. So we detect when there
+                    # is 6, 9, 12, etc. dports per dip.
+                    # The idea is that after X dips we detect a connection.
+                    # And then we 'reset' the counter
+                    # until we see again X more.
+                    if (
+                            amount_of_dports % self.port_scan_minimum_dports_threshold == 0
+                            and prev_amount_dports < amount_of_dports
+                    ):
+                        # Get the total amount of pkts sent to the same port to all IPs
+                        pkts_sent = sum(dstports[dport] for dport in dstports)
+                        uid = dstips[dstip]['uid']
+                        timestamp = dstips[dstip]['stime']
 
-                # We detect a scan every Threshold. So we detect when there
-                # is 6, 9, 12, etc. dports per dip.
-                # The idea is that after X dips we detect a connection.
-                # And then we 'reset' the counter
-                # until we see again X more.
-                if (
-                        amount_of_dports % self.port_scan_minimum_dports_threshold == 0
-                        and prev_amount_dports < amount_of_dports
-                ):
-                    # Get the total amount of pkts sent to the same port to all IPs
-                    pkts_sent = sum(dstports[dport] for dport in dstports)
-                    uid = dstips[dstip]['uid']
-                    timestamp = dstips[dstip]['stime']
-
-                    if not self.alerted_once_vertical_ps:
-                        self.alerted_once_vertical_ps = True
-                        self.set_evidence_vertical_portscan(
-                            timestamp,
-                            pkts_sent,
-                            protocol,
-                            profileid,
-                            twid,
-                            uid,
-                            amount_of_dports,
-                            dstip
-                        )
-                    else:
-                        # after alerting once, wait 10s to see if more packets/flows are coming
-                        self.pending_vertical_ps_evidence.put(
-                            (
+                        if not self.alerted_once_vertical_ps:
+                            self.alerted_once_vertical_ps = True
+                            self.set_evidence_vertical_portscan(
                                 timestamp,
                                 pkts_sent,
                                 protocol,
@@ -538,7 +513,20 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 amount_of_dports,
                                 dstip
                             )
-                        )
+                        else:
+                            # after alerting once, wait 10s to see if more packets/flows are coming
+                            self.pending_vertical_ps_evidence.put(
+                                (
+                                    timestamp,
+                                    pkts_sent,
+                                    protocol,
+                                    profileid,
+                                    twid,
+                                    uid,
+                                    amount_of_dports,
+                                    dstip
+                                )
+                            )
 
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):

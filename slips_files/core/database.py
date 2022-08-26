@@ -101,7 +101,7 @@ class Database(object):
                 'port': 6379,
                 'daemonize': 'yes',
                 'stop-writes-on-bgsave-error': 'no',
-                'save': '',
+                'save': '""',
                 'appendonly': 'no'
             }
         if '-s' in sys.argv:
