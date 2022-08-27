@@ -365,21 +365,7 @@ class Module(Module, multiprocessing.Process):
                 # get registration date
                 try:
                     creation_date = whois.query(domain).creation_date
-                except AttributeError:
-                    # the query doesn't have a creation date
-                    return False
-                except whois.exceptions.UnknownTld:
-                    # solved by manually checking valid TLDs
-                    return False
-                except whois.exceptions.FailedParsingWhoisOutput:
-                    # connection limit exceeded
-                    # todo should we do something about this?
-                    return False
-                except (whois.exceptions.WhoisCommandFailed, whois.exceptions.WhoisQuotaExceeded):
-                    # timeout while performing 'whois' command
-                    return False
-                except KeyError:
-                    # ocassionally occurs in whois/_3_adjust.py
+                except:
                     return False
 
         if not creation_date:

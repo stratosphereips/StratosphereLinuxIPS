@@ -32,7 +32,7 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 9. Alternatively you can add the bot to the channel by going to the channel and doing ```/invite @bots_name```.
 9. Edit the slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
 
-    [ExportingAlerts]
+    [exporting_alerts]
     export_to = [slack]
     slack_channel_name = SlipsAlertsChannel
 

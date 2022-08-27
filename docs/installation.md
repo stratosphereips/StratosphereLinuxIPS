@@ -42,7 +42,7 @@ Slips is dependent on three major elements:
 
 Python 3.8
 Zeek
-Redis database
+Redis database 7.0.4
 
 To install these elements we will use APT package manager. Afterwards, we will install python packages required for Slips to run and its modules to work. Also, Slips' interface Kalipso depend on Node.JS and several npm packages. 
 
@@ -102,9 +102,6 @@ To make sure that zeek can be found in the system we will add its link to a know
 
 ### Running Slips for the First Time
 
-When running Slips for the first time we need to start Redis:
-
-	redis-server --daemonize yes
 
 Once Redis is running it’s time to clone the Slips repository and run it:
 
@@ -113,6 +110,7 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 	./slips.py -c slips.conf -r datasets/hide-and-seek-short.pcap
 
 Run slips with sudo to enable blocking (Optional) 
+
 
 ## Running Slips from Docker with P2P support
 You can use Slips with P2P directly in a special docker image by doing:

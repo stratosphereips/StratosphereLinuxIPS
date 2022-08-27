@@ -311,7 +311,7 @@ class Module(Module, multiprocessing.Process):
         time_of_first_flow = flows_list[0]['ts']
         time_of_last_flow = flows_list[-1]['ts']
 
-        # get the time difference between them in seconds
+        # get the time difference between them in mins
         diff_in_mins = utils.get_time_diff(
             time_of_first_flow,
             time_of_last_flow,
@@ -374,12 +374,15 @@ class Module(Module, multiprocessing.Process):
                         return True
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp
+            self, dport, proto, daddr, profileid, twid, uid, timestamp, origstate
     ):
         """
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if origstate != 'Established':
+            # detect unknown ports on established conns only
+            return False
 
         portproto = f'{dport}/{proto}'
         if port_info := __database__.get_port_info(portproto):
@@ -986,9 +989,13 @@ class Module(Module, multiprocessing.Process):
         alerts when 10 15 20 etc. nxdomains are found
         """
 
+
+        # don't count nxdomains to cymru.com as DGA as they're made
+        # by slips to get the range of an ip
         if (
             not 'NXDOMAIN' in rcode_name
             or 'in-addr.arpa' in query
+            or 'cymru.com' in query
             or query.endswith('.local')
         ):
             return False
@@ -1170,7 +1177,7 @@ class Module(Module, multiprocessing.Process):
                 f'Connection to multiple ports {dstports} of '
                 f'Destination IP: {daddr}. {ip_identification}'
             )
-            uids = daddrs[daddr]['uids']
+            uids = daddrs[daddr]['uid']
             self.helper.set_evidence_for_connection_to_multiple_ports(
                 profileid,
                 twid,
@@ -1206,7 +1213,7 @@ class Module(Module, multiprocessing.Process):
             if len(dstports) <= 1:
                 return
 
-            uids = saddrs[saddr]['uids']
+            uids = saddrs[saddr]['uid']
             description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
 
             self.helper.set_evidence_for_connection_to_multiple_ports(
@@ -1286,11 +1293,12 @@ class Module(Module, multiprocessing.Process):
                             twid,
                             uid,
                             timestamp,
+                            origstate
                         )
 
                     # --- Detect Multiple Reconnection attempts ---
-                    key = f'{saddr}-{daddr}'
-                    if dport != 0 and origstate == 'REJ':
+                    key = f'{saddr}-{daddr}-{dport}'
+                    if origstate == 'REJ':
                         # add this conn to the stored number of reconnections
                         current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
 

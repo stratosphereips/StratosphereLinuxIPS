@@ -102,7 +102,7 @@ def test_check_unknown_port(outputQueue, database):
     # now we have info 23 udp
     assert (
         flowalerts.check_unknown_port(
-            '23', 'udp', daddr, profileid, twid, uid, timestamp
+            '23', 'udp', daddr, profileid, twid, uid, timestamp, 'Established'
         )
         == False
     )

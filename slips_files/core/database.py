@@ -65,6 +65,7 @@ class Database(object):
         'new_software',
         'p2p_data_request',
         'remove_old_files',
+        'export_evidence'
     }
 
     """ Database object management """
@@ -87,34 +88,52 @@ class Database(object):
         self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
+        self.redis_conf_file = 'redis.conf'
+        self.set_redis_options()
 
-    def get_redis_server_PID(self, slips_mode, redis_port):
+    def set_redis_options(self):
         """
-        :param slips_mode: daemonized or interactive
+        Sets the default slips options,
+         when using a different port we override it with -p
+        """
+        self.redis_options=\
+            {
+                'port': 6379,
+                'daemonize': 'yes',
+                'stop-writes-on-bgsave-error': 'no',
+                'save': '""',
+                'appendonly': 'no'
+            }
+        if '-s' in sys.argv:
+            #   Will save the DB if both the given number of seconds and the given
+            #   number of write operations against the DB occurred.
+            #   In the example below the behaviour will be to save:
+            #   after 60 sec if at least 10000 keys changed
+            #   AOF persistence logs every write operation received by the server,
+            #   that will be played again at server startup
+            self.redis_options.update({
+                'save': '60 10000',
+                'appendonly': 'yes'
+            })
+
+        with open(self.redis_conf_file, 'w') as f:
+            for option, val in self.redis_options.items():
+                f.write(f'{option} {val}\n')
+
+
+
+    def get_redis_server_PID(self, redis_port):
+        """
         get the PID of the redis server started on the given redis_port
         retrns the pid
         """
-        # log the pid of the redis server using this port
-        redis_pid = 'Not found'
-        # On modern systems, the netstat utility comes pre-installed,
-        # this can be done using psutil but it needs root on macos
-        command = f'netstat -peanut'
-        result = subprocess.run(command.split(), capture_output=True)
-        # Get command output
-        cmd_output = result.stdout.decode('utf-8').splitlines()
-
-        for line in cmd_output:
-            if f':{redis_port}' in line and 'redis-server' in line:
-                line = re.split(r'\s{2,}', line)
-                # get the substring that has the pid
-                try:
-                    redis_pid = line[-1]
-                    _ = redis_pid.index('/')
-                except ValueError:
-                    redis_pid = line[-2]
-                redis_pid = redis_pid.split('/')[0]
-                break
-        return redis_pid
+        cmd = 'ps aux | grep redis-server'
+        cmd_output = os.popen(cmd).read()
+        for line in cmd_output.splitlines():
+            if str(redis_port) in line:
+                pid = line.split()[1]
+                return pid
+        return False
 
 
     def connect_to_redis_server(self, port: str):
@@ -122,7 +141,7 @@ class Database(object):
         try:
             # start the redis server
             os.system(
-                f'redis-server --port {port} --daemonize yes > /dev/null 2>&1'
+                f'redis-server redis.conf --port {port}  > /dev/null 2>&1'
             )
 
             # db 0 changes everytime we run slips
@@ -161,7 +180,7 @@ class Database(object):
             time.sleep(1)
             self.r.client_list()
             return True
-        except redis.exceptions.ConnectionError:
+        except redis.exceptions.ConnectionError as ex:
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
@@ -177,9 +196,8 @@ class Database(object):
         self.r.set("mode", slips_mode)
 
     def close_redis_server(self, redis_port):
-        slips_mode = self.r.get("mode")
-        server_pid = self.get_redis_server_PID(slips_mode, redis_port)
-        if server_pid != 'Not found':
+        server_pid = self.get_redis_server_PID( redis_port)
+        if server_pid:
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
@@ -255,6 +273,7 @@ class Database(object):
         """Start the DB. Allow it to read the conf"""
         self.config = config
         self.read_configuration()
+
         # Read values from the configuration file
         try:
             if not hasattr(self, 'r'):
@@ -263,22 +282,15 @@ class Database(object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-                self.r.config_set(
-                    'client-output-buffer-limit',
-                    'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
-                )
-                self.rcache.config_set(
-                    'client-output-buffer-limit',
-                    'normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600',
-                )
-
                 if self.deletePrevdb and not '-S' in sys.argv:
+                    # when stopping the daemon, don't flush bc we need to get the pids
+                    # to close slips files
                     self.r.flushdb()
 
+                self.r.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
+                self.rcache.config_set('client-output-buffer-limit', "normal 0 0 0 slave 268435456 67108864 60 pubsub 1073741824 1073741824 600")
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
-                self.r.config_set('stop-writes-on-bgsave-error', 'no')
-                self.rcache.config_set('stop-writes-on-bgsave-error', 'no')
                 # Even if the DB is not deleted. We need to delete some temp data
                 # Zeek_files
                 self.r.delete('zeekfiles')
@@ -286,8 +298,9 @@ class Database(object):
             self.setSlipsInternalTime(0)
             while self.get_slips_start_time() is None:
                 self.set_slips_start_time()
-        except redis.exceptions.ConnectionError:
-            print(f"[DB] Can't connect to redis on port {redis_port}")
+        except redis.exceptions.ConnectionError as ex:
+            print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
+            return False
 
 
     def print(self, text, verbose=1, debug=0):
@@ -353,27 +366,6 @@ class Database(object):
         if ip_obj in ipaddress.ip_network(self.home_network):
             return True
         return False
-
-    def disable_redis_snapshots(self):
-        """
-        disable redis persistence and snapshotting
-        """
-        self.r.config_set('save', '')
-
-    def enable_redis_snapshots(self):
-        """
-        Set redis to save a snapshot every 60s to 900s
-        This is redis default behaviour, but slips disables it by default,
-        to be able to rn several slips instances
-        """
-        #   save <seconds> <changes>
-        #
-        #   Will save the DB if both the given number of seconds and the given
-        #   number of write operations against the DB occurred.
-        #
-        #   In the example below the behaviour will be to save:
-        #   after 60 sec if at least 10000 keys changed
-        self.r.config_set('save', '60 10000')
 
     def addProfile(self, profileid, starttime, duration):
         """
@@ -1048,21 +1040,21 @@ class Database(object):
                 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
-    
-    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid):
+
+    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state):
         data_to_send = {
                 'ip': str(ip),
                 'profileid': str(profileid),
                 'twid': str(twid),
                 'proto': str(proto),
-                'ip_state': 'dstip',
+                'ip_state': ip_state,
                 'stime': starttime,
                 'uid': uid,
             }
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
-        
+
         # ask other peers their opinion about this IP
         cache_age = 1000
         data_to_send.update({'cache_age': cache_age})
@@ -1203,8 +1195,8 @@ class Database(object):
 
         # OTH means that we didnt see the true src ip and dst ip
         if columns['state'] != 'OTH':
-            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid)
-            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid)
+            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip')
+            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid, 'dstip')
 
 
         self.update_times_contacted(ip, direction, profileid, twid)
@@ -1228,9 +1220,9 @@ class Database(object):
             pkts,
             dport,
             dpkts,
-            totbytes, 
-            ip, 
-            starttime, 
+            totbytes,
+            ip,
+            starttime,
             uid
         )
 
@@ -1245,8 +1237,8 @@ class Database(object):
             json.dumps(profileid_twid_data)
         )
         return True
-     
-     
+
+
     def refresh_data_tuples(self):
         """
         Go through all the tuples and refresh the data about the ipsinfo
@@ -1878,7 +1870,7 @@ class Database(object):
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
-        
+
         self.r.hset(
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
@@ -2812,7 +2804,7 @@ class Database(object):
         self.publish('new_url', to_send)
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
-        # Check if the host domain is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        # Check if the host domain is detected by the threat intelligence.
         data_to_send = {
             'host': host,
             'profileid': str(profileid),
@@ -2893,6 +2885,7 @@ class Database(object):
             'twid': str(twid),
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip'
 
         }
         data_to_send = json.dumps(data_to_send)
@@ -3878,9 +3871,9 @@ class Database(object):
         redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
-            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb' \
-                      f' && {self.sudo} rm dump.rdb'
+            command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
             os.system(command)
+            os.remove(redis_db_path)
             print(f'[Main] Database saved to {backup_file}.rdb')
             return True
 
@@ -3891,7 +3884,7 @@ class Database(object):
 
     def load(self, backup_file: str) -> bool:
         """
-        Load the db from disk to the db on port 6379
+        Load the db from disk to the db on port 32850
         backup_file should be the full path of the .rdb
         """
         # do not use self.print here! the outputqueue isn't initialized yet
@@ -3903,47 +3896,33 @@ class Database(object):
         # Check if valid .rdb file
         command = 'file ' + backup_file
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        # Get command output
         file_type = result.stdout.decode('utf-8')
-        # Check if valid redis database
         if not 'Redis' in file_type:
             print(
-                '{} is not a valid redis database file.'.format(backup_file)
+                f'{backup_file} is not a valid redis database file.'
             )
             return False
 
-
-        # Locate the default path of redis dump.rdb
-        if platform.system() == 'Darwin':
-            redis_dir = '/opt/homebrew/var/db/redis'
-        else:
-            command = self.sudo + 'cat /etc/redis/*.conf | grep -w "dir"'
-            redis_dir = subprocess.getoutput(command)
-            if 'dir /var/lib/redis' in redis_dir:
-                redis_dir = '/var/lib/redis'
-            else:
-                # Get the exact path without spaces
-                redis_dir = redis_dir[redis_dir.index(' ') + 1:]
-
-        # All modules throw redis.exceptions.ConnectionError when we stop
-        # the redis-server so we need to close all channels first
-        # We won't need them since we're loading a db that's already been analyzed
-        self.publish_stop()
-        # Stop the server first in order for redis to load another db
-        os.system(self.sudo + 'service redis-server stop')
-        # Copy out saved db to the dump.rdb (the db redis uses by default)
         try:
-            command = (
-                self.sudo + 'cp ' + backup_file + ' ' + redis_dir + '/dump.rdb'
-            )
-            os.system(command)
+            self.redis_options.update({
+                'dbfilename': os.path.basename(backup_file),
+                'dir': os.path.dirname(backup_file)
+            })
+
+            with open(self.redis_conf_file, 'w') as f:
+                for option, val in self.redis_options.items():
+                    f.write(f'{option} {val}\n')
+
+            self.print(f"Stopping redis server requires root access")
+            # Stop the server first in order for redis to load another db
+            os.system(self.sudo + 'service redis-server stop')
+
             # Start the server again
-            # os.system(self.sudo + 'service redis-server start')
-            os.system('redis-server --daemonize yes > /dev/null 2>&1')
+            os.system('redis-server redis.conf')
             return True
         except:
             self.print(
-                f'Error loading the database {backup_file} to {redis_dir}'
+                f'Error loading the database {backup_file}.'
             )
             return False
 

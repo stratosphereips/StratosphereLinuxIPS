@@ -298,7 +298,7 @@ Follow the official installation guide from [Zeek Website](https://zeek.org/get-
 
 ### Installing Redis
 
-Slips needs Redis for interprocess communication. Redis can be installed directly in the
+Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly in the
 host computer or can be run using Docker.
 
 Starting, stopping managing of redis DBs is done automatically by Slips. 

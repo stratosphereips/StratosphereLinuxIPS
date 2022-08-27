@@ -44,9 +44,6 @@ class Module(Module, multiprocessing.Process):
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
-        # evidence to skip before calling setevidence
-        self.arp_scan_evidence = 0
-
         if (
             'yes' in self.delete_zeek_files
             and 'no' in self.store_zeek_files_copy
@@ -252,11 +249,7 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
-                self.arp_scan_evidence += 1
-                if not self.arp_scan_evidence == 5:
-                    # to reduce the number of arp scan alerts, only alert once every 5 scans
-                    return
-                self.arp_scan_evidence = 0
+
 
                 conn_count = len(daddrs)
                 uids = get_uids()
@@ -300,7 +293,13 @@ class Module(Module, multiprocessing.Process):
             uid=uids,
         )
         # after we set evidence, clear the dict so we can detect if it does another scan
-        self.cache_arp_requests.pop(f'{profileid}_{twid}')
+        try:
+            self.cache_arp_requests.pop(f'{profileid}_{twid}')
+        except KeyError:
+            # when a tw is closed, we clear all its' entries from the cache_arp_requests dict
+            # having keyerr is a result of closing a timewindow before setting an evidence
+            # ignore it
+            pass
 
     def check_dstip_outside_localnet(
         self, profileid, twid, daddr, uid, saddr, ts

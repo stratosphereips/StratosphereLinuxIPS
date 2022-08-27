@@ -5,6 +5,15 @@
 - Detect Incompatible certificate CN
 - Detect downloads from pastebin with size > 0.012 MBs
 - Detect DOS executable downloads from http websites
+- Update the mac db automatically
+- Add redis.conf for special redis configurations when running slips
+- Fix saving and loading the database
+- Fix running several slips instances
+- Remove support for whitelisting an unsupported org by slips
+- Better description of alerts exported alerts to Slack
+- Fix -killall argument behaviour
+- Fix stopping the daemon with -S
+- Fix multiple reconnections attempts to detection to detect 5 or more rejected reconnection attempts to the same destination address on the same destination port 
 
 -0.9.3
 * Slips

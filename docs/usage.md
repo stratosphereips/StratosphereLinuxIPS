@@ -247,9 +247,11 @@ You can load it again using ```-d```, For example:
 
 ```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
 
-And then use ```./kalipso``` and select the entry on port 6379 to view the loaded database.
+And then use ```./kalipso``` and select the entry on port 32850 to view the loaded database.
 
 This feature isn't supported in docker due to problems with redis in docker.
+
+Slips will ask for root access when saving the db to be able to restart the redis service.
 
 _DISCLAIMER_: When saving the database you will see the following
 warning 
@@ -395,6 +397,9 @@ If ```home_network``` is not defined, Slips uses all ranges ```'192.168.0.0/16, 
 
 
 When the ```home_network``` parameter is set, slips creates profiles only for ips inside the home network, check the analysis direction below.
+
+The ```home_network``` parameter also supports one host as an argument, which is written like this ```192.168.2.16/32```.
+When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
 
 **Analysis Direction**
 

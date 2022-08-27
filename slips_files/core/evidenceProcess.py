@@ -415,7 +415,7 @@ class EvidenceProcess(multiprocessing.Process):
                 hostname = f'({hostname})'
 
             alert_to_print = (
-                f'{Fore.RED}IP {srcip} {hostname} detected as infected in timewindow {twid_num} '
+                f'{Fore.RED}IP {srcip} {hostname} detected as malicious in timewindow {twid_num} '
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) given the following evidence:{Style.RESET_ALL}\n'
             )
         except Exception as inst:
@@ -566,6 +566,9 @@ class EvidenceProcess(multiprocessing.Process):
         last_evidence_ID = list(tw_evidence.keys())[-1]
         return last_evidence_ID
 
+    def send_to_exporting_module(self, tw_evidence):
+        for evidence in tw_evidence.values():
+            __database__.publish('export_evidence', evidence)
 
     def run(self):
         # add metadata to alerts.log
@@ -722,7 +725,6 @@ class EvidenceProcess(multiprocessing.Process):
                                 # store the alert in our database
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
-                                # todo we can just publish in new_alert, do we need to save it in the db??
                                 __database__.set_evidence_causing_alert(
                                     profileid,
                                     twid,
@@ -730,6 +732,8 @@ class EvidenceProcess(multiprocessing.Process):
                                     self.IDs_causing_an_alert
                                 )
                                 __database__.publish('new_alert', alert_ID)
+
+                                self.send_to_exporting_module(tw_evidence)
 
                                 # print the alert
                                 alert_to_print = (
