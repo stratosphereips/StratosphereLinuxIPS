@@ -1695,21 +1695,23 @@ class ProfilerProcess(multiprocessing.Process):
             self.starttime = self.get_starttime()
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
             self.twid = self.get_timewindow(self.starttime, self.profileid)
-            if self.home_net:
-                # Home. Create profiles for home IPs only
-                if self.saddr_as_obj in self.home_net:
-                    __database__.addProfile(
-                        self.profileid, self.starttime, self.width
-                    )
-                    self.store_features_going_out()
+            if self.home_net != utils.home_network_ranges:
+                for network in self.home_net:
+                    # Home. Create profiles for home IPs only
+                    if self.saddr_as_obj in network:
+                        __database__.addProfile(
+                            self.profileid, self.starttime, self.width
+                        )
+                        self.store_features_going_out()
 
-                if self.analysis_direction == 'all':
-                    # in all mode we create profiled for daddrs too
-                    if self.daddr_as_obj in self.home_net:
-                        self.handle_in_flows()
+                    if self.analysis_direction == 'all':
+                        # in all mode we create profiled for daddrs too
+                        if self.daddr_as_obj in network:
+                            self.handle_in_flows()
+            else:
 
-            elif not self.home_net:
-                # No home. Create profiles for everybody
+                # home_network param wasn't set in slips.conf.
+                # Create profiles for everybody
                 __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
