@@ -812,6 +812,8 @@ class ProfilerProcess(multiprocessing.Process):
                     'dmac': line.get('resp_l2_addr', ''),
                 }
             )
+            # orig_bytes: The number of payload bytes the src sent.
+            # orig_ip_bytes: the length of the header + the payload
 
         elif 'dns' in file_type:
             self.column_values.update(
