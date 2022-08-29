@@ -47,7 +47,6 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('new_service')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
@@ -1511,27 +1510,7 @@ class Module(Module, multiprocessing.Process):
                             uid,
                             timestamp
                         )
-                # --- Learn ports that Zeek knows but Slips doesn't ---
-                message = self.c5.get_message(timeout=self.timeout)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_service'):
-                    data = json.loads(message['data'])
-                    # uid = data['uid']
-                    # profileid = data['profileid']
-                    # uid = data['uid']
-                    # saddr = data['saddr']
-                    port = data['port_num']
-                    proto = data['port_proto']
-                    service = data['service']
-                    port_info = __database__.get_port_info(f'{port}/{proto}')
-                    if not port_info and len(service) > 0:
-                        # zeek detected a port that we didn't know about
-                        # add to known ports
-                        __database__.set_port_info(
-                            f'{port}/{proto}', service[0]
-                        )
+
 
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
                 message = self.c6.get_message(timeout=self.timeout)

@@ -1022,18 +1022,6 @@ class ProfilerProcess(multiprocessing.Process):
                     'operation': line.get('operation', ''),
                 }
             )
-        elif 'known_services' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'known_services',
-                    'saddr': line.get('host', ''),
-                    # this file doesn't have a daddr field, but we need it in add_flow_to_profile
-                    'daddr': '0.0.0.0',
-                    'port_num': line.get('port_num', ''),
-                    'port_proto': line.get('port_proto', ''),
-                    'service': line.get('service', ''),
-                }
-            )
         elif 'software' in file_type:
             software_type = line.get('software_type', '')
             # store info about everything except http:broswer
@@ -1557,7 +1545,6 @@ class ProfilerProcess(multiprocessing.Process):
             'notice',
             'dhcp',
             'files',
-            'known_services',
             'arp',
             'ftp',
             'smtp',
@@ -1957,20 +1944,6 @@ class ProfilerProcess(multiprocessing.Process):
         to_send = json.dumps(to_send)
         __database__.publish('new_downloaded_file', to_send)
 
-    def handle_known_services(self, ):
-        # Send known_services.log data to new_service channel in flowalerts module
-        to_send = {
-            'uid': self.uid,
-            'saddr': self.saddr,
-            'port_num': self.column_values['port_num'],
-            'port_proto': self.column_values['port_proto'],
-            'service': self.column_values['service'],
-            'profileid': self.profileid,
-            'twid': self.twid,
-            'ts': self.starttime,
-        }
-        to_send = json.dumps(to_send)
-        __database__.publish('new_service', to_send)
 
     def handle_arp(self):
         to_send = {
@@ -2027,7 +2000,6 @@ class ProfilerProcess(multiprocessing.Process):
             'ftp': self.handle_ftp,
             'smtp': self.handle_smtp,
             'files': self.handle_files,
-            'known_services': self.handle_known_services,
             'arp': self.handle_arp,
             'dhcp': self.handle_dhcp,
             'software': self.handle_software
