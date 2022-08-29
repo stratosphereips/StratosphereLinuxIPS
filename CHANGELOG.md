@@ -6,6 +6,7 @@
 - Detect downloads from pastebin with size > 0.012 MBs
 - Detect DOS executable downloads from http websites
 - Update the mac db automatically
+- Support using multiple home network parameters in slips.conf
 - Add redis.conf for special redis configurations when running slips
 - Fix saving and loading the database
 - Fix running several slips instances
