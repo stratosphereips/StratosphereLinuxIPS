@@ -320,6 +320,26 @@ class Module(Module, multiprocessing.Process):
         For each contacted ip in this twid,
         check if the total bytes sent to this ip is >= data_exfiltration_threshold
         """
+        def get_sent_bytes(all_flows):
+            """Returns a dict of sent bytes to all ips {contacted_ip: (mbs_sent, [uids])}"""
+            bytes_sent = {}
+            for flow in all_flows:
+                uid = next(iter(flow))
+                flow = flow[uid]
+                daddr = flow['daddr']
+                sbytes: int = flow.get('sbytes', 0)
+
+                if self.is_ignored_ip_data_upload(daddr) or not sbytes:
+                    continue
+
+                if daddr in bytes_sent:
+                    mbs_sent, uids = bytes_sent[daddr]
+                    mbs_sent += sbytes
+                    uids.append(uid)
+                else:
+                    bytes_sent[daddr] = (sbytes, [uid])
+
+            return bytes_sent
         return
 
 
