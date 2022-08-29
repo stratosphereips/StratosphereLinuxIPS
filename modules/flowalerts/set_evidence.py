@@ -613,9 +613,8 @@ class Helper:
 
     def set_evidence_data_exfiltration(
         self,
-        most_contacted_daddr,
-        total_mbytes,
-        times_contacted,
+        daddr,
+        src_mbs,
         profileid,
         twid,
         uid,
@@ -626,12 +625,12 @@ class Helper:
         source_target_tag = 'OriginMalware'
         type_evidence = 'DataUpload'
         category = 'Malware'
-        detection_info = most_contacted_daddr
+        detection_info = daddr
         ip_identification = __database__.getIPIdentification(
-            most_contacted_daddr
+            daddr
         )
-        description = f'possible data upload. {total_mbytes} MBs sent to {most_contacted_daddr} '
-        description += f'IP contacted {times_contacted} times in the past 1h. {ip_identification}'
+        description = f'possible data upload. {src_mbs} MBs sent to {daddr} '
+        description += f'{ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
         __database__.setEvidence(
             type_evidence,
