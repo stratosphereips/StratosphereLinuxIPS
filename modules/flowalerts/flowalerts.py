@@ -340,7 +340,30 @@ class Module(Module, multiprocessing.Process):
                     bytes_sent[daddr] = (sbytes, [uid])
 
             return bytes_sent
-        return
+
+        all_flows = __database__.get_all_flows_in_profileid(
+            profileid
+        )
+        if not all_flows:
+            return
+        bytes_sent: dict = get_sent_bytes(all_flows)
+
+        for ip, ip_info in bytes_sent.items():
+            # ip_info is a tuple (bytes_sent, [uids])
+            uids = ip_info[1]
+
+            bytes_uploaded = ip_info[0]
+            mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
+            if mbs_uploaded < self.data_exfiltration_threshold:
+                continue
+
+            self.helper.set_evidence_data_exfiltration(
+                ip,
+                mbs_uploaded,
+                profileid,
+                twid,
+                uids,
+            )
 
 
     def check_unknown_port(
