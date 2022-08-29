@@ -350,13 +350,12 @@ class Database(object):
             return True
 
         ip = profileid.split(self.separator)[1]
-        try:
-            ip_obj = ipaddress.IPv4Address(ip)
-        except ipaddress.AddressValueError:
-            ip_obj = ipaddress.IPv6Address(ip)
+        ip_obj = ipaddress.ip_address(ip)
 
-        if ip_obj in ipaddress.ip_network(self.home_network):
-            return True
+        for network in self.home_network:
+            if ip_obj in network:
+                return True
+
         return False
 
     def addProfile(self, profileid, starttime, duration):

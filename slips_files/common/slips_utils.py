@@ -31,6 +31,8 @@ class Utils(object):
             '172.16.0.0/12',
             '10.0.0.0/8',
         )
+        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges))
+
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
         self.threat_levels = {
             'info': 0,
@@ -72,6 +74,7 @@ class Utils(object):
     def get_home_network(self, config) -> list:
         """
         :param config: configparser instance
+        Returns a list of network objects
         """
         home_net = self.read_configuration(
             config, 'parameters', 'home_network', False
@@ -83,7 +86,7 @@ class Utils(object):
             home_nets = [network.strip() for network in home_nets]
 
         else:
-            home_nets = self.home_network_ranges
+            return self.home_network_ranges
 
         return list(map(ipaddress.ip_network, home_nets))
 
