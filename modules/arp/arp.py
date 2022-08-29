@@ -83,20 +83,8 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        self.home_network = []
-        try:
-            self.home_network.append(
-                self.config.get('parameters', 'home_network')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_network = utils.home_network_ranges
-        # convert the ranges into network obj
-        self.home_network = list(map(ipaddress.ip_network, self.home_network))
+
+        self.home_network = utils.get_home_network(self.config)
 
         try:
             self.delete_zeek_files = self.config.get(

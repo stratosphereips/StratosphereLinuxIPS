@@ -259,15 +259,7 @@ class Database(object):
             self.disabled_detections = []
 
         # get home network from slips.conf
-        try:
-            self.home_network = self.config.get('parameters', 'home_network')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_network = utils.home_network_ranges
+        self.home_network = utils.get_home_network(self.config)
 
     def start(self, config, redis_port):
         """Start the DB. Allow it to read the conf"""
