@@ -1372,7 +1372,7 @@ class Database(object):
         starttime = str(columns['starttime'])
         uid = columns['uid']
         ip = str(ip_address)
-        # spkts = columns['spkts']
+        spkts = columns['spkts']
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
@@ -1408,10 +1408,12 @@ class Database(object):
             # if there's a conn from this ip on this port, add the pkts
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]['pkts'] += pkts
+                port_data[ip_key][ip]['spkts'] += spkts
                 port_data[ip_key][ip]['uid'].append(uid)
             else:
                 port_data[ip_key][ip] = {
                     'pkts': pkts,
+                    'spkts': spkts,
                     'stime': starttime,
                     'uid': [uid]
                 }
@@ -1425,6 +1427,7 @@ class Database(object):
                 ip_key: {
                     ip: {
                         'pkts': pkts,
+                        'spkts': spkts,
                         'stime': starttime,
                         'uid': [uid]
                     }

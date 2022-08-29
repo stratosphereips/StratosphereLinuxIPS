@@ -158,7 +158,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         and prev_amount_dips < amount_of_dips
                     ):
                         # Get the total amount of pkts sent to the same port from all IPs
-                        pkts_sent = sum(dstips[dip]['pkts'] for dip in dstips)
+                        pkts_sent = sum(dstips[dip]['spkts'] for dip in dstips)
 
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
@@ -371,7 +371,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         description = (
             f'horizontal port scan to port {port_info} {portproto}. '
             f'From {srcip} to {amount_of_dips} unique dst IPs. '
-            f'Tot pkts: {pkts_sent}. '
+            f'Tot pkts sent: {pkts_sent}. '
             f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}'
         )
