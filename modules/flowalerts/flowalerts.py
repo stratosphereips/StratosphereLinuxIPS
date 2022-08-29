@@ -47,6 +47,7 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('tw_closed')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
@@ -142,8 +143,9 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ssh_succesful_detection_threshold = 4290
         try:
-            self.data_exfiltration_threshold = int(
-                self.config.get('flowalerts', 'data_exfiltration_threshold')
+            threashold =  self.config.get('flowalerts', 'data_exfiltration_threshold')
+            self.data_exfiltration_threshold = float(
+                threashold
             )
         except (
             configparser.NoOptionError,
@@ -152,7 +154,7 @@ class Module(Module, multiprocessing.Process):
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # threshold in MBs
-            self.data_exfiltration_threshold = 700
+            self.data_exfiltration_threshold = 500
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -279,22 +281,10 @@ class Module(Module, multiprocessing.Process):
         """
         Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
         """
-        def is_ignored_ip(ip):
-            """
-            Ignore the IPs that we shouldn't alert about
-            """
 
-            ip_obj = ipaddress.ip_address(ip)
-            if (
-                ip == self.gateway
-                or ip_obj.is_multicast
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-            ):
-                return True
 
         if (
-            is_ignored_ip(daddr)
+            self.is_ignored_ip_data_upload(daddr)
             or not sbytes
         ):
             return False
@@ -310,6 +300,13 @@ class Module(Module, multiprocessing.Process):
             )
             return True
 
+
+    def detect_data_upload_in_twid(self, profileid, twid):
+        """
+        For each contacted ip in this twid,
+        check if the total bytes sent to this ip is >= data_exfiltration_threshold
+        """
+        return
 
 
     def check_unknown_port(
@@ -968,7 +965,6 @@ class Module(Module, multiprocessing.Process):
             self.nxdomains[profileid_twid] = ([],[])
             return True
 
-
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
 
         age_threshold = 60
@@ -1049,8 +1045,6 @@ class Module(Module, multiprocessing.Process):
 
         # remove all 3 logins that caused this alert
         self.smtp_bruteforce_cache[profileid] = ([],[])
-
-
 
     def detect_connection_to_multiple_ports(
             self,
@@ -1165,6 +1159,7 @@ class Module(Module, multiprocessing.Process):
             )
 
 
+
     def run(self):
         utils.drop_root_privs()
         # Main loop function
@@ -1177,7 +1172,6 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
-
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -1510,6 +1504,19 @@ class Module(Module, multiprocessing.Process):
                             uid,
                             timestamp
                         )
+
+
+                message = self.c5.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'tw_closed'):
+                    profileid_tw = message['data'].split('_')
+                    profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
+
+                    self.detect_data_upload_in_twid(profileid, twid)
+
 
 
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
