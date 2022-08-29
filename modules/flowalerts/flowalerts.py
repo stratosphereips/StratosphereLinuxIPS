@@ -277,22 +277,29 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_data_upload(self, sbytes, daddr, uid, profileid, twid):
+        """
+        Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
+        """
         def is_ignored_ip(ip):
             """
             Ignore the IPs that we shouldn't alert about
             """
-            ip = ipaddress.ip_address(ip)
+
+            ip_obj = ipaddress.ip_address(ip)
             if (
                 ip == self.gateway
-                or ip.is_multicast
-                or ip.is_link_local
-                or ip.is_reserved
+                or ip_obj.is_multicast
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
             ):
                 return True
 
-        srcip = profileid.split('_')[-1]
-        if is_ignored_ip(srcip) or not sbytes:
+        if (
+            is_ignored_ip(daddr)
+            or not sbytes
+        ):
             return False
+
         src_mbs = utils.convert_to_mb(int(sbytes))
         if src_mbs >= self.flow_upload_threshold:
             self.helper.set_evidence_data_exfiltration(
