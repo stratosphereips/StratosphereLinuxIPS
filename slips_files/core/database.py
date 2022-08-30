@@ -1082,7 +1082,7 @@ class Database(object):
             old_profileid_twid_data,
             pkts,
             dport,
-            dpkts,
+            spkts,
             totbytes,
             ip,
             starttime,
@@ -1096,7 +1096,7 @@ class Database(object):
         """
 
         dport = str(dport)
-        dpkts = int(dpkts)
+        spkts = int(spkts)
         pkts = int(pkts)
         totbytes = int(totbytes)
 
@@ -1108,9 +1108,9 @@ class Database(object):
             ip_data['totalbytes'] += totbytes
             ip_data['uid'].append(uid)
             if dport in ip_data['dstports']:
-                ip_data['dstports'][dport] += dpkts
+                ip_data['dstports'][dport] += spkts
             else:
-                ip_data['dstports'][dport] = dpkts
+                ip_data['dstports'][dport] = spkts
 
         except KeyError:
             # First time seeing this ip
@@ -1120,7 +1120,7 @@ class Database(object):
                 'totalbytes': totbytes,
                 'stime': starttime,
                 'uid': [uid],
-                'dstports': {dport: dpkts}
+                'dstports': {dport: spkts}
 
             }
 
@@ -1158,9 +1158,9 @@ class Database(object):
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
+        spkts = columns['spkts']
         # sport = columns['sport']
         # sbytes = columns['sbytes']
-        # spkts = columns['spkts']
 
 
         """
@@ -1210,7 +1210,7 @@ class Database(object):
             old_profileid_twid_data,
             pkts,
             dport,
-            dpkts,
+            spkts,
             totbytes,
             ip,
             starttime,
@@ -1363,7 +1363,7 @@ class Database(object):
         starttime = str(columns['starttime'])
         uid = columns['uid']
         ip = str(ip_address)
-        # spkts = columns['spkts']
+        spkts = columns['spkts']
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
@@ -1388,7 +1388,6 @@ class Database(object):
             role,
             'Ports'
         )
-        key_name = f'{port_type}Ports{role}{proto}{summaryState}'
 
         try:
             # we already have info about this dport, update it
@@ -1400,10 +1399,12 @@ class Database(object):
             # if there's a conn from this ip on this port, add the pkts
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]['pkts'] += pkts
+                port_data[ip_key][ip]['spkts'] += spkts
                 port_data[ip_key][ip]['uid'].append(uid)
             else:
                 port_data[ip_key][ip] = {
                     'pkts': pkts,
+                    'spkts': spkts,
                     'stime': starttime,
                     'uid': [uid]
                 }
@@ -1417,6 +1418,7 @@ class Database(object):
                 ip_key: {
                     ip: {
                         'pkts': pkts,
+                        'spkts': spkts,
                         'stime': starttime,
                         'uid': [uid]
                     }
@@ -1426,6 +1428,7 @@ class Database(object):
         old_profileid_twid_data[port] = port_data
         data = json.dumps(old_profileid_twid_data)
         hash_key = profileid + self.separator + twid
+        key_name = f'{port_type}Ports{role}{proto}{summaryState}'
         self.r.hset(hash_key, key_name, str(data))
         self.markProfileTWAsModified(profileid, twid, starttime)
 

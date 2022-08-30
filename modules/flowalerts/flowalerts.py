@@ -47,7 +47,7 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_ssh')
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('new_service')
+        self.c5 = __database__.subscribe('tw_closed')
         self.c6 = __database__.subscribe('new_dns_flow')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
@@ -85,6 +85,8 @@ class Module(Module, multiprocessing.Process):
         self.dns_arpa_queries = {}
         # after this number of arpa queries, slips will detect an arpa scan
         self.arpa_scan_threshold = 10
+        # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
+        self.flow_upload_threshold = 100
 
     def is_ignored_ip(self, ip) -> bool:
         """
@@ -141,8 +143,9 @@ class Module(Module, multiprocessing.Process):
             # There is a conf, but there is no option, or no section or no configuration file specified
             self.ssh_succesful_detection_threshold = 4290
         try:
-            self.data_exfiltration_threshold = int(
-                self.config.get('flowalerts', 'data_exfiltration_threshold')
+            threashold =  self.config.get('flowalerts', 'data_exfiltration_threshold')
+            self.data_exfiltration_threshold = float(
+                threashold
             )
         except (
             configparser.NoOptionError,
@@ -151,7 +154,7 @@ class Module(Module, multiprocessing.Process):
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             # threshold in MBs
-            self.data_exfiltration_threshold = 700
+            self.data_exfiltration_threshold = 500
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -274,113 +277,103 @@ class Module(Module, multiprocessing.Process):
         # consider this port as unknown
         return False
 
-    def check_data_upload(self, profileid, twid):
-        def remove_ignored_ips(contacted_addresses):
-            """
-            remove IPs that we shouldn't alert about if they are most contacted
-            If the gw is contacted 10 times,
-             and 8.8.8.8 is contacted 8 times, we use 8.8.8.8 as the most contacted
-            """
-            # most of the times the default gateway will be the most contacted daddr, we don't want that
-            # remove it from the dict if it's there
-            res = {}
-            for ip, ip_info in contacted_addresses.items():
-                ip_obj = ipaddress.ip_address(ip)
-                if not  (ip == self.gateway
-                    or ip_obj.is_multicast
-                    or ip_obj.is_link_local
-                    or ip_obj.is_reserved) :
-                    res[ip] = ip_info
-            return res
+    def is_ignored_ip_data_upload(self, ip):
+        """
+        Ignore the IPs that we shouldn't alert about
+        """
+
+        ip_obj = ipaddress.ip_address(ip)
+        if (
+            ip == self.gateway
+            or ip_obj.is_multicast
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+        ):
+            return True
+
+    def check_data_upload(self, sbytes, daddr, uid, profileid, twid):
+        """
+        Set evidence when 1 flow is sending >= the flow_upload_threshold bytes
+        """
 
 
-        # we’re looking for systems that are transferring large amount of data in 20 mins span
+        if (
+            self.is_ignored_ip_data_upload(daddr)
+            or not sbytes
+        ):
+            return False
+
+        src_mbs = utils.convert_to_mb(int(sbytes))
+        if src_mbs >= self.flow_upload_threshold:
+            self.helper.set_evidence_data_exfiltration(
+                daddr,
+                src_mbs,
+                profileid,
+                twid,
+                uid,
+            )
+            return True
+
+
+    def detect_data_upload_in_twid(self, profileid, twid):
+        """
+        For each contacted ip in this twid,
+        check if the total bytes sent to this ip is >= data_exfiltration_threshold
+        """
+        def get_sent_bytes(all_flows):
+            """Returns a dict of sent bytes to all ips {contacted_ip: (mbs_sent, [uids])}"""
+            bytes_sent = {}
+            for flow in all_flows:
+                uid = next(iter(flow))
+                flow = flow[uid]
+                daddr = flow['daddr']
+                sbytes: int = flow.get('sbytes', 0)
+
+                if self.is_ignored_ip_data_upload(daddr) or not sbytes:
+                    continue
+
+                if daddr in bytes_sent:
+                    mbs_sent, uids = bytes_sent[daddr]
+                    mbs_sent += sbytes
+                    uids.append(uid)
+                else:
+                    bytes_sent[daddr] = (sbytes, [uid])
+
+            return bytes_sent
+
         all_flows = __database__.get_all_flows_in_profileid(
             profileid
         )
         if not all_flows:
             return
+        bytes_sent: dict = get_sent_bytes(all_flows)
 
-        # get a list of flows without uids
-        flows_list = []
-        for flow_dict in all_flows:
-            flows_list.append(list(flow_dict.items())[0][1])
-        # sort flows by ts
-        flows_list = sorted(flows_list, key=lambda i: i['ts'])
+        for ip, ip_info in bytes_sent.items():
+            # ip_info is a tuple (bytes_sent, [uids])
+            uids = ip_info[1]
 
-        time_of_first_flow = flows_list[0]['ts']
-        time_of_last_flow = flows_list[-1]['ts']
+            bytes_uploaded = ip_info[0]
+            mbs_uploaded = utils.convert_to_mb(bytes_uploaded)
+            if mbs_uploaded < self.data_exfiltration_threshold:
+                continue
 
-        # get the time difference between them in mins
-        diff_in_mins = utils.get_time_diff(
-            time_of_first_flow,
-            time_of_last_flow,
-            return_type='minutes'
-        )
-        # we need the flows that happend in 20 mins span
-        if diff_in_mins < 20:
-            return
+            self.helper.set_evidence_data_exfiltration(
+                ip,
+                mbs_uploaded,
+                profileid,
+                twid,
+                uids,
+            )
 
-        contacted_daddrs = {}
-        # get a dict of all contacted daddr in the past hour and how many times they were ccontacted
-        for flow in flows_list:
-            daddr = flow['daddr']
-            try:
-                contacted_daddrs[daddr] = (
-                    contacted_daddrs[daddr] + 1
-                )
-            except KeyError:
-                contacted_daddrs.update({daddr: 1})
-
-        contacted_daddrs = remove_ignored_ips(contacted_daddrs)
-        if not contacted_daddrs:
-            return
-        # get the top most contacted daddr
-        most_contacted_daddr = max(
-            contacted_daddrs, key=contacted_daddrs.get
-        )
-        times_contacted = contacted_daddrs[
-            most_contacted_daddr
-        ]
-
-        # get the sum of all bytes sent to that ip in the past hour
-        total_bytes = 0
-        for flow in flows_list:
-            daddr = flow['daddr']
-            if daddr == most_contacted_daddr:
-                # In arp the sbytes is actually ''
-                if flow['sbytes'] == '':
-                    sbytes = 0
-                else:
-                    sbytes = flow['sbytes']
-                total_bytes += sbytes
-        total_mbs = total_bytes / (10**6)
-
-        if (
-            total_mbs >= self.data_exfiltration_threshold
-        ):
-            # get the first uid of these flows to use for setEvidence
-            for flow_dict in all_flows:
-                for uid, flow in flow_dict.items():
-                    if flow['daddr'] == most_contacted_daddr:
-                        self.helper.set_evidence_data_exfiltration(
-                            most_contacted_daddr,
-                            total_mbs,
-                            times_contacted,
-                            profileid,
-                            twid,
-                            uid,
-                        )
-                        return True
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp, origstate
+            self, dport, proto, daddr, profileid, twid, uid, timestamp, state
     ):
         """
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
-        if origstate != 'Established':
+        if state != 'Established':
             # detect unknown ports on established conns only
             return False
 
@@ -1029,7 +1022,6 @@ class Module(Module, multiprocessing.Process):
             self.nxdomains[profileid_twid] = ([],[])
             return True
 
-
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
 
         age_threshold = 60
@@ -1110,8 +1102,6 @@ class Module(Module, multiprocessing.Process):
 
         # remove all 3 logins that caused this alert
         self.smtp_bruteforce_cache[profileid] = ([],[])
-
-
 
     def detect_connection_to_multiple_ports(
             self,
@@ -1226,6 +1216,7 @@ class Module(Module, multiprocessing.Process):
             )
 
 
+
     def run(self):
         utils.drop_root_privs()
         # Main loop function
@@ -1238,7 +1229,6 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
-
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -1264,6 +1254,7 @@ class Module(Module, multiprocessing.Process):
                     sport = flow_dict['sport']
                     dport = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
+                    sbytes = flow_dict.get('sbytes', 0)
                     appproto = flow_dict.get('appproto', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
@@ -1293,7 +1284,7 @@ class Module(Module, multiprocessing.Process):
                             twid,
                             uid,
                             timestamp,
-                            origstate
+                            state
                         )
 
                     # --- Detect Multiple Reconnection attempts ---
@@ -1378,7 +1369,7 @@ class Module(Module, multiprocessing.Process):
                     )
 
                     # --- Detect Data exfiltration ---
-                    self.check_data_upload(profileid, twid)
+                    self.check_data_upload(sbytes, daddr, uid, profileid, twid)
 
                 # --- Detect successful SSH connections ---
                 message = self.c2.get_message(timeout=self.timeout)
@@ -1570,27 +1561,20 @@ class Module(Module, multiprocessing.Process):
                             uid,
                             timestamp
                         )
-                # --- Learn ports that Zeek knows but Slips doesn't ---
+
+
                 message = self.c5.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_service'):
-                    data = json.loads(message['data'])
-                    # uid = data['uid']
-                    # profileid = data['profileid']
-                    # uid = data['uid']
-                    # saddr = data['saddr']
-                    port = data['port_num']
-                    proto = data['port_proto']
-                    service = data['service']
-                    port_info = __database__.get_port_info(f'{port}/{proto}')
-                    if not port_info and len(service) > 0:
-                        # zeek detected a port that we didn't know about
-                        # add to known ports
-                        __database__.set_port_info(
-                            f'{port}/{proto}', service[0]
-                        )
+
+                if utils.is_msg_intended_for(message, 'tw_closed'):
+                    profileid_tw = message['data'].split('_')
+                    profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
+
+                    self.detect_data_upload_in_twid(profileid, twid)
+
+
 
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
                 message = self.c6.get_message(timeout=self.timeout)

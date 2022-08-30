@@ -525,7 +525,8 @@ class Module(Module, multiprocessing.Process):
 
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
-                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
+                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
+                    # range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
                     cache_copy = self.cache_arp_requests.copy()
                     for key in cache_copy:
