@@ -92,11 +92,24 @@ For example, even though 5223/TCP isn't a well known port, Apple uses it in Appl
 
 any port that isn't in the above 2 files is considered unknown to Slips.
 
-## Data exfiltration
+Slips will detect established connections only to unknown ports.
 
-Slips generate a 'possible data exfiltration alerts when the number of uploaded files to any IP exceeds 700 MBs.
+Rejected connections (not established) are detected as 'Multiple reconnection attempts'. for more details check 
+[Multiple reconnections](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html#multiple-reconnection-attempts)
+below
 
-The number of MBs can be modified by editting the value of ```data_exfiltration_threshold``` in ```slips.conf``` 
+## Data Upload
+
+Slips generates 'possible data upload' alerts when the number of uploaded bytes to any IP exceeds 100 MBs over
+the timewindow period which is, by default, 1h. 
+
+See detailed explanation of timewindows
+[here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html?highlight=timewindows#architecture).
+
+The number of MBs can be modified by changing the value of ```data_exfiltration_threshold``` in ```slips.conf``` 
+
+
+Slips also detects data upload when an IP uploads >=100MBs to any IP in 1 connections. 
 
 ## Malicious JA3 and JA3s hashes
 
@@ -119,9 +132,8 @@ Slips detects any connection to port 0 using any protocol other than 'IGMP' and 
 
 ## Multiple reconnection attempts 
 
-Multiple reconnection attempts in Slips are 5 or more not established flows (reconnections) to the same destination IP.
-
-
+Multiple reconnection attempts in Slips are 5 or more not established flows (reconnections) to 
+the same destination IP on the same destination port.
 
 ## Zeek alerts
 
@@ -129,8 +141,9 @@ By default, Slips depends on Zeek for detecting different behaviours, for exampl
 Self-signed certs, invalid certs, port-scans and address scans, and password guessing.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
-Check  []() section for more info #todo
-
+Check 
+[PING Sweeps](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#ping-sweeps) 
+section for more info 
 
 ## DGA
 

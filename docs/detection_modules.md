@@ -597,10 +597,9 @@ Slips checks both TCP and UDP connections for port scans.
 
 
 Slips considers an IP performing a vertical port scan if it scans 6 or more different
-destination ports
+destination ports, either the connection was established or not established.
 
-We detect a scan every threshold. So we detect when 
-there is 6, 9, 12, etc. destination ports per destination IP.
+We detect when there is 6, 9, 12, etc. scanned destination ports per destination IP.
 
 ### Horizontal port scans
 
