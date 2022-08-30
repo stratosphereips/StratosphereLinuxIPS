@@ -502,7 +502,7 @@ class Main:
         try:
             os.kill(int(self.PIDs['InputProcess']), signal.SIGKILL)
             self.PIDs.pop('InputProcess')
-        except KeyError:
+        except (KeyError, ProcessLookupError):
             pass
 
         if self.mode == 'daemonized':
@@ -513,7 +513,7 @@ class Main:
                             'logsProcess'): #'EvidenceProcess',
                 try:
                     os.kill(int(self.PIDs[process]), signal.SIGINT)
-                except KeyError:
+                except (KeyError, ProcessLookupError):
                     # logsprocess isn't started yet
                     pass
         else:
@@ -655,6 +655,7 @@ class Main:
 
             # set analysis end date
             ends_date = self.set_analysis_end_date()
+
             start_time = __database__.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, ends_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
@@ -755,7 +756,7 @@ class Main:
 
             try:
                 os.kill(int(evidence_proc_pid), signal.SIGINT)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, ProcessLookupError):
                 # slips is stopped before evidence process started
                 pass
 
@@ -777,7 +778,7 @@ class Main:
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.daemon.delete_pidfile()
-                __database__.r.flushdb()
+                # __database__.r.flushdb()
 
 
             os._exit(-1)
