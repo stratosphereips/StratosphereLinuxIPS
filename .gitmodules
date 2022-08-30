@@ -1,0 +1,3 @@
+[submodule "p2p4slips"]
+	path = p2p4slips
+	url = https://github.com/stratosphereips/p2p4slips
