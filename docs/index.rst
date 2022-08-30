@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.9.3
+Slips v0.9.5
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
