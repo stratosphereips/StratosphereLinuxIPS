@@ -1,5 +1,5 @@
 # Must imports
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 
 # Your imports
 import time

@@ -20,7 +20,7 @@
 from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 import configparser
 import signal
 import sys
@@ -1375,7 +1375,7 @@ class Main:
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
-        from slips_files.core.database import __database__
+        from slips_files.core.database.database import __database__
         __database__.start(self.config, 6379)
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
@@ -1535,7 +1535,7 @@ class Main:
                 self.terminate_slips()
             else:
                 # start only the blocking module process and the db
-                from slips_files.core.database import __database__
+                from slips_files.core.database.database import __database__
                 from multiprocessing import Queue
                 from modules.blocking.blocking import Module
 
@@ -1675,7 +1675,6 @@ class Main:
             ##########################
             # Creation of the threads
             ##########################
-            from slips_files.core.database import __database__
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:

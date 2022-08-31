@@ -274,7 +274,7 @@ Here is the whole local_connection_detector.py code for copy/paste.
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import platform
 import sys
@@ -283,6 +283,7 @@ import sys
 import datetime
 import ipaddress
 import json
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces

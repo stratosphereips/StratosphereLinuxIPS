@@ -20,7 +20,7 @@ import json
 from datetime import datetime, timedelta
 import sys
 import configparser
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback

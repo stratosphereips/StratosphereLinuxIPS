@@ -11,8 +11,6 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-import platform
-import re
 import ast
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
@@ -120,8 +118,6 @@ class Database(object):
             for option, val in self.redis_options.items():
                 f.write(f'{option} {val}\n')
 
-
-
     def get_redis_server_PID(self, redis_port):
         """
         get the PID of the redis server started on the given redis_port
@@ -134,7 +130,6 @@ class Database(object):
                 pid = line.split()[1]
                 return pid
         return False
-
 
     def connect_to_redis_server(self, port: str):
         """Connects to the given port and Sets r and rcache"""
@@ -3855,11 +3850,6 @@ class Database(object):
         # Saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
         self.r.save()
-        # if you're not root, this will return False even if the path exists
-        # if platform.system() == 'Linux':
-        #     redis_db_path = '/var/lib/redis/dump.rdb'
-        # else:
-            # redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
 
         # Saves to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')

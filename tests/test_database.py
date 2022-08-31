@@ -19,7 +19,7 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
-    from slips_files.core.database import __database__
+    from slips_files.core.database.database import __database__
 
     config = configparser.ConfigParser()
     __database__.start(config, 6381)

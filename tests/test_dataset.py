@@ -2,9 +2,7 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
-import os
 import pytest
-import shutil
 # from test_slips import create_Main_instance
 from ..slips import *
 
@@ -12,7 +10,7 @@ alerts_file = 'alerts.log'
 
 
 def connect_to_redis(redis_port):
-    from slips_files.core.database import __database__
+    from slips_files.core.database.database import __database__
 
     __database__.connect_to_redis_server(redis_port)
     return __database__
