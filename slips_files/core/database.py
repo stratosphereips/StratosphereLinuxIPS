@@ -1007,7 +1007,7 @@ class Database(object):
         # Check if we should close some TW
         self.check_TW_to_close()
 
-    def check_TW_to_close(self):
+    def check_TW_to_close(self, close_all=False):
         """
         Check if we should close some TW
         Search in the modifed tw list and compare when they
@@ -1018,6 +1018,9 @@ class Database(object):
 
         # for each modified profile
         modification_time = float(sit) - self.width
+        if close_all:
+            # close all tws no matter when they were last modified
+            modification_time = float('inf')
 
         profiles_tws_to_close = self.r.zrangebyscore(
             'ModifiedTW', 0, modification_time, withscores=True

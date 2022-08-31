@@ -652,6 +652,8 @@ class Main:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
             print('Stopping Slips')
+            # close all tws
+            __database__.check_TW_to_close(close_all=True)
 
             # set analysis end date
             ends_date = self.set_analysis_end_date()
