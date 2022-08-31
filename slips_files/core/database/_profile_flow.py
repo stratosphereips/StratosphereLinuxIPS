@@ -425,7 +425,6 @@ class ProfilingFlowsDatabase(object):
         )
         return True
 
-
     def update_ip_info(
         self,
         old_profileid_twid_data,
@@ -475,7 +474,6 @@ class ProfilingFlowsDatabase(object):
 
         old_profileid_twid_data[ip] = ip_data
         return old_profileid_twid_data
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -752,7 +750,6 @@ class ProfilingFlowsDatabase(object):
         self.r.hset(hash_key, key_name, str(data))
         self.markProfileTWAsModified(profileid, twid, starttime)
 
-
     def add_flow(
         self,
         profileid='',
@@ -833,7 +830,6 @@ class ProfilingFlowsDatabase(object):
             self.set_input_metadata({'file_start': stime})
         self.publish('new_flow', to_send)
         return True
-
 
     def set_input_metadata(self, info:dict):
         """
@@ -994,7 +990,6 @@ class ProfilingFlowsDatabase(object):
         if new_key:
             self.r.publish('ip_info_change', ip)
 
-
     def add_out_http(
         self,
         daddr,
@@ -1142,8 +1137,6 @@ class ProfilingFlowsDatabase(object):
         }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
-
-
 
     def add_out_notice(
         self,
@@ -1430,7 +1423,6 @@ class ProfilingFlowsDatabase(object):
             self.rcache.hset('DomainsInfo', domain, domain_data)
             # Publish the changes
             self.r.publish('dns_info_change', domain)
-
 
     def add_out_dns(
         self,

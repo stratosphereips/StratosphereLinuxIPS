@@ -1801,10 +1801,6 @@ class Database(ProfilingFlowsDatabase, object):
         """Add an entry to the list of zeek files"""
         self.r.sadd('zeekfiles', filename)
 
-    def del_zeek_file(self, filename):
-        """Delete an entry from the list of zeek files"""
-        self.r.srem('zeekfiles', filename)
-
     def get_all_zeek_file(self):
         """Return all entries from the list of zeek files"""
         data = self.r.smembers('zeekfiles')
@@ -1858,10 +1854,6 @@ class Database(ProfilingFlowsDatabase, object):
         else:
             data = {}
         return data
-
-    def del_zeek_file(self, filename):
-        """Delete an entry from the list of zeek files"""
-        self.r.srem('zeekfiles', filename)
 
     def delete_ips_from_IoC_ips(self, ips):
         """
