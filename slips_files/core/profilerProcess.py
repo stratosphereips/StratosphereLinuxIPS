@@ -2010,7 +2010,7 @@ class ProfilerProcess(multiprocessing.Process):
             # call the function that handles this flow
             cases[self.flow_type]()
         except KeyError:
-            # does flow contain a part of the key
+            # does flow contain a part of the key?
             for flow in cases:
                 if flow in self.flow_type:
                     cases[flow]()

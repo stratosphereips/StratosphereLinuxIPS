@@ -2040,7 +2040,7 @@ class Database(object):
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
             self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
+                f'{profileid}_{twid}_flows',
                 uid,
                 data,
             )
@@ -2058,7 +2058,7 @@ class Database(object):
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
+                f'{profileid}_{twid}_flows',
                 uid,
                 data,
             )
@@ -2465,7 +2465,7 @@ class Database(object):
         Return a list of all the flows in this profileid and twid
         """
         data = self.r.hgetall(
-            profileid + self.separator + twid + self.separator + 'flows'
+            f'{profileid}_{twid}_flows',
         )
         if data:
             return data
@@ -2524,6 +2524,24 @@ class Database(object):
             contacted_ips[daddr] = uid
         return contacted_ips
 
+    def search_tws_for_flow(self, profileid, twid, uid):
+        """
+        Search for the given uid in the given twid, or the tws before
+        """
+        twid_number: int = int(twid.split('timewindow')[-1])
+        while twid_number > -1:
+            flow = __database__.get_flow(profileid, f'timewindow{twid_number}', uid)
+
+            uid = next(iter(flow))
+            if flow[uid]:
+                return flow
+
+            twid_number -= 1
+
+        # uid isn't in this twid or any of the previous ones
+        return flow
+
+
     def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
@@ -2533,12 +2551,12 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        data = {}
-        temp = self.r.hget(
-            profileid + self.separator + twid + self.separator + 'flows', uid
-        )
-        data[uid] = temp
-        # Get the dictionary format
+
+        data = {
+            uid: self.r.hget(
+                f'{profileid}_{twid}_flows', uid
+            )
+        }
         return data
 
     def get_labels(self):
@@ -2593,13 +2611,11 @@ class Database(object):
             'flow_type': flow_type,
             'module_labels': {},
         }
-        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
-
-        # Convert to json string
+        # when adding a flow, there are still no labels from other modules, so the values is empty dictionary
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1_flows, a key uid, with data
         value = self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}flows',
+            f'{profileid}_{twid}_flows',
             uid,
             data,
         )
@@ -2611,7 +2627,8 @@ class Database(object):
         # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby('labels', 1, label)
-        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+        # We can publish the flow directly without asking for it, but its good to maintain the format given by
+        # the get_flow() function.
         flow = self.get_flow(profileid, twid, uid)
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
@@ -3589,10 +3606,10 @@ class Database(object):
         if uid:
             try:
                 time.sleep(
-                    1
+                    0.7
                 )   # it takes time for the binetflow to put the flow into the database
                 flow_information = self.r.hget(
-                    profileid + '_' + twid + '_flows', uid
+                    f'{profileid}_{twid}_flows', uid
                 )
                 flow_information = json.loads(flow_information)
                 timestamp = flow_information.get('ts')
