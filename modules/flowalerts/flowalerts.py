@@ -865,13 +865,11 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             data = message['data']
-            # Convert from json to dict
             data = json.loads(data)
             profileid = data['profileid']
             twid = data['twid']
             # Get flow as a json
             flow = data['flow']
-            # Convert flow to a dict
             flow_dict = json.loads(flow)
             timestamp = flow_dict['stime']
             uid = flow_dict['uid']

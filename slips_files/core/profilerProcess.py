@@ -556,7 +556,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Zeek can put in column 7 the auth success if it has one
             # or the auth attempts only. However if the auth
             # success is there, the auth attempts are too.
-            if 'success' in line[7]:
+            if 'T' in line[7]:
                 try:
                     self.column_values['auth_success'] = line[7]
                 except IndexError:
@@ -597,7 +597,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['host_key'] = line[17]
                 except IndexError:
                     self.column_values['host_key'] = ''
-            elif 'success' not in line[7]:
+            elif 'T' not in line[7]:
                 self.column_values['auth_success'] = ''
                 try:
                     self.column_values['auth_attempts'] = line[7]
