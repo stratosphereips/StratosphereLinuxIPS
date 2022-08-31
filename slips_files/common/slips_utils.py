@@ -31,6 +31,8 @@ class Utils(object):
             '172.16.0.0/12',
             '10.0.0.0/8',
         )
+        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges))
+
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
         self.threat_levels = {
             'info': 0,
@@ -68,6 +70,26 @@ class Utils(object):
         ):
             # There is a conf, but there is no option, or no section or no configuration file specified
             return default_value
+
+    def get_home_network(self, config) -> list:
+        """
+        :param config: configparser instance
+        Returns a list of network objects
+        """
+        home_net = self.read_configuration(
+            config, 'parameters', 'home_network', False
+        )
+
+        if home_net:
+            # we have home_network param set in slips.conf
+            home_nets = home_net.replace(']','').replace('[','').split(',')
+            home_nets = [network.strip() for network in home_nets]
+
+        else:
+            return self.home_network_ranges
+
+        return list(map(ipaddress.ip_network, home_nets))
+
 
     def get_tw_width(self, config):
         """

@@ -1,24 +1,32 @@
--0.9.4
+-0.9.5
 * Slips
-- Fix the way we update some TI files
+- Fix the way we update TI files
 - Add a new web interface
 - Detect Incompatible certificate CN
 - Detect downloads from pastebin with size > 0.012 MBs
 - Detect DOS executable downloads from http websites
-- Update the mac db automatically
+- Update the mac database automatically
+- Support using multiple home network parameters in slips.conf
 - Add redis.conf for special redis configurations when running slips
+- Improve portscan or ARP scan alerts
+- Improve ARPA scan alerts to alert on unique domains
+- Add new methods to detect data upload
+- Add the option to close all redis servers when slips can't start because all port are unavailable
+- Remove support for whitelisting an unsupported org by slips
+- Better description of alerts exported to Slack
+- Faster Whitelists
+- Whitelist connections made by slips causing false positives
+- Change the unknown ports detections to detect only established connections
+- Change -killall argument behaviour. now supports closing a specific redis port or all of them at once
+- Fix exporting module
+- Fix false positive resolution without connection alerts
+- Fix disabling alerts
 - Fix saving and loading the database
 - Fix running several slips instances
-- Remove support for whitelisting an unsupported org by slips
-- Better description of alerts exported alerts to Slack
-- Fix -killall argument behaviour
 - Fix stopping the daemon with -S
-- Fix multiple reconnections attempts to detection to detect 5 or more rejected reconnection attempts to the same destination address on the same destination port 
+- Fix how packets are calculated in portscan detections
+- Fix 'multiple reconnections attempts' detection to detect 5 or more rejected reconnection attempts to the same IP on the same destination port 
 
--0.9.3
-* Slips
-- Add the option to close a specific redis server using the -k flag.
-- Add the option to close all redis servers when slips can't start because all port are unavailable
 
 -0.9.3
 * Slips

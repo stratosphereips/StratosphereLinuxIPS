@@ -83,20 +83,8 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        self.home_network = []
-        try:
-            self.home_network.append(
-                self.config.get('parameters', 'home_network')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_network = utils.home_network_ranges
-        # convert the ranges into network obj
-        self.home_network = list(map(ipaddress.ip_network, self.home_network))
+
+        self.home_network = utils.get_home_network(self.config)
 
         try:
             self.delete_zeek_files = self.config.get(
@@ -537,7 +525,8 @@ class Module(Module, multiprocessing.Process):
 
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
-                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
+                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
+                    # range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
                     cache_copy = self.cache_arp_requests.copy()
                     for key in cache_copy:

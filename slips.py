@@ -44,7 +44,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.3'
+version = '0.9.5'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -73,8 +73,7 @@ class Main:
                 # Check the type of input
                 self.input_type, self.input_information, self.line_type = self.check_input_type()
                 # If we need zeek (bro), test if we can run it.
-                if self.check_zeek_or_bro():
-                    self.prepare_zeek_scripts()
+                self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
@@ -387,44 +386,6 @@ class Main:
             # independently of what the conf says.
             logs_dir = False
 
-    def prepare_zeek_scripts(self):
-        """
-        Adds local network to slips-conf.zeek
-        """
-
-        home_network = self.read_configuration(
-            'parameters',
-            'home_network',
-            utils.home_network_ranges
-        )
-
-        zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
-        # add local sites if not there
-        is_local_nets_defined = False
-        with open(f'{zeek_scripts_dir}/slips-conf.zeek', 'r') as slips_conf:
-            if 'local_nets' in slips_conf.read():
-                is_local_nets_defined = True
-
-        if not is_local_nets_defined:
-            with open(
-                    f'{zeek_scripts_dir}/slips-conf.zeek', 'a'
-            ) as slips_conf:
-                # update home network
-                slips_conf.write(
-                    '\nredef Site::local_nets += { ' + home_network + ' };\n'
-                )
-
-        # # load all scripts in zeek-script dir
-        # with open(zeek_scripts_dir + '/__load__.zeek','r') as f:
-        #     loaded_scripts = f.read()
-        # with open(zeek_scripts_dir + '/__load__.zeek','a') as f:
-        #     for file_name in os.listdir(zeek_scripts_dir):
-        #         # ignore the load file
-        #         if file_name == '__load__.zeek':
-        #             continue
-        #         if file_name not in loaded_scripts:
-        #             # found a file in the dir that isn't in __load__.zeek, add it
-        #             f.write(f'\n@load ./{file_name}')
 
     def start_gui_process(self):
         # Get the type of output from the parameters
@@ -541,7 +502,7 @@ class Main:
         try:
             os.kill(int(self.PIDs['InputProcess']), signal.SIGKILL)
             self.PIDs.pop('InputProcess')
-        except KeyError:
+        except (KeyError, ProcessLookupError):
             pass
 
         if self.mode == 'daemonized':
@@ -552,7 +513,7 @@ class Main:
                             'logsProcess'): #'EvidenceProcess',
                 try:
                     os.kill(int(self.PIDs[process]), signal.SIGINT)
-                except KeyError:
+                except (KeyError, ProcessLookupError):
                     # logsprocess isn't started yet
                     pass
         else:
@@ -694,6 +655,7 @@ class Main:
 
             # set analysis end date
             ends_date = self.set_analysis_end_date()
+
             start_time = __database__.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, ends_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
@@ -794,7 +756,7 @@ class Main:
 
             try:
                 os.kill(int(evidence_proc_pid), signal.SIGINT)
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, ProcessLookupError):
                 # slips is stopped before evidence process started
                 pass
 
@@ -816,7 +778,7 @@ class Main:
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.daemon.delete_pidfile()
-                __database__.r.flushdb()
+                # __database__.r.flushdb()
 
 
             os._exit(-1)
