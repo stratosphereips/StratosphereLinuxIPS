@@ -1,3 +1,8 @@
+-0.9.6
+- Fix problem detecting SSH logins by zeek
+- 
+
+
 -0.9.5
 * Slips
 - Fix the way we update TI files
