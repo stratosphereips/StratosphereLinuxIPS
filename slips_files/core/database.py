@@ -1013,20 +1013,25 @@ class Database(object):
         Search in the modifed tw list and compare when they
         were modified with the slips internal time
         """
-        # Get internal time
+
         sit = self.getSlipsInternalTime()
+
         # for each modified profile
-        # modification_time = float(sit) - self.width
-        # To test the time
-        modification_time = float(sit) - 20
+        modification_time = float(sit) - self.width
+
         profiles_tws_to_close = self.r.zrangebyscore(
             'ModifiedTW', 0, modification_time, withscores=True
         )
+
         for profile_tw_to_close in profiles_tws_to_close:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
             self.print(
-                f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}',
+                f'The profile id {profile_tw_to_close_id} has to be closed because it was'
+                f' last modifed on {profile_tw_to_close_time} and we are closing everything older '
+                f'than {modification_time}.'
+                f' Current time {sit}. '
+                f'Difference: {modification_time - profile_tw_to_close_time}',
                 3,
                 0,
             )
