@@ -633,6 +633,7 @@ class ProfilingFlowsDatabase(object):
                 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
+
     def markProfileTWAsClosed(self, profileid_tw):
         """
         Mark the TW as closed so tools can work on its data
