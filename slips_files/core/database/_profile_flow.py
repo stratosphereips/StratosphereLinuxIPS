@@ -601,31 +601,38 @@ class ProfilingFlowsDatabase(object):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
-    def check_TW_to_close(self):
+    def check_TW_to_close(self, close_all=False):
         """
         Check if we should close some TW
         Search in the modifed tw list and compare when they
         were modified with the slips internal time
         """
-        # Get internal time
+
         sit = self.getSlipsInternalTime()
+
         # for each modified profile
-        # modification_time = float(sit) - self.width
-        # To test the time
-        modification_time = float(sit) - 20
+        modification_time = float(sit) - self.width
+        if close_all:
+            # close all tws no matter when they were last modified
+            modification_time = float('inf')
+
         profiles_tws_to_close = self.r.zrangebyscore(
             'ModifiedTW', 0, modification_time, withscores=True
         )
+
         for profile_tw_to_close in profiles_tws_to_close:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
             self.print(
-                f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}',
+                f'The profile id {profile_tw_to_close_id} has to be closed because it was'
+                f' last modifed on {profile_tw_to_close_time} and we are closing everything older '
+                f'than {modification_time}.'
+                f' Current time {sit}. '
+                f'Difference: {modification_time - profile_tw_to_close_time}',
                 3,
                 0,
             )
             self.markProfileTWAsClosed(profile_tw_to_close_id)
-
     def markProfileTWAsClosed(self, profileid_tw):
         """
         Mark the TW as closed so tools can work on its data
