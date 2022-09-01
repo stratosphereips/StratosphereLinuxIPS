@@ -737,7 +737,6 @@ class Main:
                             if module_name in modules_to_be_killed_last:
                                 # we should kill these modules the very last, or else we'll miss evidence generated
                                 # right before slips stops
-                                print(f"@@@@@@@@@@@@@@@@@@  added {module_name} to modules to close last")
                                 continue
 
 
@@ -1356,16 +1355,18 @@ class Main:
         send_to_warden = self.read_configuration(
             'CESNET', 'send_alerts', 'no'
         ).lower()
+
         receive_from_warden = self.read_configuration(
             'CESNET', 'receive_alerts', 'no'
         ).lower()
+
         if 'no' in send_to_warden and 'no' in receive_from_warden:
             to_ignore.append('CESNET')
+
         # don't run blocking module unless specified
-        if (
-                not self.args.clearblocking
-                and not self.args.blocking
-                or (self.args.blocking and not self.args.interface)
+        if not (
+                 self.args.clearblocking
+                or self.args.blocking
         ):  # ignore module if not using interface
             to_ignore.append('blocking')
 
@@ -1548,6 +1549,12 @@ class Main:
             self.clear_redis_cache_database()
             self.terminate_slips()
 
+
+        # Clear cache if the parameter was included
+        if self.args.blocking and not self.args.interface:
+            print('Blocking is only allowed when running slips using an interface.')
+            self.terminate_slips()
+
         # kill all open unused redis servers if the parameter was included
         if self.args.killall:
             self.close_open_redis_servers()
@@ -1555,6 +1562,17 @@ class Main:
 
         if self.args.version:
             self.print_version()
+            self.terminate_slips()
+
+        if (
+            self.args.interface
+            and self.args.blocking
+            and os.geteuid() != 0
+        ):
+            # If the user wants to blocks, we need permission to modify iptables
+            print(
+                'Run Slips with sudo to enable the blocking module.'
+            )
             self.terminate_slips()
 
         if self.args.clearblocking:
@@ -1605,21 +1623,6 @@ class Main:
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 
-    def check_blocking_permissions(self):
-        """
-        Check if the user blocks on interface, does not make sense to block on files
-        """
-
-        if (
-            self.args.interface
-            and self.args.blocking
-            and os.geteuid() != 0
-        ):
-            # If the user wants to blocks,we need permission to modify iptables
-            print(
-                '[Main] Run Slips with sudo to enable the blocking module.'
-            )
-            self.shutdown_gracefully()
 
     def setup_print_levels(self):
         """
@@ -1689,7 +1692,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            self.check_blocking_permissions()
+
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
             """
