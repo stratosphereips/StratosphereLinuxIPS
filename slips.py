@@ -509,6 +509,16 @@ class Main:
             # process hasn't started yet
             pass
 
+    def kill_all(self, PIDs):
+        for module in PIDs:
+            if module not in self.PIDs:
+                # modules the are last to kill aren't always started and there in self.PIDs
+                # ignore them
+                continue
+
+            self.kill(module)
+            self.print_stopped_module(module)
+
     def stop_core_processes(self):
         self.kill('InputProcess')
 
@@ -649,7 +659,7 @@ class Main:
                 pass
         return end_date
 
-    def kill_all_modules(self, function_start_time) -> bool:
+    def should_kill_all_modules(self, function_start_time) -> bool:
         """
         checks if 15 minutes has passed since the start of the function
         """
@@ -692,10 +702,10 @@ class Main:
 
 
             modules_to_be_killed_last = {
-                'EvidenceProcess': self.PIDs.get('EvidenceProcess', None),
-                'Blocking': self.PIDs.get('Blocking', None),
-                'exporting_alerts': self.PIDs.get('exporting_alerts', None),
-                'OutputProcess': self.PIDs.get('OutputProcess', None)
+                'EvidenceProcess',
+                'Blocking',
+                'exporting_alerts',
+                'OutputProcess'
             }
 
             self.stop_core_processes()
@@ -768,7 +778,7 @@ class Main:
                                 # delay killing unstopped modules
                                 max_loops += 1
                                 # checks if 15 minutes has passed since the start of the function
-                                if self.kill_all_modules(function_start_time):
+                                if self.should_kill_all_modules(function_start_time):
                                     break
 
                 except KeyboardInterrupt:
@@ -779,17 +789,8 @@ class Main:
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
-            PIDs = self.PIDs.copy()
-            PIDs.update(modules_to_be_killed_last)
-
-            for module in PIDs:
-                if module not in self.PIDs:
-                    # modules the are last to kill aren't always started and there in self.PIDs
-                    # ignore them
-                    continue
-
-                self.kill(module)
-                self.print_stopped_module(module)
+            self.kill_all(self.PIDs.copy())
+            self.kill_all(modules_to_be_killed_last)
 
             # save redis database if '-s' is specified
             if self.args.save:
