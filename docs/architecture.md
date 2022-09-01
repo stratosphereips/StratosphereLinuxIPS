@@ -17,7 +17,8 @@ Slips runs detection modules on each flow and stores all evidence,
 alerts and features in an appropriate profile structure. 
 All data, i.e. zeek flows, performed detections, profiles and timewindows' data,
 is stored inside a <a href="https://redis.io/">Redis</a> database. 
-The output of Slips is a folder with logs (output/ directory) that has alert.json, alerts.log, errors.log. And Kalipso, a terminal graphical user interface.
+The output of Slips is a folder with logs (output/ directory) that has alert.json, alerts.log, errors.log.
+Kalipso, a terminal graphical user interface. or the Web interface.
 
 <style>
 .zoom {
