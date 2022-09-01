@@ -644,10 +644,22 @@ class Main:
                 pass
         return end_date
 
+    def kill_all_modules(self, function_start_time) -> bool:
+        """
+        checks if 15 minutes has passed since the start of the function
+        """
+        now = datetime.now()
+        diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
+        return True if diff >= 15 else False
+
+
     def shutdown_gracefully(self):
         """
-        Wait for all modules to confirm that they're done processing and then shutdown
+        Wait for all modules to confirm that they're done processing or kill them after 15 mins of inactivity
         """
+        # 15 mins from this time, all modules should be killed
+        function_start_time = datetime.now()
+
         try:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
@@ -735,6 +747,8 @@ class Main:
                             if not self.args.port:
                                 # delay killing unstopped modules
                                 max_loops += 1
+                                if self.kill_all_modules(function_start_time):
+                                    break
 
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)
