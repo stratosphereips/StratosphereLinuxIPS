@@ -2,8 +2,7 @@
 from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 import multiprocessing
-from slips_files.core.database import __database__
-import platform
+from slips_files.core.database.database import __database__
 import sys
 
 # Your imports
@@ -13,7 +12,6 @@ import configparser
 import json
 import traceback
 import validators
-import ast
 
 
 class Module(Module, multiprocessing.Process):

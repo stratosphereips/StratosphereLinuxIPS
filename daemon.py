@@ -1,5 +1,5 @@
 from slips_files.common.slips_utils import utils
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 import configparser
 import signal
 import sys

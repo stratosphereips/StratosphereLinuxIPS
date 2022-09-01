@@ -1,8 +1,7 @@
 # Must imports
 from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import utils
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 import platform
 import sys
 

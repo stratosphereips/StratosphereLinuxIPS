@@ -11,26 +11,13 @@ from datetime import datetime
 import ipaddress
 import sys
 import validators
-import platform
-import re
 import ast
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
-
-def timing(f):
-    """Function to measure the time another function takes."""
-
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('[DB] Function took {:.3f} ms'.format((time2 - time1) * 1000.0))
-        return ret
-
-    return wrap
+from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
 
 
-class Database(object):
+class Database(ProfilingFlowsDatabase, object):
     supported_channels = {
         'tw_modified',
         'evidence_added',
@@ -120,8 +107,6 @@ class Database(object):
             for option, val in self.redis_options.items():
                 f.write(f'{option} {val}\n')
 
-
-
     def get_redis_server_PID(self, redis_port):
         """
         get the PID of the redis server started on the given redis_port
@@ -134,7 +119,6 @@ class Database(object):
                 pid = line.split()[1]
                 return pid
         return False
-
 
     def connect_to_redis_server(self, port: str):
         """Connects to the given port and Sets r and rcache"""
@@ -294,29 +278,6 @@ class Database(object):
             print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
             return False
 
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
-
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
@@ -327,13 +288,6 @@ class Database(object):
         if start_time := self.r.get('slips_start_time'):
             start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time
-
-    def set_input_metadata(self, info:dict):
-        """
-        sets name, size, analysis dates in the db
-        """
-        for info, val in info.items():
-            self.r.hset('analysis', info, val)
 
     def setOutputQueue(self, outputqueue):
         """Set the output queue"""
@@ -603,7 +557,6 @@ class Database(object):
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset('MAC', MAC_info['MAC'], cached_ips)
-
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -971,9 +924,6 @@ class Database(object):
             f'{profileid}{self.separator}{twid}'
         ) or -1
 
-    def getSlipsInternalTime(self):
-        return self.r.get('slips_internal_time')
-
     def setSlipsInternalTime(self, timestamp):
         self.r.set('slips_internal_time', timestamp)
 
@@ -1007,34 +957,26 @@ class Database(object):
         # Check if we should close some TW
         self.check_TW_to_close()
 
-    def check_TW_to_close(self, close_all=False):
+    def check_TW_to_close(self):
         """
         Check if we should close some TW
         Search in the modifed tw list and compare when they
         were modified with the slips internal time
         """
-
+        # Get internal time
         sit = self.getSlipsInternalTime()
-
         # for each modified profile
-        modification_time = float(sit) - self.width
-        if close_all:
-            # close all tws no matter when they were last modified
-            modification_time = float('inf')
-
+        # modification_time = float(sit) - self.width
+        # To test the time
+        modification_time = float(sit) - 20
         profiles_tws_to_close = self.r.zrangebyscore(
             'ModifiedTW', 0, modification_time, withscores=True
         )
-
         for profile_tw_to_close in profiles_tws_to_close:
             profile_tw_to_close_id = profile_tw_to_close[0]
             profile_tw_to_close_time = profile_tw_to_close[1]
             self.print(
-                f'The profile id {profile_tw_to_close_id} has to be closed because it was'
-                f' last modifed on {profile_tw_to_close_time} and we are closing everything older '
-                f'than {modification_time}.'
-                f' Current time {sit}. '
-                f'Difference: {modification_time - profile_tw_to_close_time}',
+                f'The profile id {profile_tw_to_close_id} has to be closed because it was last modifed on {profile_tw_to_close_time} and we are closing everything older than {modification_time}. Current time {sit}. Difference: {modification_time - profile_tw_to_close_time}',
                 3,
                 0,
             )
@@ -1246,201 +1188,6 @@ class Database(object):
         outtuples = self.getOutTuplesfromProfileTW()
         intuples = self.getInTuplesfromProfileTW()
 
-    def add_tuple(
-        self, profileid, twid, tupleid, data_tuple, role, starttime, uid
-    ):
-        """
-        Add the tuple going in or out for this profile
-        :param tupleid: daddr:dport:proto
-        role: 'Client' or 'Server'
-        """
-        # If the traffic is going out it is part of our outtuples, if not, part of our intuples
-        if role == 'Client':
-            direction = 'OutTuples'
-        elif role == 'Server':
-            direction = 'InTuples'
-        try:
-            self.print(
-                'Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(
-                    profileid, twid, tupleid, data_tuple
-                ),3,0,
-            )
-            # Get all the InTuples or OutTuples for this profileid in this TW
-            profileid_twid = f'{profileid}{self.separator}{twid}'
-            tuples = self.r.hget(profileid_twid, direction)
-            # Separate the symbold to add and the previous data
-            (symbol_to_add, previous_two_timestamps) = data_tuple
-            if not tuples:
-                # Must be str so we can convert later
-                tuples = '{}'
-            # Convert the json str to a dictionary
-            tuples = json.loads(tuples)
-            try:
-                stored_tuple = tuples[tupleid]
-                # Disasemble the input
-                self.print(
-                    'Not the first time for tuple {} as an {} for {} in TW {}. '
-                    'Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(
-                        tupleid,
-                        direction,
-                        profileid,
-                        twid,
-                        symbol_to_add,
-                        previous_two_timestamps,
-                        tuples,
-                    ),3,0,
-                )
-                # Get the last symbols of letters in the DB
-                prev_symbols = tuples[tupleid][0]
-                # Add it to form the string of letters
-                new_symbol = f'{prev_symbols}{symbol_to_add}'
-                # Bundle the data together
-                new_data = (new_symbol, previous_two_timestamps)
-                # analyze behavioral model with lstm model if the length is divided by 3 -
-                # so we send when there is 3 more characters added
-                if len(new_symbol) % 3 == 0:
-                    to_send = {
-                        'new_symbol': new_symbol,
-                        'profileid': profileid,
-                        'twid': twid,
-                        'tupleid': str(tupleid),
-                        'uid': uid,
-                        'stime': starttime,
-                    }
-                    to_send = json.dumps(to_send)
-                    self.publish('new_letters', to_send)
-                tuples[tupleid] = new_data
-                self.print(
-                    '\tLetters so far for tuple {}: {}'.format(
-                        tupleid, new_symbol
-                    ),3,0,
-                )
-                tuples = json.dumps(tuples)
-            except (TypeError, KeyError):
-                # TODO check that this condition is triggered correctly only for the first case and not the rest after...
-                # There was no previous data stored in the DB
-                self.print(
-                    'First time for tuple {} as an {} for {} in TW {}'.format(
-                        tupleid, direction, profileid, twid
-                    ),3,0,
-                )
-                # Here get the info from the ipinfo key
-                new_data = (symbol_to_add, previous_two_timestamps)
-                tuples[tupleid] = new_data
-                # Convet the dictionary to json
-                tuples = json.dumps(tuples)
-            # Store the new data on the db
-            self.r.hset(profileid_twid, direction, str(tuples))
-            # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.outputqueue.put(
-                '01|database|[DB] {}'.format(traceback.format_exc())
-            )
-
-    def add_port(
-        self,
-        profileid: str,
-        twid: str,
-        ip_address: str,
-        columns: dict,
-        role: str,
-        port_type: str,
-    ):
-        """
-        Store info learned from ports for this flow
-        The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
-        role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
-        port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
-        """
-        # Extract variables from columns
-        dport = columns['dport']
-        sport = columns['sport']
-        totbytes = int(columns['bytes'])
-        pkts = int(columns['pkts'])
-        state = columns['state']
-        proto = columns['proto'].upper()
-        starttime = str(columns['starttime'])
-        uid = columns['uid']
-        ip = str(ip_address)
-        spkts = columns['spkts']
-        # dpkts = columns['dpkts']
-        # daddr = columns['daddr']
-        # saddr = columns['saddr']
-        # sbytes = columns['sbytes']
-
-        # Choose which port to use based if we were asked Dst or Src
-        port = str(sport) if port_type == 'Src' else str(dport)
-
-        # If we are the Client, we want to store the dstips only
-        # If we are the Server, we want to store the srcips only
-        ip_key = 'srcips' if role == 'Server' else 'dstips'
-
-        # Get the state. Established, NotEstablished
-        summaryState = __database__.getFinalStateFromFlags(state, pkts)
-
-        old_profileid_twid_data = self.getDataFromProfileTW(
-            profileid,
-            twid,
-            port_type,
-            summaryState,
-            proto,
-            role,
-            'Ports'
-        )
-
-        try:
-            # we already have info about this dport, update it
-            port_data = old_profileid_twid_data[port]
-            port_data['totalflows'] += 1
-            port_data['totalpkt'] += pkts
-            port_data['totalbytes'] += totbytes
-
-            # if there's a conn from this ip on this port, add the pkts
-            if ip in port_data[ip_key]:
-                port_data[ip_key][ip]['pkts'] += pkts
-                port_data[ip_key][ip]['spkts'] += spkts
-                port_data[ip_key][ip]['uid'].append(uid)
-            else:
-                port_data[ip_key][ip] = {
-                    'pkts': pkts,
-                    'spkts': spkts,
-                    'stime': starttime,
-                    'uid': [uid]
-                }
-
-        except KeyError:
-            # First time for this dport
-            port_data = {
-                'totalflows': 1,
-                'totalpkt': pkts,
-                'totalbytes': totbytes,
-                ip_key: {
-                    ip: {
-                        'pkts': pkts,
-                        'spkts': spkts,
-                        'stime': starttime,
-                        'uid': [uid]
-                    }
-                }
-            }
-
-        old_profileid_twid_data[port] = port_data
-        data = json.dumps(old_profileid_twid_data)
-        hash_key = profileid + self.separator + twid
-        key_name = f'{port_type}Ports{role}{proto}{summaryState}'
-        self.r.hset(hash_key, key_name, str(data))
-        self.markProfileTWAsModified(profileid, twid, starttime)
-
-
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
             """
@@ -1472,163 +1219,6 @@ class Database(object):
         """Get the in tuples"""
         data = self.r.hget(profileid + self.separator + twid, 'InTuples')
         return data
-
-    def getFinalStateFromFlags(self, state, pkts):
-        """
-        Analyze the flags given and return a summary of the state. Should work with Argus and Bro flags
-        We receive the pakets to distinguish some Reset connections
-        """
-        try:
-            # self.outputqueue.put('06|database|[DB]: State received {}'.format(state))
-            pre = state.split('_')[0]
-            try:
-                # Try suricata states
-                """
-                There are different states in which a flow can be.
-                Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                these are: New, Established and Closed,for UDP only new and established.
-                For each of these states Suricata can employ different timeouts.
-                """
-                if 'new' in state or 'established' in state:
-                    return 'Established'
-                elif 'closed' in state:
-                    return 'Not Established'
-                # We have varius type of states depending on the type of flow.
-                # For Zeek
-                if (
-                    'S0' in state
-                    or 'REJ' in state
-                    or 'RSTOS0' in state
-                    or 'RSTRH' in state
-                    or 'SH' in state
-                    or 'SHR' in state
-                ):
-                    return 'Not Established'
-                elif (
-                    'S1' in state
-                    or 'SF' in state
-                    or 'S2' in state
-                    or 'S3' in state
-                    or 'RSTO' in state
-                    or 'RSTP' in state
-                    or 'OTH' in state
-                ):
-                    return 'Established'
-                # For Argus
-                suf = state.split('_')[1]
-                if 'S' in pre and 'A' in pre and 'S' in suf and 'A' in suf:
-                    """
-                    Examples:
-                    SA_SA
-                    SR_SA
-                    FSRA_SA
-                    SPA_SPA
-                    SRA_SPA
-                    FSA_FSA
-                    FSA_FSPA
-                    SAEC_SPA
-                    SRPA_SPA
-                    FSPA_SPA
-                    FSRPA_SPA
-                    FSPA_FSPA
-                    FSRA_FSPA
-                    SRAEC_SPA
-                    FSPA_FSRPA
-                    FSAEC_FSPA
-                    FSRPA_FSPA
-                    SRPAEC_SPA
-                    FSPAEC_FSPA
-                    SRPAEC_FSRPA
-                    """
-                    return 'Established'
-                elif 'PA' in pre and 'PA' in suf:
-                    # Tipical flow that was reported in the middle
-                    """
-                    Examples:
-                    PA_PA
-                    FPA_FPA
-                    """
-                    return 'Established'
-                elif 'ECO' in pre:
-                    return 'ICMP Echo'
-                elif 'ECR' in pre:
-                    return 'ICMP Reply'
-                elif 'URH' in pre:
-                    return 'ICMP Host Unreachable'
-                elif 'URP' in pre:
-                    return 'ICMP Port Unreachable'
-                else:
-                    """
-                    Examples:
-                    S_RA
-                    S_R
-                    A_R
-                    S_SA
-                    SR_SA
-                    FA_FA
-                    SR_RA
-                    SEC_RA
-                    """
-                    return 'Not Established'
-            except IndexError:
-                # suf does not exist, which means that this is some ICMP or no response was sent for UDP or TCP
-                if 'ECO' in pre:
-                    # ICMP
-                    return 'Established'
-                elif 'UNK' in pre:
-                    # ICMP6 unknown upper layer
-                    return 'Established'
-                elif 'CON' in pre:
-                    # UDP
-                    return 'Established'
-                elif 'INT' in pre:
-                    # UDP trying to connect, NOT preciselly not established but also NOT 'Established'. So we considered not established because there
-                    # is no confirmation of what happened.
-                    return 'Not Established'
-                elif 'EST' in pre:
-                    # TCP
-                    return 'Established'
-                elif 'RST' in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
-                    # It can happen that is reseted being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    if int(pkts) <= 3:
-                        return 'Not Established'
-                    else:
-                        return 'Established'
-                elif 'FIN' in pre:
-                    # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
-                    # It can happen that is finished being not established, but we can't tell without -z b.
-                    # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    if int(pkts) <= 3:
-                        return 'Not Established'
-                    else:
-                        return 'Established'
-                else:
-                    """
-                    Examples:
-                    S_
-                    FA_
-                    PA_
-                    FSA_
-                    SEC_
-                    SRPA_
-                    """
-                    return 'Not Established'
-            self.outputqueue.put(
-                '01|database|[DB] Funcion getFinalStateFromFlags() We didnt catch the state. We should never be here'
-            )
-            return None
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.print(traceback.format_exc())
 
     def getFieldSeparator(self):
         """Return the field separator"""
@@ -1690,7 +1280,6 @@ class Database(object):
 
         profile_alerts = json.dumps(profile_alerts)
         self.r.hset('alerts', profileid, profile_alerts)
-
 
     def get_profileid_twid_alerts(self, profileid, twid) -> dict:
         """
@@ -1758,8 +1347,6 @@ class Database(object):
             return []
         else:
             return json.loads(uids)
-
-
 
     def setEvidence(
         self,
@@ -1993,7 +1580,6 @@ class Database(object):
         """
         return self.r.sismember('whitelisted_evidence', evidence_ID)
 
-
     def remove_whitelisted_evidence(self, all_evidence:str) -> str:
         """
         param all_evidence serialized json dict
@@ -2048,7 +1634,7 @@ class Database(object):
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
             self.r.hset(
-                f'{profileid}_{twid}_flows',
+                profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
             )
@@ -2066,7 +1652,7 @@ class Database(object):
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(
-                f'{profileid}_{twid}_flows',
+                profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
             )
@@ -2100,29 +1686,6 @@ class Database(object):
         if tws:
             return json.loads(tws)
         return []
-
-    def getDomainData(self, domain):
-        """
-        Return information about this domain
-        Returns a dictionary or False if there is no domain in the database
-        We need to separate these three cases:
-        1- Domain is in the DB without data. Return empty dict.
-        2- Domain is in the DB with data. Return dict.
-        3- Domain is not in the DB. Return False
-        """
-        data = self.rcache.hget('DomainsInfo', domain)
-        if data or data == {}:
-            # This means the domain was in the database, with or without data
-            # Case 1 and 2
-            # Convert the data
-            data = json.loads(data)
-            # print(f'In the DB: Domain {domain}, and data {data}')
-        else:
-            # The Domain was not in the DB
-            # Case 3
-            data = False
-            # print(f'In the DB: Domain {domain}, and data {data}')
-        return data
 
     def getIPIdentification(self, ip: str):
         """
@@ -2167,32 +1730,6 @@ class Database(object):
         identification = identification[:-2]
         return identification
 
-    def getIPData(self, ip: str):
-        """
-        Return information about this IP from IPsInfo
-        Returns a dictionary or False if there is no IP in the database
-        We need to separate these three cases:
-        1- IP is in the DB without data. Return empty dict.
-        2- IP is in the DB with data. Return dict.
-        3- IP is not in the DB. Return False
-        """
-        if (
-            type(ip) == ipaddress.IPv4Address
-            or type(ip) == ipaddress.IPv6Address
-        ):
-            ip = str(ip)
-        data = self.rcache.hget('IPsInfo', ip)
-        if data:
-            # This means the IP was in the database, with or without data
-            # Convert the data
-            data = json.loads(data)
-            # print(f'In the DB: IP {ip}, and data {data}')
-        else:
-            # The IP was not in the DB
-            data = False
-            # print(f'In the DB: IP {ip}, and data {data}')
-        return data
-
     def getURLData(self, url):
         """
         Return information about this URL
@@ -2224,43 +1761,6 @@ class Database(object):
         # data = json.loads(data)
         return data
 
-    def setNewDomain(self, domain: str):
-        """
-        1- Stores this new domain in the Domains hash
-        2- Publishes in the channels that there is a new domain, and that we want
-            data from the Threat Intelligence modules
-        """
-        data = self.getDomainData(domain)
-        if data is False:
-            # If there is no data about this domain
-            # Set this domain for the first time in the DomainsInfo
-            # Its VERY important that the data of the first time we see a domain
-            # must be '{}', an empty dictionary! if not the logic breaks.
-            # We use the empty dictionary to find if a domain exists or not
-            self.rcache.hset('DomainsInfo', domain, '{}')
-            # Publish that there is a new domain ready in the channel
-            self.publish('new_dns', domain)
-
-    def setNewIP(self, ip: str):
-        """
-        1- Stores this new IP in the IPs hash
-        2- Publishes in the channels that there is a new IP, and that we want
-            data from the Threat Intelligence modules
-        Sometimes it can happend that the ip comes as an IP object, but when
-        accessed as str, it is automatically
-        converted to str
-        """
-        data = self.getIPData(ip)
-        if data is False:
-            # If there is no data about this IP
-            # Set this IP for the first time in the IPsInfo
-            # Its VERY important that the data of the first time we see an IP
-            # must be '{}', an empty dictionary! if not the logic breaks.
-            # We use the empty dictionary to find if an IP exists or not
-            self.rcache.hset('IPsInfo', ip, '{}')
-            # Publish that there is a new IP ready in the channel
-            self.publish('new_ip', ip)
-
     def setNewURL(self, url: str):
         """
         1- Stores this new URL in the URLs hash
@@ -2291,109 +1791,6 @@ class Database(object):
             return True
         else:
             return False
-
-    def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
-        """
-        Store information for this domain
-        :param info_to_set: a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this domain
-        :param mode: defines how to deal with the new data
-        - to 'overwrite' the data with the new data
-        - to 'add' the data to the new data
-        - to 'leave' the past data untouched
-        """
-
-        # Get the previous info already stored
-        domain_data = self.getDomainData(domain)
-        if not domain_data:
-            # This domain is not in the dictionary, add it first:
-            self.setNewDomain(domain)
-            # Now get the data, which should be empty, but just in case
-            domain_data = self.getDomainData(domain)
-
-        # Let's check each key stored for this domain
-        for key in iter(info_to_set):
-            # info_to_set can be {'VirusTotal': [1,2,3,4], 'Malicious': ""}
-            # info_to_set can be {'VirusTotal': [1,2,3,4]}
-
-            # I think we dont need this anymore of the conversion
-            if type(domain_data) == str:
-                # Convert the str to a dict
-                domain_data = json.loads(domain_data)
-
-            # this can be a str or a list
-            data_to_store = info_to_set[key]
-            # If there is data previously stored, check if we have
-            # this key already
-            try:
-                # Do we have the key alredy?
-                _ = domain_data[key]
-
-                # convert incoming data to list
-                if type(data_to_store) != list:
-                    # data_to_store and prev_info Should both be lists, so we can extend
-                    data_to_store = [data_to_store]
-
-                if mode == 'overwrite':
-                    domain_data[key] = data_to_store
-                elif mode == 'add':
-                    prev_info = domain_data[key]
-
-                    if type(prev_info) == list:
-                        # for example, list of IPs
-                        prev_info.extend(data_to_store)
-                        domain_data[key] = list(set(prev_info))
-                    elif type(prev_info) == str:
-                        # previous info about this domain is a str, we should make it a list and extend
-                        prev_info = [prev_info]
-                        # add the new data_to_store to our prev_info
-                        domain_data[key] = prev_info.extend(data_to_store)
-                    elif prev_info == None:
-                        # no previous info about this domain
-                        domain_data[key] = data_to_store
-
-                elif mode == 'leave':
-                    return
-
-            except KeyError:
-                # There is no data for the key so far. Add it
-                if type(data_to_store) == list:
-                    domain_data[key] = list(set(data_to_store))
-                else:
-                    domain_data[key] = data_to_store
-            # Store
-            domain_data = json.dumps(domain_data)
-            self.rcache.hset('DomainsInfo', domain, domain_data)
-            # Publish the changes
-            self.r.publish('dns_info_change', domain)
-
-    def setInfoForIPs(self, ip: str, ipdata: dict):
-        """
-        Store information for this IP
-        We receive a dictionary, such as {'geocountry': 'rumania'} that we are
-        going to store for this IP.
-        If it was not there before we store it. If it was there before, we
-        overwrite it
-        """
-        # Get the previous info already stored
-        data = self.getIPData(ip)
-        if data is False:
-            # This IP is not in the dictionary, add it first:
-            self.setNewIP(ip)
-            # Now get the data, which should be empty, but just in case
-            data = self.getIPData(ip)
-
-        new_key = False
-        for key, val in ipdata.items():
-            # If the key is new, we will notify publish notification about that
-            if key not in data:
-                new_key = True
-
-            data[key] = val
-
-        self.rcache.hset('IPsInfo', ip, json.dumps(data))
-        if new_key:
-            self.r.publish('ip_info_change', ip)
 
     def setInfoForFile(self, md5: str, filedata: dict):
         """
@@ -2457,10 +1854,6 @@ class Database(object):
         )
         return self.pubsub
 
-    def publish(self, channel, data):
-        """Publish something"""
-        self.r.publish(channel, data)
-
     def publish_stop(self):
         """Publish stop command to terminate slips"""
         all_channels_list = self.r.pubsub_channels()
@@ -2473,7 +1866,7 @@ class Database(object):
         Return a list of all the flows in this profileid and twid
         """
         data = self.r.hgetall(
-            f'{profileid}_{twid}_flows',
+            profileid + self.separator + twid + self.separator + 'flows'
         )
         if data:
             return data
@@ -2532,24 +1925,6 @@ class Database(object):
             contacted_ips[daddr] = uid
         return contacted_ips
 
-    def search_tws_for_flow(self, profileid, twid, uid):
-        """
-        Search for the given uid in the given twid, or the tws before
-        """
-        twid_number: int = int(twid.split('timewindow')[-1])
-        while twid_number > -1:
-            flow = __database__.get_flow(profileid, f'timewindow{twid_number}', uid)
-
-            uid = next(iter(flow))
-            if flow[uid]:
-                return flow
-
-            twid_number -= 1
-
-        # uid isn't in this twid or any of the previous ones
-        return flow
-
-
     def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
@@ -2559,12 +1934,12 @@ class Database(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-
-        data = {
-            uid: self.r.hget(
-                f'{profileid}_{twid}_flows', uid
-            )
-        }
+        data = {}
+        temp = self.r.hget(
+            profileid + self.separator + twid + self.separator + 'flows', uid
+        )
+        data[uid] = temp
+        # Get the dictionary format
         return data
 
     def get_labels(self):
@@ -2619,11 +1994,13 @@ class Database(object):
             'flow_type': flow_type,
             'module_labels': {},
         }
-        # when adding a flow, there are still no labels from other modules, so the values is empty dictionary
+        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
+
+        # Convert to json string
         data = json.dumps(data)
         # Store in the hash 10.0.0.1_timewindow1_flows, a key uid, with data
         value = self.r.hset(
-            f'{profileid}_{twid}_flows',
+            f'{profileid}{self.separator}{twid}{self.separator}flows',
             uid,
             data,
         )
@@ -2635,8 +2012,7 @@ class Database(object):
         # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby('labels', 1, label)
-        # We can publish the flow directly without asking for it, but its good to maintain the format given by
-        # the get_flow() function.
+        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
         flow = self.get_flow(profileid, twid, uid)
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
@@ -3163,10 +2539,6 @@ class Database(object):
         """Add an entry to the list of zeek files"""
         self.r.sadd('zeekfiles', filename)
 
-    def del_zeek_file(self, filename):
-        """Delete an entry from the list of zeek files"""
-        self.r.srem('zeekfiles', filename)
-
     def get_all_zeek_file(self):
         """Return all entries from the list of zeek files"""
         data = self.r.smembers('zeekfiles')
@@ -3220,10 +2592,6 @@ class Database(object):
         else:
             data = {}
         return data
-
-    def del_zeek_file(self, filename):
-        """Delete an entry from the list of zeek files"""
-        self.r.srem('zeekfiles', filename)
 
     def delete_ips_from_IoC_ips(self, ips):
         """
@@ -3385,105 +2753,6 @@ class Database(object):
             data = {}
         return data
 
-    def set_dns_resolution(
-        self,
-        query: str,
-        answers: list,
-        ts: float,
-        uid: str,
-        qtype_name: str,
-        srcip: str,
-    ):
-        """
-        Cache DNS answers
-        1- For each ip in the answer, store the domain
-           in DNSresolution as {ip: {ts: .. , 'domains': .. , 'uid':... }}
-        2- For each CNAME, store the ip
-
-        :param srcip: ip that performed the dns query
-        """
-        # don't store queries ending with arpa as dns resolutions, they're reverse dns
-        # type A: for ipv4
-        # type AAAA: for ipv6
-        if (
-            (qtype_name == 'AAAA' or qtype_name == 'A')
-            and answers != '-'
-            and not query.endswith('arpa')
-        ):
-            # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
-
-            # Also store these IPs inside the domain
-            ips_to_add = []
-            CNAMEs = []
-            for answer in answers:
-                # Make sure it's an ip not a CNAME
-                if not validators.ipv6(answer) and not validators.ipv4(answer):
-                    # now this is not an ip, it's a CNAME or a TXT
-                    if 'TXT' in answer:
-                        continue
-                    # it's a CNAME
-                    CNAMEs.append(answer)
-                    continue
-
-                # get stored DNS resolution from our db
-                ip_info_from_db = self.get_reverse_dns(answer)
-                if ip_info_from_db == {}:
-                    # if the domain(query) we have isn't already in DNSresolution in the db
-                    resolved_by = [srcip]
-                    domains = []
-                else:
-                    # we have info about this domain in DNSresolution in the db
-                    # keep track of all srcips that resolved this domain
-                    resolved_by = ip_info_from_db.get('resolved-by', [])
-                    if srcip not in resolved_by:
-                        resolved_by.append(srcip)
-                    # we'll be appending the current answer to these cached domains
-                    domains = ip_info_from_db.get('domains', [])
-
-                # if the domain(query) we have isn't already in DNSresolution in the db, add it
-                if query not in domains:
-                    domains.append(query)
-
-                # domains should be a list, not a string!, so don't use json.dumps here
-                ip_info = {
-                    'ts': ts,
-                    'uid': uid,
-                    'domains': domains,
-                    'resolved-by': resolved_by,
-                }
-                ip_info = json.dumps(ip_info)
-                # we store ALL dns resolutions seen since starting slips
-                # store with the IP as the key
-                self.r.hset('DNSresolution', answer, ip_info)
-                # store with the domain as the key:
-                self.r.hset('ResolvedDomains', domains[0], answer)
-                # these ips will be associated with the query in our db
-                ips_to_add.append(answer)
-
-            #  For each CNAME in the answer
-            # store it in DomainsInfo in the cache db (used for kalipso)
-            # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
-            if ips_to_add:
-                domaindata = {}
-                domaindata['IPs'] = ips_to_add
-
-                # if an ip came in the DNS answer along with the last seen CNAME
-                try:
-                    # store this CNAME in the db
-                    domaindata['CNAME'] = CNAMEs
-                except NameError:
-                    # no CNAME came with this query
-                    pass
-
-                self.setInfoForDomains(query, domaindata, mode='add')
-                self.set_domain_resolution(query, ips_to_add)
-
-    def set_domain_resolution(self, domain, ips):
-        """
-        stores all the resolved domains with their ips in the db
-        """
-        self.r.hset("DomainsResolved", domain, json.dumps(ips))
-
     def get_domain_resolution(self, domain):
         """
         Returns the IPs resolved by this domain
@@ -3492,23 +2761,6 @@ class Database(object):
         if not ips:
             return []
         return json.loads(ips)
-
-    def get_reverse_dns(self, ip):
-        """
-        Get DNS name of the IP, a list
-        returns a dict with {ts: .. ,
-                            'domains': .. ,
-                            'uid':...,
-                            'resolved-by':.. } of this IP or {}
-
-        this function is called for every IP in the timeline of kalipso
-        """
-        ip_info = self.r.hget('DNSresolution', ip)
-        if ip_info:
-            ip_info = json.loads(ip_info)
-            # return a dict with 'ts' 'uid' 'domains' about this IP
-            return ip_info
-        return {}
 
     def get_all_dns_resolutions(self):
         dns_resolutions = self.r.hgetall('DNSresolution')
@@ -3614,10 +2866,10 @@ class Database(object):
         if uid:
             try:
                 time.sleep(
-                    0.7
+                    1
                 )   # it takes time for the binetflow to put the flow into the database
                 flow_information = self.r.hget(
-                    f'{profileid}_{twid}_flows', uid
+                    profileid + '_' + twid + '_flows', uid
                 )
                 flow_information = json.loads(flow_information)
                 timestamp = flow_information.get('ts')
@@ -3644,57 +2896,6 @@ class Database(object):
             return False, False
         else:
             return domain_description, False
-
-    def getDataFromProfileTW(
-        self,
-        profileid: str,
-        twid: str,
-        direction: str,
-        state: str,
-        protocol: str,
-        role: str,
-        type_data: str,
-    ) -> dict:
-        """
-        Get the info about a certain role (Client or Server),
-        for a particular protocol (TCP, UDP, ICMP, etc.) for a
-        particular State (Established, etc.)
-        direction: 'Dst' or 'Src'. This is used to know if you
-        want the data of the src ip or ports, or the data from
-        the dst ips or ports
-        state: can be 'Established' or 'NotEstablished'
-        protocol: can be 'TCP', 'UDP', 'ICMP' or 'IPV6ICMP'
-        role: can be 'Client' or 'Server'
-        type_data: can be 'Ports' or 'IPs'
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        try:
-            key = direction + type_data + role + protocol + state
-            # self.print('Asked Key: {}'.format(key))
-            data = self.r.hget(profileid + self.separator + twid, key)
-            value = {}
-            if data:
-                portdata = json.loads(data)
-                value = portdata
-            elif not data:
-                self.print(
-                    'There is no data for Key: {}. Profile {} TW {}'.format(
-                        key, profileid, twid
-                    ), 3, 0,
-                )
-            return value
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
-            )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
 
     def get_last_update_time_malicious_file(self):
         """Return the time of last update of the remote malicious file from the db"""
@@ -3880,11 +3081,6 @@ class Database(object):
         # Saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
         self.r.save()
-        # if you're not root, this will return False even if the path exists
-        # if platform.system() == 'Linux':
-        #     redis_db_path = '/var/lib/redis/dump.rdb'
-        # else:
-            # redis_db_path = '/opt/homebrew/var/db/redis/dump.rdb'
 
         # Saves to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')

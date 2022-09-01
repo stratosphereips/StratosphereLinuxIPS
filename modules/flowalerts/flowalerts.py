@@ -1,9 +1,8 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-import platform
 from .TimerThread import TimerThread
 
 # Your imports
@@ -11,9 +10,7 @@ import json
 import configparser
 import ipaddress
 import datetime
-import time
 import sys
-import socket
 import validators
 from .set_evidence import Helper
 from slips_files.core.whitelist import Whitelist

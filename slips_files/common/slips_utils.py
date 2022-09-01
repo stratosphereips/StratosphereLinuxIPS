@@ -537,5 +537,16 @@ class Utils(object):
 
         return IDEA_dict
 
+    def timing(f):
+        """Function to measure the time another function takes."""
+
+        def wrap(*args):
+            time1 = time.time()
+            ret = f(*args)
+            time2 = time.time()
+            print('[DB] Function took {:.3f} ms'.format((time2 - time1) * 1000.0))
+            return ret
+
+        return wrap
 
 utils = Utils()
