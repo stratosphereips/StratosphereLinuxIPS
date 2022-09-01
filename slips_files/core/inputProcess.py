@@ -19,18 +19,16 @@ from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
 import os
-import signal
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
-from .database import __database__
+from slips_files.core.database.database import __database__
 import configparser
 import time
 import json
 import traceback
 import threading
 import subprocess
-import shutil
 
 
 # Input Process

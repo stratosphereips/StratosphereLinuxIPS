@@ -17,11 +17,10 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import os
-import signal
 import json
 import time
 from watchdog.events import RegexMatchingEventHandler
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 
 

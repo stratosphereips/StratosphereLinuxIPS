@@ -20,7 +20,7 @@ import json
 from datetime import datetime, timedelta
 import sys
 import configparser
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -556,7 +556,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Zeek can put in column 7 the auth success if it has one
             # or the auth attempts only. However if the auth
             # success is there, the auth attempts are too.
-            if 'success' in line[7]:
+            if 'T' in line[7]:
                 try:
                     self.column_values['auth_success'] = line[7]
                 except IndexError:
@@ -597,7 +597,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['host_key'] = line[17]
                 except IndexError:
                     self.column_values['host_key'] = ''
-            elif 'success' not in line[7]:
+            elif 'T' not in line[7]:
                 self.column_values['auth_success'] = ''
                 try:
                     self.column_values['auth_attempts'] = line[7]
@@ -2010,7 +2010,7 @@ class ProfilerProcess(multiprocessing.Process):
             # call the function that handles this flow
             cases[self.flow_type]()
         except KeyError:
-            # does flow contain a part of the key
+            # does flow contain a part of the key?
             for flow in cases:
                 if flow in self.flow_type:
                     cases[flow]()

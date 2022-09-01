@@ -2,9 +2,8 @@
 import configparser
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-import platform
 import sys
 
 # Your imports

@@ -19,7 +19,7 @@
 import multiprocessing
 import sys
 import io
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from datetime import datetime
 import os

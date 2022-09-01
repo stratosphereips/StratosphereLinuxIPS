@@ -34,15 +34,6 @@ event zeek_init() &priority=5
   Log::create_stream(ARP::LOG, [$columns=ARP::Info, $path="arp"]);
 }
 
-function set_session(c: connection)
-{
-  if ( ! c?$arp) {
-    add c$service["arp"];
-    local info: ARP::Info;
-    info$ts = network_time();
-    c$arp = info;
-  }
-}
 
 # SPA: The sender protocol address. aka src IP (orig_h here)
 # SHA: The sender hardware address. aka sender eth
