@@ -601,6 +601,23 @@ class ProfilingFlowsDatabase(object):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
+    def search_tws_for_flow(self, profileid, twid, uid):
+        """
+        Search for the given uid in the given twid, or the tws before
+        """
+        twid_number: int = int(twid.split('timewindow')[-1])
+        while twid_number > -1:
+            flow = self.get_flow(profileid, f'timewindow{twid_number}', uid)
+
+            uid = next(iter(flow))
+            if flow[uid]:
+                return flow
+
+            twid_number -= 1
+
+        # uid isn't in this twid or any of the previous ones
+        return flow
+
     def check_TW_to_close(self, close_all=False):
         """
         Check if we should close some TW
