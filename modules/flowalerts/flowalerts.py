@@ -764,7 +764,7 @@ class Module(Module, multiprocessing.Process):
         """
         Check for auth_success: true in the given zeek flow
         """
-        original_ssh_flow = __database__.get_flow(profileid, twid, uid)
+        original_ssh_flow = __database__.search_tws_for_flow(profileid, twid, uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(
@@ -798,9 +798,9 @@ class Module(Module, multiprocessing.Process):
             self.connections_checked_in_ssh_timer_thread.append(
                 uid
             )
-            params = [message]
+            params = [uid, timestamp, profileid, twid, message]
             timer = TimerThread(
-                15, self.check_successful_ssh, params
+                15, self.detect_successful_ssh_by_zeek, params
             )
             timer.start()
 
@@ -865,13 +865,11 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             data = message['data']
-            # Convert from json to dict
             data = json.loads(data)
             profileid = data['profileid']
             twid = data['twid']
             # Get flow as a json
             flow = data['flow']
-            # Convert flow to a dict
             flow_dict = json.loads(flow)
             timestamp = flow_dict['stime']
             uid = flow_dict['uid']
