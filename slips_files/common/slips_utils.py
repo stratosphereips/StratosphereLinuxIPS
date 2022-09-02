@@ -9,6 +9,7 @@ import json
 import time
 import platform
 import os
+import sys
 import ipaddress
 import configparser
 
@@ -279,8 +280,14 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self):
-        """Returns a list of our local and public IPs"""
+    def get_own_IPs(self) -> list:
+        """
+        Returns a list of our local and public IPs
+        """
+        if '-i' not in sys.argv:
+            # this method is only valid when running on an interface
+            return []
+
         IPs = []
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
