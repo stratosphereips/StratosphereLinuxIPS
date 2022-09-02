@@ -1,8 +1,0 @@
-digraph "Graphical Class Hierarchy"
-{
- // LATEX_PDF_SIZE
-  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
-  node [fontname="Helvetica",fontsize="10",shape=record];
-  rankdir="LR";
-  Node0 [label="slips.modules.ip_info.asn\l_info.ASN",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$d7/d83/classslips_1_1modules_1_1ip__info_1_1asn__info_1_1ASN.html",tooltip=" "];
-}
