@@ -498,32 +498,46 @@ class Main:
         print(f'[Main] Metadata added to {metadata_dir}')
         return self.info_path
 
-    def stop_core_processes(self):
+    def kill(self, module_name, INT=False):
+        sig = signal.SIGINT if int else signal.SIGKILL
+
+
+        pid = int(self.PIDs[module_name])
         try:
-            os.kill(int(self.PIDs['InputProcess']), signal.SIGKILL)
-            self.PIDs.pop('InputProcess')
+            os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
+            # process hasn't started yet
             pass
+
+    def kill_all(self, PIDs):
+        for module in PIDs:
+            if module not in self.PIDs:
+                # modules the are last to kill aren't always started and there in self.PIDs
+                # ignore them
+                continue
+
+            self.kill(module)
+            self.print_stopped_module(module)
+
+    def stop_core_processes(self):
+        self.kill('InputProcess')
 
         if self.mode == 'daemonized':
             # when using -D, we kill the processes because
             # the queues are not there yet to send stop msgs
-            for process in ('OutputProcess',
-                            'ProfilerProcess',
-                            'logsProcess'): #'EvidenceProcess',
-                try:
-                    os.kill(int(self.PIDs[process]), signal.SIGINT)
-                except (KeyError, ProcessLookupError):
-                    # logsprocess isn't started yet
-                    pass
+            for process in (
+                        'ProfilerProcess',
+                        'logsProcess'
+            ):
+                self.kill(process, INT=True)
+
         else:
             # Send manual stops to the processes using queues
             stop_msg = 'stop_process'
-            self.outputqueue.put(stop_msg)
             self.profilerProcessQueue.put(stop_msg)
-            # self.evidenceProcessQueue.put(stop_msg)
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
+
 
     def save_the_db(self):
         # Create a new dir to store backups
@@ -583,6 +597,7 @@ class Main:
             shutil.rmtree('zeek_files')
 
     def print_stopped_module(self, module):
+        self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
         GREEN_s = '\033[1;32;40m'
         GREEN_e = '\033[00m'
@@ -644,10 +659,22 @@ class Main:
                 pass
         return end_date
 
+    def should_kill_all_modules(self, function_start_time) -> bool:
+        """
+        checks if 15 minutes has passed since the start of the function
+        """
+        now = datetime.now()
+        diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
+        return True if diff >= 15 else False
+
+
     def shutdown_gracefully(self):
         """
-        Wait for all modules to confirm that they're done processing and then shutdown
+        Wait for all modules to confirm that they're done processing or kill them after 15 mins of inactivity
         """
+        # 15 mins from this time, all modules should be killed
+        function_start_time = datetime.now()
+
         try:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
@@ -664,12 +691,23 @@ class Main:
 
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
+
             finished_modules = []
+
             # get dict of PIDs spawned by slips
             self.PIDs = __database__.get_PIDs()
+
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
-            evidence_proc_pid = self.PIDs.pop('EvidenceProcess', None)
+
+
+            modules_to_be_killed_last = {
+                'EvidenceProcess',
+                'Blocking',
+                'exporting_alerts',
+                'OutputProcess'
+            }
+
             self.stop_core_processes()
             # only print that modules are still running once
             warning_printed = False
@@ -678,14 +716,18 @@ class Main:
             # give slips enough time to close all modules - make sure
             # all modules aren't considered 'busy' when slips stops
             max_loops = 430
+
             # loop until all loaded modules are finished
+            # in the case of -S, slips doesn't even start the modules,
+            # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
             if not self.args.stopdaemon:
-                # in the case of -S, slips doesn't even start the modules,
-                # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
-                slips_processes = len(list(self.PIDs.keys()))
+                #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
+                # we will kill them aletr, so we shouldn't be looping and waiting for them to get outta the loop
+                slips_processes = len(list(self.PIDs.keys())) - len(modules_to_be_killed_last)
+
                 try:
                     while (
-                        len(finished_modules) < slips_processes and max_loops != 0
+                        len(finished_modules) < slips_processes  and max_loops != 0
                     ):
                         # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
                         try:
@@ -702,30 +744,30 @@ class Main:
                             # to confirm that all processing is done and we can safely exit now
                             module_name = message['data']
 
+                            if module_name in modules_to_be_killed_last:
+                                # we should kill these modules the very last, or else we'll miss evidence generated
+                                # right before slips stops
+                                continue
+
+
                             if module_name not in finished_modules:
                                 finished_modules.append(module_name)
-                                try:
-                                    os.kill(int(self.PIDs[module_name]), signal.SIGKILL)
-                                except KeyError:
-                                    pass
-
-                                # remove module from the list of opened pids
-                                self.PIDs.pop(module_name, None)
-
+                                self.kill(module_name)
                                 self.print_stopped_module(module_name)
 
                                 # some modules publish in finished_modules channel before slips.py starts listening,
                                 # but they finished gracefully.
                                 # remove already stopped modules from PIDs dict
                                 for module in self.get_already_stopped_modules():
-                                    self.PIDs.pop(module)
                                     finished_modules.append(module)
                                     self.print_stopped_module(module)
 
                         max_loops -= 1
                         # after reaching the max_loops and before killing the modules that aren't finished,
                         # make sure we're not processing
-                        if len(self.PIDs) > 0 and max_loops < 2:
+                        # the logical flow is self.pids should be empty by now as all modules
+                        # are closed, the only ones left are the ones we want to kill last
+                        if len(self.PIDs) > len(modules_to_be_killed_last) and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
                                 warning_printed = True
 
@@ -735,6 +777,9 @@ class Main:
                             if not self.args.port:
                                 # delay killing unstopped modules
                                 max_loops += 1
+                                # checks if 15 minutes has passed since the start of the function
+                                if self.should_kill_all_modules(function_start_time):
+                                    break
 
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)
@@ -744,23 +789,8 @@ class Main:
 
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
-            PIDs = self.PIDs.copy()
-            for module, pid in PIDs.items():
-                try:
-                    os.kill(int(pid), 9)
-                except ProcessLookupError:
-                    pass
-                self.PIDs.pop(module, None)
-                self.print_stopped_module(module)
-
-            # evidence process should be the last process to exit, so it can print detections of the
-            # modules that are still processing
-
-            try:
-                os.kill(int(evidence_proc_pid), signal.SIGINT)
-            except (ValueError, TypeError, ProcessLookupError):
-                # slips is stopped before evidence process started
-                pass
+            self.kill_all(self.PIDs.copy())
+            self.kill_all(modules_to_be_killed_last)
 
             # save redis database if '-s' is specified
             if self.args.save:
@@ -780,8 +810,6 @@ class Main:
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.daemon.delete_pidfile()
-                # __database__.r.flushdb()
-
 
             os._exit(-1)
         except KeyboardInterrupt:
@@ -1328,16 +1356,18 @@ class Main:
         send_to_warden = self.read_configuration(
             'CESNET', 'send_alerts', 'no'
         ).lower()
+
         receive_from_warden = self.read_configuration(
             'CESNET', 'receive_alerts', 'no'
         ).lower()
+
         if 'no' in send_to_warden and 'no' in receive_from_warden:
             to_ignore.append('CESNET')
+
         # don't run blocking module unless specified
-        if (
-                not self.args.clearblocking
-                and not self.args.blocking
-                or (self.args.blocking and not self.args.interface)
+        if not (
+                 self.args.clearblocking
+                or self.args.blocking
         ):  # ignore module if not using interface
             to_ignore.append('blocking')
 
@@ -1520,6 +1550,12 @@ class Main:
             self.clear_redis_cache_database()
             self.terminate_slips()
 
+
+        # Clear cache if the parameter was included
+        if self.args.blocking and not self.args.interface:
+            print('Blocking is only allowed when running slips using an interface.')
+            self.terminate_slips()
+
         # kill all open unused redis servers if the parameter was included
         if self.args.killall:
             self.close_open_redis_servers()
@@ -1527,6 +1563,17 @@ class Main:
 
         if self.args.version:
             self.print_version()
+            self.terminate_slips()
+
+        if (
+            self.args.interface
+            and self.args.blocking
+            and os.geteuid() != 0
+        ):
+            # If the user wants to blocks, we need permission to modify iptables
+            print(
+                'Run Slips with sudo to enable the blocking module.'
+            )
             self.terminate_slips()
 
         if self.args.clearblocking:
@@ -1577,21 +1624,6 @@ class Main:
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 
-    def check_blocking_permissions(self):
-        """
-        Check if the user blocks on interface, does not make sense to block on files
-        """
-
-        if (
-            self.args.interface
-            and self.args.blocking
-            and os.geteuid() != 0
-        ):
-            # If the user wants to blocks,we need permission to modify iptables
-            print(
-                '[Main] Run Slips with sudo to enable the blocking module.'
-            )
-            self.shutdown_gracefully()
 
     def setup_print_levels(self):
         """
@@ -1661,7 +1693,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            self.check_blocking_permissions()
+
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
             """

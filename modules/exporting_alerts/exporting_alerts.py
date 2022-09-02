@@ -37,7 +37,8 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('export_evidence')
         # Get config variables
         self.read_configuration()
-        self.get_slack_token()
+        if 'slack' in self.export_to:
+            self.get_slack_token()
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
         self.is_thread_created = False
@@ -123,6 +124,7 @@ class Module(Module, multiprocessing.Process):
     def get_slack_token(self):
         if not hasattr(self, 'slack_token_filepath'):
             return False
+
         # slack_bot_token_secret should contain your slack token only
         try:
             with open(self.slack_token_filepath, 'r') as f:
@@ -132,7 +134,7 @@ class Module(Module, multiprocessing.Process):
                 'Please add slack bot token to modules/exporting_alerts/slack_bot_token_secret. Stopping.'
             )
             # Stop the module
-            __database__.publish('export_alert', 'stop_process')
+            self.shutdown_gracefully()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -399,7 +401,7 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(msg, 'export_evidence'):
                     evidence = json.loads(msg['data'])
                     description = evidence['description']
-                    if 'slack' in self.export_to:
+                    if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
                         srcip = evidence['profileid'].split("_")[-1]
                         msg_to_send = f'Src IP {srcip} Detected {description}'
                         self.send_to_slack(msg_to_send)
