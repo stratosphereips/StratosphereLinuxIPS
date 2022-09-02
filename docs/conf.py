@@ -61,6 +61,7 @@ source_suffix = {
     '.rst': 'restructuredtext',
     '.txt': 'markdown',
     '.md': 'markdown',
+    '.html': 'html',
 }
 
 master_doc = 'index'
