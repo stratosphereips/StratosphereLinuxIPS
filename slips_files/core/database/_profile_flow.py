@@ -1218,7 +1218,7 @@ class ProfilingFlowsDatabase(object):
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
 
-    def get_reverse_dns(self, ip):
+    def get_dns_resolution(self, ip):
         """
         Get DNS name of the IP, a list
         returns a dict with {ts: .. ,
@@ -1276,7 +1276,7 @@ class ProfilingFlowsDatabase(object):
                     continue
 
                 # get stored DNS resolution from our db
-                ip_info_from_db = self.get_reverse_dns(answer)
+                ip_info_from_db = self.get_dns_resolution(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]

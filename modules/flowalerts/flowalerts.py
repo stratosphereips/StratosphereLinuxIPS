@@ -406,7 +406,7 @@ class Module(Module, multiprocessing.Process):
         if other_ip:
             other_ip = json.loads(other_ip)
         # get the domain of this ip
-        dns_resolution = __database__.get_reverse_dns(daddr)
+        dns_resolution = __database__.get_dns_resolution(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
@@ -583,7 +583,7 @@ class Module(Module, multiprocessing.Process):
                 # less than 2=30 minutes have passed
                 return False
 
-        answers_dict = __database__.get_reverse_dns(daddr)
+        answers_dict = __database__.get_dns_resolution(daddr)
         if answers_dict:
             return False
         # self.print(f'No DNS resolution in {answers_dict}')
