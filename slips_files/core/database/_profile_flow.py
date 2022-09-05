@@ -1251,6 +1251,24 @@ class ProfilingFlowsDatabase(object):
             return ip_info
         return {}
 
+    def is_ip_resolved(self, ip, go_back):
+        """
+        :param go_back: float, how many hours to look back for resolutions
+        """
+        ip_info = self.get_dns_resolution(ip)
+        if ip_info == {}:
+            return False
+        # these are the tws this ip was resolved in
+        tws = ip_info['timewindows']
+
+        tws_to_search = self.get_equivalent_tws(go_back)
+        while tws_to_search != 0:
+            matching_tws = [i for i in tws  if f'timewindow{tws_to_search}' in i]
+            if matching_tws != []:
+                return True
+
+            tws_to_search -= 1
+
     def set_dns_resolution(
         self,
         query: str,
