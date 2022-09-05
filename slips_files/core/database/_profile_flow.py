@@ -601,12 +601,19 @@ class ProfilingFlowsDatabase(object):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
-    def search_tws_for_flow(self, profileid, twid, uid):
+    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
         """
         Search for the given uid in the given twid, or the tws before
+        :param go_back: how many hours back to search?
         """
+        tws_to_search = float('inf')
+
+        if go_back:
+            hrs_to_search = float(go_back)
+            tws_to_search = self.get_equivalent_tws(hrs_to_search)
+
         twid_number: int = int(twid.split('timewindow')[-1])
-        while twid_number > -1:
+        while twid_number > -1 and tws_to_search > 0:
             flow = self.get_flow(profileid, f'timewindow{twid_number}', uid)
 
             uid = next(iter(flow))
@@ -614,9 +621,18 @@ class ProfilingFlowsDatabase(object):
                 return flow
 
             twid_number -= 1
+            # this reaches 0 when go_back is set to a number
+            tws_to_search -= 1
 
         # uid isn't in this twid or any of the previous ones
-        return flow
+        return {uid: None}
+
+    def get_equivalent_tws(self, hrs: float):
+        """
+        How many tws correspond to the given hours?
+        for example if the tw width is 1h, and hrs is 24, this function returns 24
+        """
+        return int(hrs/self.width)
 
     def check_TW_to_close(self, close_all=False):
         """
