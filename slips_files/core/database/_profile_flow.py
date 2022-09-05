@@ -1236,12 +1236,12 @@ class ProfilingFlowsDatabase(object):
 
     def get_dns_resolution(self, ip):
         """
-        Get DNS name of the IP, a list
+        IF this IP was resolved by slips
         returns a dict with {ts: .. ,
                             'domains': .. ,
                             'uid':...,
-                            'resolved-by':.. } of this IP or {}
-
+                            'resolved-by':.. }
+        If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
@@ -1259,6 +1259,7 @@ class ProfilingFlowsDatabase(object):
         uid: str,
         qtype_name: str,
         srcip: str,
+        twid: str,
     ):
         """
         Cache DNS answers
@@ -1281,6 +1282,8 @@ class ProfilingFlowsDatabase(object):
             # Also store these IPs inside the domain
             ips_to_add = []
             CNAMEs = []
+            profileid_twid = f'profile_{srcip}_{twid}'
+
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
@@ -1291,18 +1294,26 @@ class ProfilingFlowsDatabase(object):
                     CNAMEs.append(answer)
                     continue
 
+
                 # get stored DNS resolution from our db
                 ip_info_from_db = self.get_dns_resolution(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
                     domains = []
+                    timewindows = [profileid_twid]
                 else:
                     # we have info about this domain in DNSresolution in the db
                     # keep track of all srcips that resolved this domain
                     resolved_by = ip_info_from_db.get('resolved-by', [])
                     if srcip not in resolved_by:
                         resolved_by.append(srcip)
+
+                    # timewindows in which this odmain was resolved
+                    timewindows = ip_info_from_db.get('timewindows', [])
+                    if profileid_twid not in timewindows:
+                        timewindows.append(profileid_twid)
+
                     # we'll be appending the current answer to these cached domains
                     domains = ip_info_from_db.get('domains', [])
 
@@ -1316,6 +1327,7 @@ class ProfilingFlowsDatabase(object):
                     'uid': uid,
                     'domains': domains,
                     'resolved-by': resolved_by,
+                    'timewindows': timewindows,
                 }
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips
@@ -1501,7 +1513,7 @@ class ProfilingFlowsDatabase(object):
             srcip = profileid.split('_')[1]
 
             self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip
+                query, answers, stime, uid, qtype_name, srcip, twid
             )
         # Convert to json string
         data = json.dumps(data)
