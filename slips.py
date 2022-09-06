@@ -499,7 +499,7 @@ class Main:
         return self.info_path
 
     def kill(self, module_name, INT=False):
-        sig = signal.SIGINT if int else signal.SIGKILL
+        sig = signal.SIGINT if INT else signal.SIGKILL
 
 
         pid = int(self.PIDs[module_name])

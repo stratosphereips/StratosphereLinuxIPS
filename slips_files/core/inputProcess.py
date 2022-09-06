@@ -124,7 +124,7 @@ class InputProcess(multiprocessing.Process):
             self.tcp_inactivity_timeout = 5
 
 
-        self.rotation = self.config.get('parameters', 'rotation', 'yes')
+        self.rotation = get('parameters', 'rotation', 'yes')
         self.rotation = 'yes' in self.rotation
 
 
