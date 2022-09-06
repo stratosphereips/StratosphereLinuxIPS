@@ -31,7 +31,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Create a new module**. Step by step guide on how to create a new Slips module See :doc:`Create a new module <create_new_module>`.
 
-- **Code documentation**. Auto generated slips code documentation See :doc:`Code docs <code_docs>`.
+- **Code documentation**. Auto generated slips code documentation See :doc:`Code docs <code_documentation>`.
 
 
 
@@ -55,6 +55,6 @@ This documentation gives an overview how Slips works, how to use it and how to h
    slips_in_action
    contributing
    create_new_module
-   code_docs
+   code_documentation
 
 
