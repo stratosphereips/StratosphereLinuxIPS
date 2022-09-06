@@ -632,7 +632,7 @@ class ProfilingFlowsDatabase(object):
         How many tws correspond to the given hours?
         for example if the tw width is 1h, and hrs is 24, this function returns 24
         """
-        return int(hrs/self.width)
+        return int(hrs*3600/self.width)
 
     def check_TW_to_close(self, close_all=False):
         """
@@ -1251,23 +1251,27 @@ class ProfilingFlowsDatabase(object):
             return ip_info
         return {}
 
-    def is_ip_resolved(self, ip, go_back):
+    def is_ip_resolved(self, ip, hrs):
         """
-        :param go_back: float, how many hours to look back for resolutions
+        :param hrs: float, how many hours to look back for resolutions
         """
         ip_info = self.get_dns_resolution(ip)
         if ip_info == {}:
             return False
+        # IP is resolved, was it resolved in the past 24 hrs?
         # these are the tws this ip was resolved in
         tws = ip_info['timewindows']
 
-        tws_to_search = self.get_equivalent_tws(go_back)
-        while tws_to_search != 0:
-            matching_tws = [i for i in tws  if f'timewindow{tws_to_search}' in i]
+        tws_to_search = self.get_equivalent_tws(hrs)
+
+        current_twid = 0   # number of the tw we're looking for
+        while tws_to_search != current_twid:
+            matching_tws = [i for i in tws if f'timewindow{current_twid}' in i]
+
             if matching_tws != []:
                 return True
 
-            tws_to_search -= 1
+            current_twid += 1
 
     def set_dns_resolution(
         self,

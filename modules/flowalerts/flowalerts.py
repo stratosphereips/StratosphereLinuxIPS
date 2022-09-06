@@ -584,8 +584,7 @@ class Module(Module, multiprocessing.Process):
                 return False
 
         # search 24hs back for a dns resolution
-        resolved = __database__.is_ip_resolved(daddr, 24)
-        if resolved:
+        if __database__.is_ip_resolved(daddr, 24):
             return False
         # self.print(f'No DNS resolution in {answers_dict}')
         # There is no DNS resolution, but it can be that Slips is
