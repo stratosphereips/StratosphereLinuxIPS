@@ -528,7 +528,6 @@ class InputProcess(multiprocessing.Process):
                     rotation_interval = (
                         "-e 'redef Log::default_rotation_interval =  1day;'"
                     )
-                # Change the bro command
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
