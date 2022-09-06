@@ -21,6 +21,7 @@ from slips_files.common.abstracts import Module
 from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 import configparser
 import signal
 import sys
@@ -77,7 +78,7 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
-                self.twid_width = utils.get_tw_width(self.config)
+                self.twid_width = conf.get_tw_width(self.config)
 
 
     def prepare_zeek_output_dir(self):

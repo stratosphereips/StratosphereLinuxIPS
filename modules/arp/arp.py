@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 import configparser
 
@@ -81,8 +82,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
 
-        self.home_network = utils.get_home_network(self.config)
-
+        self.home_network = conf.get_home_network(self.config)
         try:
             self.delete_zeek_files = self.config.get(
                 'parameters', 'delete_zeek_files'

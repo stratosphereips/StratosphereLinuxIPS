@@ -1,3 +1,6 @@
+from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
+from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
 import os
 import signal
 import redis
@@ -13,8 +16,7 @@ import sys
 import validators
 import ast
 from uuid import uuid4
-from slips_files.common.slips_utils import utils
-from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
+
 
 
 class Database(ProfilingFlowsDatabase, object):
@@ -243,7 +245,7 @@ class Database(ProfilingFlowsDatabase, object):
             self.disabled_detections = []
 
         # get home network from slips.conf
-        self.home_network = utils.get_home_network(self.config)
+        self.home_network = conf.get_home_network(self.config)
 
     def start(self, config, redis_port):
         """Start the DB. Allow it to read the conf"""
