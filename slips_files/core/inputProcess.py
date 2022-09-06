@@ -99,42 +99,35 @@ class InputProcess(multiprocessing.Process):
     def read_configuration(self):
         """Read the configuration file for what we need"""
 
-        try:
-            self.packet_filter = self.config.get('parameters', 'pcapfilter')
-        except (
+        def get(section, value, default_value):
+            """
+            read the given value from the given section in slips.conf
+            on error set the value to the default value
+            """
+            try:
+                 return self.config.get(section, value)
+            except (
                 configparser.NoOptionError,
                 configparser.NoSectionError,
                 NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.packet_filter = 'ip or not ip'
+            ):
+                # There is a conf, but there is no option, or no section or no
+                # configuration file specified
+                return default_value
 
+        self.packet_filter = get('parameters', 'pcapfilter',  'ip or not ip')
+
+        self.tcp_inactivity_timeout = get('parameters', 'tcp_inactivity_timeout', '5')
         try:
-            self.tcp_inactivity_timeout = self.config.get(
-                'parameters', 'tcp_inactivity_timeout'
-            )
-            # make sure the value is a valid int
             self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
+        except ValueError:
+            self.tcp_inactivity_timeout = 5
 
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.tcp_inactivity_timeout = '5'
 
-        try:
-            self.rotation = self.config.get('parameters', 'rotation')
-            self.rotation = 'yes' in self.rotation
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.rotation = True
+        self.rotation = self.config.get('parameters', 'rotation', 'yes')
+        self.rotation = 'yes' in self.rotation
+
+
 
     def print(self, text, verbose=1, debug=0):
         """

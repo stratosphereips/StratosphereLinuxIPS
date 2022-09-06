@@ -594,7 +594,7 @@ class Main:
         )
 
         if delete:
-            shutil.rmtree('zeek_files')
+            shutil.rmtree(self.zeek_folder)
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
