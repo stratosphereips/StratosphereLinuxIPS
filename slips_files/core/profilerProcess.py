@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import sys
 import configparser
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -116,7 +117,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.analysis_direction = get('parameters', 'analysis_direction', 'all')
         self.label = get('parameters', 'label', 'unknown')
 
-        self.home_net = utils.get_home_network(self.config)
+        self.home_net = conf.get_home_network(self.config)
 
         self.width = get('parameters', 'time_window_width', 3600)
         if 'only_one_tw' in str(self.width):
