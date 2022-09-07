@@ -86,20 +86,6 @@ class Main:
         without_ext = Path(self.input_information).stem
         self.zeek_folder = f'./zeek_files_{without_ext}/'
 
-
-    def read_configuration(self, section, name, default_value):
-        """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
-        try:
-            return self.config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            return default_value
-
     def get_host_ip(self):
         """
         Recognize the IP address of the machine
@@ -458,7 +444,7 @@ class Main:
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
         """
-        if not 'yes' in self.enable_metadata.lower():
+        if not self.enable_metadata:
             return
 
         metadata_dir = os.path.join(self.args.output, 'metadata')
@@ -1381,17 +1367,15 @@ class Main:
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose == None:
-            self.args.verbose = int(self.read_configuration('parameters', 'verbose', 1))
+            self.args.verbose = conf.verbose()
 
         # Limit any verbosity to > 0
         if self.args.verbose < 1:
             self.args.verbose = 1
 
-        # Any debuggsity passed as parameter overrides the configuration. Only check its value
+        # Any deug passed as parameter overrides the configuration. Only check its value
         if self.args.debug == None:
-            self.args.debug = int(
-                self.read_configuration('parameters', 'debug', 0)
-            )
+            self.args.debug = conf.debug()
 
         # Limit any debuggisity to > 0
         if self.args.debug < 0:
@@ -1621,13 +1605,9 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-            self.enable_metadata = self.read_configuration(
-                                                'parameters',
-                                                'metadata_dir',
-                                                'no'
-                                                )
+            self.enable_metadata = conf.enable_metadata()
 
-            if 'yes' in self.enable_metadata.lower():
+            if self.enable_metadata:
                 self.info_path = self.add_metadata()
 
             hostIP = self.store_host_ip()
