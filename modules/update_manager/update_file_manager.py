@@ -16,13 +16,11 @@ from datetime import datetime
 from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         self.outputqueue = outputqueue
-        self.config = config
         # For now, read the malicious IPs from here
         self.name = 'update_manager'
-        # Start the database
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.new_update_time = float('-inf')
@@ -31,7 +29,7 @@ class UpdateFileManager:
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line

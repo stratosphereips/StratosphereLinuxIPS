@@ -42,7 +42,6 @@ class InputProcess(multiprocessing.Process):
             profilerqueue,
             input_type,
             input_information,
-            config,
             packet_filter,
             zeek_or_bro,
             zeek_folder,
@@ -53,9 +52,7 @@ class InputProcess(multiprocessing.Process):
         self.name = 'InputProcess'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.redis_port = redis_port
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input

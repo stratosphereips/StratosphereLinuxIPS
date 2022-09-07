@@ -50,7 +50,6 @@ class LogsProcess(multiprocessing.Process):
         outputqueue,
         verbose,
         debug,
-        config,
         mainfoldername,
         redis_port,
     ):
@@ -58,11 +57,8 @@ class LogsProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.separator = '_'
-        # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         # Read the configuration
@@ -76,8 +72,6 @@ class LogsProcess(multiprocessing.Process):
         self.is_timline_file = False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the time of log report
         self.report_time = conf.log_report_time()
         self.outputqueue.put(
             f'01|logs|Logs Process configured to report every: '

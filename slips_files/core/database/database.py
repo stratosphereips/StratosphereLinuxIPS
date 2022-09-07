@@ -192,9 +192,8 @@ class Database(ProfilingFlowsDatabase, object):
         self.home_network = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
 
-    def start(self, config, redis_port):
+    def start(self, redis_port):
         """Start the DB. Allow it to read the conf"""
-        self.config = config
         self.read_configuration()
 
         # Read values from the configuration file

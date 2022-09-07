@@ -245,6 +245,6 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        __database__.start(self.config, port)
+        __database__.start(port)
         self.slips.c1 = __database__.subscribe('finished_modules')
         self.slips.shutdown_gracefully()

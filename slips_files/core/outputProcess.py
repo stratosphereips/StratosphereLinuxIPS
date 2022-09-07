@@ -21,6 +21,7 @@ import sys
 import io
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 from datetime import datetime
 import os
 
@@ -33,7 +34,6 @@ class OutputProcess(multiprocessing.Process):
         inputqueue,
         verbose,
         debug,
-        config,
         redis_port,
         stdout='',
         stderr='output/errors.log',
@@ -47,7 +47,6 @@ class OutputProcess(multiprocessing.Process):
         self.slips_logfile = slips_logfile
         self.name = 'OutputProcess'
         self.queue = inputqueue
-        self.config = config
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
         # self.quiet manages if we should really print stuff or not
@@ -59,7 +58,7 @@ class OutputProcess(multiprocessing.Process):
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
             )
         # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
 
 
     def log_branch_info(self, logfile):

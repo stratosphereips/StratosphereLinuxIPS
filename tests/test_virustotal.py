@@ -83,10 +83,7 @@ def read_configuration():
 def create_virustotal_instance(outputQueue):
     """Create an instance of virustotal.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    with open('slips.conf') as conf_file:
-        config.read_file(conf_file)
-    virustotal = Module(outputQueue, config, 6380)
+    virustotal = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration

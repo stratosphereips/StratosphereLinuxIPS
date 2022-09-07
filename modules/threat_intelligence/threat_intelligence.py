@@ -9,7 +9,6 @@ import sys
 # Your imports
 import ipaddress
 import os
-import configparser
 import json
 import traceback
 import validators
@@ -21,13 +20,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Subscribe to the channel
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')

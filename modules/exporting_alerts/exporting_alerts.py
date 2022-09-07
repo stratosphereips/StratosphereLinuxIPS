@@ -29,12 +29,11 @@ class Module(Module, multiprocessing.Process):
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.port = None
         self.outputqueue = outputqueue
-        self.config = config
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('export_evidence')
         self.read_configuration()
         if 'slack' in self.export_to:

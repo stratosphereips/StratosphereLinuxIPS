@@ -12,8 +12,7 @@ def do_nothing(*args):
 def create_threatintel_instance(outputQueue):
     """Create an instance of threatintel.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    threatintel = Module(outputQueue, config, 6380)
+    threatintel = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     threatintel.print = do_nothing
     return threatintel

@@ -27,12 +27,10 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, config, redis_port, monitored_zeek_files):
+    def __init__(self, redis_port, monitored_zeek_files):
         super().__init__(self.REGEX)
-        self.config = config
         self.monitored_zeek_files = monitored_zeek_files
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         utils.drop_root_privs()
 
     def on_created(self, event):
