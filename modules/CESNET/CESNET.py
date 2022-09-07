@@ -1,10 +1,10 @@
 # Must imports
 from slips_files.common.abstracts import Module
-import multiprocessing
+from slips_files.common.config_parser import conf
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+import multiprocessing
 import sys
-from slips_files.common.config_parser import conf
 
 # Your imports
 from ..CESNET.warden_client import Client, read_cfg
@@ -22,16 +22,12 @@ class Module(Module, multiprocessing.Process):
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.read_configuration()
         self.c1 = __database__.subscribe('new_alert')
         self.timeout = 0.00000001

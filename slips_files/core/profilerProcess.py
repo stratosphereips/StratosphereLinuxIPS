@@ -37,21 +37,19 @@ class ProfilerProcess(multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+        self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
         self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.config = config
         self.columns_defined = False
         self.timeformat = None
         self.input_type = False
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns

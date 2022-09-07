@@ -22,8 +22,7 @@ def do_nothing(*args):
 def create_flowalerts_instance(outputQueue):
     """Create an instance of flowalerts.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    flowalerts = Module(outputQueue, config, 6380)
+    flowalerts = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     flowalerts.print = do_nothing
     return flowalerts

@@ -22,7 +22,7 @@ def init_tests(pigeon_port=6669):
     output_process_thread.start()
 
     # Start the DB
-    __database__.start(config)
+    __database__.start()
     __database__.setOutputQueue(output_process_queue)
     module_process = Trust(
         output_process_queue,

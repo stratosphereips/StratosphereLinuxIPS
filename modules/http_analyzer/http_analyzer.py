@@ -16,13 +16,11 @@ class Module(Module, multiprocessing.Process):
     description = 'Analyze HTTP flows'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_http')
         self.timeout = 0.00000001
         self.connections_counter = {}

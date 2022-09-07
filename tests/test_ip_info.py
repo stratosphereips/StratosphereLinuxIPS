@@ -12,8 +12,7 @@ def do_nothing(*args):
 def create_ip_info_instance(outputQueue):
     """Create an instance of ip_info.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    ip_info = Module(outputQueue, config, 6380)
+    ip_info = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     ip_info.print = do_nothing
     return ip_info

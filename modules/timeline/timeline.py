@@ -10,7 +10,6 @@ import sys
 # Your imports
 import time
 import json
-import configparser
 
 
 class Module(Module, multiprocessing.Process):
@@ -19,14 +18,11 @@ class Module(Module, multiprocessing.Process):
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.separator = __database__.getFieldSeparator()
         # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')

@@ -300,7 +300,7 @@ class Module(Module, multiprocessing.Process):
         # your own configurations
         self.config = config
         # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -432,7 +432,7 @@ self.config = config
 This line is necessary if you need to read the ```slips.conf ``` configuration file for your own configurations
 
 ```python
-__database__.start(self.config, redis_port)
+__database__.start(redis_port)
 ```
 
 This line starts the redis database, Slips mainly depends on redis Pub/Sub system for modules communications, 

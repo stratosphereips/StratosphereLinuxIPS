@@ -67,8 +67,6 @@ class Main:
         if not testing:
             self.pid = os.getpid()
             self.args = conf.get_args()
-            # set self.config
-            self.config = conf.read_config_file()
             self.check_given_flags()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -312,14 +310,13 @@ class Main:
             if 'p2ptrust' == module_name:
                 ModuleProcess = module_class(
                     self.outputqueue,
-                    self.config,
                     self.redis_port,
                     output_dir=self.args.output
                 )
             else:
+                print(f"@@@@@@@@@@@@@@@@@@  ModuleProcess { module_class}")
                 ModuleProcess = module_class(
                     self.outputqueue,
-                    self.config,
                     self.redis_port
                 )
             ModuleProcess.start()
@@ -355,7 +352,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 logs_dir,
                 self.redis_port
             )
@@ -381,7 +377,7 @@ class Main:
             guiProcessQueue = Queue()
             guiProcessThread = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
-                self.args.debug, self.config
+                self.args.debug
             )
             guiProcessThread.start()
             self.print('quiet')
@@ -435,7 +431,7 @@ class Main:
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
-        update_manager = UpdateFileManager(self.outputqueue, self.config, self.redis_port)
+        update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
         update_manager.update_ports_info()
         update_manager.update_org_files()
 
@@ -1144,7 +1140,7 @@ class Main:
         self.input_type = 'database'
         # self.input_information = 'database'
         from slips_files.core.database.database import __database__
-        __database__.start(self.config, 6379)
+        __database__.start(6379)
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
@@ -1324,7 +1320,7 @@ class Main:
                 from multiprocessing import Queue
                 from modules.blocking.blocking import Module
 
-                blocking = Module(Queue(), self.config)
+                blocking = Module(Queue())
                 blocking.start()
                 blocking.delete_slipsBlocking_chain()
                 # Tell the blocking module to clear the slips chain
@@ -1469,7 +1465,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 self.redis_port,
                 stdout=current_stdout,
                 stderr=stderr,
@@ -1533,7 +1528,6 @@ class Main:
             evidence_process = EvidenceProcess(
                 self.evidenceProcessQueue,
                 self.outputqueue,
-                self.config,
                 self.args.output,
                 logs_dir,
                 self.redis_port,
@@ -1558,7 +1552,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 self.redis_port,
             )
             profiler_process.start()
@@ -1578,7 +1571,6 @@ class Main:
                 self.profilerProcessQueue,
                 self.input_type,
                 self.input_information,
-                self.config,
                 self.args.pcapfilter,
                 self.zeek_bro,
                 self.zeek_folder,

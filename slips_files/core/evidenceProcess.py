@@ -22,7 +22,6 @@ from slips_files.common.slips_utils import utils
 from .notify import Notify
 import json
 from datetime import datetime
-import configparser
 from os import path
 from colorama import Fore, Style
 import sys
@@ -44,7 +43,6 @@ class EvidenceProcess(multiprocessing.Process):
         self,
         inputqueue,
         outputqueue,
-        config,
         output_folder,
         logs_folder,
         redis_port,
@@ -53,10 +51,8 @@ class EvidenceProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.config = config
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
+        __database__.start(redis_port)
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
