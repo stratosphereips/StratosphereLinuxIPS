@@ -35,6 +35,8 @@ class ConfigParser(object):
             pass
         return config
 
+
+
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
@@ -78,6 +80,38 @@ class ConfigParser(object):
 
         return list(map(ipaddress.ip_network, home_nets))
 
+    def evidence_detection_threshold(self):
+        return self.read_configuration(
+            'detection', 'evidence_detection_threshold', 2
+        )
+
+    def packet_filter(self):
+        return self.read_configuration(
+            'parameters', 'pcapfilter',  'ip or not ip'
+        )
+
+    def tcp_inactivity_timeout(self):
+        timeout = self.read_configuration(
+            'parameters', 'tcp_inactivity_timeout',  '5'
+        )
+        try:
+            timeout = int(timeout)
+        except ValueError:
+            timeout = 5
+        return timeout
+
+    def popup_alerts(self):
+        popups =  self.read_configuration(
+            'detection', 'popup_alerts', 'False'
+        )
+        return True if 'true' in popups.lower() else False
+
+    def rotation(self):
+        rotation = self.read_configuration(
+            'parameters', 'rotation', 'yes'
+        )
+        return True if 'yes' in rotation.lower() else False
+
     def store_a_copy_of_zeek_files(self):
         store_a_copy_of_zeek_files = self.read_configuration(
             'parameters', 'store_a_copy_of_zeek_files', 'no'
@@ -99,6 +133,37 @@ class ConfigParser(object):
             'parameters', 'whitelist_path', 'whitelist.conf'
         )
 
+    def logsfile(self):
+        return self.read_configuration(
+            'modes', 'logsfile', 'slips.log'
+        )
+
+    def stdout(self):
+        return self.read_configuration(
+            'modes', 'stdout', 'slips.log'
+        )
+
+    def stderr(self):
+        return self.read_configuration(
+            'modes', 'stderr', 'errors.log'
+        )
+
+    def ts_format(self):
+        return self.read_configuration(
+            'timestamp', 'format', None
+        )
+
+
+    def log_report_time(self):
+        time = self.read_configuration(
+            'parameters', 'log_report_time', 5
+        )
+        try:
+            time = int(time)
+        except ValueError:
+            time = 5
+        return time
+
     def delete_zeek_files(self):
         delete = self.read_configuration(
             'parameters', 'delete_zeek_files', 'no'
@@ -115,11 +180,43 @@ class ConfigParser(object):
             False if 'no' in store_copy.lower() else True
         )
 
-    def get_tw_width(self, ):
-        twid_width = self.read_configuration(
-            'parameters', 'time_window_width', 3600
-        )
-        twid_width = int(twid_width)
+    def get_tw_width_as_float(self):
+        try:
+            twid_width = self.config.get('parameters', 'time_window_width')
+        except (
+            configparser.NoOptionError,
+            configparser.NoSectionError,
+            NameError,
+            ValueError
+        ):
+            # There is a conf, but there is no option,
+            # or no section or no configuration file specified
+            twid_width = 3600
+
+        try:
+            twid_width = float(twid_width)
+        except ValueError:
+            # Its not a float
+            if 'only_one_tw' in twid_width:
+                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
+                twid_width = 9999999999
+        return twid_width
+
+    def disabled_detections(self):
+        disabled_detections = self.read_configuration(
+                'DisabledAlerts', 'disabled_detections', []
+            )
+        if disabled_detections:
+            disabled_detections = (
+                disabled_detections.replace('[', '')
+                .replace(']', '')
+                .replace(',', '')
+                .split()
+            )
+        return disabled_detections
+
+    def get_tw_width(self):
+        twid_width = self.get_tw_width_as_float()
         # twid_width = f'{twid_width / 60} mins' if twid_width <= 60
         # else f'{twid_width / 60 / 60}h'
         twid_width = str(timedelta(seconds=twid_width))
@@ -436,6 +533,22 @@ class ConfigParser(object):
             update_period = 86400   # 1 day
         return update_period
 
+    def vt_api_key_file(self):
+        return self.read_configuration(
+             'virustotal', 'api_key_file', None
+        )
+
+    def virustotal_update_period(self):
+        update_period =  self.read_configuration(
+             'virustotal', 'virustotal_update_period', 259200
+        )
+        try:
+            update_period = int(update_period)
+        except ValueError:
+            update_period = 259200
+        return update_period
+
+
     def riskiq_update_period(self):
         update_period =  self.read_configuration(
              'threatintelligence', 'update_period', 604800
@@ -456,12 +569,22 @@ class ConfigParser(object):
             update_period = 1209600   # 2 weeks
         return update_period
 
+    def deletePrevdb(self):
+        delete = self.read_configuration(
+             'parameters', 'deletePrevdb', True
+        )
+        return False if delete == 'False' else True
 
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''
         ))
 
+
+    def label(self):
+        return self.read_configuration(
+             'parameters', 'label', 'unknown'
+        )
 
     def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
