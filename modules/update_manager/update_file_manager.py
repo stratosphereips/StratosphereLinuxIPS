@@ -388,17 +388,6 @@ class UpdateFileManager:
         """
         return response.headers.get('ETag', False)
 
-    def sanitize(self, string):
-        """
-        Sanitize strings taken from the user
-        """
-        string = string.replace(';', '')
-        string = string.replace('\`', '')
-        string = string.replace('&', '')
-        string = string.replace('|', '')
-        string = string.replace('$(', '')
-        string = string.replace('\n', '')
-        return string
 
     def write_file_to_disk(self, response, full_path):
 
@@ -1452,7 +1441,7 @@ class UpdateFileManager:
 
             for file_to_download in files_to_download.keys():
                 file_to_download = file_to_download.strip()
-                file_to_download = self.sanitize(file_to_download)
+                file_to_download = utils.sanitize(file_to_download)
 
                 response = self.__check_if_update(file_to_download, self.update_period)
                 if response:

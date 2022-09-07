@@ -101,21 +101,10 @@ class ASN:
         ):
             # private ip or RDAP lookup failed. don't cache
             return False
-        # except NoResolverConfiguration:
-        #     # Resolver configuration could not be read or specified no nameservers
-        #     # self.print('Error: Resolver configuration could not be read or specified no nameservers.')
-        #     return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
-        # except dns.resolver.NoResolverConfiguration:
-        #     # ipwhois can't read /etc/resolv.conf
-        #     # manually specify the dns server
-        #     # ignore resolv.conf
-        #     dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
-        #     # use google's DNS
-        #     dns.resolver.default_resolver.nameservers=['8.8.8.8']
-        #     return False
+
 
     def get_asn_online(self, ip):
         """
