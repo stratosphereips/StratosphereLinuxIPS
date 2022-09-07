@@ -19,11 +19,11 @@
 import multiprocessing
 import sys
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 import os
 import threading
 import time
 from slips_files.core.database.database import __database__
-import configparser
 import json
 
 
@@ -78,21 +78,10 @@ class LogsProcess(multiprocessing.Process):
     def read_configuration(self):
         """Read the configuration file for what we need"""
         # Get the time of log report
-        try:
-            self.report_time = int(
-                self.config.get('parameters', 'log_report_time')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.report_time = 5
+        self.report_time = conf.log_report_time()
         self.outputqueue.put(
-            '01|logs|Logs Process configured to report every: {} seconds'.format(
-                self.report_time
-            )
+            f'01|logs|Logs Process configured to report every: '
+            f'{self.report_time} seconds'
         )
 
     def print(self, text, verbose=1, debug=0):

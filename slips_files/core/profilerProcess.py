@@ -93,42 +93,12 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
-
-        self.whitelist_path = get('parameters', 'whitelist_path', 'whitelist.conf')
-        self.timeformat = get('timestamp', 'format', None)
-        self.analysis_direction = get('parameters', 'analysis_direction', 'all')
-        self.label = get('parameters', 'label', 'unknown')
-
+        self.whitelist_path = conf.whitelist_path()
+        self.timeformat = conf.ts_format()
+        self.analysis_direction = conf.analysis_direction()
+        self.label = conf.label()
         self.home_net = conf.get_home_network()
-
-        self.width = get('parameters', 'time_window_width', 3600)
-        if 'only_one_tw' in str(self.width):
-            # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-            self.width = 9999999999
-            self.print(
-                f'Time Windows Width used: {self.width} seconds.'
-                f' Only 1 time windows. Dates in the names of files are 100 years in the past.',3,0
-            )
-        else:
-            self.width = float(self.width)
+        self.width = conf.get_tw_width_as_float()
 
     def define_type(self, line):
         """
