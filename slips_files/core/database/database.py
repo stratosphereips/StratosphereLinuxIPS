@@ -190,7 +190,7 @@ class Database(ProfilingFlowsDatabase, object):
         self.deletePrevdb = conf.deletePrevdb()
         self.disabled_detections = conf.disabled_detections()
         self.home_network = conf.get_home_network()
-        # self.width = conf.get_tw_width_as_float()
+        self.width = conf.get_tw_width_as_float()
 
     def start(self, config, redis_port):
         """Start the DB. Allow it to read the conf"""

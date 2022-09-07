@@ -81,9 +81,15 @@ class ConfigParser(object):
         return list(map(ipaddress.ip_network, home_nets))
 
     def evidence_detection_threshold(self):
-        return self.read_configuration(
+        threshold = self.read_configuration(
             'detection', 'evidence_detection_threshold', 2
         )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 2
+        return threshold
+
 
     def packet_filter(self):
         return self.read_configuration(
