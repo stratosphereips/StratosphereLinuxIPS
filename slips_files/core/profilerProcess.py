@@ -117,7 +117,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.analysis_direction = get('parameters', 'analysis_direction', 'all')
         self.label = get('parameters', 'label', 'unknown')
 
-        self.home_net = conf.get_home_network(self.config)
+        self.home_net = conf.get_home_network()
 
         self.width = get('parameters', 'time_window_width', 3600)
         if 'only_one_tw' in str(self.width):
