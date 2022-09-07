@@ -289,10 +289,11 @@ class Hotkeys:
 
         if alerts:
             alerts = json.loads(alerts)
-            alerts_tw = alerts[timewindow]
+            alerts_tw = alerts.get(timewindow, dict())
             tws = self.get_all_tw_with_ts(profile)
             evidences = self.db.hget("evidence" + profile, timewindow)
-            evidences = json.loads(evidences)
+            if evidences:
+                evidences = json.loads(evidences)
 
             for alert_ID, evidence_ID_list in alerts_tw.items():
                 evidence_count = len(evidence_ID_list)
