@@ -1,16 +1,14 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-import platform
 import warnings
 import json
 
 # Your imports
 import numpy as np
 import sys
-from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
 
 

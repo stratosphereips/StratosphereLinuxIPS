@@ -1,15 +1,12 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import configparser
-import signal, os
 
 # Your imports
 import json
-import sys
-import datetime
 import ipaddress
 import time
 import threading
@@ -44,9 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
-        # evidence to skip before calling setevidence
-        self.arp_scan_evidence = 0
-
         if (
             'yes' in self.delete_zeek_files
             and 'no' in self.store_zeek_files_copy
@@ -86,20 +80,8 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        self.home_network = []
-        try:
-            self.home_network.append(
-                self.config.get('parameters', 'home_network')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.home_network = utils.home_network_ranges
-        # convert the ranges into network obj
-        self.home_network = list(map(ipaddress.ip_network, self.home_network))
+
+        self.home_network = utils.get_home_network(self.config)
 
         try:
             self.delete_zeek_files = self.config.get(
@@ -252,11 +234,7 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
-                self.arp_scan_evidence += 1
-                if not self.arp_scan_evidence == 5:
-                    # to reduce the number of arp scan alerts, only alert once every 5 scans
-                    return
-                self.arp_scan_evidence = 0
+
 
                 conn_count = len(daddrs)
                 uids = get_uids()
@@ -300,7 +278,13 @@ class Module(Module, multiprocessing.Process):
             uid=uids,
         )
         # after we set evidence, clear the dict so we can detect if it does another scan
-        self.cache_arp_requests.pop(f'{profileid}_{twid}')
+        try:
+            self.cache_arp_requests.pop(f'{profileid}_{twid}')
+        except KeyError:
+            # when a tw is closed, we clear all its' entries from the cache_arp_requests dict
+            # having keyerr is a result of closing a timewindow before setting an evidence
+            # ignore it
+            pass
 
     def check_dstip_outside_localnet(
         self, profileid, twid, daddr, uid, saddr, ts
@@ -538,7 +522,8 @@ class Module(Module, multiprocessing.Process):
 
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
-                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time range anymore
+                    # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
+                    # range anymore
                     # this copy is made to avoid dictionary changed size during iteration err
                     cache_copy = self.cache_arp_requests.copy()
                     for key in cache_copy:

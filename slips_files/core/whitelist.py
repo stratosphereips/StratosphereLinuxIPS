@@ -1,9 +1,9 @@
 import json
 import configparser
-from .database import __database__
+from slips_files.core.database.database import __database__
 import ipaddress
 import validators
-import requests
+from slips_files.common.slips_utils import utils
 import re
 import os
 
@@ -329,11 +329,10 @@ class Whitelist:
             with open(self.whitelist_path) as whitelist:
                 # Process lines after comments
                 line_number = 0
-                line = whitelist.readline()
-                while line:
+                # line = whitelist.readline()
+                while line := whitelist.readline():
                     line_number += 1
                     if line.startswith('"IoCType"'):
-                        line = whitelist.readline()
                         continue
 
                     # check if the user commented an org, ip or domain that was whitelisted
@@ -378,8 +377,8 @@ class Whitelist:
                                     whitelisted_orgs.pop(org)
                                     break
 
-                        # todo if the user closes slips, changes the whitelist, and reopens slips , slips will still have the old whitelist in the cache!
-                        line = whitelist.readline()
+                        # todo if the user closes slips, changes the whitelist, and reopens slips ,
+                        #  slips will still have the old whitelist in the cache!
                         continue
                     # line should be: ["type","domain/ip/organization","from","what_to_ignore"]
                     line = line.replace('\n', '').replace(' ', '').split(',')
@@ -395,7 +394,6 @@ class Whitelist:
                         self.print(
                             f'Line {line_number} in whitelist.conf is missing a column. Skipping.'
                         )
-                        line = whitelist.readline()
                         continue
 
                     # Validate the type before processing
@@ -419,6 +417,9 @@ class Whitelist:
                                 'what_to_ignore': what_to_ignore,
                             }
                         elif 'org' in type_:
+                            if data not in utils.supported_orgs:
+                                self.print(f"Whitelisted org {data} is not supported in slips")
+                                continue
                             # organizations dicts look something like this:
                             #  {'google': {'from':'dst',
                             #               'what_to_ignore': 'alerts'
@@ -440,9 +441,8 @@ class Whitelist:
                             self.print(f'{data} is not a valid {type_}.', 1, 0)
                     except:
                         self.print(
-                            f'Line {line_number} in whitelist.conf is invalid. Skipping.'
+                            f'Line {line_number} in whitelist.conf is invalid. Skipping. '
                         )
-                    line = whitelist.readline()
         except FileNotFoundError:
             self.print(
                 f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead"
@@ -812,51 +812,6 @@ class Whitelist:
         __database__.set_org_info(org, json.dumps(domains), 'domains')
         return domains
 
-    def get_org_ipranges_online(self, org):
-        return False
-        org_subnets = {}
-        org_info_file = os.path.join(self.org_info_path, org)
-        # see if we can get asn about this org
-        try:
-            url = f'https://asn-lookup.p.rapidapi.com/api&orgname={org}'
-            headers = {
-                'X-RapidAPI-Host': 'asn-lookup.p.rapidapi.com',
-                'X-RapidAPI-Key': self.asnlookup_api_key
-            }
-            response = requests.get(
-                url,
-                headers=headers,
-                timeout=10,
-            )
-            if response.status_code != 200:
-                return
-            ip_space = json.loads(response.text)
-            if not ip_space:
-                return
-
-            with open(org_info_file, 'w') as f:
-                for subnet in ip_space:
-                    # get ipv4 only
-                    if ':' not in subnet and '.' in subnet:
-                        try:
-                            # make sure this line is a valid network
-                            ipaddress.ip_network(subnet)
-                        except ValueError:
-                            # not a valid line, ignore it
-                            continue
-
-                        f.write(subnet + '\n')
-                        first_octet = subnet.split('.')
-                        try:
-                            org_subnets[first_octet].append(subnet)
-                        except KeyError:
-                            org_subnets[first_octet] = [subnet]
-            return org_subnets
-
-        except requests.exceptions.ConnectionError:
-            # Connection reset by peer
-            return
-
     def load_org_IPs(self, org):
         """
         Reads the specified org's info from slips_files/organizations_info and stores the info in the database
@@ -864,6 +819,9 @@ class Whitelist:
         org: 'google', 'facebook', 'twitter', etc...
         returns a list of this organization's subnets
         """
+        if org not in utils.supported_orgs:
+            return
+
         org_info_file = os.path.join(self.org_info_path, org)
         try:
             # Each file is named after the organization's name
@@ -897,9 +855,7 @@ class Whitelist:
 
         except (FileNotFoundError, IOError):
             # there's no slips_files/organizations_info/{org} for this org
-            org_subnets = self.get_org_ipranges_online(org)
-            if not org_subnets:
-                return
+            return
 
         # Store the IPs of this org
         __database__.set_org_info(org, json.dumps(org_subnets), 'IPs')

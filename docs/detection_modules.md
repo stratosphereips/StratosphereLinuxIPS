@@ -376,7 +376,11 @@ Slips is shipped with an offline database (GeoLite2) in ```databases/GeoLite2-AS
 to search for ASNs, if
 the ASN of a given IP is not in the GeoLite2 database, we try to get the ASN online
 using the online database using the ```ipwhois``` library.
-However, to reduce the amount of requests, we retrieve the range of the IP and we cache the whole range. To search and cache the whole range of an IP, the module uses the ipwhois library. The ipwhois library gets the range of this IP by making a connection to the server ```cymru.com``` using a TXT DNS query. The DNS server is the one set up in the operating system. For example to get the ASN of the IP 13.32.98.150, you will see a DNS connection asking for the TXT record of the domain ```150.98.32.13.origin.asn.cymru.com```.
+However, to reduce the amount of requests, we retrieve the range of the IP and we cache the whole range.
+To search and cache the whole range of an IP, the module uses the ipwhois library. 
+The ipwhois library gets the range of this IP by making a connection to the server ```cymru.com``` using a TXT DNS query. 
+The DNS server is the one set up in the operating system. For example to get the ASN of the IP 13.32.98.150, 
+you will see a DNS connection asking for the TXT record of the domain ```150.98.32.13.origin.asn.cymru.com```.
 
 ### Country by Geolocation 
 
@@ -388,8 +392,12 @@ to search for Geolocation.
 Slips is shipped with an offline database ```databases/macaddress-db.json``` for 
 MAC address vendor mapping.
 
-This database is a combination of 2 different online databases, but the format of them
-is changed to a format slips understands and to reduce the size of the db.
+Slips updates this database by default every 2 weeks using the following online db
+
+https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1
+
+You can change how often this db is updated by changing the value of
+```mac_db_update``` in ```slips.conf```.
 
 Slips gets the MAC address of each IP from dhcp.log and arp.log and then searches the offline
 database using the OUI.
@@ -589,10 +597,9 @@ Slips checks both TCP and UDP connections for port scans.
 
 
 Slips considers an IP performing a vertical port scan if it scans 6 or more different
-destination ports
+destination ports, either the connection was established or not established.
 
-We detect a scan every threshold. So we detect when 
-there is 6, 9, 12, etc. destination ports per destination IP.
+We detect when there is 6, 9, 12, etc. scanned destination ports per destination IP.
 
 ### Horizontal port scans
 
@@ -630,7 +637,6 @@ The list below contains all connections made by Slips
 http://useragentstring.com -> For getting user agent info if no info was found in Zeek
 https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-http://asnlookup.com/api/lookup -> For getting ASN info about whitelisted organizations if no info was found in slips_files/
 http://ipinfo.io/json -> For getting your public IP
 https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
 

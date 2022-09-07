@@ -20,7 +20,7 @@ import json
 from datetime import datetime, timedelta
 import sys
 import configparser
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -116,9 +116,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.analysis_direction = get('parameters', 'analysis_direction', 'all')
         self.label = get('parameters', 'label', 'unknown')
 
-        self.home_net = get('parameters', 'home_network', False)
-        if self.home_net:
-            self.home_net = ipaddress.ip_network(self.home_net)
+        self.home_net = utils.get_home_network(self.config)
 
         self.width = get('parameters', 'time_window_width', 3600)
         if 'only_one_tw' in str(self.width):
@@ -558,7 +556,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Zeek can put in column 7 the auth success if it has one
             # or the auth attempts only. However if the auth
             # success is there, the auth attempts are too.
-            if 'success' in line[7]:
+            if 'T' in line[7]:
                 try:
                     self.column_values['auth_success'] = line[7]
                 except IndexError:
@@ -599,7 +597,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['host_key'] = line[17]
                 except IndexError:
                     self.column_values['host_key'] = ''
-            elif 'success' not in line[7]:
+            elif 'T' not in line[7]:
                 self.column_values['auth_success'] = ''
                 try:
                     self.column_values['auth_attempts'] = line[7]
@@ -812,6 +810,8 @@ class ProfilerProcess(multiprocessing.Process):
                     'dmac': line.get('resp_l2_addr', ''),
                 }
             )
+            # orig_bytes: The number of payload bytes the src sent.
+            # orig_ip_bytes: the length of the header + the payload
 
         elif 'dns' in file_type:
             self.column_values.update(
@@ -1018,18 +1018,6 @@ class ProfilerProcess(multiprocessing.Process):
                     'dst_hw': line.get('resp_hw', ''),
                     'src_hw': line.get('orig_hw', ''),
                     'operation': line.get('operation', ''),
-                }
-            )
-        elif 'known_services' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'known_services',
-                    'saddr': line.get('host', ''),
-                    # this file doesn't have a daddr field, but we need it in add_flow_to_profile
-                    'daddr': '0.0.0.0',
-                    'port_num': line.get('port_num', ''),
-                    'port_proto': line.get('port_proto', ''),
-                    'service': line.get('service', ''),
                 }
             )
         elif 'software' in file_type:
@@ -1555,7 +1543,6 @@ class ProfilerProcess(multiprocessing.Process):
             'notice',
             'dhcp',
             'files',
-            'known_services',
             'arp',
             'ftp',
             'smtp',
@@ -1697,21 +1684,23 @@ class ProfilerProcess(multiprocessing.Process):
             self.starttime = self.get_starttime()
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
             self.twid = self.get_timewindow(self.starttime, self.profileid)
-            if self.home_net:
-                # Home. Create profiles for home IPs only
-                if self.saddr_as_obj in self.home_net:
-                    __database__.addProfile(
-                        self.profileid, self.starttime, self.width
-                    )
-                    self.store_features_going_out()
+            if self.home_net != utils.home_network_ranges:
+                for network in self.home_net:
+                    # Home. Create profiles for home IPs only
+                    if self.saddr_as_obj in network:
+                        __database__.addProfile(
+                            self.profileid, self.starttime, self.width
+                        )
+                        self.store_features_going_out()
 
-                if self.analysis_direction == 'all':
-                    # in all mode we create profiled for daddrs too
-                    if self.daddr_as_obj in self.home_net:
-                        self.handle_in_flows()
+                    if self.analysis_direction == 'all':
+                        # in all mode we create profiled for daddrs too
+                        if self.daddr_as_obj in network:
+                            self.handle_in_flows()
+            else:
 
-            elif not self.home_net:
-                # No home. Create profiles for everybody
+                # home_network param wasn't set in slips.conf.
+                # Create profiles for everybody
                 __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
@@ -1955,20 +1944,6 @@ class ProfilerProcess(multiprocessing.Process):
         to_send = json.dumps(to_send)
         __database__.publish('new_downloaded_file', to_send)
 
-    def handle_known_services(self, ):
-        # Send known_services.log data to new_service channel in flowalerts module
-        to_send = {
-            'uid': self.uid,
-            'saddr': self.saddr,
-            'port_num': self.column_values['port_num'],
-            'port_proto': self.column_values['port_proto'],
-            'service': self.column_values['service'],
-            'profileid': self.profileid,
-            'twid': self.twid,
-            'ts': self.starttime,
-        }
-        to_send = json.dumps(to_send)
-        __database__.publish('new_service', to_send)
 
     def handle_arp(self):
         to_send = {
@@ -2025,7 +2000,6 @@ class ProfilerProcess(multiprocessing.Process):
             'ftp': self.handle_ftp,
             'smtp': self.handle_smtp,
             'files': self.handle_files,
-            'known_services': self.handle_known_services,
             'arp': self.handle_arp,
             'dhcp': self.handle_dhcp,
             'software': self.handle_software
@@ -2036,7 +2010,7 @@ class ProfilerProcess(multiprocessing.Process):
             # call the function that handles this flow
             cases[self.flow_type]()
         except KeyError:
-            # does flow contain a part of the key
+            # does flow contain a part of the key?
             for flow in cases:
                 if flow in self.flow_type:
                     cases[flow]()

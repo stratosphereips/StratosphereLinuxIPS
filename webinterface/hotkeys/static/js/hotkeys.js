@@ -164,10 +164,10 @@ let profiles = function () {
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
-            { data: 'dns_resolution' },
             { data: 'preposition' },
             { data: 'daddr',
             "className": 'daddr'},
+            { data: 'dns_resolution' },
             { data: 'dport/proto' },
             { data: 'state' },
             { data: 'Sent' },

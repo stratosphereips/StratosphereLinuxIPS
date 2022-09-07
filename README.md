@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.9.3
+Slips v0.9.5
 
 
 <h3 align="center"> 
@@ -58,24 +58,25 @@ The following table summarizes all active modules in Slips, its status and purpo
 
 |   Module            | Status | Description | 
 | --------------------|   :-:  |------------ |  
-| https               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
-| port scan detector  |   ✅   | detects horizontal and vertical port scans |
-| rnn-cc-detection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
-| flowalerts          |   ✅   | detects a malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |
-| flowmldetection     |   ✅   | detects malicious flows using ML pretrained models |
-| leak_detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
-| threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
+| HTTPS               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
+| Port scan detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
+| RNN C&C etection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
+| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |
+| Flow ML detection   |   ✅   | detects malicious flows using ML pretrained models |
+| Leak detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
+| Threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
 | ARP                 |   ✅   | checks for ARP attacks in ARP traffic  |
-| timeline            |   ✅   | creates a timeline of what happened in the network based on all the flows and type of data available  |
+| Timeline            |   ✅   | creates a timeline of what happened in the network based on all the flows and type of data available  |
 | VirusTotal          |   ✅   | lookups IP addresses on VirusTotal |
 | RiskIQ              |   ✅   | lookups IP addresses on RiskIQ  |
-| IP_Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
+| IP Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
 | CESNET              |   ✅   | sends and receives alerts from CESNET Warden servers |
-| ExportingAlerts     |   ✅   | exports alerts to Slack or STIX format |
-| http_analyzer       |   ✅   | analyzes HTTP traffic |
-| blocking            |   ✅   | blocks malicious IPs connecting to the device |
+| Exporting Alerts    |   ✅   | exports alerts to Slack or STIX format |
+| HTTP analyzer       |   ✅   | analyzes HTTP traffic |
+| Blocking            |   ✅   | blocks malicious IPs connecting to the device |
 | P2P                 |   ✅   | shares network detections with other Slips peers in the local network |
 | Kalipso             |   ✅   | Slips console graphical user interface to show detection with graphs and tables |
+| Web Interface       |   ✅   | Slips web graphical user interface to show detections and timeline |
 
 # Installation
 
@@ -298,7 +299,7 @@ Follow the official installation guide from [Zeek Website](https://zeek.org/get-
 
 ### Installing Redis
 
-Slips needs Redis for interprocess communication. Redis can be installed directly in the
+Slips needs Redis >= 7.0.4 for interprocess communication. Redis can be installed directly in the
 host computer or can be run using Docker.
 
 Starting, stopping managing of redis DBs is done automatically by Slips. 
@@ -318,7 +319,25 @@ you are ready to run Slips. Copy pcap files or other flow files in the ./dataset
     ./slips.py -c slips.conf -f dataset/myfile.pcap
 ```
 
+## Viewing Slips Output
 
+You can view slips output using kalipso in your terminal using:
+
+   ./kalipso.sh
+
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/kalipso.png" width="850px"
+title="Kalispo GUI">
+
+Or use Slips' web interface by using:
+
+   ./webinteface.sh
+
+Then navigate to ```http://localhost:55000/``` from your browser.
+
+
+<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
+title="Web Interface">
 
 ## P2P Module
 The peer to peer system os Slips is a highly complex automatic system to find other peers in the network and share data on IoC automatically in a balanced, trusted way. You just have to enable the P2P system. Please check the documentation [here](../docs/P2P.md)

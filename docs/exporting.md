@@ -26,10 +26,13 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 5.2 In the navigation menu, choose the OAuth & Permissions feature.
 5.3 Scroll down to the Scopes section, and pick channels:read and chat:write from the drop down menu.
 5.4 Scroll back to the top of this page and look for the button that says Install App to Workspace (or Reinstall App if you've done this before). Click it.
-6. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the messae when you add an integration in the channel), and click 'Add this app to a channel'.
-7. Edit the slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
+6. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the message when you add an integration in the channel), and click 'Add this app to a channel'.
+7. Add your slack bot token to the path specified by ```slack_api_path``` in slips.conf, 
+by default the path is  ```modules/exporting_alerts/slack_bot_token_secret```. the file should contain 
+your API key in a single line .
+8. Edit the slips.conf file, put `slack` in the export_to variable, and add the channel's name to which you want to send.
 
-    [ExportingAlerts]
+    [exporting_alerts]
     export_to = [slack]
     slack_channel_name = SlipsAlertsChannel
 

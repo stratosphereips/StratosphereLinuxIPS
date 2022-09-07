@@ -1,7 +1,7 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
 
@@ -467,7 +467,7 @@ class Module(Module, multiprocessing.Process):
             twid,
             uid
     ):
-        if resp_mime_types and 'application/x-dosexec' not in resp_mime_types:
+        if not resp_mime_types or not ('application/x-dosexec' in resp_mime_types):
             return False
 
         type_detection = 'dstdomain'
@@ -494,6 +494,7 @@ class Module(Module, multiprocessing.Process):
             twid=twid,
             uid=uid,
         )
+        return True
 
 
     def shutdown_gracefully(self):
@@ -582,8 +583,6 @@ class Module(Module, multiprocessing.Process):
                         timestamp,
                         uid
                     )
-
-
 
                     self.detect_binary_downloads(
                         resp_mime_types,

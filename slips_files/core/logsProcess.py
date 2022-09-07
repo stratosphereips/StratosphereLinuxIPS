@@ -18,13 +18,11 @@
 
 import multiprocessing
 import sys
-from datetime import datetime
-from datetime import timedelta
 from slips_files.common.slips_utils import utils
 import os
 import threading
 import time
-from .database import __database__
+from slips_files.core.database.database import __database__
 import configparser
 import json
 
@@ -272,8 +270,7 @@ class LogsProcess(multiprocessing.Process):
                         state = flow.get('state', '')
                         critical_warning = flow.get('critical warning', '')
                         trusted = flow.get('Trusted', '')
-                        if state == 'notestablished':
-                            state = 'not established'
+                        if state.lower() == 'not established':
                             if 'UDP' in dport:
                                 state = 'not answered'
                         to_print += f'{ts} : {dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'

@@ -19,7 +19,7 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
-    from slips_files.core.database import __database__
+    from slips_files.core.database.database import __database__
 
     config = configparser.ConfigParser()
     __database__.start(config, 6381)
@@ -125,7 +125,7 @@ def test_add_ips(outputQueue):
         'sbytes': 30,
         'bytes': 30,
         'spkts': 70,
-        'state': 'notestablished',
+        'state': 'Not Established',
         'uid': '1234',
         'proto': 'TCP',
         'saddr': '8.8.8.8',
@@ -154,7 +154,7 @@ def test_add_port(outputQueue):
         'sbytes': 30,
         'bytes': 30,
         'spkts': 70,
-        'state': 'notestablished',
+        'state': 'Not Established',
         'proto': 'TCP',
         'saddr': '8.8.8.8',
         'daddr': test_ip,
@@ -164,8 +164,8 @@ def test_add_port(outputQueue):
     database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
     hash_key = profileid + '_' + twid
     added_ports = database.r.hgetall(hash_key)
-    assert 'DstPortsServerTCPEstablished' in added_ports.keys()
-    assert test_ip in added_ports['DstPortsServerTCPEstablished']
+    assert 'DstPortsServerTCPNot Established' in added_ports.keys()
+    assert test_ip in added_ports['DstPortsServerTCPNot Established']
 
 
 def test_setEvidence(outputQueue):
