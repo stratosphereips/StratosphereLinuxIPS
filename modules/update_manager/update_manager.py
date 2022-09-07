@@ -3,11 +3,11 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 import sys
 
 # Your imports
 import asyncio
-import configparser
 from modules.update_manager.timer_manager import InfiniteTimer
 from modules.update_manager.update_file_manager import UpdateFileManager
 
@@ -43,20 +43,8 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timeout = 0.000001
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        try:
-            # update period
-            self.update_period = self.config.get(
-                'threatintelligence', 'malicious_data_update_period'
-            )
-            self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400
+        self.update_period = conf.update_period()
+
 
     def print(self, text, verbose=1, debug=0):
         """

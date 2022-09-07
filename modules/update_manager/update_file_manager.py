@@ -78,7 +78,8 @@ class UpdateFileManager:
             if not RiskIQ_credentials_path:
                 return
 
-            RiskIQ_credentials_path  = os.path.join(os.getcwd(), RiskIQ_credentials_path)
+            RiskIQ_credentials_path  = os.path.join(os.getcwd(),
+                                                    RiskIQ_credentials_path)
             if not os.path.exists(RiskIQ_credentials_path):
                 return
 

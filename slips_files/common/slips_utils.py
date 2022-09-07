@@ -58,19 +58,6 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S'
 
-    def read_configuration(self, config, section, name, default_value):
-        """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
-        try:
-            return config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            return default_value
-
     def sanitize(self, string):
         """
         Sanitize strings taken from the user

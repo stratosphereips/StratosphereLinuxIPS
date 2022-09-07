@@ -1,9 +1,9 @@
 # Must imports
-import configparser
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 import sys
 
 # Your imports
@@ -72,30 +72,8 @@ class Module(Module, multiprocessing.Process):
         self.incorrect_API_key = False
 
     def __read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            self.key_file = self.config.get('virustotal', 'api_key_file')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.key_file = None
-        try:
-            # update period
-            self.update_period = self.config.get(
-                'virustotal', 'virustotal_update_period'
-            )
-            self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 259200
+        self.key_file = conf.vt_api_key_file()
+        self.update_period = conf.virustotal_update_period()
 
     def print(self, text, verbose=1, debug=0):
         """
