@@ -32,17 +32,9 @@ class Module(Module, multiprocessing.Process):
         self.config = config
         # Start the DB
         __database__.start(self.config, redis_port)
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
         self.c1 = __database__.subscribe('new_blocking')
         self.os = platform.system()
         if self.os == 'Darwin':
-            # blocking isn't supported, exit module
             self.print('Mac OS blocking is not supported yet.')
             sys.exit()
         self.timeout = 0.00000001

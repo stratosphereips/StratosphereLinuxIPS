@@ -115,6 +115,14 @@ class ConfigParser(object):
             False if 'no' in delete.lower() else True
         )
 
+    def store_zeek_files_copy(self):
+        store_copy = self.read_configuration(
+                'parameters', 'store_a_copy_of_zeek_files', 'yes'
+            )
+        return (
+            False if 'no' in store_copy.lower() else True
+        )
+
     def get_tw_width(self, ):
         twid_width = self.read_configuration(
             'parameters', 'time_window_width', 3600
@@ -173,6 +181,25 @@ class ConfigParser(object):
             False if 'no' in use_p2p.lower() else True
         )
 
+
+    def cesnet_conf_file(self):
+        file = self.read_configuration(
+            'CESNET', 'configuration_file', False
+        )
+        return file
+
+    def poll_delay(self):
+        poll_delay = self.read_configuration(
+            'CESNET', 'receive_delay', 86400
+        )
+        try:
+            poll_delay = int(poll_delay)
+        except ValueError:
+            # By default push every 1 day
+            poll_delay = 86400
+
+        return poll_delay
+
     def send_to_warden(self):
         send_to_warden = self.read_configuration(
             'CESNET', 'send_alerts', 'no'
@@ -209,9 +236,95 @@ class ConfigParser(object):
             debug = int(debug)
             if debug < 0:
                 debug = 0
-            return debug
         except ValueError:
-            return 0
+            debug = 0
+        return debug
+
+    def export_to(self):
+        export_to = self.read_configuration(
+            'exporting_alerts', 'export_to', '[]'
+        )\
+            .replace(']','')\
+            .replace('[','')\
+            .replace(' ', '')\
+            .lower().split(',')
+        return export_to
+
+    def slack_token_filepath(self):
+        file = self.read_configuration(
+            'exporting_alerts', 'slack_api_path', False
+        )
+        return file
+
+    def slack_channel_name(self):
+        channel = self.read_configuration(
+            'exporting_alerts', 'slack_channel_name', False
+        )
+        return channel
+
+    def sensor_name(self):
+        sensor = self.read_configuration(
+            'exporting_alerts', 'sensor_name', False
+        )
+        return sensor
+
+
+    def taxii_server(self):
+        return self.read_configuration(
+            'exporting_alerts', 'TAXII_server', False
+        )
+
+    def taxii_port(self):
+        return self.read_configuration(
+            'exporting_alerts', 'port', False
+        )
+
+    def use_https(self):
+        use_https = self.read_configuration(
+            'exporting_alerts', 'use_https', 'false'
+        )
+        return True if use_https.lower() == 'true' else False
+
+    def discovery_path(self):
+        return self.read_configuration(
+            'exporting_alerts', 'discovery_path', False
+        )
+
+    def inbox_path(self):
+        return self.read_configuration(
+            'exporting_alerts', 'inbox_path', False
+        )
+
+    def push_delay(self):
+        delay = self.read_configuration(
+            'exporting_alerts', 'push_delay', 60*60
+        )
+        try:
+            delay = float(delay)
+        except ValueError:
+            delay = 60*60
+        return delay
+
+    def collection_name(self):
+        return self.read_configuration(
+            'exporting_alerts', 'collection_name', False
+        )
+
+    def taxii_username(self):
+        return self.read_configuration(
+            'exporting_alerts', 'taxii_username', False
+        )
+
+    def taxii_password(self):
+        return self.read_configuration(
+            'exporting_alerts', 'taxii_password', False
+        )
+
+    def jwt_auth_url(self):
+        return self.read_configuration(
+            'exporting_alerts', 'jwt_auth_url', False
+        )
+
 
     def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
@@ -228,12 +341,7 @@ class ConfigParser(object):
         )
 
         # Ignore exporting alerts module if export_to is empty
-        export_to = (
-            self.read_configuration('exporting_alerts', 'export_to', '[]')
-                .rstrip('][')
-                .replace(' ', '')
-                .lower()
-        )
+        export_to = self.export_to()
         if (
                 'stix' not in export_to
                 and 'slack' not in export_to

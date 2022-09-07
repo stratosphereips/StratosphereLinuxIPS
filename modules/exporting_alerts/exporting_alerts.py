@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 
 # Your imports
 import multiprocessing
@@ -31,11 +32,11 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, config, redis_port):
         multiprocessing.Process.__init__(self)
+        self.port = None
         self.outputqueue = outputqueue
         self.config = config
         __database__.start(self.config, redis_port)
         self.c1 = __database__.subscribe('export_evidence')
-        # Get config variables
         self.read_configuration()
         if 'slack' in self.export_to:
             self.get_slack_token()
@@ -49,77 +50,27 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         """Read the configuration file for what we need"""
 
-        def get(section, value, default_value=False):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
         # Available options ['slack','stix']
-        self.export_to = get('exporting_alerts', 'export_to', False)
-        if self.export_to:
-            self.export_to = self.export_to\
-                .strip('][')\
-                .replace(' ', '')\
-                .lower()\
-                .split(',')
+        self.export_to = conf.export_to()
 
         if 'slack' in self.export_to:
-            self.slack_token_filepath = get(
-                'exporting_alerts',
-                'slack_api_path',
-            )
-            self.slack_channel_name = get(
-                'exporting_alerts',
-                'slack_channel_name',
-                False)
-            self.sensor_name = get(
-                'exporting_alerts',
-                'sensor_name'
-            )
+            self.slack_token_filepath = conf.slack_token_filepath()
+            self.slack_channel_name = conf.slack_channel_name()
+            self.sensor_name = conf.sensor_name()
 
         if 'stix' in self.export_to:
-            self.TAXII_server = get('exporting_alerts',
-                                    'TAXII_server')
-            # taxii server port
-            self.port = get('exporting_alerts',
-                            'port')
-            self.use_https = get('exporting_alerts',
-                                 'use_https', 'false')
-            self.use_https = True  if self.use_https.lower() == 'true' else False
-            self.discovery_path = get('exporting_alerts',
-                                      'discovery_path')
-            self.inbox_path = get('exporting_alerts',
-                                  'inbox_path')
+            self.TAXII_server = conf.taxii_server()
+            self.port = conf.taxii_port()
+            self.use_https = conf.use_https()
+            self.discovery_path = conf.discovery_path()
+            self.inbox_path = conf.inbox_path()
+            self.push_delay = conf.push_delay()
+            self.collection_name = conf.collection_name()
+            self.taxii_username = conf.taxii_username()
+            self.taxii_password = conf.taxii_password()
+            self.jwt_auth_url = conf.jwt_auth_url()
             # push delay exists -> create thread that waits
             # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
-            self.push_delay = get('exporting_alerts',
-                                  'push_delay',
-                                  60*60)
-            self.collection_name = get(
-                'exporting_alerts',
-                'collection_name'
-            )
-            self.taxii_username = get(
-                'exporting_alerts',
-                'taxii_username'
-            )
-            self.taxii_password = get(
-                'exporting_alerts', 'taxii_password'
-            )
-            self.jwt_auth_url = get(
-                'exporting_alerts', 'jwt_auth_url'
-            )
 
     def get_slack_token(self):
         if not hasattr(self, 'slack_token_filepath'):
@@ -131,7 +82,8 @@ class Module(Module, multiprocessing.Process):
                 self.BOT_TOKEN = f.read()
         except FileNotFoundError:
             self.print(
-                'Please add slack bot token to modules/exporting_alerts/slack_bot_token_secret. Stopping.'
+                f'Please add slack bot token to '
+                f'{self.slack_token_filepath}. Stopping.'
             )
             # Stop the module
             self.shutdown_gracefully()

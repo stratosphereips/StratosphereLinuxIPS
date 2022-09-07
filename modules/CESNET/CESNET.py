@@ -4,6 +4,7 @@ import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
+from slips_files.common.config_parser import conf
 
 # Your imports
 from ..CESNET.warden_client import Client, read_cfg
@@ -59,27 +60,17 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         """Read importing/exporting preferences from slips.conf"""
 
-        self.send_to_warden = self.config.get('CESNET', 'send_alerts').lower()
-
-        self.receive_from_warden = self.config.get(
-            'CESNET', 'receive_alerts'
-        ).lower()
-        if 'yes' in self.receive_from_warden:
+        self.send_to_warden = conf.send_to_warden()
+        self.receive_from_warden = conf.receive_from_warden()
+        if self.receive_from_warden:
             # how often should we get alerts from the server?
-            try:
-                self.poll_delay = int(
-                    self.config.get('CESNET', 'receive_delay')
-                )
-            except ValueError:
-                # By default push every 1 day
-                self.poll_delay = 86400
+            self.poll_delay = conf.poll_delay()
 
-        self.configuration_file = self.config.get(
-            'CESNET', 'configuration_file'
-        )
+        self.configuration_file = conf.cesnet_conf_file()
         if not os.path.exists(self.configuration_file):
             self.print(
-                f"Can't find warden.conf at {self.configuration_file}. Stopping module."
+                f"Can't find warden.conf at {self.configuration_file}. "
+                f"Stopping module."
             )
             self.stop_module = True
 
