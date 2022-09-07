@@ -1,13 +1,4 @@
-import hashlib
 from datetime import datetime, timezone, timedelta
-import validators
-from git import Repo
-import socket
-import subprocess
-import json
-import time
-import platform
-import os
 import sys
 import ipaddress
 import configparser
@@ -324,6 +315,49 @@ class ConfigParser(object):
         return self.read_configuration(
             'exporting_alerts', 'jwt_auth_url', False
         )
+
+
+    def long_connection_threshold(self):
+        """
+        returns threshold in seconds
+        """
+        # 1500 is in seconds, =25 mins
+        threshold = self.read_configuration(
+            'flowalerts', 'long_connection_threshold', 1500
+        )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 1500
+        return threshold
+
+    def ssh_succesful_detection_threshold(self):
+        """
+        returns threshold in seconds
+        """
+        threshold =  self.read_configuration(
+            'flowalerts', 'ssh_succesful_detection_threshold', 4290
+        )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 4290
+
+        return threshold
+
+    def data_exfiltration_threshold(self):
+        """
+        returns threshold in MBs
+        """
+        # threshold in MBs
+        threshold =  self.read_configuration(
+        'flowalerts', 'data_exfiltration_threshold', 500
+        )
+        try:
+            threshold = int(threshold)
+        except ValueError:
+            threshold = 500
+        return threshold
 
 
     def get_disabled_modules(self, input_type) -> list:
