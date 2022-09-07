@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 import sys
 
 # Your imports
@@ -59,26 +60,9 @@ class Module(Module, multiprocessing.Process):
                     self.cached_ipv6_ranges[first_octet] = [range]
 
     def __read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            # Read the path to where to store and read the malicious files
-            self.path_to_local_threat_intelligence_data = self.config.get(
-                'threatintelligence',
-                'download_path_for_local_threat_intelligence',
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.path_to_local_threat_intelligence_data = (
-                'modules/threat_intelligence/local_data_files/'
-            )
-
-        if not os.path.exists(self.path_to_local_threat_intelligence_data):
-            os.mkdir(self.path_to_local_threat_intelligence_data)
+        self.path_to_local_ti_files = conf.local_ti_data_path()
+        if not os.path.exists(self.path_to_local_ti_files):
+            os.mkdir(self.path_to_local_ti_files)
 
     def set_evidence_malicious_ip(
         self,
@@ -537,10 +521,10 @@ class Module(Module, multiprocessing.Process):
             # The remote files are being loaded by the update_manager
             # check if we should update the files
             if not self.check_local_ti_files_for_update(
-                self.path_to_local_threat_intelligence_data
+                self.path_to_local_ti_files
             ):
                 self.print(
-                    f'Could not load the local TI files {self.path_to_local_threat_intelligence_data}'
+                    f'Could not load the local TI files {self.path_to_local_ti_files}'
                 )
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
