@@ -35,8 +35,6 @@ class GuiProcess(multiprocessing.Process):
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.config = config
-        # Read the configuration
-        self.read_configuration()
         self.redis_port = redis_port
 
     def print(self, text, verbose=1, debug=0):

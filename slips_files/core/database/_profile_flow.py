@@ -1,19 +1,9 @@
-import os
-import signal
-import redis
 import time
 import json
-from typing import Tuple
-import configparser
 import traceback
-import subprocess
-from datetime import datetime
 import ipaddress
 import sys
 import validators
-import ast
-from uuid import uuid4
-from slips_files.common.slips_utils import utils
 
 
 class ProfilingFlowsDatabase(object):

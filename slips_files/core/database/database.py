@@ -187,65 +187,10 @@ class Database(ProfilingFlowsDatabase, object):
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
-        """
-        Read values from the configuration file
-        """
-        try:
-            deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
-            self.deletePrevdb = deletePrevdbText != 'False'
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-            KeyError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.deletePrevdb = True
-
-        try:
-            data = self.config.get('parameters', 'time_window_width')
-            self.width = float(data)
-        except ValueError:
-            # Its not a float
-            if 'only_one_tw' in data:
-                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                self.width = 9999999999
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no
-            # configuration file specified
-            # 1h
-            self.width = 3600
-
-        # Read disabled detections from slips.conf
-        # get the configuration for this alert
-        try:
-            self.disabled_detections = self.config.get(
-                'DisabledAlerts', 'disabled_detections'
-            )
-            self.disabled_detections = (
-                self.disabled_detections.replace('[', '')
-                .replace(']', '')
-                .replace(',', '')
-                .split()
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-            KeyError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # if we failed to read a value, it will be enabled by default.
-            self.disabled_detections = []
-
-        # get home network from slips.conf
+        self.deletePrevdb = conf.deletePrevdb()
+        self.disabled_detections = conf.disabled_detections()
         self.home_network = conf.get_home_network()
+        # self.width = conf.get_tw_width_as_float()
 
     def start(self, config, redis_port):
         """Start the DB. Allow it to read the conf"""
