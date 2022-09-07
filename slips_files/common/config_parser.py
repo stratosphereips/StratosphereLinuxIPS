@@ -21,7 +21,7 @@ class ConfigParser(object):
 
     def __init__(self):
         self.args = self.get_args()
-        self.read_config_file()
+        self.config = self.read_config_file()
         self.home_network_ranges = (
             '192.168.0.0/16',
             '172.16.0.0/12',
@@ -35,12 +35,13 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf is the default file
         """
-        self.config = configparser.ConfigParser(interpolation=None)
+        config = configparser.ConfigParser(interpolation=None)
         try:
             with open(self.args.config) as source:
-                self.config.read_file(source)
+                config.read_file(source)
         except (IOError, TypeError):
             pass
+        return config
 
     def get_args(self):
         """

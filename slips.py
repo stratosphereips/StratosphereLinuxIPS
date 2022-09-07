@@ -68,7 +68,7 @@ class Main:
             self.pid = os.getpid()
             self.args = conf.get_args()
             # set self.config
-            self.read_conf_file()
+            self.config = conf.read_config_file()
             self.check_given_flags()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -1062,20 +1062,6 @@ class Main:
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
 
-
-    def read_conf_file(self):
-        """
-        sets self.config
-        """
-        # don't use '%' for interpolation.
-        self.config = configparser.ConfigParser(interpolation=None)
-        try:
-            with open(self.args.config) as source:
-                self.config.read_file(source)
-        except (IOError, TypeError):
-            pass
-
-        return self.config
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
