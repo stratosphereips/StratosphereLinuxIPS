@@ -3,6 +3,7 @@ import sys
 import ipaddress
 import configparser
 from slips_files.common.argparse import ArgumentParser
+from slips_files.common.slips_utils import utils
 
 
 class ConfigParser(object):
@@ -359,6 +360,108 @@ class ConfigParser(object):
             threshold = 500
         return threshold
 
+    def get_ml_mode(self):
+        return self.read_configuration(
+            'flowmldetection', 'mode', 'test'
+        )
+
+    def RiskIQ_credentials_path(self):
+        return self.read_configuration(
+            'threatintelligence', 'RiskIQ_credentials_path', ''
+        )
+
+    def local_ti_data_path(self):
+        return self.read_configuration(
+            'threatintelligence',
+            'download_path_for_local_threat_intelligence',
+            'modules/threat_intelligence/local_data_files/'
+        )
+
+
+    def remote_ti_data_path(self):
+        path = self.read_configuration(
+            'threatintelligence',
+            'download_path_for_remote_threat_intelligence',
+            'modules/threat_intelligence/remote_data_files/'
+        )
+        return utils.sanitize(path)
+
+    def ti_files(self):
+        feeds = self.read_configuration(
+            'threatintelligence',
+            'ti_files',
+            False
+        )
+        if feeds:
+            return feeds.split('\n')
+        return {}
+
+    def ja3_feeds(self):
+        feeds = self.read_configuration(
+            'threatintelligence',
+            'ja3_feeds',
+            False
+        )
+        if feeds:
+            return feeds.split('\n')
+        return {}
+
+    def ssl_feeds(self):
+        feeds = self.read_configuration(
+            'threatintelligence',
+            'ssl_feeds',
+            False
+        )
+        if feeds:
+            return feeds.split('\n')
+        return {}
+
+    def timeline_human_timestamp(self):
+        return self.read_configuration(
+            'modules', 'timeline_human_timestamp', False
+        )
+
+    def analysis_direction(self):
+        return self.read_configuration(
+             'parameters', 'analysis_direction', False
+        )
+
+    def update_period(self):
+        update_period =  self.read_configuration(
+             'threatintelligence', 'malicious_data_update_period', 86400
+        )
+        try:
+            update_period = float(update_period)
+        except ValueError:
+            update_period = 86400   # 1 day
+        return update_period
+
+    def riskiq_update_period(self):
+        update_period =  self.read_configuration(
+             'threatintelligence', 'update_period', 604800
+        )
+        try:
+            update_period = float(update_period)
+        except ValueError:
+            update_period = 604800   # 1 week
+        return update_period
+
+    def mac_db_update_period(self):
+        update_period =  self.read_configuration(
+             'threatintelligence', 'mac_db_update', 1209600
+        )
+        try:
+            update_period = float(update_period)
+        except ValueError:
+            update_period = 1209600   # 2 weeks
+        return update_period
+
+
+    def mac_db_link(self):
+        return utils.sanitize(self.read_configuration(
+             'threatintelligence', 'mac_db', ''
+        ))
+
 
     def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
@@ -388,7 +491,8 @@ class ConfigParser(object):
         ):
             to_ignore.append('p2ptrust')
 
-        # ignore CESNET sharing module if send and receive are disabled in slips.conf
+        # ignore CESNET sharing module if send and receive are
+        # disabled in slips.conf
         send_to_warden = self.send_to_warden()
         receive_from_warden = self.receive_from_warden()
 
@@ -407,6 +511,7 @@ class ConfigParser(object):
             to_ignore.append('leak_detector')
 
         return to_ignore
+
 
 
 conf = ConfigParser()
