@@ -18,7 +18,6 @@ import time
 import _thread
 import sys
 import validators
-import configparser
 
 class Module(Module, multiprocessing.Process):
     """

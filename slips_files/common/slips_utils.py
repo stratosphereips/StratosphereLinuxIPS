@@ -71,6 +71,17 @@ class Utils(object):
             # There is a conf, but there is no option, or no section or no configuration file specified
             return default_value
 
+    def sanitize(self, string):
+        """
+        Sanitize strings taken from the user
+        """
+        string = string.replace(';', '')
+        string = string.replace('\`', '')
+        string = string.replace('&', '')
+        string = string.replace('|', '')
+        string = string.replace('$(', '')
+        string = string.replace('\n', '')
+        return string
 
     def detect_data_type(self, data):
         """Detects if incoming data is ipv4, ipv6, domain or ip range"""
