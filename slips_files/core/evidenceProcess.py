@@ -128,7 +128,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
             f'Detection Threshold: {self.detection_threshold} '
-            f'attacks per minute ({self.detection_threshold * self.width / 60} '
+            f'attacks per minute ({self.detection_threshold * int(self.width) / 60} '
             f'in the current time window width)',2,0,
         )
 
