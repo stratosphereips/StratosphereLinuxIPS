@@ -9,7 +9,7 @@ app.config['JSON_SORT_KEYS'] = False  # disable sorting of timewindows
 
 @app.route('/')
 def index():
-    return render_template('base.html', title='Slips')
+    return render_template('app.html', title='Slips')
 
 @app.route('/info')
 def set_pcap_info():
