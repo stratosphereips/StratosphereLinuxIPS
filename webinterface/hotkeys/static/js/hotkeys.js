@@ -416,7 +416,9 @@ $('#table_timeline_filter_button').click(function(){
     else{hotkeys.search_reload(filter_gender);}
 });
 
-
+function updateTable(){
+    hotkeys.update_hook()
+}
 
 
 function KeyPress(e) {
@@ -430,6 +432,7 @@ function KeyPress(e) {
         active_timewindow_index += 1
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
+        updateTable()
     }
     if (evtobj.keyCode == 80 && evtobj.ctrlKey){
         var table = $(active_tw_id).DataTable();
@@ -440,6 +443,7 @@ function KeyPress(e) {
         active_timewindow_index -= 1;
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
+        updateTable()
     }
 }
 
