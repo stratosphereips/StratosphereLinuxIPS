@@ -27,7 +27,7 @@ let profiles = function () {
         scrollCollapse: true,
         paging:false,
         info: false,
-        ajax: '/hotkeys/profiles_tws',
+        ajax: '/analysis/profiles_tws',
         columns: [
             {
                 data: 'profile',
@@ -77,7 +77,7 @@ let profiles = function () {
                 }
                 else {
                     row.child(add_table_tws(profile_id_dash)).show();
-                    let ajax_ljnk = '/hotkeys/tws/' + profile_id;
+                    let ajax_ljnk = '/analysis/tws/' + profile_id;
                     let table_tws = $(table_id_tw).DataTable({
                         "ajax":ajax_ljnk,
                         "bDestroy": true,
@@ -124,7 +124,7 @@ let profiles = function () {
         onclick_ips: function () {
             $('#profiles ').on('click', 'tbody td.r', function () {
                 let data = profiles_table.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.profile
+                let url = '/analysis/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
         },
@@ -265,7 +265,7 @@ let profiles = function () {
 
     function update_table(){
         if(active_profile && active_timewindow){
-            let link = "/hotkeys/" + active_hotkey_name + "/" + active_profile + "/" + active_timewindow
+            let link = "/analysis/" + active_hotkey_name + "/" + active_profile + "/" + active_timewindow
             active_hotkey_table.ajax.url(link).load();}
         document.getElementById(active_hotkey_name).style.display = "block"
     }
@@ -302,7 +302,7 @@ let profiles = function () {
         },
 
         search_reload: function(filter_parameter){
-           let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+           let link = "/analysis/" + active_hotkey_name + "/" + profile + "/" + timewindow
             if (filter_parameter){ link += "/" + filter_parameter; }
             active_hotkey_table.ajax.url(link).load();
         },
@@ -323,7 +323,7 @@ let profiles = function () {
         onclick_timeline_flows_saddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.saddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.saddr;
+                let url = '/analysis/info/' + data.saddr;
                 ipinfo.ajax.url(url).load();
             })
         },
@@ -331,7 +331,7 @@ let profiles = function () {
         onclick_timeline_flows_daddr: function () {
         $('#table_timeline_flows ').on('click', 'tbody td.daddr', function () {
                 let data = timeline_flows.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.daddr;
+                let url = '/analysis/info/' + data.daddr;
                 ipinfo.ajax.url(url).load();
             })
         },
@@ -339,7 +339,7 @@ let profiles = function () {
         onclick_timeline_daddr: function () {
         $('#table_timeline ').on('click', 'tbody td.daddr', function () {
                 let data = timeline.row($(this).parents('tr')).data();
-                let url = '/hotkeys/info/' + data.daddr;
+                let url = '/analysis/info/' + data.daddr;
                 ipinfo.ajax.url(url).load();
             })
         },
@@ -370,7 +370,7 @@ let profiles = function () {
                             { data: 'description'}
                         ]
                     });
-                    let link = "/hotkeys/evidence/" + active_profile + "/" + active_timewindow + "/" + row.data()["alert_id"]
+                    let link = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + row.data()["alert_id"]
                     evidence.ajax.url(link).load();
                     tr.addClass('shown');
                 }
