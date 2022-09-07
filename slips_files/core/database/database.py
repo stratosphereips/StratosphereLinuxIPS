@@ -245,7 +245,7 @@ class Database(ProfilingFlowsDatabase, object):
             self.disabled_detections = []
 
         # get home network from slips.conf
-        self.home_network = conf.get_home_network(self.config)
+        self.home_network = conf.get_home_network()
 
     def start(self, config, redis_port):
         """Start the DB. Allow it to read the conf"""

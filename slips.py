@@ -78,7 +78,7 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
-                self.twid_width = conf.get_tw_width(self.config)
+                self.twid_width = conf.get_tw_width()
 
 
     def prepare_zeek_output_dir(self):

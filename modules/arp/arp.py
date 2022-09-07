@@ -82,7 +82,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
 
-        self.home_network = conf.get_home_network(self.config)
+        self.home_network = conf.get_home_network()
         try:
             self.delete_zeek_files = self.config.get(
                 'parameters', 'delete_zeek_files'
