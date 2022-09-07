@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import os
@@ -96,37 +97,10 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
-        self.packet_filter = get('parameters', 'pcapfilter',  'ip or not ip')
-
-        self.tcp_inactivity_timeout = get('parameters', 'tcp_inactivity_timeout', '5')
-        try:
-            self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
-        except ValueError:
-            self.tcp_inactivity_timeout = 5
-
-
-        self.rotation = get('parameters', 'rotation', 'yes')
-        self.rotation = 'yes' in self.rotation
-
-
+        conf = ConfigParser()
+        self.packet_filter = conf.packet_filter()
+        self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
+        self.rotation = conf.rotation()
 
     def print(self, text, verbose=1, debug=0):
         """
