@@ -2,6 +2,7 @@ import configparser
 import time
 import os
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 import json
 import ipaddress
@@ -25,7 +26,6 @@ class UpdateFileManager:
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.new_update_time = float('-inf')
-        # Read the conf
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
@@ -55,7 +55,6 @@ class UpdateFileManager:
         self.first_time_reading_files = False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
         def get(section, value, default_value):
             """
             read the given value from the given section in slips.conf
@@ -87,63 +86,29 @@ class UpdateFileManager:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
 
-        self.update_period = get('threatintelligence', 'malicious_data_update_period', 86400)
-        try:
-            self.update_period = float(self.update_period)
-        except(NameError, TypeError, ValueError):
-            self.update_period = 86400   # 1 day
+        self.update_period = conf.update_period()
 
-        self.path_to_threat_intelligence_data = get(
-            'threatintelligence',
-            'download_path_for_remote_threat_intelligence',
-            'modules/threat_intelligence/remote_data_files/'
-        )
-        self.path_to_threat_intelligence_data = self.sanitize(
-                self.path_to_threat_intelligence_data
-        )
-        if not os.path.exists(self.path_to_threat_intelligence_data):
-            os.mkdir(self.path_to_threat_intelligence_data)
+        self.path_to_ti_files = conf.remote_ti_data_path()
+        if not os.path.exists(self.path_to_ti_files):
+            os.mkdir(self.path_to_ti_files)
 
-        self.ti_feed_tuples = get('threatintelligence', 'ti_files', '')
-        if self.ti_feed_tuples:
-            self.ti_feed_tuples = self.ti_feed_tuples.split('\n')
-            self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
-        else:
-            self.url_feeds = {}
+        self.ti_feed_tuples = conf.ti_files()
+        self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
 
-        self.ja3_feed_tuples = get('threatintelligence', 'ja3_feeds', '')
-        if self.ja3_feed_tuples:
-            self.ja3_feed_tuples = self.ja3_feed_tuples.split('\n')
-            self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-        else:
-            self.ja3_feeds = {}
+        self.ja3_feed_tuples = conf.ja3_feeds()
+        self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
 
-        self.ssl_feed_tuples = get('threatintelligence', 'ssl_feeds', '')
-        if self.ssl_feed_tuples:
-            self.ssl_feed_tuples = self.ssl_feed_tuples.split('\n')
-            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
-        else:
-            self.ssl_feeds = {}
+        self.ssl_feed_tuples = conf.ssl_feeds()
+        self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
 
-        RiskIQ_credentials_path = get('threatintelligence', 'RiskIQ_credentials_path', '')
+        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
 
+        self.riskiq_update_period = conf.riskiq_update_period()
 
-        self.riskiq_update_period = get('threatintelligence', 'update_period', 604800)  # 1 week
-        self.riskiq_update_period = float(self.riskiq_update_period)
-        try:
-            self.riskiq_update_period = float(self.riskiq_update_period)
-        except(NameError, TypeError, ValueError):
-            self.riskiq_update_period = 604800
+        self.mac_db_update_period = conf.mac_db_update_period()
 
-        self.mac_db_update_period = get('threatintelligence', 'mac_db_update', 1209600)  # 2 weeks
-        try:
-            self.mac_db_update_period = float(self.mac_db_update_period)
-        except(NameError, TypeError, ValueError):
-            self.mac_db_update_period = 1209600
-
-        self.mac_db_link = get('threatintelligence', 'mac_db', '')
-        self.mac_db_link = self.sanitize(self.mac_db_link)
+        self.mac_db_link = conf.mac_db_link()
 
 
     def get_feed_properties(self, feeds):
@@ -568,7 +533,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
-            full_path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
+            full_path = f'{self.path_to_ti_files}/{file_name_to_download}'
             self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
