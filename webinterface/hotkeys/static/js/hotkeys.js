@@ -88,7 +88,14 @@ let profiles = function () {
                         searching: false,
                         columns: [
                             {data: 'name'}
-                        ]
+                        ],
+                        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+                            switch(aData['blocked']){
+                                case true:
+                                    $('td', nRow).css('background-color', '#FF8989')
+                                    break;
+                            }
+                        }
                     });
 
                     $(table_id_tw).on('click', 'tbody tr', function () {
