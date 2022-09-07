@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import conf
 import multiprocessing
 import sys
 import os
@@ -97,44 +98,9 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        try:
-            self.packet_filter = self.config.get('parameters', 'pcapfilter')
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.packet_filter = 'ip or not ip'
-
-        try:
-            self.tcp_inactivity_timeout = self.config.get(
-                'parameters', 'tcp_inactivity_timeout'
-            )
-            # make sure the value is a valid int
-            self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
-
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.tcp_inactivity_timeout = '5'
-
-        try:
-            self.rotation = self.config.get('parameters', 'rotation')
-            self.rotation = 'yes' in self.rotation
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.rotation = True
+        self.packet_filter = conf.packet_filter()
+        self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
+        self.rotation = conf.rotation()
 
     def print(self, text, verbose=1, debug=0):
         """

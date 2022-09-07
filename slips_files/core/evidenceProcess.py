@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 from .notify import Notify
 import json
@@ -123,62 +124,17 @@ class EvidenceProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Read the width of the TW
-        try:
-            data = self.config.get('parameters', 'time_window_width')
-            self.width = float(data)
-            # Limit any width to be > 0. By default we use 300 seconds, 5minutes
-            if self.width < 0:
-                raise configparser.NoOptionError
-        except ValueError:
-            # Its not a float
-            if 'only_one_tw' in data:
-                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                self.width = 9999999999
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.width = 300.0
-
-
-
-        # Get the detection threshold
-        try:
-            self.detection_threshold = float(
-                self.config.get('detection', 'evidence_detection_threshold')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
-            self.detection_threshold = 2
+        self.width = conf.get_tw_width_as_float()
+        self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
-            f'Detection Threshold: {self.detection_threshold} attacks per minute ({self.detection_threshold * self.width / 60} in the current time window width)',2,0,
+            f'Detection Threshold: {self.detection_threshold} '
+            f'attacks per minute ({self.detection_threshold * self.width / 60} '
+            f'in the current time window width)',2,0,
         )
 
-        try:
-            self.popup_alerts = self.config\
-                .get(
-                'detection', 'popup_alerts'
-                ).lower()
-            self.popup_alerts = 'yes' in self.popup_alerts
-
-            # In docker, disable alerts no matter what slips.conf says
-            if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
-                self.popup_alerts = False
-
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified, by default...
+        self.popup_alerts = conf.popup_alerts()
+        # In docker, disable alerts no matter what slips.conf says
+        if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
             self.popup_alerts = False
 
     def format_blocked_srcip_evidence(self, profileid, twid, flow_datetime):
