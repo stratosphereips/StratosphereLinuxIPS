@@ -189,6 +189,30 @@ class ConfigParser(object):
             False if 'no' in receive_from_warden.lower() else True
         )
 
+    def verbose(self):
+        verbose = self.read_configuration(
+          'parameters', 'verbose', 1
+        )
+        try:
+            verbose = int(verbose)
+            if verbose < 1:
+                verbose = 1
+            return verbose
+        except ValueError:
+            return 1
+
+    def debug(self):
+        debug = self.read_configuration(
+          'parameters', 'debug', 0
+        )
+        try:
+            debug = int(debug)
+            if debug < 0:
+                debug = 0
+            return debug
+        except ValueError:
+            return 0
+
     def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
             'modules', 'disable', False
