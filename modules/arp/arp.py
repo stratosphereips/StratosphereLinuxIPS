@@ -43,8 +43,8 @@ class Module(Module, multiprocessing.Process):
         self.arp_ts = 0
         self.period_before_deleting = 0
         if (
-            'yes' in self.delete_zeek_files
-            and 'no' in self.store_zeek_files_copy
+            self.delete_zeek_files
+            and not self.store_zeek_files_copy
         ):
             self.delete_arp_periodically = True
             # first time arp.log is created
@@ -81,31 +81,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-
         self.home_network = conf.get_home_network()
-        try:
-            self.delete_zeek_files = self.config.get(
-                'parameters', 'delete_zeek_files'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.delete_zeek_files = 'no'
-
-        try:
-            self.store_zeek_files_copy = self.config.get(
-                'parameters', 'store_a_copy_of_zeek_files'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.store_zeek_files_copy = 'yes'
+        self.delete_zeek_files = conf.delete_zeek_files()
+        self.store_zeek_files_copy = conf.store_zeek_files_copy()
 
     def wait_for_arp_scans(self):
         """
