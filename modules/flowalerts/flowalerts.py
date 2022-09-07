@@ -4,6 +4,8 @@ import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from .TimerThread import TimerThread
+from slips_files.common.config_parser import conf
+
 
 # Your imports
 import json
@@ -112,46 +114,9 @@ class Module(Module, multiprocessing.Process):
             return False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the pcap filter
-        try:
-            self.long_connection_threshold = int(
-                self.config.get('flowalerts', 'long_connection_threshold')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # this value is in seconds, =25 mins
-            self.long_connection_threshold = 1500
-        try:
-            self.ssh_succesful_detection_threshold = int(
-                self.config.get(
-                    'flowalerts', 'ssh_succesful_detection_threshold'
-                )
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ssh_succesful_detection_threshold = 4290
-        try:
-            threashold =  self.config.get('flowalerts', 'data_exfiltration_threshold')
-            self.data_exfiltration_threshold = float(
-                threashold
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # threshold in MBs
-            self.data_exfiltration_threshold = 500
+        self.long_connection_threshold = conf.long_connection_threshold()
+        self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
+        self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
 
     def print(self, text, verbose=1, debug=0):
         """
