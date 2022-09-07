@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 import traceback
 import sys
@@ -34,28 +35,9 @@ class Module(Module, multiprocessing.Process):
         # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
-        self.is_human_timestamp = bool(
-            self.read_configuration('modules', 'timeline_human_timestamp')
-        )
-        self.analysis_direction = self.config.get(
-            'parameters', 'analysis_direction'
-        )
-        # Wait a little so we give time to have something to print
+        self.is_human_timestamp = conf.timeline_human_timestamp()
+        self.analysis_direction = conf.analysis_direction()
         self.timeout = 0.0000001
-
-    def read_configuration(self, section: str, name: str) -> str:
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            conf_variable = self.config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            conf_variable = None
-        return conf_variable
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -78,7 +60,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def process_timestamp(self, timestamp: float) -> str:
-        if self.is_human_timestamp is True:
+        if self.is_human_timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 

@@ -2,10 +2,10 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import conf
 from slips_files.common.slips_utils import utils
 
 # Your imports
-import configparser
 import os
 import json
 import sys
@@ -30,19 +30,15 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
 
     def read_configuration(self):
+        # Read the riskiq api key
+        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         try:
-            # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get(
-                'threatintelligence', 'RiskIQ_credentials_path'
-            )
             with open(RiskIQ_credentials_path, 'r') as f:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
                 if len(self.riskiq_key) != 64:
                     raise NameError
         except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
             NameError,
             FileNotFoundError,
         ):
