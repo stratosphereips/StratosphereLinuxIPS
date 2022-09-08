@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, timedelta
+from datetime import timedelta
 import sys
 import ipaddress
 import configparser
@@ -12,7 +12,9 @@ class ConfigParser(object):
     authors = ['Alya Gomaa']
 
     def __init__(self):
-        self.args = self.get_args()
+        # self.args = self.get_args()
+        # self.config = self.read_config_file()
+        self.configfile = self.get_config_file()
         self.config = self.read_config_file()
         self.home_network_ranges = (
             '192.168.0.0/16',
@@ -29,12 +31,17 @@ class ConfigParser(object):
         """
         config = configparser.ConfigParser(interpolation=None)
         try:
-            with open(self.args.config) as source:
+            with open(self.configfile) as source:
                 config.read_file(source)
         except (IOError, TypeError):
             pass
         return config
 
+    def get_config_file(self):
+        parser = ArgumentParser(
+            usage='./slips.py -c <configfile> [options] [file]', add_help=False
+        )
+        return parser.get_configfile()
 
 
     def get_args(self):
