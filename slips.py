@@ -1274,6 +1274,12 @@ class Main:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
+        if self.conf.use_p2p() and not self.args.interface:
+            print('P2P is only supported using an interface.\n'
+                  'set use_p2p=no in slips.conf and restart Slips.')
+            self.terminate_slips()
+
+
         # Clear cache if the parameter was included
         if self.args.clearcache:
             print('Deleting Cache DB in Redis.')
