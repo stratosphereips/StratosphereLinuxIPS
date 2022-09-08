@@ -15,13 +15,11 @@ def create_inputProcess_instance(
 ):
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
     inputProcess = InputProcess(
         outputQueue,
         profilerQueue,
         input_type,
         input_information,
-        config,
         None,
         'zeek',
         zeek_tmp_dir,

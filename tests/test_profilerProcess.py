@@ -15,13 +15,11 @@ def do_nothing(*args):
 def create_profilerProcess_instance(outputQueue, inputQueue):
     """Create an instance of profilerProcess.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser(interpolation=None)
     profilerProcess = ProfilerProcess(
         inputQueue,
         outputQueue,
         1,
         0,
-        config,
         6380
     )
 
