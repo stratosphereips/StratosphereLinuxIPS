@@ -1,5 +1,5 @@
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
 import os
 import signal
@@ -187,6 +187,7 @@ class Database(ProfilingFlowsDatabase, object):
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.deletePrevdb = conf.deletePrevdb()
         self.disabled_detections = conf.disabled_detections()
         self.home_network = conf.get_home_network()

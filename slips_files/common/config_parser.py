@@ -643,5 +643,4 @@ class ConfigParser(object):
 
 
 
-conf = ConfigParser()
 

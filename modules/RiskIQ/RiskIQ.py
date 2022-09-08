@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
 # Your imports
@@ -26,6 +26,7 @@ class Module(Module, multiprocessing.Process):
         self.read_configuration()
 
     def read_configuration(self):
+        conf = ConfigParser()
         # Read the riskiq api key
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         try:

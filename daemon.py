@@ -1,7 +1,7 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 import configparser
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import sys
 import os
 from signal import SIGTERM
@@ -61,6 +61,7 @@ class Daemon():
 
     def read_configuration(self):
         self.config = self.slips.read_conf_file()
+        conf = ConfigParser()
         self.logsfile = conf.logsfile()
         self.stdout = conf.stdout()
         self.stderr = conf.stderr()
