@@ -43,7 +43,7 @@ class Module(Module, multiprocessing.Process):
         try:
             with open(self.key_file, 'r') as f:
                 self.key = f.read(64)
-        except FileNotFoundError:
+        except (FileNotFoundError, TypeError):
             self.print(
                 'The file with API key ('
                 + self.key_file

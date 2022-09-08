@@ -557,7 +557,7 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete = conf.delete_zeek_files()
+        delete = self.conf.delete_zeek_files()
         if delete:
             shutil.rmtree(self.zeek_folder)
 
