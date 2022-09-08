@@ -601,12 +601,19 @@ class ProfilingFlowsDatabase(object):
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
 
-    def search_tws_for_flow(self, profileid, twid, uid):
+    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
         """
         Search for the given uid in the given twid, or the tws before
+        :param go_back: how many hours back to search?
         """
+        tws_to_search = float('inf')
+
+        if go_back:
+            hrs_to_search = float(go_back)
+            tws_to_search = self.get_equivalent_tws(hrs_to_search)
+
         twid_number: int = int(twid.split('timewindow')[-1])
-        while twid_number > -1:
+        while twid_number > -1 and tws_to_search > 0:
             flow = self.get_flow(profileid, f'timewindow{twid_number}', uid)
 
             uid = next(iter(flow))
@@ -614,9 +621,18 @@ class ProfilingFlowsDatabase(object):
                 return flow
 
             twid_number -= 1
+            # this reaches 0 when go_back is set to a number
+            tws_to_search -= 1
 
         # uid isn't in this twid or any of the previous ones
-        return flow
+        return {uid: None}
+
+    def get_equivalent_tws(self, hrs: float):
+        """
+        How many tws correspond to the given hours?
+        for example if the tw width is 1h, and hrs is 24, this function returns 24
+        """
+        return int(hrs*3600/self.width)
 
     def check_TW_to_close(self, close_all=False):
         """
@@ -1218,14 +1234,14 @@ class ProfilingFlowsDatabase(object):
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
 
-    def get_reverse_dns(self, ip):
+    def get_dns_resolution(self, ip):
         """
-        Get DNS name of the IP, a list
+        IF this IP was resolved by slips
         returns a dict with {ts: .. ,
                             'domains': .. ,
                             'uid':...,
-                            'resolved-by':.. } of this IP or {}
-
+                            'resolved-by':.. }
+        If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
         """
         ip_info = self.r.hget('DNSresolution', ip)
@@ -1235,6 +1251,28 @@ class ProfilingFlowsDatabase(object):
             return ip_info
         return {}
 
+    def is_ip_resolved(self, ip, hrs):
+        """
+        :param hrs: float, how many hours to look back for resolutions
+        """
+        ip_info = self.get_dns_resolution(ip)
+        if ip_info == {}:
+            return False
+        # IP is resolved, was it resolved in the past 24 hrs?
+        # these are the tws this ip was resolved in
+        tws = ip_info['timewindows']
+
+        tws_to_search = self.get_equivalent_tws(hrs)
+
+        current_twid = 0   # number of the tw we're looking for
+        while tws_to_search != current_twid:
+            matching_tws = [i for i in tws if f'timewindow{current_twid}' in i]
+
+            if matching_tws != []:
+                return True
+
+            current_twid += 1
+
     def set_dns_resolution(
         self,
         query: str,
@@ -1243,6 +1281,7 @@ class ProfilingFlowsDatabase(object):
         uid: str,
         qtype_name: str,
         srcip: str,
+        twid: str,
     ):
         """
         Cache DNS answers
@@ -1265,6 +1304,8 @@ class ProfilingFlowsDatabase(object):
             # Also store these IPs inside the domain
             ips_to_add = []
             CNAMEs = []
+            profileid_twid = f'profile_{srcip}_{twid}'
+
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
@@ -1275,18 +1316,26 @@ class ProfilingFlowsDatabase(object):
                     CNAMEs.append(answer)
                     continue
 
+
                 # get stored DNS resolution from our db
-                ip_info_from_db = self.get_reverse_dns(answer)
+                ip_info_from_db = self.get_dns_resolution(answer)
                 if ip_info_from_db == {}:
                     # if the domain(query) we have isn't already in DNSresolution in the db
                     resolved_by = [srcip]
                     domains = []
+                    timewindows = [profileid_twid]
                 else:
                     # we have info about this domain in DNSresolution in the db
                     # keep track of all srcips that resolved this domain
                     resolved_by = ip_info_from_db.get('resolved-by', [])
                     if srcip not in resolved_by:
                         resolved_by.append(srcip)
+
+                    # timewindows in which this odmain was resolved
+                    timewindows = ip_info_from_db.get('timewindows', [])
+                    if profileid_twid not in timewindows:
+                        timewindows.append(profileid_twid)
+
                     # we'll be appending the current answer to these cached domains
                     domains = ip_info_from_db.get('domains', [])
 
@@ -1300,6 +1349,7 @@ class ProfilingFlowsDatabase(object):
                     'uid': uid,
                     'domains': domains,
                     'resolved-by': resolved_by,
+                    'timewindows': timewindows,
                 }
                 ip_info = json.dumps(ip_info)
                 # we store ALL dns resolutions seen since starting slips
@@ -1485,7 +1535,7 @@ class ProfilingFlowsDatabase(object):
             srcip = profileid.split('_')[1]
 
             self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip
+                query, answers, stime, uid, qtype_name, srcip, twid
             )
         # Convert to json string
         data = json.dumps(data)

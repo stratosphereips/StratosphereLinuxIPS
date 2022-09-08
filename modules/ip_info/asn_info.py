@@ -137,6 +137,7 @@ class ASN:
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
+            json.decoder.JSONDecodeError
         ):
             pass
 

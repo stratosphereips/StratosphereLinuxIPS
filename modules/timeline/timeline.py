@@ -153,7 +153,7 @@ class Module(Module, multiprocessing.Process):
                 if self.analysis_direction == 'all' and str(daddr) == str(
                         profile_ip
                 ):
-                    dns_resolution = __database__.get_reverse_dns(daddr)
+                    dns_resolution = __database__.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -204,7 +204,7 @@ class Module(Module, multiprocessing.Process):
                         critical_warning_dport_name = (
                             'Protocol not recognized by Slips nor Zeek.'
                         )
-                    dns_resolution = __database__.get_reverse_dns(daddr)
+                    dns_resolution = __database__.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
