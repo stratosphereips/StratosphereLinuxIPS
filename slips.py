@@ -499,7 +499,7 @@ class Main:
         return self.info_path
 
     def kill(self, module_name, INT=False):
-        sig = signal.SIGINT if int else signal.SIGKILL
+        sig = signal.SIGINT if INT else signal.SIGKILL
 
 
         pid = int(self.PIDs[module_name])
@@ -594,7 +594,7 @@ class Main:
         )
 
         if delete:
-            shutil.rmtree('zeek_files')
+            shutil.rmtree(self.zeek_folder)
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
