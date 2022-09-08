@@ -45,9 +45,8 @@ class Module(Module, multiprocessing.Process):
                 self.key = f.read(64)
         except (FileNotFoundError, TypeError):
             self.print(
-                'The file with API key ('
-                + self.key_file
-                + ') could not be loaded. VT module is stopping.'
+                f'The file with API key {self.key_file} '
+                f'could not be loaded. VT module is stopping.'
             )
 
         # query counter for debugging purposes
