@@ -267,31 +267,37 @@ class Database(ProfilingFlowsDatabase, object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if not self.r.sismember(
-                'profiles', str(profileid)
-            ) and self.should_add(profileid):
-                # Add the profile to the index. The index is called 'profiles'
-                self.r.sadd('profiles', str(profileid))
-                # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
-                # Add the start time of profile
-                self.r.hset(profileid, 'starttime', starttime)
-                # For now duration of the TW is fixed
-                self.r.hset(profileid, 'duration', duration)
-                # When a new profiled is created assign threat level = 0 and confidence = 0.05
-                self.r.hset(profileid, 'threat_level', 0)
-                self.r.hset(profileid, 'confidence', 0.05)
-                # The IP of the profile should also be added as a new IP we know about.
-                ip = profileid.split(self.separator)[1]
-                # If the ip is new add it to the list of ips
-                self.setNewIP(ip)
-                # Publish that we have a new profile
-                self.publish('new_profile', ip)
+            if self.r.sismember('profiles', str(profileid)):
+                # we already have this profile
+                return False
+
+            if not self.should_add(profileid):
+                return False
+
+            # Add the profile to the index. The index is called 'profiles'
+            self.r.sadd('profiles', str(profileid))
+            # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
+            # Add the start time of profile
+            self.r.hset(profileid, 'starttime', starttime)
+            # For now duration of the TW is fixed
+            self.r.hset(profileid, 'duration', duration)
+            # When a new profiled is created assign threat level = 0 and confidence = 0.05
+            self.r.hset(profileid, 'threat_level', 0)
+            self.r.hset(profileid, 'confidence', 0.05)
+            # The IP of the profile should also be added as a new IP we know about.
+            ip = profileid.split(self.separator)[1]
+            # If the ip is new add it to the list of ips
+            self.setNewIP(ip)
+            # Publish that we have a new profile
+            self.publish('new_profile', ip)
+            return True
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
                 '00|database|Error in addProfile in database.py'
             )
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
+
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """

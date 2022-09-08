@@ -1,9 +1,11 @@
+from slips_files.common.slips_utils import utils
 import ipaddress
 import redis
 import os
 import json
-import configparser
+import sys
 import time
+
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -20,9 +22,14 @@ def do_nothing(*arg):
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
     from slips_files.core.database.database import __database__
-    __database__.start(6381)
+    __database__.connect_to_redis_server(6381)
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
+    __database__.deletePrevdb = True
+    __database__.disabled_detections = []
+    __database__.home_network = utils.home_network_ranges
+    __database__.width = 3600
+    __database__.setSlipsInternalTime(0)
     return __database__
 
 
@@ -85,7 +92,7 @@ def test_getProfileIdFromIP(outputQueue):
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    database.addProfile('profile_192.168.1.1', '00:00', '1')
+    ret = database.addProfile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) != False
 
@@ -263,7 +270,8 @@ def test_profile_moddule_labels(outputQueue):
     assert labels['test'] == 'malicious'
 
 
-def test_add_mac_addr_to_profile(database):
+def test_add_mac_addr_to_profile(outputQueue):
+    database = create_db_instace(outputQueue)
     ipv4 = '192.168.1.5'
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
@@ -294,7 +302,8 @@ def test_add_mac_addr_to_profile(database):
     assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
 
 
-def test_get_the_other_ip_version(database):
+def test_get_the_other_ip_version(outputQueue):
+    database = create_db_instace(outputQueue)
     # profileid is ipv4
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)
