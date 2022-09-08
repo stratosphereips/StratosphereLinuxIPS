@@ -1355,6 +1355,8 @@ class Database(ProfilingFlowsDatabase, object):
                 uid,
                 data,
             )
+            return True
+        return False
 
     def get_module_labels_from_flow(self, profileid, twid, uid):
         """

@@ -22,21 +22,18 @@ def do_nothing(*arg):
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
     from slips_files.core.database.database import __database__
-    __database__.connect_to_redis_server(6381)
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     __database__.deletePrevdb = True
     __database__.disabled_detections = []
     __database__.home_network = utils.home_network_ranges
     __database__.width = 3600
+    __database__.connect_to_redis_server(6381)
+    __database__.r.flushdb()
     __database__.setSlipsInternalTime(0)
     return __database__
 
-
-# this should always be the first unit test in this file
-# because we don't want another unit test adding the same flow before this one
-def test_add_flow(outputQueue):
-    database = create_db_instace(outputQueue)
+def add_flow(db):
     starttime = '5'
     dur = '5'
     sport = 80
@@ -52,8 +49,8 @@ def test_add_flow(outputQueue):
     appproto = 'dhcp'
     uid = '1234'
     flow_type = ''
-    assert (
-        database.add_flow(
+
+    return db.add_flow(
             profileid=profileid,
             twid=twid,
             stime=starttime,
@@ -72,8 +69,15 @@ def test_add_flow(outputQueue):
             uid=uid,
             flow_type=flow_type,
         )
-        == True
-    )
+
+
+
+# this should always be the first unit test in this file
+# because we don't want another unit test adding the same flow before this one
+def test_add_flow(outputQueue):
+    database = create_db_instace(outputQueue)
+    uid = '1234'
+    assert add_flow(database) ==  True
     assert (
         database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
         == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,'
@@ -228,12 +232,14 @@ def test_module_labels(outputQueue):
     """ tests set and get_module_labels_from_flow """
     # clear the database before running this test
     os.system('./slips.py -cc')
+    add_flow(database)
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
-    database.set_module_label_to_flow(
+    assert database.set_module_label_to_flow(
         profileid, twid, uid, module_name, module_label
-    )
+    ) == True
+
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'test' in labels
     assert labels['test'] == 'malicious'
