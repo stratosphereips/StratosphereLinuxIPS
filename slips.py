@@ -1340,6 +1340,10 @@ class Main:
             'analysis_start': now,
 
         }
+        if hasattr(self, 'zeek_folder'):
+            info.update({
+                'zeek_dir': self.zeek_folder
+            })
 
         size_in_mb = '-'
         if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
@@ -1479,7 +1483,7 @@ class Main:
             self.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
-            self.set_input_metadata()
+
 
 
             if self.mode == 'daemonized':
@@ -1586,7 +1590,7 @@ class Main:
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
-
+            self.set_input_metadata()
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
