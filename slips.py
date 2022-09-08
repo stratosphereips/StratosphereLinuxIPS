@@ -18,11 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 from slips_files.common.abstracts import Module
-from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
-import configparser
+from slips_files.common.config_parser import ConfigParser
 import signal
 import sys
 import redis
@@ -66,7 +64,8 @@ class Main:
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
-            self.args = conf.get_args()
+            self.conf = ConfigParser()
+            self.args = self.conf.get_args()
             self.check_given_flags()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -76,7 +75,7 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
-                self.twid_width = conf.get_tw_width()
+                self.twid_width = self.conf.get_tw_width()
 
 
     def prepare_zeek_output_dir(self):
@@ -299,7 +298,7 @@ class Main:
         return plugins, failed_to_load_modules
 
     def load_modules(self):
-        to_ignore = conf.get_disabled_modules(self.input_type)
+        to_ignore = self.conf.get_disabled_modules(self.input_type)
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
         for module_name in modules_to_call:
@@ -338,7 +337,7 @@ class Main:
         Detailed logs are the ones created by logsProcess
         """
 
-        do_logs = conf.create_log_files()
+        do_logs = self.conf.create_log_files()
         # if -l is provided or create_log_files is yes then we will create log files
         if self.args.createlogfiles and do_logs:
             # Create a folder for logs
@@ -454,7 +453,7 @@ class Main:
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
-        whitelist = conf.whitelist_path()
+        whitelist = self.conf.whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
         branch_info = utils.get_branch_info()
@@ -548,7 +547,7 @@ class Main:
         )
 
     def store_zeek_dir_copy(self):
-        store_a_copy_of_zeek_files = conf.store_a_copy_of_zeek_files()
+        store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
@@ -558,7 +557,7 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete_zeek_files = conf.delete_zeek_files()
+        delete_zeek_files = self.conf.delete_zeek_files()
         if delete_zeek_files:
             shutil.rmtree('zeek_files')
 
@@ -609,7 +608,7 @@ class Main:
         Add the analysis end date to the metadata file and
         the db for the web inerface to display
         """
-        self.enable_metadata = conf.enable_metadata()
+        self.enable_metadata = self.conf.enable_metadata()
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
         __database__.set_input_metadata({'analysis_end': end_date})
         if self.enable_metadata:
@@ -1362,7 +1361,7 @@ class Main:
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose == None:
-            self.args.verbose = conf.verbose()
+            self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
         if self.args.verbose < 1:
@@ -1370,7 +1369,7 @@ class Main:
 
         # Any deug passed as parameter overrides the configuration. Only check its value
         if self.args.debug == None:
-            self.args.debug = conf.debug()
+            self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
         if self.args.debug < 0:
@@ -1597,7 +1596,7 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-            self.enable_metadata = conf.enable_metadata()
+            self.enable_metadata = self.conf.enable_metadata()
 
             if self.enable_metadata:
                 self.info_path = self.add_metadata()
