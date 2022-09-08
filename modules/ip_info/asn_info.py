@@ -1,5 +1,7 @@
 # Must imports
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
+
 
 # Your imports
 import time

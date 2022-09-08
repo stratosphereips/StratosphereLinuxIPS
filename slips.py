@@ -314,7 +314,6 @@ class Main:
                     output_dir=self.args.output
                 )
             else:
-                print(f"@@@@@@@@@@@@@@@@@@  ModuleProcess { module_class}")
                 ModuleProcess = module_class(
                     self.outputqueue,
                     self.redis_port
@@ -1473,6 +1472,7 @@ class Main:
             # this process starts the db
             output_process.start()
             __database__.store_process_PID('OutputProcess', int(output_process.pid))
+
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started

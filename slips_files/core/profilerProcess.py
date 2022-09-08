@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 import sys
 import configparser
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -91,6 +91,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.whitelist_path = conf.whitelist_path()
         self.timeformat = conf.ts_format()
         self.analysis_direction = conf.analysis_direction()

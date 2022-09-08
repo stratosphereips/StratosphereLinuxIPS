@@ -16,7 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import os
@@ -95,6 +95,7 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.packet_filter = conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.rotation = conf.rotation()

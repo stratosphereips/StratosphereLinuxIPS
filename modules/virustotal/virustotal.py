@@ -3,7 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -69,6 +69,7 @@ class Module(Module, multiprocessing.Process):
         self.incorrect_API_key = False
 
     def __read_configuration(self):
+        conf = ConfigParser()
         self.key_file = conf.vt_api_key_file()
         self.update_period = conf.virustotal_update_period()
 

@@ -19,7 +19,7 @@
 import multiprocessing
 import sys
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import os
 import threading
 import time
@@ -72,6 +72,7 @@ class LogsProcess(multiprocessing.Process):
         self.is_timline_file = False
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.report_time = conf.log_report_time()
         self.outputqueue.put(
             f'01|logs|Logs Process configured to report every: '

@@ -3,7 +3,7 @@ from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -56,6 +56,7 @@ class Module(Module, multiprocessing.Process):
                     self.cached_ipv6_ranges[first_octet] = [range]
 
     def __read_configuration(self):
+        conf = ConfigParser()
         self.path_to_local_ti_files = conf.local_ti_data_path()
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)

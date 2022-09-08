@@ -2,7 +2,7 @@ import configparser
 import time
 import os
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import json
 import ipaddress
@@ -53,22 +53,6 @@ class UpdateFileManager:
         self.first_time_reading_files = False
 
     def read_configuration(self):
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError, TypeError, ValueError
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
         def read_riskiq_creds(RiskIQ_credentials_path):
             self.riskiq_email = None
             self.riskiq_key = None
@@ -84,6 +68,8 @@ class UpdateFileManager:
             with open(RiskIQ_credentials_path, 'r') as f:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
+
+        conf = ConfigParser()
 
         self.update_period = conf.update_period()
 

@@ -1,6 +1,6 @@
 import json
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 import ipaddress
 import validators
 from slips_files.common.slips_utils import utils
@@ -39,6 +39,7 @@ class Whitelist:
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.whitelist_path = conf.whitelist_path()
 
     def is_whitelisted_asn(self, ip, org):

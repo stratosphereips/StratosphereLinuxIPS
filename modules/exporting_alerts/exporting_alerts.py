@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 
 # Your imports
 import multiprocessing
@@ -47,7 +47,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
-
+        conf = ConfigParser()
         # Available options ['slack','stix']
         self.export_to = conf.export_to()
 

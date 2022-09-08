@@ -1,6 +1,6 @@
 # Must imports
 from slips_files.common.abstracts import Module
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import multiprocessing
@@ -55,7 +55,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
         """Read importing/exporting preferences from slips.conf"""
-
+        conf = ConfigParser()
         self.send_to_warden = conf.send_to_warden()
         self.receive_from_warden = conf.receive_from_warden()
         if self.receive_from_warden:

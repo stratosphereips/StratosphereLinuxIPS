@@ -2,7 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import traceback
 import sys
@@ -31,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
+        conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
         self.analysis_direction = conf.analysis_direction()
         self.timeout = 0.0000001

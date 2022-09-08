@@ -17,7 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import conf
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from .notify import Notify
 import json
@@ -120,6 +120,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
+        conf = ConfigParser()
         self.width = conf.get_tw_width_as_float()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.print(
