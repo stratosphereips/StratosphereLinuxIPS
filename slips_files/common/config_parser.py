@@ -13,7 +13,6 @@ class ConfigParser(object):
 
     def __init__(self):
         # self.args = self.get_args()
-        # self.config = self.read_config_file()
         self.configfile = self.get_config_file()
         self.config = self.read_config_file()
         self.home_network_ranges = (
@@ -601,10 +600,8 @@ class ConfigParser(object):
 
     def get_disabled_modules(self, input_type) -> list:
         to_ignore = self.read_configuration(
-            'modules', 'disable', False
+            'modules', 'disable', '[template , ensembling]'
         )
-        use_p2p = self.use_p2p()
-
         # Convert string to list
         to_ignore = (
             to_ignore.replace('[', '')
@@ -612,6 +609,7 @@ class ConfigParser(object):
                 .replace(' ', '')
                 .split(',')
         )
+        use_p2p = self.use_p2p()
 
         # Ignore exporting alerts module if export_to is empty
         export_to = self.export_to()
