@@ -1279,6 +1279,10 @@ class Main:
                   'set use_p2p=no in slips.conf and restart Slips.')
             self.terminate_slips()
 
+        if self.args.config and not os.path.exists(self.args.config):
+            print(f"{self.args.config} doesn't exist. Stopping Slips")
+            self.terminate_slips()
+
 
         # Clear cache if the parameter was included
         if self.args.clearcache:
