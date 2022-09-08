@@ -39,7 +39,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timeout = 0.000001
 
     def read_configuration(self):
-        conf = ConfigParser
+        conf = ConfigParser()
         self.update_period = conf.update_period()
 
 

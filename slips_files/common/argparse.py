@@ -93,7 +93,7 @@ class ArgumentParser(argparse.ArgumentParser):
             print(output)
 
     def get_configfile(self):
-        slips_conf_path = os.path.join(os.getcwd() ,'slips.conf')
+        slips_conf_path = os.path.join(os.getcwd(), 'slips.conf')
         self.add_argument(
             '-c',
             '--config',
@@ -103,7 +103,7 @@ class ArgumentParser(argparse.ArgumentParser):
             default=slips_conf_path,
             help='Path to the Slips config file.',
         )
-        return self.parse_args()
+        return self.parse_known_args()[0].config
 
     def parse_arguments(self):
         # Parse the parameters
