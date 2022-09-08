@@ -1334,12 +1334,15 @@ class Main:
         save info about name, size, analysis start date in the db
         """
         now = utils.convert_format(datetime.now(), utils.alerts_format)
+        to_ignore = self.conf.get_disabled_modules(self.input_type)
+
         info = {
             'slips_version': version,
             'name': self.input_information,
             'analysis_start': now,
-
+            'disabled_modules': json.dumps(to_ignore)
         }
+
         if hasattr(self, 'zeek_folder'):
             info.update({
                 'zeek_dir': self.zeek_folder

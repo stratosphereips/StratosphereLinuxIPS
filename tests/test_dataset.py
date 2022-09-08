@@ -379,12 +379,27 @@ def test_conf_file(
     zeek_output_dir = database.get_zeek_output_dir()[2:]
     assert zeek_output_dir not in os.listdir()
 
-    # shutil.rmtree(output_dir)
+    # test store_a_copy_of_zeek_files
+    assert 'zeek_files' in os.listdir(output_dir)
 
-    # slips = create_Main_instance(pcap_path)
-    # slips.prepare_zeek_output_dir()
-    # # remove the generated zeek files
-    # shutil.rmtree(f"{slips.zeek_folder}")
+    # test metadata_dir
+    assert 'metadata' in os.listdir(output_dir)
+    metadata_path = os.path.join(output_dir, 'metadata')
+    for file in ('test.conf', 'whitelist.conf', 'info.txt'):
+        assert file in os.listdir(metadata_path)
+
+    # test label=malicious
+    assert int(database.get_label_count('malicious')) > 700
+
+    # test disable
+    for module in ['template' , 'ensembling', 'flowmldetection']:
+        assert module in database.get_disabled_modules()
+
+
+
+
+    shutil.rmtree(output_dir)
+
 
 # @pytest.mark.parametrize(
 #     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',

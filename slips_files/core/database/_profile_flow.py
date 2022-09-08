@@ -862,6 +862,15 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_flow', to_send)
         return True
 
+    def get_label_count(self, label):
+        """
+        :param label: malicious or normal
+        """
+        return self.r.zscore('labels', label)
+
+    def get_disabled_modules(self)-> list:
+        return json.loads(self.r.hget('analysis', 'disabled_modules'))
+
     def set_input_metadata(self, info:dict):
         """
         sets name, size, analysis dates, and zeek output dir in the db
