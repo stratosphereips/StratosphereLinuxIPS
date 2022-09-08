@@ -1229,11 +1229,9 @@ class Database(ProfilingFlowsDatabase, object):
 
         return True
 
-    def setEvidenceFoAllProfiles(self, evidence):
+    def set_evidence_for_profileid(self, evidence):
         """
         Set evidence for the profile in the same format as json in alerts.json
-
-        Comment: it would be better ot have same format of evidence every where.
         """
         evidence = json.dumps(evidence)
         self.r.sadd('Evidence', evidence)
