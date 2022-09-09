@@ -470,8 +470,67 @@ class Module(Module, multiprocessing.Process):
         return json.loads(ip_info)
 
     def spamhaus(self, ip):
-        #todo
-        pass
+        # these are spamhaus datasets
+        lists_names = {
+            '127.0.0.2' :'SBL Data',
+            '127.0.0.3' :'SBL CSS Data',
+            '127.0.0.4' :'XBL CBL Data',
+            '127.0.0.9' :'SBL DROP/EDROP Data',
+            '127.0.0.10':'PBL ISP Maintained',
+            '127.0.0.11':'PBL Spamhaus Maintained',
+                    0: False
+        }
+
+        list_description = {'127.0.0.2' :'IP under the control of, used by, or made available for use'
+                                          ' by spammers and abusers in unsolicited bulk '
+                                          'email or other types of Internet-based abuse that '
+                                          'threatens networks or users',
+                             '127.0.0.3' :'IP involved in sending low-reputation email, '
+                                          'may display a risk to users or a compromised host',
+                             '127.0.0.4' :'IP address of exploited systems.'
+                                          'This includes machines operating open proxies, systems infected '
+                                          'with trojans, and other malware vectors.',
+                             '127.0.0.9' :'IP is part of a netblock that is ‘hijacked’ or leased by professional spam '
+                                          'or cyber-crime operations and therefore used for dissemination of malware, '
+                                          'trojan downloaders, botnet controllers, etc.',
+                             '127.0.0.10':'IP address should not -according to the ISP controlling it- '
+                                          'be delivering unauthenticated SMTP email to any Internet mail server',
+                             '127.0.0.11': 'IP is not expected be delivering unauthenticated SMTP email to any Internet mail server,'
+                                           ' such as dynamic and residential IP space'}
+
+
+        spamhaus_dns_hostname = ".".join(ip.split(".")[::-1]) + ".zen.spamhaus.org"
+
+        try:
+            spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
+        except:
+            spamhaus_result = 0
+
+        if spamhaus_result != 0:
+            # convert dns answer to text
+            lists_that_have_this_ip = [data.to_text() for data in spamhaus_result]
+
+            # get the source and description of the ip
+            source_dataset = ''
+            for list in lists_that_have_this_ip:
+                name = lists_names.get(list, False)
+                if not name:
+                    continue
+                source_dataset += f'{name}, '
+                description = list_description.get(list, '')
+            if not source_dataset:
+                return False
+
+            ip_info = {
+                'source': source_dataset[:-2],
+                'description': description,
+                'therat_level': 'medium',
+                'tags': 'malicious'
+            }
+            __database__.add_ips_to_IoC({
+                ip: json.dumps(ip_info)
+            })
+            return ip_info
 
 
 
