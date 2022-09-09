@@ -508,6 +508,8 @@ interface. this is called zeek rotation and is enabled by default.
 
 You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf```
 
+Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info 
+
 But you can also enable storing a copy of zeek log files in the output 
 directory by setting ```store_a_copy_of_zeek_files``` to yes.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
@@ -518,6 +520,31 @@ Once slips is done, you will find a copy of your zeek files in ```<output_dir>/z
 DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slips is done by enabling
  ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
 it deletes large log files periodically (like arp.log).
+
+
+#### Rotation
+
+Rotation is done in zeek files to avoid growing zeek log files and save disk space.
+
+Rotating is only enabled when running on an interface.
+
+By default, Slips rotates zeek files every 1 day. this can be changed in ```slips.conf```
+by changing the value of ```rotation_period```
+
+```rotation_period``` value can be written as a numeric constant followed by a time unit where
+the time unit is one of usec, msec, sec, min, hr, or day which respectively
+represent microseconds, milliseconds, seconds, minutes, hours, and days.
+Whitespace between the numeric constant and time unit is optional. Appending the letter s to the
+time unit in order to pluralize it is also optional. 
+Check [Zeek rotation interval](https://docs.zeek.org/en/master/script-reference/types.html#type-interval) for more details
+
+Slips has an option to not delete the rotated zeek files immediately by setting the
+```keep_rotated_files_for``` parameter.
+
+This is equivalent to telling slips, Delete all logs that happened before the last  ```keep_rotated_files_for``` days.
+
+```keep_rotated_files_for``` value supports days only.
+
 
 ####  Running Slips with verbose and debug flags
 
