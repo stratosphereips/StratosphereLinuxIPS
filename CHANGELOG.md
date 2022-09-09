@@ -1,6 +1,6 @@
 -0.9.6
 - Fix problem detecting SSH logins by zeek
-- 
+- Make rotating zeek files configurable. how many days you want to keep the rotated files and how often to rotate 
 
 
 -0.9.5
