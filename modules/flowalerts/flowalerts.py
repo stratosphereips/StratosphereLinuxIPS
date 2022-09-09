@@ -936,6 +936,7 @@ class Module(Module, multiprocessing.Process):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
+        Ignore queries done to *.in-addr.arpa domains and to *.local domains
         """
 
 
@@ -943,7 +944,7 @@ class Module(Module, multiprocessing.Process):
         # by slips to get the range of an ip
         if (
             not 'NXDOMAIN' in rcode_name
-            or 'in-addr.arpa' in query
+            or query.endswith('.in-addr.arpa')
             or query.endswith('.local')
         ):
             return False
