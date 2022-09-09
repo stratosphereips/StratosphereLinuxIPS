@@ -1,6 +1,6 @@
 import json
-import configparser
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 import ipaddress
 import validators
 from slips_files.common.slips_utils import utils
@@ -9,14 +9,13 @@ import os
 
 
 class Whitelist:
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         self.name = 'whitelist'
         self.outputqueue = outputqueue
-        self.config = config
         self.read_configuration()
         self.org_info_path = 'slips_files/organizations_info/'
         self.ignored_flow_types = ('arp')
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
 
 
     def print(self, text, verbose=1, debug=0):
@@ -40,17 +39,8 @@ class Whitelist:
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        try:
-            self.whitelist_path = self.config.get(
-                'parameters', 'whitelist_path'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            self.whitelist_path = 'whitelist.conf'
+        conf = ConfigParser()
+        self.whitelist_path = conf.whitelist_path()
 
     def is_whitelisted_asn(self, ip, org):
         ip_data = __database__.getIPData(ip)
@@ -102,9 +92,7 @@ class Whitelist:
 
             try:
                 # self.print(f"DNS of dst IP {column_values['daddr']}: {__database__.get_dns_resolution(column_values['daddr'])}")
-                dst_dns_domains = __database__.get_reverse_dns(
-                    column_values['daddr']
-                )
+                dst_dns_domains = __database__.get_dns_resolution(column_values['daddr'])
                 dst_dns_domains = dst_dns_domains.get('domains', [])
                 for dns_domain in dst_dns_domains:
                     domains_to_check_dst.append(dns_domain)
@@ -475,9 +463,7 @@ class Whitelist:
             pass
         try:
             # self.print(f"DNS of src IP {column_values['saddr']}: {__database__.get_dns_resolution(column_values['saddr'])}")
-            src_dns_domains = __database__.get_reverse_dns(
-                column_values['saddr']
-            )
+            src_dns_domains = __database__.get_dns_resolution(column_values['saddr'])
             src_dns_domains = src_dns_domains.get('domains', [])
             for dns_domain in src_dns_domains:
                 domains_to_check_src.append(dns_domain)

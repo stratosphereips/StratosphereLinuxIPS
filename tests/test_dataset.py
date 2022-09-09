@@ -2,6 +2,7 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
+import os
 import pytest
 # from test_slips import create_Main_instance
 from ..slips import *
@@ -44,6 +45,15 @@ def has_errors(output_dir):
 
     return False
 
+
+def check_for_text(txt, output_dir):
+    """function to parse slips_output file and check for a given string"""
+    slips_output = os.path.join(output_dir, 'slips_output.txt')
+    with open(slips_output, 'r') as f:
+        for line in f:
+            if txt in line:
+                return True
+    return False
 
 def create_Main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
@@ -91,7 +101,6 @@ def test_pcap(
     slips = create_Main_instance(pcap_path)
     slips.prepare_zeek_output_dir()
     # remove the generated zeek files
-    # shutil.rmtree(f"zeek_files_{pcap_path.split('/')[-1]}")
     shutil.rmtree(f"{slips.zeek_folder}")
 
 @pytest.mark.parametrize(
@@ -318,3 +327,116 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     # log_file = output_dir + alerts_file
     # assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
+
+
+@pytest.mark.parametrize(
+    'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
+    [
+        (
+            'dataset/hide-and-seek-short.pcap',
+            290,
+            'pcap_test_conf/',
+            'horizontal port scan to port  23',
+            6667,
+        )
+    ],
+)
+def test_conf_file(
+    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
+):
+    """
+    In this test we're using tests/test.conf
+    """
+    try:
+        os.mkdir(output_dir)
+    except FileExistsError:
+        pass
+    output_file = os.path.join(output_dir, 'slips_output.txt')
+    command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test.conf  ' \
+              f'-P {redis_port} > {output_file} 2>&1'
+    # this function returns when slips is done
+    os.system(command)
+
+    assert has_errors(output_dir) == False
+
+    database = connect_to_redis(redis_port)
+    profiles = int(database.getProfilesLen())
+    # expected_profiles is more than 50 because we're using direction = all
+    assert profiles > expected_profiles
+
+    log_file = output_dir + alerts_file
+    assert is_evidence_present(log_file, expected_evidence) == True
+
+    # testing disabled_detections param in the configuration file
+    disabled_evidence = 'a connection without DNS resolution'
+    assert is_evidence_present(log_file, disabled_evidence) == False
+
+    # testing time_window_width param in the configuration file
+    assert check_for_text('in the last 115740 days', output_dir) == True
+
+    # test delete_zeek_files param
+    zeek_output_dir = database.get_zeek_output_dir()[2:]
+    assert zeek_output_dir not in os.listdir()
+
+    # test store_a_copy_of_zeek_files
+    assert 'zeek_files' in os.listdir(output_dir)
+
+    # test metadata_dir
+    assert 'metadata' in os.listdir(output_dir)
+    metadata_path = os.path.join(output_dir, 'metadata')
+    for file in ('test.conf', 'whitelist.conf', 'info.txt'):
+        assert file in os.listdir(metadata_path)
+
+    # test label=malicious
+    assert int(database.get_label_count('malicious')) > 700
+
+    # test disable
+    for module in ['template' , 'ensembling', 'flowmldetection']:
+        assert module in database.get_disabled_modules()
+
+    shutil.rmtree(output_dir)
+
+
+@pytest.mark.parametrize(
+    'pcap_path, expected_profiles, output_dir, redis_port',
+    [
+        (
+            'dataset/arp-only.pcap',
+            1,
+            'pcap_test_conf2/',
+            6668,
+        )
+    ],
+)
+def test_conf_file2(
+    pcap_path, expected_profiles, output_dir, redis_port
+):
+    """
+    In this test we're using tests/test2.conf
+    """
+
+    try:
+        os.mkdir(output_dir)
+    except FileExistsError:
+        pass
+    output_file = os.path.join(output_dir, 'slips_output.txt')
+    command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test2.conf  ' \
+              f'-P {redis_port} > {output_file} 2>&1'
+    # this function returns when slips is done
+    os.system(command)
+
+    assert has_errors(output_dir) == False
+
+    database = connect_to_redis(redis_port)
+
+    # test 1 homenet ip
+    # the only profile we should have is the one in home_network parameter
+    profiles = int(database.getProfilesLen())
+    assert profiles == expected_profiles
+
+    shutil.rmtree(output_dir)
+    slips = create_Main_instance(pcap_path)
+    slips.prepare_zeek_output_dir()
+    # remove the generated zeek files
+    shutil.rmtree(f"{slips.zeek_folder}")
+

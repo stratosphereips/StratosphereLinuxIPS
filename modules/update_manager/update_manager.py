@@ -3,11 +3,11 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
 import asyncio
-import configparser
 from modules.update_manager.timer_manager import InfiniteTimer
 from modules.update_manager.update_file_manager import UpdateFileManager
 
@@ -18,23 +18,19 @@ class UpdateManager(Module, multiprocessing.Process):
     description = 'Update Threat Intelligence files'
     authors = ['Kamila Babayeva']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Read the conf
         self.read_configuration()
         # Start the DB
         self.redis_port = redis_port
-        __database__.start(self.config, self.redis_port)
+        __database__.start(self.redis_port)
         self.c1 = __database__.subscribe('core_messages')
         # Update file manager
         self.update_manager = UpdateFileManager(
-            self.outputqueue, config, redis_port
+            self.outputqueue, redis_port
         )
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(
@@ -43,20 +39,9 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timeout = 0.000001
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        try:
-            # update period
-            self.update_period = self.config.get(
-                'threatintelligence', 'malicious_data_update_period'
-            )
-            self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 86400
+        conf = ConfigParser()
+        self.update_period = conf.update_period()
+
 
     def print(self, text, verbose=1, debug=0):
         """

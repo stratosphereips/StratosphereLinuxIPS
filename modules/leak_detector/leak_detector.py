@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import sys
 
@@ -20,12 +21,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:

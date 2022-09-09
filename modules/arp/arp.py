@@ -2,8 +2,8 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import configparser
 
 # Your imports
 import json
@@ -18,16 +18,13 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect arp attacks'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
         # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
         self.timeout = 0.0000001
@@ -42,8 +39,8 @@ class Module(Module, multiprocessing.Process):
         self.arp_ts = 0
         self.period_before_deleting = 0
         if (
-            'yes' in self.delete_zeek_files
-            and 'no' in self.store_zeek_files_copy
+            self.delete_zeek_files
+            and not self.store_zeek_files_copy
         ):
             self.delete_arp_periodically = True
             # first time arp.log is created
@@ -80,32 +77,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-
-        self.home_network = utils.get_home_network(self.config)
-
-        try:
-            self.delete_zeek_files = self.config.get(
-                'parameters', 'delete_zeek_files'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.delete_zeek_files = 'no'
-
-        try:
-            self.store_zeek_files_copy = self.config.get(
-                'parameters', 'store_a_copy_of_zeek_files'
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.store_zeek_files_copy = 'yes'
+        conf = ConfigParser()
+        self.home_network = conf.get_home_network()
+        self.delete_zeek_files = conf.delete_zeek_files()
+        self.store_zeek_files_copy = conf.store_zeek_files_copy()
 
     def wait_for_arp_scans(self):
         """

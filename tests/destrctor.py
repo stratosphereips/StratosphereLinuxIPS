@@ -80,7 +80,7 @@ def kill_redis_server(pid):
 
 
 if __name__ == '__main__':
-    redis_server_ports = [65531, 6380, 6381, 1234]
+    redis_server_ports = [65531, 6380, 6381, 1234, 6667]
     closed_servers = 0
     for redis_port in redis_server_ports:
         # On modern systems, the netstat utility comes pre-installed,

@@ -22,8 +22,7 @@ def do_nothing(*args):
 def create_flowalerts_instance(outputQueue):
     """Create an instance of flowalerts.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    flowalerts = Module(outputQueue, config, 6380)
+    flowalerts = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     flowalerts.print = do_nothing
     return flowalerts
@@ -118,7 +117,7 @@ def test_check_if_resolution_was_made_by_different_version(
     other_ip = database.get_the_other_ip_version(profileid)
     assert json.loads(other_ip) == ipv6
     database.set_dns_resolution(
-        'example.com', [daddr], timestamp, uid, 'AAAA', ipv6
+        'example.com', [daddr], timestamp, uid, 'AAAA', ipv6, twid
     )
     res = flowalerts.check_if_resolution_was_made_by_different_version(
         profileid, daddr

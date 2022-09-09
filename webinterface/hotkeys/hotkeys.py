@@ -16,29 +16,23 @@ class Hotkeys:
         # Routes should be set explicity, because Flask process self parameter in function wrong.
         self.bp.add_url_rule("/", view_func=self.index)
         self.bp.add_url_rule("/profiles_tws", view_func=self.set_profile_tws)
+        self.bp.add_url_rule("/tws/<profileid>", view_func=self.set_tws)
         self.bp.add_url_rule("/info/<ip>", view_func=self.set_ip_info)
         self.bp.add_url_rule("/outtuples/<profile>/<timewindow>", view_func=self.set_outtuples)
         self.bp.add_url_rule("/intuples/<profile>/<timewindow>", view_func=self.set_intuples)
-        # TODO: decide and fix the graph
-        # self.bp.add_url_rule("/dstIP/<profile>/<timewindow>", view_func=self.set_DstIPflow)
-        # self.bp.add_url_rule("/DstPortsClientUDPNotEstablished", view_func=self.set_dstPortsClientUDPNotEstablished)
         self.bp.add_url_rule("/timeline_flows/<profile>/<timewindow>", view_func=self.set_timeline_flows)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>", view_func=self.set_timeline)
         self.bp.add_url_rule("/timeline/<profile>/<timewindow>/<search_filter>", view_func=self.set_timeline)
         self.bp.add_url_rule("/alerts/<profile>/<timewindow>", view_func=self.set_alerts)
         self.bp.add_url_rule("/evidence/<profile>/<timewindow>/<alert_id>", view_func=self.set_evidence)
 
+    # ----------------------------------------
+    # HELPER FUNCTIONS
+    # ----------------------------------------
     def ts_to_date(self, ts, seconds=False):
         if seconds:
             return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S.%f')
         return datetime.fromtimestamp(ts).strftime('%Y/%m/%d %H:%M:%S')
-
-    def format_tw(self, profile, tw, seconds=False):
-        tw_tuple = self.db.zrange("tws" + profile, 0, -1, withscores=True)
-        tw_n = tw_tuple[0]
-        tw_ts = tw_tuple[1]
-        tw_date = self.ts_to_date(tw_ts)
-        return "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
 
     def get_all_tw_with_ts(self, profileid):
         tws = self.db.zrange("tws" + profileid, 0, -1, withscores=True)
@@ -48,12 +42,10 @@ class Hotkeys:
             tw_n = tw_tuple[0]
             tw_ts = tw_tuple[1]
             tw_date = self.ts_to_date(tw_ts)
+            dict_tws[tw_n]["tw"] = tw_n
             dict_tws[tw_n]["name"] = "TW" + " " + tw_n.split("timewindow")[1] + ":" + tw_date
             dict_tws[tw_n]["blocked"] = False  # needed to color profiles
         return dict_tws
-
-    def index(self):
-        return render_template('hotkeys.html', title='Slips')
 
     def get_ip_info(self, ip):
         """
@@ -90,6 +82,14 @@ class Hotkeys:
                     "com_file": com_file}
         return data
 
+    # ----------------------------------------
+    # ROUTE FUNCTIONS
+    # ----------------------------------------
+
+    def index(self):
+        return render_template('hotkeys.html', title='Slips')
+
+
     def set_ip_info(self, ip):
         '''
         Set info about the ip in route /info/<ip> (geocountry, asn, TI)
@@ -104,72 +104,61 @@ class Hotkeys:
             'data': data
         }
 
+    def set_tws(self, profileid):
+        '''
+        Set timewindows for selected profile
+        :return:
+        '''
+
+        data = []
+
+        # Fetch all profile TWs
+        tws = self.get_all_tw_with_ts("profile_" + profileid)
+
+        # Fetch blocked tws
+        blockedTWs = self.db.hget('BlockedProfTW', "profile_"+profileid)
+        if blockedTWs:
+            blockedTWs = json.loads(blockedTWs)
+
+            for tw in blockedTWs:
+                tws[tw]['blocked'] = True
+
+        for tw_key, tw_value in tws.items():
+            data.append({"tw": tw_value["tw"],"name": tw_value["name"], "blocked": tw_value["blocked"]})
+
+        return{
+            "data": data
+        }
+
     def set_profile_tws(self):
         '''
         Set profiles and their timewindows into the tree. Blocked are highligted in red.
         :return: (profile, [tw, blocked], blocked)
         '''
 
-        # Fetch blocked
-        dict_blockedProfileTWs = defaultdict(list)
-        blockedProfileTWs = self.db.hgetall('BlockedProfTW')
-
-        if blockedProfileTWs:
-            for profile, tws in blockedProfileTWs.items():
-                profile_word, blocked_ip = profile.split("_")
-                dict_blockedProfileTWs[blocked_ip] = json.loads(tws)
+        profiles_dict = dict()
+        data = []
 
         # Fetch profiles
         profiles = self.db.smembers('profiles')
-        data = []
         for profileid in profiles:
             profile_word, profile_ip = profileid.split("_")
-            dict_tws = self.get_all_tw_with_ts(profileid)
-            blocked_profile = False
+            profiles_dict[profile_ip] = False
 
-            if profile_ip in dict_blockedProfileTWs.keys():
-                for blocked_tw in dict_blockedProfileTWs[profile_ip]:
-                    dict_tws[blocked_tw]["blocked"] = True
-                blocked_profile = True
+        # Fetch blocked profiles
+        blockedProfileTWs = self.db.hgetall('BlockedProfTW')
+        if blockedProfileTWs:
+            for blocked in blockedProfileTWs.keys():
+                profile_word, blocked_ip = blocked.split("_")
+                profiles_dict[blocked_ip] = True
 
-            data.append({"id": str(id), "profile": profile_ip, "tws": dict_tws, "blocked": blocked_profile})
+        # Set all profiles
+        for profile_ip, blocked_state in profiles_dict.items():
+            data.append({"profile": profile_ip, "blocked": blocked_state})
 
         return {
             'data': data
         }
-
-    # TODO: decide and fix the graph
-    # def set_DstIPflow(self, profile, timewindow):
-    #     """
-    #     Set flows per each destination IP
-    #     :param profile: active profile
-    #     :param timewindow: active timewindow
-    #     :return: data with flows per ip
-    #     """
-    #     dst_ips = json.loads(self.db.hget(profile + '_' + timewindow, 'DstIPs'))
-    #     data = []
-    #     id = 0
-    #     for ip, port in dst_ips.items():
-    #         data.append({"ip": ip, "flow": port})
-    #         id = id + 1
-    #
-    #     return {
-    #         'data': data
-    #     }
-
-    # TODO: decide and fix the graph
-    # def set_dstPortsClientUDPNotEstablished(self):
-    #
-    #     dst_ips = json.loads(self.db.hget('profile_192.168.2.16_timewindow1', 'DstPortsClientUDPNotEstablished'))
-    #     data = []
-    #     id = 0
-    #     for port, info in dst_ips.items():
-    #         data.append({"port": port, "info": info})
-    #         id = id + 1
-    #
-    #     return {
-    #         'data': data
-    #     }
 
     def set_outtuples(self, profile, timewindow):
         """
@@ -180,7 +169,7 @@ class Hotkeys:
         """
 
         data = []
-        outtuples = self.db.hget(profile + '_' + timewindow, 'OutTuples')
+        outtuples = self.db.hget("profile_" + profile + '_' + timewindow, 'OutTuples')
         if outtuples:
             outtuples = json.loads(outtuples)
 
@@ -204,7 +193,7 @@ class Hotkeys:
         :return: (tuple, string, ip_info)
         """
         data = []
-        intuples = self.db.hget(profile + '_' + timewindow, 'InTuples')
+        intuples = self.db.hget("profile_" + profile + '_' + timewindow, 'InTuples')
         if intuples:
             intuples = json.loads(intuples)
             for key, value in intuples.items():
@@ -226,7 +215,7 @@ class Hotkeys:
         :return: list of timeline flows as set initially in database
         """
         data = []
-        timeline_flows = self.db.hgetall(profile + "_" + timewindow + "_flows")
+        timeline_flows = self.db.hgetall("profile_" + profile + "_" + timewindow + "_flows")
         if timeline_flows:
             for key, value in timeline_flows.items():
                 value = json.loads(value)
@@ -253,7 +242,7 @@ class Hotkeys:
         """
         data = []
 
-        timeline = self.db.zrange(profile + "_" + timewindow + "_timeline", 0, -1)
+        timeline = self.db.zrange("profile_" + profile + "_" + timewindow + "_timeline", 0, -1)
         if timeline:
 
             search_filter = search_filter.strip()
@@ -295,14 +284,16 @@ class Hotkeys:
         Set alerts for chosen profile and timewindow
         """
         data = []
+        profile = "profile_" + profile
         alerts = self.db.hget("alerts", profile)
 
         if alerts:
             alerts = json.loads(alerts)
-            alerts_tw = alerts[timewindow]
+            alerts_tw = alerts.get(timewindow, dict())
             tws = self.get_all_tw_with_ts(profile)
             evidences = self.db.hget("evidence" + profile, timewindow)
-            evidences = json.loads(evidences)
+            if evidences:
+                evidences = json.loads(evidences)
 
             for alert_ID, evidence_ID_list in alerts_tw.items():
                 evidence_count = len(evidence_ID_list)
@@ -324,13 +315,13 @@ class Hotkeys:
         """
 
         data = []
-        alerts = self.db.hget("alerts", profile)
+        alerts = self.db.hget("alerts", "profile_" + profile)
 
         if alerts:
             alerts = json.loads(alerts)
             alerts_tw = alerts[timewindow]
             evidence_ID_list = alerts_tw[alert_id]
-            evidences = self.db.hget("evidence" + profile, timewindow)
+            evidences = self.db.hget("evidence" + "profile_" + profile, timewindow)
             evidences = json.loads(evidences)
 
             for evidence_ID in evidence_ID_list:

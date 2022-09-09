@@ -18,10 +18,9 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 from slips_files.common.abstracts import Module
-from slips_files.common.argparse import ArgumentParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
-import configparser
+from slips_files.common.config_parser import ConfigParser
 import signal
 import sys
 import redis
@@ -65,9 +64,8 @@ class Main:
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
-            self.parse_arguments()
-            # set self.config
-            self.read_conf_file()
+            self.conf = ConfigParser()
+            self.args = self.conf.get_args()
             self.check_given_flags()
             if not self.args.stopdaemon:
                 # Check the type of input
@@ -77,27 +75,13 @@ class Main:
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
-                self.twid_width = utils.get_tw_width(self.config)
+                self.twid_width = self.conf.get_tw_width()
 
 
     def prepare_zeek_output_dir(self):
         from pathlib import Path
         without_ext = Path(self.input_information).stem
         self.zeek_folder = f'./zeek_files_{without_ext}/'
-
-
-    def read_configuration(self, section, name, default_value):
-        """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
-        try:
-            return self.config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            return default_value
 
     def get_host_ip(self):
         """
@@ -314,7 +298,7 @@ class Main:
         return plugins, failed_to_load_modules
 
     def load_modules(self):
-        to_ignore = self.get_disabled_modules()
+        to_ignore = self.conf.get_disabled_modules(self.input_type)
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
         for module_name in modules_to_call:
@@ -325,14 +309,12 @@ class Main:
             if 'p2ptrust' == module_name:
                 ModuleProcess = module_class(
                     self.outputqueue,
-                    self.config,
                     self.redis_port,
                     output_dir=self.args.output
                 )
             else:
                 ModuleProcess = module_class(
                     self.outputqueue,
-                    self.config,
                     self.redis_port
                 )
             ModuleProcess.start()
@@ -354,11 +336,10 @@ class Main:
         """
         Detailed logs are the ones created by logsProcess
         """
-        do_logs = self.read_configuration(
-            'parameters', 'create_log_files', 'no'
-        )
+
+        do_logs = self.conf.create_log_files()
         # if -l is provided or create_log_files is yes then we will create log files
-        if self.args.createlogfiles or do_logs == 'yes':
+        if self.args.createlogfiles and do_logs:
             # Create a folder for logs
             logs_dir = self.create_folder_for_logs()
             # Create the logsfile thread if by parameter we were told,
@@ -369,7 +350,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 logs_dir,
                 self.redis_port
             )
@@ -395,7 +375,7 @@ class Main:
             guiProcessQueue = Queue()
             guiProcessThread = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
-                self.args.debug, self.config
+                self.args.debug
             )
             guiProcessThread.start()
             self.print('quiet')
@@ -449,7 +429,7 @@ class Main:
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
-        update_manager = UpdateFileManager(self.outputqueue, self.config, self.redis_port)
+        update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
         update_manager.update_ports_info()
         update_manager.update_org_files()
 
@@ -458,7 +438,7 @@ class Main:
         """
         Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
         """
-        if not 'yes' in self.enable_metadata.lower():
+        if not self.enable_metadata:
             return
 
         metadata_dir = os.path.join(self.args.output, 'metadata')
@@ -473,9 +453,7 @@ class Main:
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
-        whitelist = self.read_configuration(
-            'parameters', 'whitelist_path', 'whitelist.conf'
-        )
+        whitelist = self.conf.whitelist_path()
         shutil.copy(whitelist, metadata_dir)
 
         branch_info = utils.get_branch_info()
@@ -499,7 +477,7 @@ class Main:
         return self.info_path
 
     def kill(self, module_name, INT=False):
-        sig = signal.SIGINT if int else signal.SIGKILL
+        sig = signal.SIGINT if INT else signal.SIGKILL
 
 
         pid = int(self.PIDs[module_name])
@@ -569,14 +547,7 @@ class Main:
         )
 
     def store_zeek_dir_copy(self):
-        store_a_copy_of_zeek_files = self.read_configuration(
-            'parameters', 'store_a_copy_of_zeek_files', 'no'
-        )
-        store_a_copy_of_zeek_files = (
-            False
-            if 'no' in store_a_copy_of_zeek_files.lower()
-            else True
-        )
+        store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
@@ -586,15 +557,9 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete = self.read_configuration(
-            'parameters', 'delete_zeek_files', 'no'
-        )
-        delete = (
-            False if 'no' in delete.lower() else True
-        )
-
+        delete = self.conf.delete_zeek_files()
         if delete:
-            shutil.rmtree('zeek_files')
+            shutil.rmtree(self.zeek_folder)
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
@@ -643,14 +608,10 @@ class Main:
         Add the analysis end date to the metadata file and
         the db for the web inerface to display
         """
-        self.enable_metadata = self.read_configuration(
-                                                'parameters',
-                                                'metadata_dir',
-                                                'no'
-                                                )
+        self.enable_metadata = self.conf.enable_metadata()
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
         __database__.set_input_metadata({'analysis_end': end_date})
-        if 'yes' in self.enable_metadata.lower():
+        if self.enable_metadata:
             # add slips end date in the metadata dir
             try:
                 with open(self.info_path, 'a') as f:
@@ -1081,177 +1042,6 @@ class Main:
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
 
-    def parse_arguments(self):
-        # Parse the parameters
-        slips_conf_path = os.path.join(os.getcwd() ,'slips.conf')
-        parser = ArgumentParser(
-            usage='./slips.py -c <configfile> [options] [file]', add_help=False
-        )
-        parser.add_argument(
-            '-c',
-            '--config',
-            metavar='<configfile>',
-            action='store',
-            required=False,
-            default=slips_conf_path,
-            help='Path to the Slips config file.',
-        )
-        parser.add_argument(
-            '-v',
-            '--verbose',
-            metavar='<verbositylevel>',
-            action='store',
-            required=False,
-            type=int,
-            help='Verbosity level. This logs more info about Slips.',
-        )
-        parser.add_argument(
-            '-e',
-            '--debug',
-            metavar='<debuglevel>',
-            action='store',
-            required=False,
-            type=int,
-            help='Debugging level. This shows more detailed errors.',
-        )
-        parser.add_argument(
-            '-f',
-            '--filepath',
-            metavar='<file>',
-            action='store',
-            required=False,
-            help='Read a Zeek dir, Argus binetflow, pcapfile or nfdump.',
-        )
-        parser.add_argument(
-            '-i',
-            '--interface',
-            metavar='<interface>',
-            action='store',
-            required=False,
-            help='Read packets from an interface.',
-        )
-        parser.add_argument(
-            '-l',
-            '--createlogfiles',
-            action='store_true',
-            required=False,
-            help='Create log files with all the traffic info and detections.',
-        )
-        parser.add_argument(
-            '-F',
-            '--pcapfilter',
-            action='store',
-            required=False,
-            type=str,
-            help="Packet filter for Zeek. BPF style.",
-        )
-        parser.add_argument(
-            '-cc',
-            '--clearcache',
-            action='store_true',
-            required=False,
-            help='Clear the cache database.',
-        )
-        parser.add_argument(
-            '-p',
-            '--blocking',
-            help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
-            required=False,
-            default=False,
-            action='store_true',
-        )
-        parser.add_argument(
-            '-cb',
-            '--clearblocking',
-            help='Flush and delete slipsBlocking iptables chain',
-            required=False,
-            default=False,
-            action='store_true',
-        )
-        parser.add_argument(
-            '-o',
-            '--output',
-            action='store',
-            required=False,
-            default=self.alerts_default_path,
-            help='Store alerts.json and alerts.txt in the given folder.',
-        )
-        parser.add_argument(
-            '-s',
-            '--save',
-            action='store_true',
-            required=False,
-            help='Save the analysed file db to disk.',
-        )
-        parser.add_argument(
-            '-d',
-            '--db',
-            action='store',
-            required=False,
-            help='Read an analysed file (rdb) from disk.',
-        )
-        parser.add_argument(
-            '-D',
-            '--daemon',
-            required=False,
-            default=False,
-            action='store_true',
-            help='Run slips in daemon mode',
-        )
-        parser.add_argument(
-            '-S',
-            '--stopdaemon',
-            required=False,
-            default=False,
-            action='store_true',
-            help='Stop slips daemon',
-        )
-        parser.add_argument(
-            '-k',
-            '--killall',
-            action='store_true',
-            required=False,
-            help='Kill all unused redis servers',
-        )
-        parser.add_argument(
-            '-m',
-            '--multiinstance',
-            action='store_true',
-            required=False,
-            help='Run multiple instances of slips, don\'t overwrite the old one',
-        )
-        parser.add_argument(
-            '-P',
-            '--port',
-            action='store',
-            required=False,
-            help='The redis-server port to use',
-        )
-        parser.add_argument(
-            '-V',
-            '--version',
-            action='store_true',
-            required=False,
-            help='Print Slips Version',
-        )
-        parser.add_argument(
-            '-h', '--help', action='help', help='command line help'
-        )
-        self.args = parser.parse_args()
-
-    def read_conf_file(self):
-        """
-        sets self.config
-        """
-        # don't use '%' for interpolation.
-        self.config = configparser.ConfigParser(interpolation=None)
-        try:
-            with open(self.args.config) as source:
-                self.config.read_file(source)
-        except (IOError, TypeError):
-            pass
-
-        return self.config
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
@@ -1315,67 +1105,7 @@ class Main:
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def get_disabled_modules(self) -> list:
-        to_ignore = self.read_configuration(
-            'modules', 'disable', False
-        )
-        use_p2p = self.read_configuration(
-            'P2P', 'use_p2p', 'no'
-        )
 
-        if not to_ignore:
-            return []
-        # Convert string to list
-        to_ignore = (
-            to_ignore.replace('[', '')
-                .replace(']', '')
-                .replace(' ', '')
-                .split(',')
-        )
-        # Ignore exporting alerts module if export_to is empty
-        export_to = (
-            self.read_configuration('exporting_alerts', 'export_to', '[]')
-                .rstrip('][')
-                .replace(' ', '')
-                .lower()
-        )
-        if (
-                'stix' not in export_to
-                and 'slack' not in export_to
-                and 'json' not in export_to
-        ):
-            to_ignore.append('exporting_alerts')
-        if (
-                not use_p2p
-                or use_p2p == 'no'
-                or not self.args.interface
-        ):
-            to_ignore.append('p2ptrust')
-
-        # ignore CESNET sharing module if send and receive are are disabled in slips.conf
-        send_to_warden = self.read_configuration(
-            'CESNET', 'send_alerts', 'no'
-        ).lower()
-
-        receive_from_warden = self.read_configuration(
-            'CESNET', 'receive_alerts', 'no'
-        ).lower()
-
-        if 'no' in send_to_warden and 'no' in receive_from_warden:
-            to_ignore.append('CESNET')
-
-        # don't run blocking module unless specified
-        if not (
-                 self.args.clearblocking
-                or self.args.blocking
-        ):  # ignore module if not using interface
-            to_ignore.append('blocking')
-
-        # leak detector only works on pcap files
-        if self.input_type != 'pcap':
-            to_ignore.append('leak_detector')
-
-        return to_ignore
 
     def handle_flows_from_stdin(self, input_information):
         """
@@ -1408,7 +1138,7 @@ class Main:
         self.input_type = 'database'
         # self.input_information = 'database'
         from slips_files.core.database.database import __database__
-        __database__.start(self.config, 6379)
+        __database__.start(6379)
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
@@ -1544,6 +1274,16 @@ class Main:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
+        if self.conf.use_p2p() and not self.args.interface:
+            print('P2P is only supported using an interface.\n'
+                  'set use_p2p=no in slips.conf and restart Slips.')
+            self.terminate_slips()
+
+        if self.args.config and not os.path.exists(self.args.config):
+            print(f"{self.args.config} doesn't exist. Stopping Slips")
+            self.terminate_slips()
+
+
         # Clear cache if the parameter was included
         if self.args.clearcache:
             print('Deleting Cache DB in Redis.')
@@ -1588,7 +1328,7 @@ class Main:
                 from multiprocessing import Queue
                 from modules.blocking.blocking import Module
 
-                blocking = Module(Queue(), self.config)
+                blocking = Module(Queue())
                 blocking.start()
                 blocking.delete_slipsBlocking_chain()
                 # Tell the blocking module to clear the slips chain
@@ -1604,12 +1344,19 @@ class Main:
         save info about name, size, analysis start date in the db
         """
         now = utils.convert_format(datetime.now(), utils.alerts_format)
+        to_ignore = self.conf.get_disabled_modules(self.input_type)
+
         info = {
             'slips_version': version,
             'name': self.input_information,
             'analysis_start': now,
-
+            'disabled_modules': json.dumps(to_ignore)
         }
+
+        if hasattr(self, 'zeek_folder'):
+            info.update({
+                'zeek_dir': self.zeek_folder
+            })
 
         size_in_mb = '-'
         if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
@@ -1631,17 +1378,15 @@ class Main:
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
         if self.args.verbose == None:
-            self.args.verbose = int(self.read_configuration('parameters', 'verbose', 1))
+            self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
         if self.args.verbose < 1:
             self.args.verbose = 1
 
-        # Any debuggsity passed as parameter overrides the configuration. Only check its value
+        # Any deug passed as parameter overrides the configuration. Only check its value
         if self.args.debug == None:
-            self.args.debug = int(
-                self.read_configuration('parameters', 'debug', 0)
-            )
+            self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
         if self.args.debug < 0:
@@ -1735,7 +1480,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 self.redis_port,
                 stdout=current_stdout,
                 stderr=stderr,
@@ -1745,13 +1489,14 @@ class Main:
             output_process.start()
             __database__.store_process_PID('OutputProcess', int(output_process.pid))
 
+
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.get_pid_of_redis_server(self.redis_port)
             self.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
-            self.set_input_metadata()
+
 
 
             if self.mode == 'daemonized':
@@ -1799,7 +1544,6 @@ class Main:
             evidence_process = EvidenceProcess(
                 self.evidenceProcessQueue,
                 self.outputqueue,
-                self.config,
                 self.args.output,
                 logs_dir,
                 self.redis_port,
@@ -1824,7 +1568,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.config,
                 self.redis_port,
             )
             profiler_process.start()
@@ -1844,7 +1587,6 @@ class Main:
                 self.profilerProcessQueue,
                 self.input_type,
                 self.input_information,
-                self.config,
                 self.args.pcapfilter,
                 self.zeek_bro,
                 self.zeek_folder,
@@ -1861,7 +1603,7 @@ class Main:
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
-
+            self.set_input_metadata()
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
@@ -1871,13 +1613,9 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-            self.enable_metadata = self.read_configuration(
-                                                'parameters',
-                                                'metadata_dir',
-                                                'no'
-                                                )
+            self.enable_metadata = self.conf.enable_metadata()
 
-            if 'yes' in self.enable_metadata.lower():
+            if self.enable_metadata:
                 self.info_path = self.add_metadata()
 
             hostIP = self.store_host_ip()

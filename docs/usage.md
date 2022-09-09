@@ -502,11 +502,16 @@ You can also change how often Slips creates log files using the ```log_report_ti
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
-DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space, Slips deletes all zeek log files after 1 day by default. this is called zeek rotation and is enabled by default.
+DISCLAIMER: zeek generates log files that grow every second until they reach GBs, to save disk space, 
+Slips deletes all zeek log files after 1 day when running on an
+interface. this is called zeek rotation and is enabled by default.
 
 You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf```
 
-But you can also enable storing a copy of zeek log files in the output directory by setting ```store_a_copy_of_zeek_files``` to yes. this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops. so this doesn't include deleted zeek logs.
+But you can also enable storing a copy of zeek log files in the output 
+directory by setting ```store_a_copy_of_zeek_files``` to yes.
+this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
+so this doesn't include deleted zeek logs.
 
 Once slips is done, you will find a copy of your zeek files in ```<output_dir>/zeek_files/```
 

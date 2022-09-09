@@ -1,9 +1,9 @@
 # Must imports
-import configparser
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -25,16 +25,13 @@ class Module(Module, multiprocessing.Process):
         'Sebastian Garcia',
     ]
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Start the DB
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
         self.c3 = __database__.subscribe('new_url')
@@ -46,11 +43,10 @@ class Module(Module, multiprocessing.Process):
         try:
             with open(self.key_file, 'r') as f:
                 self.key = f.read(64)
-        except FileNotFoundError:
+        except (FileNotFoundError, TypeError):
             self.print(
-                'The file with API key ('
-                + self.key_file
-                + ') could not be loaded. VT module is stopping.'
+                f'The file with API key {self.key_file} '
+                f'could not be loaded. VT module is stopping.'
             )
 
         # query counter for debugging purposes
@@ -72,30 +68,9 @@ class Module(Module, multiprocessing.Process):
         self.incorrect_API_key = False
 
     def __read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            self.key_file = self.config.get('virustotal', 'api_key_file')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.key_file = None
-        try:
-            # update period
-            self.update_period = self.config.get(
-                'virustotal', 'virustotal_update_period'
-            )
-            self.update_period = float(self.update_period)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.update_period = 259200
+        conf = ConfigParser()
+        self.key_file = conf.vt_api_key_file()
+        self.update_period = conf.virustotal_update_period()
 
     def print(self, text, verbose=1, debug=0):
         """

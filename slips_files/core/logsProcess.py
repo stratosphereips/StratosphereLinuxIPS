@@ -19,11 +19,11 @@
 import multiprocessing
 import sys
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import os
 import threading
 import time
 from slips_files.core.database.database import __database__
-import configparser
 import json
 
 
@@ -50,7 +50,6 @@ class LogsProcess(multiprocessing.Process):
         outputqueue,
         verbose,
         debug,
-        config,
         mainfoldername,
         redis_port,
     ):
@@ -58,11 +57,8 @@ class LogsProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.separator = '_'
-        # From the config, read the timeout to read logs. Now defaults to 5 seconds
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         # Read the configuration
@@ -76,23 +72,11 @@ class LogsProcess(multiprocessing.Process):
         self.is_timline_file = False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            self.report_time = int(
-                self.config.get('parameters', 'log_report_time')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.report_time = 5
+        conf = ConfigParser()
+        self.report_time = conf.log_report_time()
         self.outputqueue.put(
-            '01|logs|Logs Process configured to report every: {} seconds'.format(
-                self.report_time
-            )
+            f'01|logs|Logs Process configured to report every: '
+            f'{self.report_time} seconds'
         )
 
     def print(self, text, verbose=1, debug=0):

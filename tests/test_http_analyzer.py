@@ -17,8 +17,7 @@ def do_nothing(*args):
 def create_http_analyzer_instance(outputQueue):
     """Create an instance of http_analyzer.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    http_analyzer = Module(outputQueue, config, 6380)
+    http_analyzer = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     http_analyzer.print = do_nothing
     return http_analyzer

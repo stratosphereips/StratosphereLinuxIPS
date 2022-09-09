@@ -21,6 +21,7 @@ from datetime import datetime, timedelta
 import sys
 import configparser
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -36,21 +37,19 @@ class ProfilerProcess(multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+        self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
         self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.config = config
         self.columns_defined = False
         self.timeformat = None
         self.input_type = False
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
@@ -92,42 +91,13 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
-
-        self.whitelist_path = get('parameters', 'whitelist_path', 'whitelist.conf')
-        self.timeformat = get('timestamp', 'format', None)
-        self.analysis_direction = get('parameters', 'analysis_direction', 'all')
-        self.label = get('parameters', 'label', 'unknown')
-
-        self.home_net = utils.get_home_network(self.config)
-
-        self.width = get('parameters', 'time_window_width', 3600)
-        if 'only_one_tw' in str(self.width):
-            # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-            self.width = 9999999999
-            self.print(
-                f'Time Windows Width used: {self.width} seconds.'
-                f' Only 1 time windows. Dates in the names of files are 100 years in the past.',3,0
-            )
-        else:
-            self.width = float(self.width)
+        conf = ConfigParser()
+        self.whitelist_path = conf.whitelist_path()
+        self.timeformat = conf.ts_format()
+        self.analysis_direction = conf.analysis_direction()
+        self.label = conf.label()
+        self.home_net = conf.get_home_network()
+        self.width = conf.get_tw_width_as_float()
 
     def define_type(self, line):
         """

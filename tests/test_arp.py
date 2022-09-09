@@ -15,8 +15,7 @@ def do_nothing(*args):
 def create_ARP_instance(outputQueue):
     """Create an instance of arp.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser(interpolation=None)
-    ARP = Module(outputQueue, config, 6380)
+    ARP = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     ARP.print = do_nothing
     return ARP

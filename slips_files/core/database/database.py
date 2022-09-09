@@ -1,3 +1,6 @@
+from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
 import os
 import signal
 import redis
@@ -13,8 +16,7 @@ import sys
 import validators
 import ast
 from uuid import uuid4
-from slips_files.common.slips_utils import utils
-from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
+
 
 
 class Database(ProfilingFlowsDatabase, object):
@@ -185,69 +187,14 @@ class Database(ProfilingFlowsDatabase, object):
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
-        """
-        Read values from the configuration file
-        """
-        try:
-            deletePrevdbText = self.config.get('parameters', 'deletePrevdb')
-            self.deletePrevdb = deletePrevdbText != 'False'
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-            KeyError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.deletePrevdb = True
+        conf = ConfigParser()
+        self.deletePrevdb = conf.deletePrevdb()
+        self.disabled_detections = conf.disabled_detections()
+        self.home_network = conf.get_home_network()
+        self.width = conf.get_tw_width_as_float()
 
-        try:
-            data = self.config.get('parameters', 'time_window_width')
-            self.width = float(data)
-        except ValueError:
-            # Its not a float
-            if 'only_one_tw' in data:
-                # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-                self.width = 9999999999
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no
-            # configuration file specified
-            # 1h
-            self.width = 3600
-
-        # Read disabled detections from slips.conf
-        # get the configuration for this alert
-        try:
-            self.disabled_detections = self.config.get(
-                'DisabledAlerts', 'disabled_detections'
-            )
-            self.disabled_detections = (
-                self.disabled_detections.replace('[', '')
-                .replace(']', '')
-                .replace(',', '')
-                .split()
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError,
-            KeyError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # if we failed to read a value, it will be enabled by default.
-            self.disabled_detections = []
-
-        # get home network from slips.conf
-        self.home_network = utils.get_home_network(self.config)
-
-    def start(self, config, redis_port):
+    def start(self, redis_port):
         """Start the DB. Allow it to read the conf"""
-        self.config = config
         self.read_configuration()
 
         # Read values from the configuration file
@@ -320,31 +267,37 @@ class Database(ProfilingFlowsDatabase, object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if not self.r.sismember(
-                'profiles', str(profileid)
-            ) and self.should_add(profileid):
-                # Add the profile to the index. The index is called 'profiles'
-                self.r.sadd('profiles', str(profileid))
-                # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
-                # Add the start time of profile
-                self.r.hset(profileid, 'starttime', starttime)
-                # For now duration of the TW is fixed
-                self.r.hset(profileid, 'duration', duration)
-                # When a new profiled is created assign threat level = 0 and confidence = 0.05
-                self.r.hset(profileid, 'threat_level', 0)
-                self.r.hset(profileid, 'confidence', 0.05)
-                # The IP of the profile should also be added as a new IP we know about.
-                ip = profileid.split(self.separator)[1]
-                # If the ip is new add it to the list of ips
-                self.setNewIP(ip)
-                # Publish that we have a new profile
-                self.publish('new_profile', ip)
+            if self.r.sismember('profiles', str(profileid)):
+                # we already have this profile
+                return False
+
+            if not self.should_add(profileid):
+                return False
+
+            # Add the profile to the index. The index is called 'profiles'
+            self.r.sadd('profiles', str(profileid))
+            # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
+            # Add the start time of profile
+            self.r.hset(profileid, 'starttime', starttime)
+            # For now duration of the TW is fixed
+            self.r.hset(profileid, 'duration', duration)
+            # When a new profiled is created assign threat level = 0 and confidence = 0.05
+            self.r.hset(profileid, 'threat_level', 0)
+            self.r.hset(profileid, 'confidence', 0.05)
+            # The IP of the profile should also be added as a new IP we know about.
+            ip = profileid.split(self.separator)[1]
+            # If the ip is new add it to the list of ips
+            self.setNewIP(ip)
+            # Publish that we have a new profile
+            self.publish('new_profile', ip)
+            return True
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
                 '00|database|Error in addProfile in database.py'
             )
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
+
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -1229,11 +1182,9 @@ class Database(ProfilingFlowsDatabase, object):
 
         return True
 
-    def setEvidenceFoAllProfiles(self, evidence):
+    def set_evidence_for_profileid(self, evidence):
         """
         Set evidence for the profile in the same format as json in alerts.json
-
-        Comment: it would be better ot have same format of evidence every where.
         """
         evidence = json.dumps(evidence)
         self.r.sadd('Evidence', evidence)
@@ -1404,6 +1355,8 @@ class Database(ProfilingFlowsDatabase, object):
                 uid,
                 data,
             )
+            return True
+        return False
 
     def get_module_labels_from_flow(self, profileid, twid, uid):
         """

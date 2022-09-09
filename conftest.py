@@ -48,9 +48,7 @@ def profilerQueue():
 @pytest.fixture
 def database(outputQueue):
     from slips_files.core.database.database import __database__
-
-    config = configparser.ConfigParser()
-    __database__.start(config, 1234)
+    __database__.start(1234)
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     return __database__

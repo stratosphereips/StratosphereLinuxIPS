@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -23,12 +24,10 @@ class PortScanProcess(Module, multiprocessing.Process):
     description = 'Detect Horizonal, Vertical and ICMP scans'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # Get from the database the separator used to separate the IP and the word profile
@@ -133,7 +132,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dstips_to_discard = []
                     # Remove dstips that have DNS resolution already
                     for dip in dstips:
-                        dns_resolution = __database__.get_reverse_dns(dip)
+                        dns_resolution = __database__.get_dns_resolution(dip)
                         dns_resolution = dns_resolution.get('domains', [])
                         if dns_resolution:
                             dstips_to_discard.append(dip)

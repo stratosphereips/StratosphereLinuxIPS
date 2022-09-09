@@ -3,6 +3,14 @@ const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 co
            "<'row'<'col-sm-12'tr>>" +
            "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
 
+let active_profile = '';
+let active_timewindow = '';
+let active_timewindow_index = 0;
+let active_tw_id = "";
+let active_hotkey_name = 'timeline';
+let last_active_hotkey_name = 'timeline';
+let active_hotkey_table = null;
+
 
 /*
 Set profile and timewindow table.
@@ -20,49 +28,95 @@ let profiles = function () {
         paging:false,
         info: false,
         ajax: '/hotkeys/profiles_tws',
-        "rowId": 'id',
         columns: [
             {
                 data: 'profile',
                 "className": 'r'
             }
         ],
-        "fnRowCallback": function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){
                 case true:
                     $('td', nRow).css('background-color', '#FF8989')
                     break;
             }
-    }
+        }
     });
+
+
+    function add_table_tws(table_id) {
+        let entry ='<table' + ' id="'+ table_id + '"' + ' class="table table-striped" >'
+        let exit = '</table>'
+        let head ="<thead>"+
+         "<tr>"+
+         "<th>TW</th>" +
+         "</tr>"+
+         "</thead>"
+        return (entry + head  + exit);
+    };
+
+    var convertDotToDash = function(string) {
+        return string.replace(/\./g,'_');
+    }
+
 
     return {
         onclick_tws: function () {
-            function add_tws(profile_tws) {
-                const open_string = '<table class="table table-striped">'
-                const close_string = '</table>'
-                let data = ""
-                Object.entries(profile_tws.tws).forEach(([item, value]) => {
-                    let colored_item = ""
-                    if(value["blocked"]){
-                       colored_item = '<td style="background-color:#FF8989">' + value["name"] + '</td>'
-                    }
-                    else{
-                       colored_item = '<td style="background-color:#FFFFFF">' + value["name"] + '</td>'
-                    }
-                    data = data + '<tr onclick="hotkey_hook.initialize_profile_timewindow(' + "'" + "profile_" + profile_tws.profile + "'" + ',' + "'" + item + "'" + ',' +"'" + value["name"] +"'" +')">' + colored_item + '</tr>';
-                })
-                return open_string + data + close_string;
-            }
-
             $('#profiles').on('click', 'tbody td.r', function () {
                 let tr = $(this).closest('tr');
                 let row = profiles_table.row(tr);
+
+                let profile_id = row.data()['profile']
+                let profile_id_dash = convertDotToDash(profile_id)
+                let table_id_tw = '#' + profile_id_dash
+
                 if (row.child.isShown()) {
+                    $(table_id_tw).DataTable().clear().destroy();
                     row.child.hide();
+                    tr.removeClass('shown');
                 }
                 else {
-                    row.child(add_tws(row.data())).show();
+                    row.child(add_table_tws(profile_id_dash)).show();
+                    let ajax_ljnk = '/hotkeys/tws/' + profile_id;
+                    let table_tws = $(table_id_tw).DataTable({
+                        "ajax":ajax_ljnk,
+                        "bDestroy": true,
+                        dom: custom_dom,
+                        bInfo: false,
+                        ordering: false,
+                        paging: false,
+                        searching: false,
+                        columns: [
+                            {data: 'name'}
+                        ],
+                        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+                            switch(aData['blocked']){
+                                case true:
+                                    $('td', nRow).css('background-color', '#FF8989')
+                                    break;
+                            }
+                        }
+                    });
+
+                    $(table_id_tw).on('click', 'tbody tr', function () {
+                        let row = table_tws.row($(this))
+                        let rowData = row.data();
+                        let rowIndex = row.index();
+                        let t = $(table_id_tw).DataTable();
+                        if(active_tw_id){
+                          $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
+
+                        }
+                        active_tw_id = table_id_tw
+                        active_timewindow_index = rowIndex;
+                        $(t.row(rowIndex).node()).addClass('row_selected');
+                        active_profile =  profiles_table.row(tr).data()["profile"]
+                        active_timewindow = rowData["tw"]
+                        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + rowData["name"];
+                        hotkey_hook.initialize_profile_timewindow()
+                     });
+
+                    tr.addClass('shown');
                 }
             });
         },
@@ -73,16 +127,16 @@ let profiles = function () {
                 let url = '/hotkeys/info/' + data.profile
                 ipinfo.ajax.url(url).load();
             });
+        },
+
+        get_profiles_table: function(){
+            return profiles_table;
         }
+
     }
 }
 
  let operate_hotkeys = function () {
-    let profile = '';
-    let timewindow = '';
-    let active_hotkey_name = 'timeline';
-    let last_active_hotkey_name = 'timeline';
-    let active_hotkey_table = null;
 
     let timeline_flows = $('#table_timeline_flows').DataTable({
         destroy: true,
@@ -187,7 +241,7 @@ let profiles = function () {
     });
 
 
-    function format(d) {
+    function add_table_evidence(d) {
         let table_id = d["alert_id"]
         let entry ='<table' + ' id="'+ table_id + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
         let exit = '</table>'
@@ -201,88 +255,8 @@ let profiles = function () {
          "<th>Description</th>" +
          "</tr>"+
          "</thead>"
-        return ( entry + head  + exit);
+        return (entry + head  + exit);
     }
-
-// TODO: decide and fix chart
-//    function addData(chart, labels, dataset) {
-//        chart.data.labels = labels;
-//        chart.data.datasets[0] = dataset
-//        chart.update();
-//    }
-//
-//    function addOptions(chart, options) {
-//        chart.options = options;
-//        chart.update();
-//    }
-
-// TODO: decide and fix chart
-//
-//    let dstIP = function(){
-//        const headers = {
-//        headers: {'Content-Type': 'application/json'}
-//    }
-//        let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
-//        fetch(link, {
-//            method: "GET",
-//            headers: headers
-//            }).then(response => response.json())
-//            .then(data => {
-//                const labels = data['data'].map(function(d){ return d['ip']})
-//                const barGraphData = data['data'].map(function(d){ return d['flow']})
-//                const data_set = data['data'].map(function(d){ return [d['ip'],d['flow']]})
-//var chart = Highcharts.chart('container', {
-//    chart: {
-//        type: 'bar',
-//        marginLeft: 150,
-//
-//    },
-//    title: {
-//        text: 'Amount of flows per dstIP'
-//    },
-//    xAxis: {
-//        type: 'category',
-//        title: {
-//            text: null
-//        },
-//        min: 0,
-//        max: 4,
-//        scrollbar: {
-//            enabled: true
-//        },
-//        tickLength: 0
-//    },
-//    yAxis: {
-//        min: 0,
-//        max: 20,
-//        title: {
-//            text: 'Flows',
-//            align: 'high'
-//        }
-//    },
-//    plotOptions: {
-//        bar: {
-//            dataLabels: {
-//                enabled: true
-//            }
-//        }
-//    },
-//    legend: {
-//        enabled: false
-//    },
-//    credits: {
-//        enabled: false
-//    },
-//
-//    series: [{
-//        name: 'Flows',
-//        data: data_set
-//    }]
-//});
-//});
-//
-//    document.getElementById(active_hotkey_name).style.display = "block"
-//    }
 
     function hide_hotkey() {
         document.getElementById(last_active_hotkey_name).style.display = "none"
@@ -290,8 +264,8 @@ let profiles = function () {
     }
 
     function update_table(){
-        if(profile && timewindow){
-            let link = "/hotkeys/" + active_hotkey_name + "/" + profile + "/" + timewindow
+        if(active_profile && active_timewindow){
+            let link = "/hotkeys/" + active_hotkey_name + "/" + active_profile + "/" + active_timewindow
             active_hotkey_table.ajax.url(link).load();}
         document.getElementById(active_hotkey_name).style.display = "block"
     }
@@ -318,20 +292,10 @@ let profiles = function () {
                 active_hotkey_table = alerts
                 update_table()
                 break;
-                // TODO: decide and fix chart
-//            case 'dstIP':
-//                dstIP()
-//                break;
         }
     }
 
     return {
-
-        set_profile_timewindow: function (pr, tw, tw_name) {
-            profile = pr;
-            timewindow = tw;
-            document.getElementById("active_profile_tw").innerText = "Selected: " + pr + " " + tw_name;
-        },
 
         update_hook: function(){
             update_hotkey()
@@ -388,7 +352,7 @@ let profiles = function () {
                     row.child.hide();
                     tr.removeClass('shown');
                 } else {
-                    row.child(format(row.data())).show();
+                    row.child(add_table_evidence(row.data())).show();
                     let table_id = "#" + row.data()["alert_id"]
                     let evidence = $(table_id).DataTable({
                         "bDestroy": true,
@@ -406,7 +370,7 @@ let profiles = function () {
                             { data: 'description'}
                         ]
                     });
-                    let link = "/hotkeys/evidence/" + profile + "/" + timewindow + "/" + row.data()["alert_id"]
+                    let link = "/hotkeys/evidence/" + active_profile + "/" + active_timewindow + "/" + row.data()["alert_id"]
                     evidence.ajax.url(link).load();
                     tr.addClass('shown');
                 }
@@ -436,38 +400,9 @@ let ipinfo = $('#ipinfo').DataTable({
 });
 
 
-// TODO: fix the chart filter
-//    function filterFunction() {
-//        let chartDom = document.getElementById("container");
-//        let chart = Highcharts.charts[Highcharts.attr(chartDom, 'data-highcharts-chart')]
-//        console.log(chart.series[0])
-//        let input = document.getElementById('myInput'),
-//                    points = chart.series[0].points.options,
-//                    filteredPoint = points.filter(point => point.category == input.value);
-//
-//              if (filteredPoint.length) {
-//                let newData = [];
-//                for (let i in data) {
-//                  newData.push(null)
-//                }
-//
-//                newData[filteredPoint[0].index] = filteredPoint[0].y
-//                    newData.push(null) //--- extra null as a workaround for bug
-//
-//                chart.series[0].update({
-//                  data: newData
-//                })
-//              } else {
-//                chart.series[0].update({
-//                  data: data
-//                })
-//              }
-//      }
-
-
-let profile = profiles();
-profile.onclick_tws();
-profile.onclick_ips();
+let profile_handle = profiles();
+profile_handle.onclick_tws();
+profile_handle.onclick_ips();
 
 let hotkeys = operate_hotkeys();
 hotkeys.onclick_buttons();
@@ -477,20 +412,46 @@ hotkeys.onclick_timeline_daddr();
 hotkeys.onclick_alerts();
 
 let hotkey_hook = {
-    'initialize_profile_timewindow': function (profile, timewindow, tw_name) {
-        hotkeys.set_profile_timewindow(profile, timewindow, tw_name);
+    'initialize_profile_timewindow': function () {
         hotkeys.update_hook();
     }
 }
 
 $('#table_timeline_filter_button').click(function(){
     var filter_gender = $('#table_timeline_filter_input').val();
-    if(filter_gender != '')
-    {
-        hotkeys.search_reload(filter_gender);
-    }
-    else
-    {
-        hotkeys.search_reload(filter_gender)
-    }
+    if(filter_gender != ''){hotkeys.search_reload(filter_gender);}
+    else{hotkeys.search_reload(filter_gender);}
 });
+
+function updateTable(){
+    hotkeys.update_hook()
+}
+
+
+function KeyPress(e) {
+    let evtobj = window.event? event : e
+    if (evtobj.keyCode == 78 && evtobj.ctrlKey){
+        var table = $(active_tw_id).DataTable();
+        $(table.row(active_timewindow_index).node()).removeClass('row_selected');
+        active_timewindow_index += 1
+        if(active_timewindow_index == table.data().count() - 1){
+            active_timewindow_index = 0
+        }
+        $(table.row(active_timewindow_index).node()).addClass('row_selected');
+        active_timewindow = table.row(active_timewindow_index).data()["tw"]
+        updateTable()
+    }
+    if (evtobj.keyCode == 80 && evtobj.ctrlKey){
+        var table = $(active_tw_id).DataTable();
+        $(table.row(active_timewindow_index).node()).removeClass('row_selected');
+        active_timewindow_index -= 1;
+        if(active_timewindow_index < 0){
+            active_timewindow_index = table.data().count() - 1;
+        }
+        $(table.row(active_timewindow_index).node()).addClass('row_selected');
+        active_timewindow = table.row(active_timewindow_index).data()["tw"]
+        updateTable()
+    }
+}
+
+document.onkeydown = KeyPress;

@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 import platform
 import sys
 
@@ -22,27 +23,15 @@ class Module(Module, multiprocessing.Process):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
-        # To which channels do you wnat to subscribe? When a message
-        # arrives on the channel the module will wakeup
-        # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
-        # - new_ip
-        # - tw_modified
-        # - evidence_added
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_blocking')
         self.os = platform.system()
         if self.os == 'Darwin':
-            # blocking isn't supported, exit module
             self.print('Mac OS blocking is not supported yet.')
             sys.exit()
         self.timeout = 0.00000001

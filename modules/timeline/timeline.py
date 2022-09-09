@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import traceback
 import sys
@@ -9,7 +10,6 @@ import sys
 # Your imports
 import time
 import json
-import configparser
 
 
 class Module(Module, multiprocessing.Process):
@@ -18,14 +18,11 @@ class Module(Module, multiprocessing.Process):
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.separator = __database__.getFieldSeparator()
         # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')
@@ -34,28 +31,10 @@ class Module(Module, multiprocessing.Process):
         # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
         self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
-        self.is_human_timestamp = bool(
-            self.read_configuration('modules', 'timeline_human_timestamp')
-        )
-        self.analysis_direction = self.config.get(
-            'parameters', 'analysis_direction'
-        )
-        # Wait a little so we give time to have something to print
+        conf = ConfigParser()
+        self.is_human_timestamp = conf.timeline_human_timestamp()
+        self.analysis_direction = conf.analysis_direction()
         self.timeout = 0.0000001
-
-    def read_configuration(self, section: str, name: str) -> str:
-        """Read the configuration file for what we need"""
-        # Get the time of log report
-        try:
-            conf_variable = self.config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            conf_variable = None
-        return conf_variable
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -78,7 +57,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def process_timestamp(self, timestamp: float) -> str:
-        if self.is_human_timestamp is True:
+        if self.is_human_timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
         return str(timestamp)
 
@@ -153,7 +132,7 @@ class Module(Module, multiprocessing.Process):
                 if self.analysis_direction == 'all' and str(daddr) == str(
                         profile_ip
                 ):
-                    dns_resolution = __database__.get_reverse_dns(daddr)
+                    dns_resolution = __database__.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -204,7 +183,7 @@ class Module(Module, multiprocessing.Process):
                         critical_warning_dport_name = (
                             'Protocol not recognized by Slips nor Zeek.'
                         )
-                    dns_resolution = __database__.get_reverse_dns(daddr)
+                    dns_resolution = __database__.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.

@@ -2,10 +2,10 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 
 # Your imports
-import configparser
 import os
 import json
 import sys
@@ -17,32 +17,25 @@ class Module(Module, multiprocessing.Process):
     description = 'Module to get different information from RiskIQ'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_ip')
         self.timeout = 0.00000001
         self.read_configuration()
 
     def read_configuration(self):
+        conf = ConfigParser()
+        # Read the riskiq api key
+        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         try:
-            # Read the riskiq api key
-            RiskIQ_credentials_path = self.config.get(
-                'threatintelligence', 'RiskIQ_credentials_path'
-            )
             with open(RiskIQ_credentials_path, 'r') as f:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
                 if len(self.riskiq_key) != 64:
                     raise NameError
         except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
             NameError,
             FileNotFoundError,
         ):

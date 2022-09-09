@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 from .TimerThread import TimerThread
 
 # Your imports
@@ -25,16 +26,12 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Read the configuration
         self.read_configuration()
         # Retrieve the labels
@@ -49,7 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.timeout = 0.0000001
@@ -112,46 +109,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        # Get the pcap filter
-        try:
-            self.long_connection_threshold = int(
-                self.config.get('flowalerts', 'long_connection_threshold')
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # this value is in seconds, =25 mins
-            self.long_connection_threshold = 1500
-        try:
-            self.ssh_succesful_detection_threshold = int(
-                self.config.get(
-                    'flowalerts', 'ssh_succesful_detection_threshold'
-                )
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.ssh_succesful_detection_threshold = 4290
-        try:
-            threashold =  self.config.get('flowalerts', 'data_exfiltration_threshold')
-            self.data_exfiltration_threshold = float(
-                threashold
-            )
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # threshold in MBs
-            self.data_exfiltration_threshold = 500
+        conf = ConfigParser()
+        self.long_connection_threshold = conf.long_connection_threshold()
+        self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
+        self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -406,7 +367,7 @@ class Module(Module, multiprocessing.Process):
         if other_ip:
             other_ip = json.loads(other_ip)
         # get the domain of this ip
-        dns_resolution = __database__.get_reverse_dns(daddr)
+        dns_resolution = __database__.get_dns_resolution(daddr)
 
         try:
             if other_ip and other_ip in dns_resolution.get('resolved-by', []):
@@ -583,8 +544,8 @@ class Module(Module, multiprocessing.Process):
                 # less than 2=30 minutes have passed
                 return False
 
-        answers_dict = __database__.get_reverse_dns(daddr)
-        if answers_dict:
+        # search 24hs back for a dns resolution
+        if __database__.is_ip_resolved(daddr, 24):
             return False
         # self.print(f'No DNS resolution in {answers_dict}')
         # There is no DNS resolution, but it can be that Slips is

@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import os
@@ -41,7 +42,6 @@ class InputProcess(multiprocessing.Process):
             profilerqueue,
             input_type,
             input_information,
-            config,
             packet_filter,
             zeek_or_bro,
             zeek_folder,
@@ -52,9 +52,7 @@ class InputProcess(multiprocessing.Process):
         self.name = 'InputProcess'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.redis_port = redis_port
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
@@ -71,7 +69,6 @@ class InputProcess(multiprocessing.Process):
         # over the configuration file
         if packet_filter:
             self.packet_filter = "'" + packet_filter + "'"
-        self.event_handler = None
         self.event_observer = None
         # set to true in unit tests
         self.testing = False
@@ -97,44 +94,10 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        try:
-            self.packet_filter = self.config.get('parameters', 'pcapfilter')
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.packet_filter = 'ip or not ip'
-
-        try:
-            self.tcp_inactivity_timeout = self.config.get(
-                'parameters', 'tcp_inactivity_timeout'
-            )
-            # make sure the value is a valid int
-            self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
-
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.tcp_inactivity_timeout = '5'
-
-        try:
-            self.rotation = self.config.get('parameters', 'rotation')
-            self.rotation = 'yes' in self.rotation
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.rotation = True
+        conf = ConfigParser()
+        self.packet_filter = conf.packet_filter()
+        self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
+        self.rotation = conf.rotation()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -365,8 +328,11 @@ class InputProcess(multiprocessing.Process):
             return False
 
     def read_zeek_folder(self):
+        # This is the case that a folder full of zeek files is passed with -f
         try:
-            # This is the case that a folder full of zeek files is passed with -f. Read them all
+            self.zeek_folder = self.given_path
+            self.start_observer()
+
             for file in os.listdir(self.given_path):
                 # Remove .log extension and add file name to database.
                 extension = file[-4:]
@@ -377,9 +343,11 @@ class InputProcess(multiprocessing.Process):
                         f'{self.given_path}/{file_name_without_extension}'
                     )
                 if self.testing: break
-            # We want to stop bro if no new line is coming.
-            self.bro_timeout = 1
+
+            # We want to stop slips if no new line is coming within 15s.
+            self.bro_timeout = 15
             lines = self.read_zeek_files()
+
             self.print(
                 f'\nWe read everything from the folder.'
                 f' No more input. Stopping input process. Sent {lines} lines', 2, 0,
@@ -476,7 +444,7 @@ class InputProcess(multiprocessing.Process):
                 return False
             # Add log file to database
             __database__.add_zeek_file(file_name_without_extension)
-            self.bro_timeout = 1
+            self.bro_timeout = 15
             self.lines = self.read_zeek_files()
             self.stop_queues()
             return True
@@ -503,6 +471,22 @@ class InputProcess(multiprocessing.Process):
         pid = subprocess.getoutput(command).splitlines()[0].split()[1]
         return int(pid)
 
+    def start_observer(self):
+        # Now start the observer of new files. We need the observer because Zeek does not create all the files
+        # at once, but when the traffic appears. That means that we need
+        # some process to tell us which files to read in real time when they appear
+        # Get the file eventhandler
+        # We have to set event_handler and event_observer before running zeek.
+        event_handler = FileEventHandler(self.redis_port, self.zeek_folder)
+        # Create an observer
+        self.event_observer = Observer()
+        # Schedule the observer with the callback on the file handler
+        self.event_observer.schedule(
+            event_handler, self.zeek_folder, recursive=True
+        )
+        # Start the observer
+        self.event_observer.start()
+
     def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
 
@@ -511,20 +495,7 @@ class InputProcess(multiprocessing.Process):
             if not os.path.exists(self.zeek_folder):
                 os.makedirs(self.zeek_folder)
             self.print(f'Storing zeek log files in {self.zeek_folder}')
-            # Now start the observer of new files. We need the observer because Zeek does not create all the files
-            # at once, but when the traffic appears. That means that we need
-            # some process to tell us which files to read in real time when they appear
-            # Get the file eventhandler
-            # We have to set event_handler and event_observer before running zeek.
-            self.event_handler = FileEventHandler(self.config, self.redis_port, self.zeek_folder)
-            # Create an observer
-            self.event_observer = Observer()
-            # Schedule the observer with the callback on the file handler
-            self.event_observer.schedule(
-                self.event_handler, self.zeek_folder, recursive=True
-            )
-            # Start the observer
-            self.event_observer.start()
+            self.start_observer()
 
             # rotation is disabled unless it's an interface
             rotation_interval = (
@@ -535,7 +506,6 @@ class InputProcess(multiprocessing.Process):
                     rotation_interval = (
                         "-e 'redef Log::default_rotation_interval =  1day;'"
                     )
-                # Change the bro command
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.bro_timeout = 9999999999999999
