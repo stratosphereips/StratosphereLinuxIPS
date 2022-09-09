@@ -12,7 +12,7 @@ import os
 import json
 import traceback
 import validators
-
+import dns
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -95,9 +95,10 @@ class Module(Module, multiprocessing.Process):
         elif 'dst' in type_detection:
             direction = 'to'
         ip_identification = __database__.getIPIdentification(ip)
+
         description = (
             f'connection {direction} blacklisted IP {ip} {ip_identification}.'
-            f' Source: {ip_info["source"]}. Description: {ip_info["description"]}'
+            f' Source: {ip_info["source"]}.'
         )
         tags = ''
         if tags_temp := ip_info.get('tags', False):
@@ -459,17 +460,33 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
-    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
-        """Search for this IP in our database of IoC"""
+    def search_offline(self, ip):
+        """ Searches the TI files for the given ip """
         ip_info = __database__.search_IP_in_IoC(ip)
         # check if it's a blacklisted ip
         if not ip_info:
             return False
 
-        # Dont change this condition. This is the only way it works
-        # If the IP is in the blacklist of IoC. Add it as Malicious
-        ip_info = json.loads(ip_info)
-        # Set the evidence on this detection
+        return json.loads(ip_info)
+
+    def spamhaus(self, ip):
+        #todo
+        pass
+
+
+
+    def search_online(self, ip):
+        return self.spamhaus(ip)
+
+    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
+        """Search for this IP in our database of IoC"""
+        ip_info = self.search_offline(ip)
+        if not ip_info:
+            ip_info = self.search_online(ip)
+
+        if not ip_info:
+            # not malicious
+            return False
         self.set_evidence_malicious_ip(
             ip,
             uid,

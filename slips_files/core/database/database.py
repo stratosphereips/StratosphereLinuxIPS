@@ -1824,8 +1824,10 @@ class Database(ProfilingFlowsDatabase, object):
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
-        :param ips_and_description: is {ip: json.dumps{'source':..,'tags':..,
-                                                        'threat_level':... ,'description'}}
+        :param ips_and_description: is {ip: json.dumps{'source':..,
+                                                        'tags':..,
+                                                        'threat_level':... ,
+                                                        'description':...}}
 
         """
         if ips_and_description:
