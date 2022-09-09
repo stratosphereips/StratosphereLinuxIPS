@@ -89,7 +89,7 @@ class OutputProcess(multiprocessing.Process):
         """
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
-        if "-D" in sys.argv and 'update'.lower() not in sender:
+        if "-D" in sys.argv and 'update'.lower() not in sender and 'stopping' not in sender:
             # if the sender is the update manager, always log
             return
 
@@ -226,6 +226,9 @@ class OutputProcess(multiprocessing.Process):
             self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
+        self.log_line('[Output Process]', 'Stopping output process. '
+                                        'Further evidence may be missing. '
+                                        'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
     def run(self):
