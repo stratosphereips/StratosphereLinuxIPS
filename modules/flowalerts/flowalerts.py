@@ -944,7 +944,6 @@ class Module(Module, multiprocessing.Process):
         if (
             not 'NXDOMAIN' in rcode_name
             or 'in-addr.arpa' in query
-            or 'cymru.com' in query
             or query.endswith('.local')
         ):
             return False
