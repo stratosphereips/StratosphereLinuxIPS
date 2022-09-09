@@ -27,6 +27,7 @@ import redis
 import os
 import time
 import shutil
+import psutil
 from datetime import datetime
 import socket
 import warnings
@@ -1283,6 +1284,12 @@ class Main:
             print(f"{self.args.config} doesn't exist. Stopping Slips")
             self.terminate_slips()
 
+        if self.args.interface:
+            interfaces = psutil.net_if_addrs().keys()
+            if self.args.interface not in interfaces:
+                print(f"{self.args.interface} is not a valid interface. Stopping Slips")
+                self.terminate_slips()
+
 
         # Clear cache if the parameter was included
         if self.args.clearcache:
@@ -1429,6 +1436,10 @@ class Main:
             slips_version += f' ({commit[:8]})'
         print(slips_version)
 
+    def change_nice_value(self):
+        command = f'renice -n 6 -p {os.getpid()} > /dev/null 2>&1'
+        os.system(command)
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1438,7 +1449,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
+            self.change_nice_value()
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
             """
