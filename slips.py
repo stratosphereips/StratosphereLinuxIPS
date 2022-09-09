@@ -505,7 +505,9 @@ class Main:
             # the queues are not there yet to send stop msgs
             for process in (
                         'ProfilerProcess',
-                        'logsProcess'
+                        'logsProcess',
+                        'OutputProcess'
+
             ):
                 self.kill(process, INT=True)
 
@@ -513,6 +515,7 @@ class Main:
             # Send manual stops to the processes using queues
             stop_msg = 'stop_process'
             self.profilerProcessQueue.put(stop_msg)
+            self.outputqueue.put(stop_msg)
             if hasattr(self, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
 
@@ -666,7 +669,6 @@ class Main:
                 'EvidenceProcess',
                 'Blocking',
                 'exporting_alerts',
-                'OutputProcess'
             }
 
             self.stop_core_processes()
