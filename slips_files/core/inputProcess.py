@@ -74,6 +74,7 @@ class InputProcess(multiprocessing.Process):
         self.testing = False
         # number of lines read
         self.lines = 0
+        self.marked_as_growing = False
         # these are the files that slips doesn't read
         self.ignored_files = {
             'capture_loss',
@@ -271,6 +272,13 @@ class InputProcess(multiprocessing.Process):
                 if not cache_lines:
                     # Verify that we didn't have any new lines in the
                     # last 10 seconds. Seems enough for any network to have ANY traffic
+                    if not self.marked_as_growing and __database__.is_growing_zeek_dir():
+                        # slips is given a dir that is growing i.e zeek dir running on an interface
+                        # don't stop slips
+                        self.print("Detected running on an interface.")
+                        self.bro_timeout = float('inf')
+                        self.marked_as_growing = True
+
                     diff = utils.get_time_diff(last_updated_file_time, datetime.now())
                     if diff >= self.bro_timeout:
                         # It has been 10 seconds without any file
@@ -344,8 +352,7 @@ class InputProcess(multiprocessing.Process):
                     )
                 if self.testing: break
 
-            # We want to stop slips if no new line is coming within 15s.
-            self.bro_timeout = 15
+            self.bro_timeout = 3
             lines = self.read_zeek_files()
 
             self.print(
@@ -444,7 +451,7 @@ class InputProcess(multiprocessing.Process):
                 return False
             # Add log file to database
             __database__.add_zeek_file(file_name_without_extension)
-            self.bro_timeout = 15
+            self.bro_timeout = 3
             self.lines = self.read_zeek_files()
             self.stop_queues()
             return True
@@ -508,7 +515,8 @@ class InputProcess(multiprocessing.Process):
                     )
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
-                self.bro_timeout = 9999999999999999
+                self.marked_as_growing = True
+                self.bro_timeout = float('inf')
             elif self.input_type == 'pcap':
                 # Find if the pcap file name was absolute or relative
                 if self.given_path[0] == '/':

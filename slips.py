@@ -479,8 +479,6 @@ class Main:
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
-
-
         pid = int(self.PIDs[module_name])
         try:
             os.kill(pid, sig)
@@ -697,7 +695,7 @@ class Main:
                         except NameError:
                             continue
 
-                        if message and message['data'] == 'stop_process':
+                        if message and message['data'] in ('stop_process', 'stop_slips'):
                             continue
 
                         if utils.is_msg_intended_for(message, 'finished_modules'):
