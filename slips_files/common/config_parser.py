@@ -587,6 +587,14 @@ class ConfigParser(object):
         )
         return False if delete == 'False' else True
 
+    def rotation_period(self):
+        """ returns period in seconds"""
+        rotation_period = self.read_configuration(
+             'parameters', 'rotation_period', '1d'
+        )
+        return utils.sanitize(rotation_period)
+
+
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''

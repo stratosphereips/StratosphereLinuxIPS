@@ -63,7 +63,6 @@ class InputProcess(multiprocessing.Process):
         self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
-        # Read the configuration
         self.read_configuration()
         # If we were given something from command line, has preference
         # over the configuration file
@@ -98,6 +97,7 @@ class InputProcess(multiprocessing.Process):
         self.packet_filter = conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.rotation = conf.rotation()
+        self.rotation_period = conf.rotation_period()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -504,7 +504,7 @@ class InputProcess(multiprocessing.Process):
             if self.input_type == 'interface':
                 if self.rotation:
                     rotation_interval = (
-                        "-e 'redef Log::default_rotation_interval =  1day;'"
+                        f"-e 'redef Log::default_rotation_interval = {self.rotation_period} ;'"
                     )
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
