@@ -946,6 +946,7 @@ class Module(Module, multiprocessing.Process):
             not 'NXDOMAIN' in rcode_name
             or query.endswith('.in-addr.arpa')
             or query.endswith('.local')
+            or not query
         ):
             return False
 
