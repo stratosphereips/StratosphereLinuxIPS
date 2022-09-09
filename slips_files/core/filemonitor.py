@@ -32,6 +32,8 @@ class FileEventHandler(RegexMatchingEventHandler):
         self.monitored_zeek_files = monitored_zeek_files
         __database__.start(redis_port)
         utils.drop_root_privs()
+        # is the dir we're observing marked as growing?
+        self.marked = False
 
     def on_created(self, event):
         filename, ext = os.path.splitext(event.src_path)
@@ -54,6 +56,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         # so if zeek recieves a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
+
         if 'reporter' in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
@@ -67,3 +70,9 @@ class FileEventHandler(RegexMatchingEventHandler):
                             break
         elif 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')
+        else:
+            # a zeek dir is modified, mark it as growing zeek dir so slips can treat it
+            # is an interface
+            if not self.marked:
+                __database__.set_growing_zeek_dir()
+                self.marked = True
