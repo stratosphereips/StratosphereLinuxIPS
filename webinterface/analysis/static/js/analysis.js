@@ -33,6 +33,10 @@ function updateAnalysisTable(analysisTag){
     document.getElementById(active_hotkey_name).style.display = "block"
 }
 
+function hideAnalysisTable() {
+    document.getElementById(last_active_hotkey_name).style.display = "none"
+    last_active_hotkey_name = active_hotkey_name;
+}
 
 
 }
