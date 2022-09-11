@@ -1,8 +1,4 @@
 
-const custom_dom = "<'row'<'col-lg-8 col-md-8 col-xs-12'B><'col-lg-4 col-md-4 col-xs-12'fl>>" +
-           "<'row'<'col-sm-12'tr>>" +
-           "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
-
 let active_profile = '';
 let active_timewindow = '';
 let active_timewindow_index = 0;
@@ -19,30 +15,6 @@ Functions:
     onclick_ips: display a list of timewindows onclick, and the IP info
 */
 let profiles = function () {
-    let profiles_table = $('#profiles').DataTable({
-        destroy: true,
-        dom: '<"top"f>rt',
-        scrollX: false,
-        scrollY: "78vh", // hardcoded height to fit the page
-        scrollCollapse: true,
-        paging:false,
-        info: false,
-        ajax: '/analysis/profiles_tws',
-        columns: [
-            {
-                data: 'profile',
-                "className": 'r'
-            }
-        ],
-        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
-            switch(aData['blocked']){
-                case true:
-                    $('td', nRow).css('background-color', '#FF8989')
-                    break;
-            }
-        }
-    });
-
 
     function add_table_tws(table_id) {
         let entry ='<table' + ' id="'+ table_id + '"' + ' class="table table-striped" >'
@@ -78,26 +50,6 @@ let profiles = function () {
                 else {
                     row.child(add_table_tws(profile_id_dash)).show();
                     let ajax_ljnk = '/analysis/tws/' + profile_id;
-                    let table_tws = $(table_id_tw).DataTable({
-                        "ajax":ajax_ljnk,
-                        "bDestroy": true,
-                        dom: custom_dom,
-                        bInfo: false,
-                        ordering: false,
-                        paging: false,
-                        searching: false,
-                        columns: [
-                            {data: 'name'}
-                        ],
-                        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
-                            switch(aData['blocked']){
-                                case true:
-                                    $('td', nRow).css('background-color', '#FF8989')
-                                    break;
-                            }
-                        }
-                    });
-
                     $(table_id_tw).on('click', 'tbody tr', function () {
                         let row = table_tws.row($(this))
                         let rowData = row.data();
@@ -138,107 +90,6 @@ let profiles = function () {
 
  let operate_hotkeys = function () {
 
-    let timeline_flows = $('#table_timeline_flows').DataTable({
-        destroy: true,
-        dom: custom_dom,
-        buttons: ['colvis'],
-        scrollX: true,
-        columns: [
-            { data: 'ts' },
-            { data: 'dur' },
-            { data: 'saddr' ,
-              "className": 'saddr'},
-            { data: 'sport' },
-            { data: 'daddr' ,
-            "className": 'daddr'},
-            { data: 'dport' },
-            { data: 'proto' },
-            { data: 'origstate' },
-            { data: 'state' },
-            { data: 'pkts' },
-            { data: 'allbytes' },
-            { data: 'spkts' },
-            { data: 'sbytes' }
-        ]
-    });
-
-    let timeline = $('#table_timeline').DataTable({
-        destroy: true,
-        dom: custom_dom,
-        buttons: ['colvis'],
-        scrollX: true,
-        searching: false,
-        columns: [
-            { data: 'timestamp' },
-            { data: 'dport_name' },
-            { data: 'preposition' },
-            { data: 'daddr',
-            "className": 'daddr'},
-            { data: 'dns_resolution' },
-            { data: 'dport/proto' },
-            { data: 'state' },
-            { data: 'Sent' },
-            { data: 'Recv' },
-            { data: 'Tot' },
-            { data: 'Duration' },
-            { data: 'warning' },
-            { data: 'critical warning' },
-            { data: 'info' }
-        ]
-    });
-
-    let outtuples = $('#table_outtuples').DataTable({
-        destroy: true,
-        dom: custom_dom,
-        buttons: ['colvis'],
-        scrollX: true,
-        columns: [
-            { data: 'tuple' },
-            { data: 'string' },
-            { data: 'geocountry' },
-            { data: 'reverse_dns' },
-            { data: 'asnorg' },
-            { data: 'threat_intel' },
-            { data: 'url' },
-            { data: 'down_file' },
-            { data: 'ref_file' },
-            { data: 'com_file' }
-        ]
-    });
-
-    let intuples = $('#table_intuples').DataTable({
-        destroy: true,
-        dom: custom_dom,
-        buttons: ['colvis'],
-        scrollX: true,
-        columns: [
-            { data: 'tuple' },
-            { data: 'string' },
-            { data: 'geocountry' },
-            { data: 'reverse_dns' },
-            { data: 'asnorg' },
-            { data: 'threat_intel' },
-            { data: 'url' },
-            { data: 'down_file' },
-            { data: 'ref_file' },
-            { data: 'com_file' }
-        ]
-    });
-
-    let alerts = $('#table_alerts').DataTable({
-        "bDestroy": true,
-        select: true,
-        dom: custom_dom,
-        scrollX: false,
-        columns: [
-            { data: 'alert' ,
-            "className":"r"},
-            { data: 'profileid'},
-            { data: 'timewindow'},
-            { data: 'evidence_count'}
-
-        ]
-    });
 
 
     function add_table_evidence(d) {
@@ -379,25 +230,6 @@ let profiles = function () {
     }
 }
 
-let ipinfo = $('#ipinfo').DataTable({
-    "bDestroy": true,
-    ordering: false,
-    searching: false,
-    "paging": false,
-    "bInfo": false,
-    responsive: true,
-    columns: [
-        { data: 'ip' },
-        { data: 'geocountry' },
-        { data: 'reverse_dns' },
-        { data: 'asnorg' },
-        { data: 'threat_intel' },
-        { data: 'url' },
-        { data: 'down_file' },
-        { data: 'ref_file' },
-        { data: 'com_file' }
-    ]
-});
 
 
 let profile_handle = profiles();
