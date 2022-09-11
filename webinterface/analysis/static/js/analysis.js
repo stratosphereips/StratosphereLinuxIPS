@@ -1,3 +1,4 @@
+import { analysisTableDefs, analysisSubTableDefs } from "./tableDefs.js"
 
 let active_profile = '';
 let active_timewindow = '';
