@@ -8,83 +8,6 @@ let last_active_hotkey_name = 'timeline';
 let active_hotkey_table = null;
 
 
-/*
-Set profile and timewindow table.
-Functions:
-    onclick_tws:
-    onclick_ips: display a list of timewindows onclick, and the IP info
-*/
-let profiles = function () {
-
-    function add_table_tws(table_id) {
-        let entry ='<table' + ' id="'+ table_id + '"' + ' class="table table-striped" >'
-        let exit = '</table>'
-        let head ="<thead>"+
-         "<tr>"+
-         "<th>TW</th>" +
-         "</tr>"+
-         "</thead>"
-        return (entry + head  + exit);
-    };
-
-    var convertDotToDash = function(string) {
-        return string.replace(/\./g,'_');
-    }
-
-
-    return {
-        onclick_tws: function () {
-            $('#profiles').on('click', 'tbody td.r', function () {
-                let tr = $(this).closest('tr');
-                let row = profiles_table.row(tr);
-
-                let profile_id = row.data()['profile']
-                let profile_id_dash = convertDotToDash(profile_id)
-                let table_id_tw = '#' + profile_id_dash
-
-                if (row.child.isShown()) {
-                    $(table_id_tw).DataTable().clear().destroy();
-                    row.child.hide();
-                    tr.removeClass('shown');
-                }
-                else {
-                    row.child(add_table_tws(profile_id_dash)).show();
-                    let ajax_ljnk = '/analysis/tws/' + profile_id;
-                    $(table_id_tw).on('click', 'tbody tr', function () {
-                        let row = table_tws.row($(this))
-                        let rowData = row.data();
-                        let rowIndex = row.index();
-                        let t = $(table_id_tw).DataTable();
-                        if(active_tw_id){
-                          $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
-
-                        }
-                        active_tw_id = table_id_tw
-                        active_timewindow_index = rowIndex;
-                        $(t.row(rowIndex).node()).addClass('row_selected');
-                        active_profile =  profiles_table.row(tr).data()["profile"]
-                        active_timewindow = rowData["tw"]
-                        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + rowData["name"];
-                        hotkey_hook.initialize_profile_timewindow()
-                     });
-
-                    tr.addClass('shown');
-                }
-            });
-        },
-
-        onclick_ips: function () {
-            $('#profiles ').on('click', 'tbody td.r', function () {
-                let data = profiles_table.row($(this).parents('tr')).data();
-                let url = '/analysis/info/' + data.profile
-                ipinfo.ajax.url(url).load();
-            });
-        },
-
-        get_profiles_table: function(){
-            return profiles_table;
-        }
-
     }
 }
 
@@ -283,7 +206,50 @@ function KeyPress(e) {
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
         updateTable()
+function convertDotToDash(string){
+    return string.replace(/\./g,'_');
+}
     }
+function addTableTWsListener(table_tw_id,tr){
+    $("#" + table_tw_id).on('click', 'tbody tr', function () {
+        let row = $("#" + table_tw_id).DataTable().row($(this))
+        let rowData = row.data();
+        let rowIndex = row.index();
+        let t = $("#" + table_tw_id).DataTable();
+        if(active_tw_id){
+          $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
+
+        }
+        active_tw_id = "#" + table_tw_id
+        active_timewindow_index = rowIndex;
+        $(t.row(rowIndex).node()).addClass('row_selected');
+        active_profile =  $("#table_profiles").DataTable().row(tr).data()["profile"]
+        active_timewindow = rowData["tw"]
+        document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + rowData["name"];
+        updateAnalysisTable(active_hotkey_name)
+     });
 }
 
+$('#table_profiles').on('click', 'tbody td.r', function () {
+    let tr = $(this).closest('tr');
+    let row = $("#table_profiles").DataTable().row(tr);
+    updateIPInfo(row, "profile")
+
+    let profile_id = row.data()['profile']
+    let profile_id_dash = convertDotToDash(profile_id)
+
+    if (row.child.isShown()) {
+        $("#" + profile_id_dash).DataTable().clear().destroy();
+        row.child.hide();
+        tr.removeClass('shown');
+    }
+    else {
+        row.child(addTableTWs(profile_id_dash)).show();
+        let url = '/analysis/tws/' + profile_id;
+        let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
+        table_tws.ajax.url(url).load();
+        addTableTWsListener(profile_id_dash, tr)
+        tr.addClass('shown');
+    }
+});
 document.onkeydown = KeyPress;
