@@ -204,7 +204,19 @@ function KeyPress(e) {
 function convertDotToDash(string){
     return string.replace(/\./g,'_');
 }
+
+/* EVENTS */
+$("#buttons .btn").click(function () {
+    $("#buttons .btn").removeClass('active');
+    $(this).toggleClass('active');
+    let [first, ...rest] = (this.id).split('_');
+    active_hotkey_name = rest.join('_');
+    if (active_hotkey_name != last_active_hotkey_name) {
+        hideAnalysisTable();
     }
+   updateAnalysisTable(active_hotkey_name)
+});
+
 function addTableTWsListener(table_tw_id,tr){
     $("#" + table_tw_id).on('click', 'tbody tr', function () {
         let row = $("#" + table_tw_id).DataTable().row($(this))
