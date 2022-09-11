@@ -329,4 +329,10 @@ $('#table_alerts').on('click', 'tbody td.r', function () {
         tr.addClass('shown');
     }
 });
+
+
+$(document).ready(function() {
+    initAnalysisTables()
+});
+
 document.onkeydown = KeyPress;
