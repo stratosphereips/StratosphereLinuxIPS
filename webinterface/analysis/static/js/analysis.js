@@ -38,6 +38,11 @@ function hideAnalysisTable() {
     last_active_hotkey_name = active_hotkey_name;
 }
 
+function updateIPInfo(row, field){
+    let data = row.data();
+    let url = '/analysis/info/' + data[field];
+    $("#table_ipinfo").DataTable().ajax.url(url).load();
+        console.log(data[field], url)
 
 }
 
