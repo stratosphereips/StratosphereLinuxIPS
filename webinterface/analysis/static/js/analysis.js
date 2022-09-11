@@ -247,6 +247,18 @@ $('#table_profiles').on('click', 'tbody td.r', function () {
         tr.addClass('shown');
     }
 });
+function initializeTimelineListeners(){
+    $('#table_timeline').on('click', 'tbody td.daddr', function () {
+        let row = $("#table_timeline").DataTable().row($(this).parents('tr'));
+        updateIPInfo(row, "daddr")
+    })
+
+    $('#table_timeline_filter_button').click(function(){
+        var filter_gender = $('#table_timeline_filter_input').val();
+        if(filter_gender != ''){hotkeys.search_reload(filter_gender);}
+        else{hotkeys.search_reload(filter_gender);}
+    });
+}
 $('#table_alerts').on('click', 'tbody td.r', function () {
     var tr = $(this).closest('tr');
     var row = $("#table_alerts").DataTable().row(tr);
