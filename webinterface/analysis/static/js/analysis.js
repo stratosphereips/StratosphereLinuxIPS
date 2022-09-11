@@ -175,8 +175,33 @@ $('#table_timeline_filter_button').click(function(){
 
 function updateTable(){
     hotkeys.update_hook()
+function add_table_evidence(d) {
+    let table_id = d["alert_id"]
+    let entry ='<table' + ' id="'+ table_id + '"' + 'class="table table-striped" cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+    let exit = '</table>'
+    let head ="<thead>"+
+     "<tr>"+
+     "<th>Evidence</th>" +
+     "<th>Confidence</th>" +
+     "<th>Threat Level</th>" +
+     "<th>Category</th>" +
+      "<th>Tag</th>" +
+     "<th>Description</th>" +
+     "</tr>"+
+     "</thead>"
+    return (entry + head  + exit);
 }
 
+function addTableTWs(tableID) {
+    let entry ='<table' + ' id="'+ tableID + '"' + ' class="table table-striped" >'
+    let exit = '</table>'
+    let head ="<thead>"+
+     "<tr>"+
+     "<th>TW</th>" +
+     "</tr>"+
+     "</thead>"
+    return (entry + head  + exit);
+};
 
 function KeyPress(e) {
     let evtobj = window.event? event : e
@@ -189,7 +214,7 @@ function KeyPress(e) {
         }
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
-        updateTable()
+        hideAnalysisTable()
     }
     if (evtobj.keyCode == 80 && evtobj.ctrlKey){
         var table = $(active_tw_id).DataTable();
@@ -200,7 +225,10 @@ function KeyPress(e) {
         }
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
-        updateTable()
+        hideAnalysisTable()
+    }
+}
+
 function convertDotToDash(string){
     return string.replace(/\./g,'_');
 }
