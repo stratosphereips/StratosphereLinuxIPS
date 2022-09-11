@@ -63,6 +63,13 @@ function add_table_evidence(d) {
     return (entry + head  + exit);
 }
 
+//
+//        search_reload: function(filter_parameter){
+//           let link = "/analysis/" + active_hotkey_name + "/" + profile + "/" + timewindow
+//            if (filter_parameter){ link += "/" + filter_parameter; }
+//            active_hotkey_table.ajax.url(link).load();
+//        }
+
 function addTableTWs(tableID) {
     let entry ='<table' + ' id="'+ tableID + '"' + ' class="table table-striped" >'
     let exit = '</table>'
