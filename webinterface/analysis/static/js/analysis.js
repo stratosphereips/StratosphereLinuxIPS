@@ -258,6 +258,10 @@ function initializeTimelineFlowsListeners(){
         updateIPInfo(row, "daddr")
     })
 }
+
+function removeListeners(){
+     $("#table_timeline").off("click", "**")
+}
 function initializeTimelineListeners(){
     $('#table_timeline').on('click', 'tbody td.daddr', function () {
         let row = $("#table_timeline").DataTable().row($(this).parents('tr'));
