@@ -48,28 +48,19 @@ function initAnalysisTables(){
         document.getElementById(active_hotkey_name).style.display = "block"
     }
 
-    function update_hotkey(){
-        switch (active_hotkey_name) {
-            case 'timeline':
-                active_hotkey_table = timeline
-                update_table()
+function updateAnalysisTable(analysisTag){
+    if(active_profile && active_timewindow){
+        let link = "/analysis/" + active_hotkey_name + "/" + active_profile + "/" + active_timewindow
+        $("#table_"+analysisTag).DataTable().ajax.url(link).load();
+        switch(analysisTag){
+            case "timeline": {
+                initializeTimelineListeners()
                 break;
-            case 'timeline_flows':
-                active_hotkey_table = timeline_flows
-                update_table()
+            }
+            case "timeline_flows": {
+                initializeTimelineFlowsListeners()
                 break;
-            case 'outtuples':
-                active_hotkey_table = outtuples
-                update_table()
-                break;
-            case 'intuples':
-                active_hotkey_table = intuples
-                update_table()
-                break;
-            case 'alerts':
-                active_hotkey_table = alerts
-                update_table()
-                break;
+            }
         }
     }
 
