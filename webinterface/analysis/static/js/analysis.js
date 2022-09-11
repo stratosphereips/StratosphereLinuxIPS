@@ -8,6 +8,9 @@ let last_active_hotkey_name = 'timeline';
 let active_hotkey_table = null;
 
 
+function initAnalysisTables(){
+    for (const [key, value] of Object.entries(analysisTableDefs)) {
+        $("#table_" + key).DataTable(value);
     }
 }
 
