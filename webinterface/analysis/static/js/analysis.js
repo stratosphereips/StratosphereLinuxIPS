@@ -247,6 +247,17 @@ $('#table_profiles').on('click', 'tbody td.r', function () {
         tr.addClass('shown');
     }
 });
+function initializeTimelineFlowsListeners(){
+    $('#table_timeline_flows').on('click', 'tbody td.saddr', function () {
+        let row = $("#table_timeline_flows").DataTable().row($(this).parents('tr'));
+        updateIPInfo(row, "saddr")
+    })
+
+    $('#table_timeline_flows').on('click', 'tbody td.daddr', function () {
+        let row = $("#table_timeline_flows").DataTable().row($(this).parents('tr'));
+        updateIPInfo(row, "daddr")
+    })
+}
 function initializeTimelineListeners(){
     $('#table_timeline').on('click', 'tbody td.daddr', function () {
         let row = $("#table_timeline").DataTable().row($(this).parents('tr'));
