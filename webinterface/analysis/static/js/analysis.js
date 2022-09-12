@@ -30,9 +30,8 @@ function updateAnalysisTable(){
     document.getElementById(active_analysisTable).style.display = "block";
 }
 
-function hideAnalysisTable() {
-    document.getElementById(last_analysisTable).style.display = "none";
-    last_analysisTable = active_analysisTable;
+function hideAnalysisTable(tableID) {
+    document.getElementById(tableID).style.display = "none";
 }
 
 function updateIPInfo(row, field){
