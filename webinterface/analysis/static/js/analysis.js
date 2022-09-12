@@ -7,12 +7,12 @@ let active_tw_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
-function updateAnalysisTable(analysisTag){
+function updateAnalysisTable(){
     if(active_profile && active_timewindow){
         let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
-        $("#table_"+analysisTag).DataTable().ajax.url(link).load();
+        $("#table_" + active_analysisTable).DataTable().ajax.url(link).load();
 
-        switch(analysisTag){
+        switch(active_analysisTable){
             case "timeline": {
                 initTimelineListeners();
                 break;
@@ -85,7 +85,7 @@ function hotkeyPress(e) {
         }
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
-        hideAnalysisTable()
+        updateAnalysisTable()
     }
     if (evtobj.keyCode == 80 && evtobj.ctrlKey){
         var table = $(active_tw_id).DataTable();
@@ -96,7 +96,7 @@ function hotkeyPress(e) {
         }
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
-        hideAnalysisTable()
+        updateAnalysisTable()
     }
 }
 
@@ -114,7 +114,7 @@ function initAnalysisTagListeners(){
         if (active_analysisTable != last_analysisTable) {
             hideAnalysisTable();
         }
-       updateAnalysisTable(active_analysisTable)
+       updateAnalysisTable()
     });
 }
 
@@ -134,7 +134,7 @@ function addTableTWsListener(table_tw_id,tr){
         active_profile =  $("#table_profiles").DataTable().row(tr).data()["profile"]
         active_timewindow = rowData["tw"]
         document.getElementById("active_profile_tw").innerText = "Selected: " + active_profile + " " + rowData["name"];
-        updateAnalysisTable(active_analysisTable)
+        updateAnalysisTable()
      });
 }
 
