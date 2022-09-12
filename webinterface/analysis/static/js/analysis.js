@@ -57,10 +57,10 @@ function addTableEvidence(table_id) {
     return (entry + head  + exit);
 }
 
-function search_reload(filter_parameter){
-   let link = "/analysis/" + active_analysisTable + "/" + profile + "/" + timewindow
+function searchReload(filter_parameter){
+    let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow
     if (filter_parameter){ link += "/" + filter_parameter; }
-    active_hotkey_table.ajax.url(link).load();
+    $("#table_"+active_analysisTable).DataTable().ajax.url(link).load();
 }
 
 function addTableTWs(tableID) {
@@ -183,8 +183,7 @@ function initTimelineListeners(){
 
     $('#table_timeline_filter_button').click(function(){
         var filter_gender = $('#table_timeline_filter_input').val();
-        if(filter_gender != ''){hotkeys.search_reload(filter_gender);}
-        else{hotkeys.search_reload(filter_gender);}
+        searchReload(filter_gender);
     });
 }
 
