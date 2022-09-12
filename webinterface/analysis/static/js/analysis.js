@@ -224,9 +224,8 @@ function initAnalysisPage(){
     initAnalysisTagListeners(); //Initialize analysisTags listeners
 }
 
-
 $(document).ready(function() {
     initAnalysisPage();
+    document.onkeydown = hotkeyPress;
 });
 
-document.onkeydown = hotkeyPress;
