@@ -143,29 +143,30 @@ function addTableTWsListener(table_tw_id,tr){
      });
 }
 
-$('#table_profiles').on('click', 'tbody td.r', function () {
-    let tr = $(this).closest('tr');
-    let row = $("#table_profiles").DataTable().row(tr);
-    updateIPInfo(row, "profile")
+function initProfileTwListeners(){
+    $('#table_profiles').on('click', 'tbody td.r', function () {
+        let tr = $(this).closest('tr');
+        let row = $("#table_profiles").DataTable().row(tr);
+        updateIPInfo(row, "profile")
 
-    let profile_id = row.data()['profile']
-    let profile_id_dash = convertDotToDash(profile_id)
+        let profile_id = row.data()['profile']
+        let profile_id_dash = convertDotToDash(profile_id)
 
-    if (row.child.isShown()) {
-        $("#" + profile_id_dash).DataTable().clear().destroy();
-        row.child.hide();
-        tr.removeClass('shown');
-    }
-    else {
-        row.child(addTableTWs(profile_id_dash)).show();
-        let url = '/analysis/tws/' + profile_id;
-        let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
-        table_tws.ajax.url(url).load();
-        addTableTWsListener(profile_id_dash, tr)
-        tr.addClass('shown');
-    }
-});
-function initializeTimelineFlowsListeners(){
+        if (row.child.isShown()) {
+            $("#" + profile_id_dash).DataTable().clear().destroy();
+            row.child.hide();
+            tr.removeClass('shown');
+        }
+        else {
+            row.child(addTableTWs(profile_id_dash)).show();
+            let url = '/analysis/tws/' + profile_id;
+            let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
+            table_tws.ajax.url(url).load();
+            addTableTWsListener(profile_id_dash, tr)
+            tr.addClass('shown');
+        }
+    });
+}
     $('#table_timeline_flows').on('click', 'tbody td.saddr', function () {
         let row = $("#table_timeline_flows").DataTable().row($(this).parents('tr'));
         updateIPInfo(row, "saddr")
