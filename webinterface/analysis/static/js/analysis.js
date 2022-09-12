@@ -227,10 +227,15 @@ function initAlertListeners(){
 }
     }
 });
+function initAnalysisPage(){
+    initAllAnalysisTables();  // Initialize all analysis tables
+    initProfileTwListeners(); // Initialize all profile and tw tables' listeners
+    initAnalysisTagListeners(); //Initialize analysisTags listeners
+}
 
 
 $(document).ready(function() {
     initAnalysisTables()
 });
 
-document.onkeydown = KeyPress;
+document.onkeydown = KeyPress;document.onkeydown = hotkeyPress;
