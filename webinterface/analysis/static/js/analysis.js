@@ -225,8 +225,18 @@ function initAlertListeners(){
         }
     });
 }
+/*--------------------------------------------------------------*/
+
+function removeListeners(analysisTag){
+     $("#table_"+analysisTag).off("click", "**")
+}
+
+function initAllAnalysisTables(){
+    for (const [key, value] of Object.entries(analysisTableDefs)) {
+        $("#table_" + key).DataTable(value);
     }
-});
+}
+
 function initAnalysisPage(){
     initAllAnalysisTables();  // Initialize all analysis tables
     initProfileTwListeners(); // Initialize all profile and tw tables' listeners
