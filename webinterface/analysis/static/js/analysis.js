@@ -110,10 +110,11 @@ function initAnalysisTagListeners(){
         $("#buttons .btn").removeClass('active');
         $(this).toggleClass('active');
         active_analysisTable = $(this).data("tableid");
+        updateAnalysisTable();
         if (active_analysisTable != last_analysisTable) {
-            hideAnalysisTable();
+            hideAnalysisTable(last_analysisTable);
         }
-       updateAnalysisTable()
+        last_analysisTable = active_analysisTable;
     });
 }
 
