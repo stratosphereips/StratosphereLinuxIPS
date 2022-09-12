@@ -1,5 +1,5 @@
 import { analysisTableDefs, analysisSubTableDefs } from "./tableDefs.js"
-
+/*---------GLOBALS---------*/
 let active_profile = "";
 let active_timewindow = "";
 let active_timewindow_index = 0;
