@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request
-from hotkeys.hotkeys import Hotkeys
+from analysis.analysis import Analysis
 from general.general import General
 from argparse import ArgumentParser
 import redis
@@ -9,7 +9,7 @@ app.config['JSON_SORT_KEYS'] = False  # disable sorting of timewindows
 
 @app.route('/')
 def index():
-    return render_template('base.html', title='Slips')
+    return render_template('app.html', title='Slips')
 
 @app.route('/info')
 def set_pcap_info():
@@ -43,8 +43,8 @@ if __name__ == '__main__':
                                   decode_responses=True,
                                   health_check_interval=30)
 
-    hotkeys = Hotkeys(__database__, __cache__)
-    app.register_blueprint(hotkeys.bp, url_prefix="/hotkeys")
+    hotkeys = Analysis(__database__, __cache__)
+    app.register_blueprint(hotkeys.bp, url_prefix="/analysis")
 
     general = General(__database__, __cache__)
     app.register_blueprint(general.bp, url_prefix="/general")

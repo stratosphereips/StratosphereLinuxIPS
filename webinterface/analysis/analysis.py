@@ -5,12 +5,12 @@ from collections import defaultdict
 from datetime import datetime
 
 
-class Hotkeys:
+class Analysis:
 
     def __init__(self, database, cache):
         self.db = database
         self.cache = cache
-        self.bp = Blueprint('hotkeys', __name__, static_folder='static', static_url_path='/hotkeys/static',
+        self.bp = Blueprint('analysis', __name__, static_folder='static', static_url_path='/analysis/static',
                             template_folder='templates')
 
         # Routes should be set explicity, because Flask process self parameter in function wrong.

@@ -1,11 +1,10 @@
 <!doctype html>
 <html>
     <head>
-        <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='base.css')}}"/>
         <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css"/>
         <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.css"/>
         <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.dataTables.min.css">
-        <link rel="stylesheet" type="text/css" href="{{url_for('hotkeys.static', filename='css/style.css')}}"/>
+        <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/style.css')}}"/>
         <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/style.css')}}"/>
     </head>
 
@@ -47,7 +46,7 @@
                 <div class="tab-content" id="nav-tabContent">
                   <div class="tab-pane fade show active" id="nav-hotkeys" role="tabpanel" aria-labelledby="nav-hotkeys-tab">
                       <div class="row">
-                        {% include 'hotkeys.html' %}
+                        {% include 'analysis.html' %}
                       </div>
                   </div>
                   <div class="tab-pane fade" id="nav-general" role="tabpanel" aria-labelledby="nav-general-tab">
@@ -70,9 +69,11 @@
     <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
     <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
-    <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='base.js')}}"></script>
+    <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='app.js')}}"></script>
     <script src="https://cdn.jsdelivr.net/gh/jeffreydwalter/ColReorderWithResize@9ce30c640e394282c9e0df5787d54e5887bc8ecc/ColReorderWithResize.js"></script>
-    <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('hotkeys.static', filename='js/hotkeys.js')}}"></script>
+    <script type="module" charset="utf8" rel="stylesheet" src="{{url_for('analysis.static', filename='js/analysis.js')}}"></script>
+        <script type="module" charset="utf8" rel="stylesheet" src="{{url_for('analysis.static', filename='js/tableDefs.js')}}"></script>
+
     <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('general.static', filename='js/general.js')}}"></script>
 
 </html>
