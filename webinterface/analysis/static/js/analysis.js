@@ -196,11 +196,12 @@ function initAlertListeners(){
             row.child.hide();
             tr.removeClass('shown');
         } else {
-            let tableEvidenceID = row.data()["alert_id"]
-            row.child(addTableEvidence(row.data())).show();
-            let table_id = "#table_" + row.data()["alert_id"]
-            let evidence = $(table_id).DataTable(analysisSubTableDefs["evidence"]);
-            let link = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + row.data()["alert_id"]
+            let alertID = row.data()["alert_id"]
+            let tableEvidenceID = "#table_" + alertID
+            row.child(addTableEvidence(tableEvidenceID)).show();
+            let evidence = $(tableEvidenceID).DataTable(analysisSubTableDefs["evidence"]);
+            let link = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + alertID
+            console.log(li)
             evidence.ajax.url(link).load();
             tr.addClass('shown');
         }
