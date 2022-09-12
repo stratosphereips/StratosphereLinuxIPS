@@ -11,6 +11,7 @@ function updateAnalysisTable(){
     if(active_profile && active_timewindow){
         let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
         $("#table_" + active_analysisTable).DataTable().ajax.url(link).load();
+        removeListeners(last_analysisTable);
 
         switch(active_analysisTable){
             case "timeline": {
