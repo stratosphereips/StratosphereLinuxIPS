@@ -104,7 +104,7 @@ class ListTable{
         return new Promise ((resolve, reject)=>{this.redis_database.getIpInfo(ip).then(redis_IpInfo_data=>{
         try{
             var ip_info_dict = {'asn':'', 'geo':'', 'SNI':'', 'reverse_dns':'', 'url':'', 'down':'','ref':'','com':''}
-            if(redis_IpInfo_data==null)resolve(ip_info_dict)
+            if(redis_IpInfo_data==null){resolve(ip_info_dict)}
             else{
                 var ipInfo_json = JSON.parse(redis_IpInfo_data);
 
