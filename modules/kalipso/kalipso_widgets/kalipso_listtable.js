@@ -107,8 +107,6 @@ class ListTable{
             if(redis_IpInfo_data==null)resolve(ip_info_dict)
             else{
                 var ipInfo_json = JSON.parse(redis_IpInfo_data);
-                var ip_values =  Object.values(ipInfo_json);
-                var ip_keys = Object.keys(ipInfo_json);
 
                 if (ipInfo_json.hasOwnProperty('VirusTotal')){
                     ip_info_dict['url'] = String(this.round(ipInfo_json['VirusTotal']['URL'],5))
