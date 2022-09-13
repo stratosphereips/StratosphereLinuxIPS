@@ -163,11 +163,11 @@ class Module(Module, multiprocessing.Process):
                         'dport/proto': f'{str(dport)}/{proto}',
                         'state': state,
                         'warning': warning_empty,
-                        'Sent': sbytes,
-                        'Recv': allbytes - sbytes,
-                        'Tot': allbytes,
-                        'Duration': dur,
                         'info' : '',
+                        'sent': sbytes,
+                        'recv': allbytes - sbytes,
+                        'tot': allbytes,
+                        'duration': dur,
                         'critical warning': critical_warning_dport_name
                     }
 
@@ -260,9 +260,9 @@ class Module(Module, multiprocessing.Process):
                      'dport/proto': f'{sport}/ICMP',
                      'state': '',
                      'warning' : warning,
-                     'Sent' :'',
-                     'Recv' :'',
-                     'Tot' :'',
+                     'sent' :'',
+                     'recv' :'',
+                     'tot' :'',
                      'critical warning' : '',
                 })
 
