@@ -155,6 +155,21 @@ class Redis{
         else{resolve(reply);}
       });})
     }
+
+    /*Create all the client to the Redis database.*/
+    createClient(){
+        let redis_config = {
+            host: "127.0.0.1",
+            port: this.redis_port
+            };
+
+        let redis_cache_config = {
+            host: "127.0.0.1",
+            port: 6379        }
+        this.db = this.redis.createClient(redis_config)
+        this.cache = this.redis.createClient(redis_cache_config)
+        this.cache.select(1)
+  	}
 }
 
 module.exports = Redis
