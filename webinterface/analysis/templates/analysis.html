@@ -1,5 +1,5 @@
 
-<div class="row flex-nowrap">
+<div class="row mt-3 flex-nowrap">
     <div class="col-auto px-2">
         <div id="sidebar" class="collapse collapse-horizontal show border-end">
           <table id="table_profiles" class="table table-hover">
@@ -11,7 +11,7 @@
           </table>
         </div>
     </div>
-    <main class="col ps-md-2 pt-2">
+    <main class="col">
       <div class="row">
             <div class="col-auto px-2">
               <a href="#" data-bs-target="#sidebar" data-bs-toggle="collapse" class="border rounded-3 p-1 text-decoration-none"><i class="bi bi-list bi-lg py-2 p-1"></i>Profiles</a>
@@ -23,7 +23,7 @@
 
       <div class="row">
             <div class="col-12">
-              <table id="table_ipinfo" class="table ">
+              <table id="table_ipinfo" class="table mt-2">
                 <thead>
                   <tr>
                     <th>IP</th>
@@ -39,7 +39,7 @@
                 </thead>
               </table>
 
-              <nav class="navbar navbar-light bg-light">
+              <nav class="navbar mt-2 navbar-light bg-light">
                 <form class="form-inline">
                   <div id="buttons">
                     <button class="btn btn-outline-primary active" type="button" id="button_timeline" data-tableid="timeline" >Timeline</button>
@@ -52,7 +52,7 @@
               </nav>
 
 
-              <div id="timeline">
+              <div id="timeline" class="mt-2">
                 <table border="0" cellspacing="5" cellpadding="5">
                     <tbody><tr>
                         <td>Custom search:</td>
@@ -61,7 +61,8 @@
                     </tr>
                   </tbody>
                 </table>
-                <table id="table_timeline" class="table table-striped display nowrap" style="width:100%">
+
+                <table id="table_timeline" class="table mt-2 table-striped display nowrap" style="width:100%">
                   <thead>
                     <tr>
                       <th>Timestamp</th>
@@ -82,7 +83,8 @@
                   </thead>
                 </table>
               </div>
-              <div id="alerts" style="display:none;">
+
+              <div id="alerts" class="mt-4" style="display:none;">
                 <table id="table_alerts" class="table table-striped display  nowrap" style="width:100%">
                   <thead>
                     <tr>
@@ -95,7 +97,7 @@
                 </table>
               </div>
 
-              <div id="timeline_flows" style="display:none;">
+              <div id="timeline_flows" class="mt-4" style="display:none;">
                 <table id="table_timeline_flows" class="table table-striped display  nowrap" style="width:100%">
                   <thead>
                     <tr>
@@ -117,7 +119,7 @@
                 </table>
               </div>
 
-              <div id="outtuples" style="display:none;">
+              <div id="outtuples" class="mt-4" style="display:none;">
                 <table id="table_outtuples" class="table table-striped display  nowrap" style="width:100%">
                   <thead>
                     <tr>
@@ -137,7 +139,7 @@
               </div>
 
 
-              <div id="intuples" style="display:none;">
+              <div id="intuples" class="mt-4" style="display:none;">
                 <table id="table_intuples" class="table table-striped display  nowrap" style="width:100%">
                   <thead>
                     <tr>
