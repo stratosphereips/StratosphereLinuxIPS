@@ -234,12 +234,11 @@ class ListTable{
             var json_inTuples = JSON.parse(redis_inTuples)
             var keys = Object.keys(json_inTuples)
             async.each(keys,(key, callback)=>{
-                var tuple_info = json_inTuples[key];
-                var split_tuple = key.split(':')
-                var inTuple_port = split_tuple[split_tuple.length-2];
-                var inTuple_protocol = split_tuple[split_tuple.length -1]
-                if(split_tuple.length > 3){var inTuple_ip = split_tuple.slice(0,split_tuple.length-2).join(':')}
-                else{var inTuple_ip = split_tuple[0]}
+                let tuple_info = json_inTuples[key];
+                let split_tuple = key.split('-')
+                let inTuple_ip = split_tuple[0]
+                let inTuple_port = split_tuple[1]
+                let inTuple_protocol = split_tuple[2]
                 var letters_string = tuple_info[0].substr(0, this.limit_letter_intuple)
                 this.getIPInfo_dict(inTuple_ip).then(ip_info_dict =>{
                 this.redis_database.getDNSResolution(inTuple_ip).then(dns_resolution=>{
