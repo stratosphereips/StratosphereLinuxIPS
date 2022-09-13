@@ -226,7 +226,7 @@ class Module(Module, multiprocessing.Process):
                     else:
                         dport_name = 'ICMP Unknown type'
                         extra_info =  {
-                            'Type': f'0x{str(sport)}',
+                            'type': f'0x{str(sport)}',
                         }
 
                 elif type(sport) == str:
