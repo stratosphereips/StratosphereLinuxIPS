@@ -9,7 +9,7 @@ class Redis{
 
     /*Get all the keys from the database.*/
   	getAllKeys(){
-  		return new Promise((resolve,reject)=>{this.tree_keys.keys('*',(err, reply)=>{
+  		return new Promise((resolve,reject)=>{this.db.keys('*',(err, reply)=>{
   			if(err){console.log('Error in getAllKeys() in kalipso_redis.js to retrieve all keys from the database. Error: ',err); reject(err)}
   			else{resolve(reply)}
         });})
@@ -17,7 +17,7 @@ class Redis{
 
     /*Get blocked IPs and timewindows.*/
   	getBlockedIPsTWs(){
-  		return new Promise((resolve,reject)=>{this.BlockedIPsTWs.hgetall("BlockedProfTW",(err,reply)=>{
+  		return new Promise((resolve,reject)=>{this.db.hgetall("BlockedProfTW",(err,reply)=>{
   			if(err){console.log("Error in the retrieving blocked IPs and timewindows. Error: ",err);reject(err)}
   			else{resolve(reply)}
   		});})
@@ -25,7 +25,7 @@ class Redis{
 
     /*Get host IP*/
     getHostIP(){
-	    return new Promise((resolve,reject)=>{this.client.smembers('hostIP',(err,value)=>{
+	    return new Promise((resolve,reject)=>{this.db.smembers('hostIP',(err,value)=>{
 	      if(err){ console.log(err); reject(err);}
 	      else{resolve(value) ;}
 	  	});})
@@ -33,7 +33,7 @@ class Redis{
 
     /*Get hostname of IP*/
     getHostnameOfIP(profileid){
-	    return new Promise((resolve,reject)=>{this.client.hmget(profileid, 'host_name',(err,value)=>{
+	    return new Promise((resolve,reject)=>{this.db.hmget(profileid, 'host_name',(err,value)=>{
 	      if(err){ console.log(err); reject(err);}
 	      else{
               resolve(value[0]) ;}
@@ -42,7 +42,7 @@ class Redis{
 
     /*Get timeline data for specific profile and timewindow*/
     getTimeline(ip, timewindow){
-      return new Promise((resolve, reject)=>{ this.timeline_data.zrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
+      return new Promise((resolve, reject)=>{ this.db.zrange("profile_"+ip+"_"+timewindow+'_timeline',0,-1, (err,reply)=>{
           if(err){console.log('Error in getTimeline in kalipso_redis.js. Error: ',err); reject(err);}
           else{resolve(reply);}
       });})
@@ -50,7 +50,7 @@ class Redis{
 
     /*Get evidence for specific profile and timewindow*/
     getEvidence(ip, timewindow){
-      return new Promise ((resolve, reject)=>{this.evidence_data.hget("profile_"+ip+"_"+timewindow,'Evidence',(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow,'Evidence',(err,reply)=>{
         if(err){console.log("Error in getEvidence() in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -60,7 +60,7 @@ class Redis{
     getDNSResolution(ip){
       return new Promise((resolve,reject)=>{
         var resolved_dns = '';
-        this.redis_resolved_dns.hget('DNSresolution',ip,(err,value)=> {
+        this.db.hget('DNSresolution',ip,(err,value)=> {
           if(err){console.log('Error in getDNSResolution() in kalipso_redis.js. Error: ',err);
                   reject(resolved_dns)}
           else{
@@ -74,7 +74,7 @@ class Redis{
 
     /*Get information about the specific IP*/
     getIpInfo(ip){
-      return new Promise((resolve, reject)=>{this.ipInfo_data.hget("IPsInfo",ip,(err,reply)=>{
+      return new Promise((resolve, reject)=>{this.cache.hget("IPsInfo",ip,(err,reply)=>{
         if(err){console.log("Error in getIpInfo in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -82,7 +82,7 @@ class Redis{
 
     /*Get outtuples for specific profile and timewindow.*/
     getOutTuples(ip,timewindow){
-      return new Promise ((resolve, reject)=>{this.outTuples_data.hget("profile_"+ip+"_"+timewindow,'OutTuples',(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow,'OutTuples',(err,reply)=>{
         if(err){console.log("Error in getOutTuples in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -90,7 +90,7 @@ class Redis{
 
     /*Get intuples for specific profile and timewindow*/
     getInTuples(ip,timewindow){
-      return new Promise ((resolve, reject)=>{this.inTuples_data.hget("profile_"+ip+"_"+timewindow,'InTuples',(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow,'InTuples',(err,reply)=>{
         if(err){console.log("Error in getInTuples in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -98,7 +98,7 @@ class Redis{
 
     /*Get data for UDP established connections (dst/src ports/ips client/server) for specific profile and timewindow*/
     getUDPest(ip, timewindow,udp_key){
-      return new Promise ((resolve, reject)=>{this.udp_data_est.hget("profile_"+ip+"_"+timewindow, udp_key,(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow, udp_key,(err,reply)=>{
         if(err){console.log("Error in getUDPest in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -106,7 +106,7 @@ class Redis{
 
     /*Get data for TCP established (dst/src ports/IPs client/server) for specific profile and timewindow.*/
     getTCPest(ip, timewindow,tcp_key){
-      return new Promise ((resolve, reject)=>{this.tcp_data_est.hget("profile_"+ip+"_"+timewindow,tcp_key,(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow,tcp_key,(err,reply)=>{
         if(err){console.log("Error in getTCPest in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -114,7 +114,7 @@ class Redis{
 
     /*Get data for UDP notestablished (dst/src ports/IPs client/server) for specific profile and timewindow*/
     getUDPnotest(ip, timewindow,udp_key){
-      return new Promise ((resolve, reject)=>{this.udp_data_notest.hget("profile_"+ip+"_"+timewindow, udp_key,(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow, udp_key,(err,reply)=>{
         if(err){console.log("Error in getUDPnotest in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -122,7 +122,7 @@ class Redis{
 
     /*Get data for TCP notestablished (dst/src port/ips client/server) for specific profile and timewindow*/
     getTCPnotest(ip, timewindow,tcp_key){
-      return new Promise ((resolve, reject)=>{this.tcp_data_notest.hget("profile_"+ip+"_"+timewindow,tcp_key,(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.hget("profile_"+ip+"_"+timewindow,tcp_key,(err,reply)=>{
         if(err){console.log("Error in getTCPnotest in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
@@ -131,7 +131,7 @@ class Redis{
     /*Get all evidence for specific profile.*/
     getAllProfileEvidences(ip){
         return new Promise(
-               (resolve,reject)=>{this.all_profile_evidences.hgetall("evidenceprofile_"+ip, (err,reply)=>{
+               (resolve,reject)=>{this.db.hgetall("evidenceprofile_"+ip, (err,reply)=>{
                    if(err){console.log("Error in getAllProfileEvidences in kalipso_redis.js. Error: ",err); reject(err);}
                    else{resolve(reply);}
                })}
@@ -141,7 +141,7 @@ class Redis{
     /*Get all slips processes PIDs.*/
     getPIDs(){
         return new Promise(
-               (resolve,reject)=>{this.redis_client.hgetall("PIDs", (err,reply)=>{
+               (resolve,reject)=>{this.db.hgetall("PIDs", (err,reply)=>{
                    if(err){console.log("Error in getPIDs in kalipso_redis.js. Error: ",err); reject(err);}
                    else{resolve(reply);}
                })}
@@ -150,7 +150,7 @@ class Redis{
 
     /*Get starttime for the timewindow in the profile*/
     getStarttimeForTW(ip, timewindow){
-      return new Promise ((resolve, reject)=>{this.tw_starttime.zscore("twsprofile_"+ip,timewindow,(err,reply)=>{
+      return new Promise ((resolve, reject)=>{this.db.zscore("twsprofile_"+ip,timewindow,(err,reply)=>{
         if(err){console.log("Error in getStarttimeForTW in kalipso_redis.js. Error: ",err); reject(err);}
         else{resolve(reply);}
       });})
