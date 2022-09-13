@@ -346,7 +346,7 @@ class Module(Module, multiprocessing.Process):
                         'subject'] else '????'
                     # We put server_name instead of dns resolution
                     alt_activity = {
-                        'SN': subject,
+                        'server_name': subject,
                         'trusted': validation,
                         'resumed': resumed,
                         'version': alt_flow['version'],
