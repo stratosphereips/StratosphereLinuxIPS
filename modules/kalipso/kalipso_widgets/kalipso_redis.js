@@ -6,29 +6,6 @@ class Redis{
         this.redis_port = redis_port
     }
 
-    /*Create all the client to the Redis database.*/
-    createClient(){
-        var redis_config = {
-            host: "127.0.0.1",
-            port: this.redis_port
-            };
-        this.tree_keys = this.redis.createClient(redis_config)
-  		this.BlockedIPsTWs = this.redis.createClient(redis_config)
-        this.client = this.redis.createClient(redis_config)
-        this.timeline_data = this.redis.createClient(redis_config)
-        this.evidence_data = this.redis.createClient(redis_config)
-        this.ipInfo_data = this.redis.createClient() // use the default db 0 port 6379 for cache
-        this.outTuples_data = this.redis.createClient(redis_config)
-        this.inTuples_data = this.redis.createClient(redis_config)
-        this.tcp_data_est = this.redis.createClient(redis_config)
-        this.udp_data_est = this.redis.createClient(redis_config)
-        this.tcp_data_notest = this.redis.createClient(redis_config)
-        this.udp_data_notest = this.redis.createClient(redis_config)
-        this.redis_resolved_dns = this.redis.createClient(redis_config)
-        this.all_profile_evidences = this.redis.createClient(redis_config)
-        this.tw_starttime = this.redis.createClient(redis_config)
-        this.redis_client = this.redis.createClient(redis_config)
-  	}
 
     /*Get all the keys from the database.*/
   	getAllKeys(){
