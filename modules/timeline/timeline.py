@@ -201,11 +201,11 @@ class Module(Module, multiprocessing.Process):
                         'dport/proto': f'{str(dport)}/{proto}',
                         'state': state,
                         'warning': warning_empty,
-                        'Sent': sbytes,
-                        'Recv': allbytes - sbytes,
-                        'Tot': allbytes,
-                        'Duration': dur,
                         'info': '',
+                        'sent': sbytes,
+                        'recv': allbytes - sbytes,
+                        'tot': allbytes,
+                        'duration': dur,
                         'critical warning': critical_warning_dport_name
                     }
 
@@ -250,8 +250,8 @@ class Module(Module, multiprocessing.Process):
                             'dport_name': dport_name,
                             'preposition': 'from',
                             'saddr': saddr,
-                            'Size': allbytes,
-                            'Duration': dur,
+                            'size': allbytes,
+                            'duration': dur,
                         }
 
                 extra_info.update({
@@ -275,8 +275,8 @@ class Module(Module, multiprocessing.Process):
                     'dport_name': dport_name,
                     'preposition': 'from',
                     'saddr': saddr,
-                    'Size': allbytes,
-                    'Duration': dur,
+                    'size': allbytes,
+                    'duration': dur,
                 }
             #################################
             # Now process the alternative flows
@@ -300,9 +300,9 @@ class Module(Module, multiprocessing.Process):
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
                     alt_activity = {
-                        'Query': alt_flow['query'],
-                        'Answers': answer,
                         'info': '',
+                        'query': alt_flow['query'],
+                        'answers': answer,
                         'critical warning':'',
                     }
                 elif alt_flow['type'] == 'http':
@@ -347,19 +347,19 @@ class Module(Module, multiprocessing.Process):
                     # We put server_name instead of dns resolution
                     alt_activity = {
                         'SN': subject,
-                        'Trusted': validation,
-                        'Resumed': resumed,
-                        'Version': alt_flow['version'],
+                        'trusted': validation,
+                        'resumed': resumed,
+                        'version': alt_flow['version'],
                         'dns_resolution': alt_flow['server_name'],
                     }
                 elif alt_flow['type'] == 'ssh':
                     success = 'Successful' if alt_flow[
                         'auth_success'] else 'Not Successful'
                     alt_activity = {
-                        'Login': success,
-                        'Auth attempts': alt_flow['auth_attempts'],
-                        'Client': alt_flow['client'],
-                        'Server': alt_flow['client'],
+                        'login': success,
+                        'auth attempts': alt_flow['auth_attempts'],
+                        'client': alt_flow['client'],
+                        'server': alt_flow['client'],
                     }
 
             elif activity:
