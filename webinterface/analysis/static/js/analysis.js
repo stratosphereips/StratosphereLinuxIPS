@@ -104,27 +104,20 @@ function convertDotToDash(string){
     return string.replace(/\./g,'_');
 }
 
+
 function addAltFlowsData(d) {
-    return (
-        '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">' +
-        '<tr>' +
-        '<td>Full name:</td>' +
-        '<td>' +
-        d.query +
-        '</td>' +
-        '</tr>' +
-        '<tr>' +
-        '<td>Extension number:</td>' +
-        '<td>' +
-        d.answers +
-        '</td>' +
-        '</tr>' +
-        '<tr>' +
-        '<td>Extra info:</td>' +
-        '<td>And any further details here (images etc)...</td>' +
-        '</tr>' +
-        '</table>'
-    );
+    let start = '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+    let end = '</table>'
+
+    let middle = ""
+    for (let [k, v] of Object.entries(d)) {
+        middle += '<tr>'
+
+        middle += '<td>' + k + '</td>' + '<td>' + v + '</td>'
+
+        middle += '</tr>'
+    }
+    return start +  middle + end
 }
 
 /* INITIALIZE LISTENERS FOR TABLES */
