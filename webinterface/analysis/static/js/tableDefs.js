@@ -60,8 +60,13 @@ let analysisTableDefs = {
             { data: 'tot' },
             { data: 'duration' },
             { data: 'warning' },
-            { data: 'critical warning' },
-        ]
+            { data: 'critical warning' }
+        ],
+        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+            if(aData['info']){
+                $('td', nRow).css('background-color', '#ECFEE8')
+            }
+        }
     },
     "outtuples": {
         destroy: true,
