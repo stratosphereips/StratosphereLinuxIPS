@@ -299,10 +299,12 @@ class Module(Module, multiprocessing.Process):
                     answer = alt_flow['answers']
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
-                    alt_activity = {
-                        'info': '',
+                    dns_activity = {
                         'query': alt_flow['query'],
-                        'answers': answer,
+                        'answers': answer
+                    }
+                    alt_activity = {
+                        'info': dns_activity,
                         'critical warning':'',
                     }
                 elif alt_flow['type'] == 'http':
@@ -323,7 +325,7 @@ class Module(Module, multiprocessing.Process):
                         for k, v in http_data_all.items()
                         if v is not '' and v is not '/'
                     }
-                    alt_activity = {'http_data': http_data}
+                    alt_activity = {'info': http_data}
                 elif alt_flow['type'] == 'ssl':
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
@@ -345,25 +347,27 @@ class Module(Module, multiprocessing.Process):
                     subject = alt_flow['subject'].split(',')[0] if alt_flow[
                         'subject'] else '????'
                     # We put server_name instead of dns resolution
-                    alt_activity = {
+                    ssl_activity = {
                         'server_name': subject,
                         'trusted': validation,
                         'resumed': resumed,
                         'version': alt_flow['version'],
-                        'dns_resolution': alt_flow['server_name'],
+                        'dns_resolution': alt_flow['server_name']
                     }
+                    alt_activity = {'info': ssl_activity}
                 elif alt_flow['type'] == 'ssh':
                     success = 'Successful' if alt_flow[
                         'auth_success'] else 'Not Successful'
-                    alt_activity = {
+                    ssh_activity = {
                         'login': success,
                         'auth_attempts': alt_flow['auth_attempts'],
                         'client': alt_flow['client'],
                         'server': alt_flow['client'],
                     }
+                    alt_activity = {'info': ssh_activity}
 
             elif activity:
-                alt_activity = {'info': 'No extra data.'}
+                alt_activity = {'info': ''}
 
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
