@@ -61,7 +61,6 @@ let analysisTableDefs = {
             { data: 'duration' },
             { data: 'warning' },
             { data: 'critical warning' },
-            { data: 'info' }
         ]
     },
     "outtuples": {
