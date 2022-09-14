@@ -104,6 +104,29 @@ function convertDotToDash(string){
     return string.replace(/\./g,'_');
 }
 
+function addAltFlowsData(d) {
+    return (
+        '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">' +
+        '<tr>' +
+        '<td>Full name:</td>' +
+        '<td>' +
+        d.query +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td>Extension number:</td>' +
+        '<td>' +
+        d.answers +
+        '</td>' +
+        '</tr>' +
+        '<tr>' +
+        '<td>Extra info:</td>' +
+        '<td>And any further details here (images etc)...</td>' +
+        '</tr>' +
+        '</table>'
+    );
+}
+
 /* INITIALIZE LISTENERS FOR TABLES */
 /*--------------------------------------------------------------*/
 function initAnalysisTagListeners(){
@@ -185,6 +208,25 @@ function initTimelineListeners(){
     $('#table_timeline_filter_button').click(function(){
         var filter_gender = $('#table_timeline_filter_input').val();
         searchReload(filter_gender);
+    });
+
+        // Add event listener for opening and closing details
+    $('#table_timeline').on('click', 'tbody tr', function () {
+        let tr = $(this).closest('tr');
+        let row = $("#table_timeline").DataTable().row(this)
+        let data = row.data()["info"]
+
+        if(data){
+            if (row.child.isShown()) {
+                // This row is already open - close it
+                row.child.hide();
+                tr.removeClass('shown');
+            } else {
+                // Open this row
+                row.child(addAltFlowsData(data)).show();
+                tr.addClass('shown');
+            }
+        }
     });
 }
 
