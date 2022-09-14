@@ -357,7 +357,7 @@ class Module(Module, multiprocessing.Process):
                         'auth_success'] else 'Not Successful'
                     alt_activity = {
                         'login': success,
-                        'auth attempts': alt_flow['auth_attempts'],
+                        'auth_attempts': alt_flow['auth_attempts'],
                         'client': alt_flow['client'],
                         'server': alt_flow['client'],
                     }
