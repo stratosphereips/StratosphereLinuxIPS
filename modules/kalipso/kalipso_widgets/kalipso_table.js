@@ -143,11 +143,11 @@ class Table{
                     // display ip (source or dst) based on the direction
                     let direction = timeline_json['preposition'];
                     if (direction === "to" ){
-                        var cyan_keywords = ['daddr']
+                        cyan_keywords.push('daddr')
                         timeline_json['saddr'] = ''
 
                     } else if(direction === "from"){
-                        var cyan_keywords = ['saddr']
+                        cyan_keywords.push('saddr')
                         timeline_json['daddr'] = ''
                     }
 
