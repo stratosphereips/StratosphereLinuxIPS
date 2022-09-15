@@ -112,7 +112,7 @@ function addTableAltFlows(data) {
     let middle = ""
     for (let [k, v] of Object.entries(data)) {
         middle += '<tr>'
-        middle += '<td>' + k + '</td>' + '<td>' + v + '</td>'
+        middle += '<td>' + k.toUpperCase() + '</td>' + '<td>' + v + '</td>'
         middle += '</tr>'
     }
     return start +  middle + end
