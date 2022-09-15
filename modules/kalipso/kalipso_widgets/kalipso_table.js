@@ -158,34 +158,34 @@ class Table{
                       let info = ''
 
                       for (let [key, value] of Object.entries(timeline_json)) {
-
+                        let flow_value = ''
 
                         if(key.includes('critical warning')){
-                          value = color.red(value)
+                          flow_value = color.red(value)
                         }
                         else if(key.includes('warning')){
-                          value = color.rgb(255,165,0)(value)
+                          flow_value = color.rgb(255,165,0)(value)
                         }
                         else if(key.includes('timestamp')){
-                          value = value.substring(0, value.indexOf('.'));
+                          flow_value = color.bold(value);
                         }
                         else if(key.includes('dport/proto')){
-                          value = color.bold.yellow(value)
+                          flow_value = color.bold.yellow(value)
                         }
                         else if(key.includes('info')){
                           value = color.rgb(105,105,105)(value)
                         }
                         else if (blue_keywords.some(element => key.includes(element))){
-                          value = color.rgb(51, 153, 255)(value);
+                          flow_value = color.rgb(51, 153, 255)(value);
                         }
                         else if(cyan_keywords.some(element => key.includes(element))){
-                          value = color.rgb(112, 168, 154)('[' + value+']')
+                          flow_value = color.rgb(112, 168, 154)('[' + value+']')
                         }
                         else if (orange_keywords.some(element => key.includes(element))){
-                          value =key + ':' + color.rgb(255, 153, 51)(value);
+                          flow_value = this.capitalizeFirstLetter(key) + ':' + color.rgb(255, 153, 51)(value);
                         }
                         else if (red_keywords .some(element => key.includes(element))){
-                          value = color.red(value);
+                          flow_value = color.red(value);
                         }
                         else if (pink_keywords_parameter .some(element => key.includes(element))){
                           value = color.rgb(219,112,147)(value);
@@ -198,6 +198,9 @@ class Table{
                         }
                         if(value && !http_data){
                           final_timeline += value +' ';}
+
+                        if(flow_value){
+                          final_timeline += flow_value +' ';}
                         }
 
                         row.push(final_timeline);
