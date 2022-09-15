@@ -151,7 +151,6 @@ class Table{
                         timeline_json['daddr'] = ''
                     }
 
-                    if(timeline_json['timestamp']){
                       //  we will be appending each row value to this final_timeline
                        // each value has it's own color
                       let final_timeline = ''
@@ -215,7 +214,6 @@ class Table{
                                 timeline_data.push(row);
                             }
                         }
-                    }
 
               callback();
               },(err)=>{
