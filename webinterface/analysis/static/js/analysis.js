@@ -105,12 +105,12 @@ function convertDotToDash(string){
 }
 
 
-function addAltFlowsData(d) {
+function addTableAltFlows(data) {
     let start = '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
     let end = '</table>'
 
     let middle = ""
-    for (let [k, v] of Object.entries(d)) {
+    for (let [k, v] of Object.entries(data)) {
         middle += '<tr>'
         middle += '<td>' + k + '</td>' + '<td>' + v + '</td>'
         middle += '</tr>'
@@ -214,7 +214,7 @@ function initTimelineListeners(){
                 tr.removeClass('shown');
             } else {
                 // Open this row
-                row.child(addAltFlowsData(data)).show();
+                row.child(addTableAltFlows(data)).show();
                 tr.addClass('shown');
             }
         }
