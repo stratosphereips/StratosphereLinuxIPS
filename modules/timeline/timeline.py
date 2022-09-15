@@ -144,7 +144,7 @@ class Module(Module, multiprocessing.Process):
 
                     # Check if the connection sent anything!
                     if not allbytes:
-                        warning_empty = ', Empty!'
+                        warning_empty = 'No data exchange!'
 
                     # Check if slips and zeek know dport_name!
                     if not dport_name:
@@ -175,7 +175,7 @@ class Module(Module, multiprocessing.Process):
                 else:
                     # Check if the connection sent anything!
                     if not allbytes:
-                        warning_empty = 'Empty!'
+                        warning_empty = 'No data exchange!'
 
                     # Check if slips and zeek know dport_name!
                     if not dport_name:
