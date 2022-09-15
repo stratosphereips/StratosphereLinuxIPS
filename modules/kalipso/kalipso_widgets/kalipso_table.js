@@ -173,7 +173,7 @@ class Table{
                           flow_value = color.bold.yellow(value)
                         }
                         else if(key.includes('info')){
-                          value = color.rgb(105,105,105)(value)
+                            info = value
                         }
                         else if (blue_keywords.some(element => key.includes(element))){
                           flow_value = color.rgb(51, 153, 255)(value);
