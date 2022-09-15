@@ -201,7 +201,6 @@ function initTimelineListeners(){
         searchReload(filter_gender);
     });
 
-        // Add event listener for opening and closing details
     $('#table_timeline').on('click', 'tbody tr', function () {
         let tr = $(this).closest('tr');
         let row = $("#table_timeline").DataTable().row(this)
@@ -209,11 +208,9 @@ function initTimelineListeners(){
 
         if(data){
             if (row.child.isShown()) {
-                // This row is already open - close it
                 row.child.hide();
                 tr.removeClass('shown');
             } else {
-                // Open this row
                 row.child(addTableAltFlows(data)).show();
                 tr.addClass('shown');
             }
