@@ -10,6 +10,7 @@ let last_analysisTable = 'timeline';
 function capitalizeFirstLetter(data){
     return data.charAt(0).toUpperCase() + data.slice(1);
 }
+
 function updateAnalysisTable(){
     if(active_profile && active_timewindow){
         let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
@@ -115,7 +116,7 @@ function addTableAltFlows(data) {
     let middle = ""
     for (let [k, v] of Object.entries(data)) {
         middle += '<tr>'
-        middle += '<td>' + k.toUpperCase() + '</td>' + '<td>' + v + '</td>'
+        middle += '<td>' + '<b>' + capitalizeFirstLetter(k) + ':' + '</b>'+'</td>' + '<td>' + v + '</td>'
         middle += '</tr>'
     }
     return start +  middle + end
