@@ -326,6 +326,7 @@ class Module(Module, multiprocessing.Process):
                         if v is not '' and v is not '/'
                     }
                     alt_activity = {'info': http_data}
+                    print(http_data)
                 elif alt_flow['type'] == 'ssl':
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'

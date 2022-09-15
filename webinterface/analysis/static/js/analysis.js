@@ -7,6 +7,9 @@ let active_tw_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
+function capitalizeFirstLetter(data){
+    return data.charAt(0).toUpperCase() + data.slice(1);
+}
 function updateAnalysisTable(){
     if(active_profile && active_timewindow){
         let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
