@@ -131,7 +131,6 @@ class Table{
             else{
                 // found timeline data, parse it
                 async.each(redis_timeline_data, (timeline, callback)=>{
-                    var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version', 'Login', 'Auth attempts','Server','Client']
                     let row = [];
                     let timeline_json = JSON.parse(timeline)
                     // this one is coming from database.py: get_dns_resolution
