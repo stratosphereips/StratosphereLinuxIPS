@@ -187,16 +187,8 @@ class Table{
                           flow_value = color.red(value);
                         }
                         else if (pink_keywords_parameter .some(element => key.includes(element))){
-                          value = color.rgb(219,112,147)(value);
+                          flow_value = color.rgb(219,112,147)(value);
                         }
-                        else if (pink_keywords .some(element => key.includes(element))){
-                          value = key + ':'+color.rgb(219,112,147)(value);
-                        }
-                        else if(key.includes('http_data')){
-                          http_data = value;
-                        }
-                        if(value && !http_data){
-                          final_timeline += value +' ';}
 
                         if(flow_value){
                           final_timeline += flow_value +' ';}
@@ -204,13 +196,11 @@ class Table{
 
                         row.push(final_timeline);
                         timeline_data.push(row);
-                        if(http_data){
-                            var http_timeline = ''
-
-                            for (let [key, value] of Object.entries(http_data)) {
+                        if(info){
+                            for (let [key, value] of Object.entries(info)) {
                                 row = []
-                                http_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
-                                row.push(http_timeline);
+                                let info_format = color.bold(this.capitalizeFirstLetter(key).padStart(20 + key.length)) + ':' + color.rgb(219,112,147)(value) + ' ';
+                                row.push(info_format);
                                 timeline_data.push(row);
                             }
                         }
