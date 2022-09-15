@@ -112,9 +112,7 @@ function addAltFlowsData(d) {
     let middle = ""
     for (let [k, v] of Object.entries(d)) {
         middle += '<tr>'
-
         middle += '<td>' + k + '</td>' + '<td>' + v + '</td>'
-
         middle += '</tr>'
     }
     return start +  middle + end
