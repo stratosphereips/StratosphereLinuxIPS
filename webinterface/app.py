@@ -1,4 +1,6 @@
+from flask import Flask, render_template, request, redirect, url_for, current_app
 from database.database import __database__
+from database.signals import message_sent
 
 from analysis.analysis import analysis
 from general.general import general
@@ -17,6 +19,16 @@ app = create_app()
 @app.route('/')
 def index():
     return render_template('app.html', title='Slips')
+
+# Example of redirect and signal sent
+# @app.route('/db')
+# def rem():
+#     message_sent.send(
+#         current_app._get_current_object(),
+#         port=63777,
+#         dbnumber=0
+#     )
+#     return redirect(url_for('index'))
 
 @app.route('/info')
 def set_pcap_info():
