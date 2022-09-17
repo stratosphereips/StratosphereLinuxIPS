@@ -1,11 +1,18 @@
-from flask import Flask, render_template, request
-from analysis.analysis import Analysis
-from general.general import General
-from argparse import ArgumentParser
-import redis
+from database.database import __database__
 
-app = Flask(__name__)
-app.config['JSON_SORT_KEYS'] = False  # disable sorting of timewindows
+from analysis.analysis import analysis
+from general.general import general
+from argparse import ArgumentParser
+
+
+def create_app():
+    app = Flask(__name__)
+    app.config['JSON_SORT_KEYS'] = False  # disable sorting of timewindows
+    return app
+
+
+app = create_app()
+
 
 @app.route('/')
 def index():
@@ -16,8 +23,9 @@ def set_pcap_info():
     """
     Set information about the pcap.
     """
-    info = __database__.hgetall("analysis")
+    info = __database__.db.hgetall("analysis")
     return info
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()
@@ -25,28 +33,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     port = args.p
 
-    __database__ = redis.StrictRedis(host='localhost',
-                                     port=port,
-                                     db=0,
-                                     charset="utf-8",
-                                     socket_keepalive=True,
-                                     retry_on_timeout=True,
-                                     decode_responses=True,
-                                     health_check_interval=30)
+    app.register_blueprint(analysis, url_prefix="/analysis")
 
-    __cache__ = redis.StrictRedis(host='localhost',
-                                  port=6379,
-                                  db=1,
-                                  charset="utf-8",
-                                  socket_keepalive=True,
-                                  retry_on_timeout=True,
-                                  decode_responses=True,
-                                  health_check_interval=30)
-
-    hotkeys = Analysis(__database__, __cache__)
-    app.register_blueprint(hotkeys.bp, url_prefix="/analysis")
-
-    general = General(__database__, __cache__)
-    app.register_blueprint(general.bp, url_prefix="/general")
+    app.register_blueprint(general, url_prefix="/general")
 
     app.run(host="0.0.0.0", port=55000)
