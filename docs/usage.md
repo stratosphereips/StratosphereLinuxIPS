@@ -386,7 +386,7 @@ Slips doesn't need root permissions unless you
 If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
 
 ```
-setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+sudo setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
 ```
 
 Even when Slips is run using sudo, it drops root privileges  in modules that don't need them.

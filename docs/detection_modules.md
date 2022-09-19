@@ -634,12 +634,12 @@ Slips uses online databases to query information about many different things, fo
 
 The list below contains all connections made by Slips
 
-http://useragentstring.com -> For getting user agent info if no info was found in Zeek
-https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
-http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-http://ipinfo.io/json -> For getting your public IP
-https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
-
+useragentstring.com -> For getting user agent info if no info was found in Zeek
+macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
+ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
+ipinfo.io -> For getting your public IP
+virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
+urlhaus-api.abuse.ch -> For getting info about contacted IPs and domains
 
 ---
 
