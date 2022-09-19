@@ -29,6 +29,16 @@ fetch("/info", {
 })
 
 
+$('#button_choose_db').click(function(){
+    let data = $('#table_choose_redis').DataTable().row( { selected: true } ).data()
+        $('#myModal .close').click() // close modal by imitating the close button click. $('#myModal').hide() does not work
+console.log("close modal")
+    let link = "/db/" + data['redis_port']
+    $.get( link );
+    console.log("send new port")
+
+});
+
 $('#myModal').modal({
     show: true,
     backdrop: 'static',
