@@ -340,4 +340,4 @@ def set_evidence(profile, timewindow, alert_id):
 
 @analysis.route('/')
 def index():
-    return render_template('hotkeys.html', title='Slips')
+    return render_template('analysis.html', title='Slips')
