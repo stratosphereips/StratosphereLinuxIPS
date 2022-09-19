@@ -43,6 +43,9 @@ class Table{
         this.widget.focus()
     }
 
+    capitalizeFirstLetter(data){
+        return data.charAt(0).toUpperCase() + data.slice(1);
+    }
 
 
     timeConverter(UNIX_timestamp){
@@ -122,95 +125,85 @@ class Table{
         try{
             // get the timeline of thi ip and tw from the db for example "profile_ip_timewindow_timeline"
             this.redis_database.getTimeline(ip, timewindow).then(redis_timeline_data=>{
-            var timeline_data = [];
+            let timeline_data = [];
             // handle no timeline data found
             if(redis_timeline_data.length < 1){this.setData([ip+" "+timewindow], timeline_data);}
             else{
                 // found timeline data, parse it
                 async.each(redis_timeline_data, (timeline, callback)=>{
-                    var row = [];
-                    var timeline_json = JSON.parse(timeline)
-                    var pink_keywords = ['Query','Answers','SN', 'Trusted', 'Resumed', 'Version', 'Login', 'Auth attempts','Server','Client']
+                    let row = [];
+                    let timeline_json = JSON.parse(timeline)
                     // this one is coming from database.py: get_dns_resolution
-                    var pink_keywords_parameter = ['dns_resolution']
-                    var red_keywords = ['critical warning' ]
-                    var orange_keywords = ['Sent','Recv','Tot','Size','Type','Duration']
-                    var blue_keywords = ['dport_name', 'dport_name/proto']
-                    // var cyan_keywords = ['daddr', 'saddr']
+                    let pink_keywords_parameter = ['dns_resolution']
+                    let red_keywords = ['critical warning' ]
+                    let orange_keywords = ['sent','recv','tot','size','type','duration']
+                    let blue_keywords = ['dport_name', 'dport_name/proto']
+                    let cyan_keywords = []
 
                     // display ip (source or dst) based on the direction
-                    var direction = timeline_json['preposition'];
+                    let direction = timeline_json['preposition'];
                     if (direction === "to" ){
-                        var cyan_keywords = ['daddr']
+                        cyan_keywords.push('daddr')
                         timeline_json['saddr'] = ''
 
                     } else if(direction === "from"){
-                        var cyan_keywords = ['saddr']
+                        cyan_keywords.push('saddr')
                         timeline_json['daddr'] = ''
                     }
 
-                    if(timeline_json['timestamp']){
                       //  we will be appending each row value to this final_timeline
-                        // each value has it's own color
-                      var final_timeline = ''
-                      var http_data = ''
+                       // each value has it's own color
+                      let final_timeline = ''
+                      let info = ''
 
                       for (let [key, value] of Object.entries(timeline_json)) {
-
+                        let flow_value = ''
 
                         if(key.includes('critical warning')){
-                          value = color.red(value)
+                          flow_value = color.red(value)
                         }
                         else if(key.includes('warning')){
-                          value = color.rgb(255,165,0)(value)
+                          flow_value = color.rgb(255,165,0)(value)
                         }
                         else if(key.includes('timestamp')){
-                          value = value.substring(0, value.indexOf('.'));
+                          flow_value = color.bold(value);
                         }
                         else if(key.includes('dport/proto')){
-                          value = color.bold.yellow(value)
+                          flow_value = color.bold.yellow(value)
                         }
                         else if(key.includes('info')){
-                          value = color.rgb(105,105,105)(value)
+                            info = value
                         }
                         else if (blue_keywords.some(element => key.includes(element))){
-                          value = color.rgb(51, 153, 255)(value);
+                          flow_value = color.rgb(51, 153, 255)(value);
                         }
                         else if(cyan_keywords.some(element => key.includes(element))){
-                          value = color.rgb(112, 168, 154)('[' + value+']')
+                          flow_value = color.rgb(112, 168, 154)('[' + value+']')
                         }
                         else if (orange_keywords.some(element => key.includes(element))){
-                          value =key + ':' + color.rgb(255, 153, 51)(value);
+                          flow_value = this.capitalizeFirstLetter(key) + ':' + color.rgb(255, 153, 51)(value);
                         }
                         else if (red_keywords .some(element => key.includes(element))){
-                          value = color.red(value);
+                          flow_value = color.red(value);
                         }
                         else if (pink_keywords_parameter .some(element => key.includes(element))){
-                          value = color.rgb(219,112,147)(value);
+                          flow_value = color.rgb(219,112,147)(value);
                         }
-                        else if (pink_keywords .some(element => key.includes(element))){
-                          value = key + ':'+color.rgb(219,112,147)(value);
-                        }
-                        else if(key.includes('http_data')){
-                          http_data = value;
-                        }
-                        if(value && !http_data){
-                          final_timeline += value +' ';}
+
+                        if(flow_value){
+                          final_timeline += flow_value +' ';}
                         }
 
                         row.push(final_timeline);
                         timeline_data.push(row);
-                        if(http_data){
-                            var http_timeline = ''
-
-                            for (let [key, value] of Object.entries(http_data)) {
+                        if(info){
+                            for (let [key, value] of Object.entries(info)) {
                                 row = []
-                                http_timeline = key.padStart(21+key.length) +': ' +color.rgb(51, 153, 255)(value);
-                                row.push(http_timeline);
+                                let info_format = color.bold(this.capitalizeFirstLetter(key).padStart(20 + key.length)) + ':' + color.rgb(219,112,147)(value) + ' ';
+                                row.push(info_format);
                                 timeline_data.push(row);
                             }
                         }
-                    }
 
               callback();
               },(err)=>{

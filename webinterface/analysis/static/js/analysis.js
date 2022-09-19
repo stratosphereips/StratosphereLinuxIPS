@@ -7,6 +7,10 @@ let active_tw_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
+function capitalizeFirstLetter(data){
+    return data.charAt(0).toUpperCase() + data.slice(1);
+}
+
 function updateAnalysisTable(){
     if(active_profile && active_timewindow){
         let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
@@ -104,6 +108,20 @@ function convertDotToDash(string){
     return string.replace(/\./g,'_');
 }
 
+
+function addTableAltFlows(data) {
+    let start = '<table cellpadding="5" cellspacing="0" border="0" style="padding-left:50px;">'
+    let end = '</table>'
+
+    let middle = ""
+    for (let [k, v] of Object.entries(data)) {
+        middle += '<tr>'
+        middle += '<td>' + '<b>' + capitalizeFirstLetter(k) + ':' + '</b>'+'</td>' + '<td>' + v + '</td>'
+        middle += '</tr>'
+    }
+    return start +  middle + end
+}
+
 /* INITIALIZE LISTENERS FOR TABLES */
 /*--------------------------------------------------------------*/
 function initAnalysisTagListeners(){
@@ -185,6 +203,22 @@ function initTimelineListeners(){
     $('#table_timeline_filter_button').click(function(){
         var filter_gender = $('#table_timeline_filter_input').val();
         searchReload(filter_gender);
+    });
+
+    $('#table_timeline').on('click', 'tbody tr', function () {
+        let tr = $(this).closest('tr');
+        let row = $("#table_timeline").DataTable().row(this)
+        let data = row.data()["info"]
+
+        if(data){
+            if (row.child.isShown()) {
+                row.child.hide();
+                tr.removeClass('shown');
+            } else {
+                row.child(addTableAltFlows(data)).show();
+                tr.addClass('shown');
+            }
+        }
     });
 }
 
