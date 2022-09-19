@@ -31,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         self.timeout = 0.0000001
         self.__read_configuration()
         self.get_malicious_ip_ranges()
+        self.create_urlhaus_session()
 
     def get_malicious_ip_ranges(self):
         """
@@ -539,11 +540,15 @@ class Module(Module, multiprocessing.Process):
         })
         return ip_info
 
+    def create_urlhaus_session(self):
+        self.urlhaus_session = requests.session()
+        self.urlhaus_session.verify = True
+
+
     def urlhaus(self, ioc):
         """
         Supports IPs, domains, and hashes (MD5, sha256) lookups
         #todo support domains and hashes
-        #todo do not create a session for each ip to speedup this function!
         """
         def get_description(urls:list):
             """
@@ -553,7 +558,7 @@ class Module(Module, multiprocessing.Process):
                 return ''
 
             url_dict = urls[0]
-            description = f"{url_dict['threat']} url status: {url_dict['url_status']}"
+            description = f"{url_dict['threat']}, url status: {url_dict['url_status']}"
             return description
 
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
@@ -566,24 +571,21 @@ class Module(Module, multiprocessing.Process):
         }
         indicator_type = types[utils.detect_data_type(ioc)]
 
-        urlhaus_session = requests.session()
-        urlhaus_session.verify = True
-
         urlhaus_data = {
             indicator_type: ioc
         }
 
         if indicator_type == 'host':
-            urlhaus_api_response = urlhaus_session.post(
+            urlhaus_api_response = self.urlhaus_session.post(
                 f'{urlhaus_base_url}/host/',
                 urlhaus_data,
-                headers=urlhaus_session.headers
+                headers=self.urlhaus_session.headers
             )
         else:
-            urlhaus_api_response = urlhaus_session.post(
+            urlhaus_api_response = self.urlhaus_session.post(
                 f'{urlhaus_base_url}/payload/',
                 urlhaus_data,
-                headers=urlhaus_session.headers
+                headers=self.urlhaus_session.headers
             )
 
         if urlhaus_api_response.status_code != 200: #or urlhaus_api_response == "{'query_status': 'no_results'}":
