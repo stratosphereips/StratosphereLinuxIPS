@@ -21,14 +21,16 @@ def index():
     return render_template('app.html', title='Slips')
 
 # Example of redirect and signal sent
-# @app.route('/db')
-# def rem():
-#     message_sent.send(
-#         current_app._get_current_object(),
-#         port=63777,
-#         dbnumber=0
-#     )
-#     return redirect(url_for('index'))
+@app.route('/db/<new_port>')
+def get_post_javascript_data(new_port):
+    print("app: recevied port")
+    message_sent.send(
+        current_app._get_current_object(),
+        port=int(new_port),
+        dbnumber=0
+    )
+    print("redirect")
+    return redirect(url_for('index'))
 
 @app.route('/info')
 def set_pcap_info():
