@@ -7,6 +7,35 @@
         <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/style.css')}}"/>
         <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/style.css')}}"/>
     </head>
+    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#myModal">
+        Change DB
+    </button>
+    <div class="modal " id="myModal" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel" >
+      <div class="modal-dialog" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="staticBackdropLabel">Modal title</h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+                <table id="table_choose_redis" class="table table-striped display  nowrap" style="width:100%">
+                    <thead>
+                    <tr>
+                    <th>Filename</th>
+                    <th>Port</th>
+                    </tr>
+                    </thead>
+                </table>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+            <button type="button" id="button_choose_db" class="btn btn-primary">Understood</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <body>
         <div class="container-fluid">
