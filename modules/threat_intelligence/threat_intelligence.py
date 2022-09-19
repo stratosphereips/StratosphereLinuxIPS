@@ -175,8 +175,10 @@ class Module(Module, multiprocessing.Process):
         source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
         description = (
             f'connection to a blacklisted domain {domain}. '
-            f'Found in feed {domain_info["source"]}, with tags {tags}. '
-            f'Confidence {confidence}.'
+            f'Description: {domain_info.get("description", "")}, '
+            f'Found in feed: {domain_info["source"]}, '
+            f'with tags: {tags}. '
+            f'Confidence: {confidence}.'
         )
         __database__.setEvidence(
             type_evidence,
@@ -530,25 +532,34 @@ class Module(Module, multiprocessing.Process):
             'therat_level': 'medium',
             'tags': 'spam'
         }
-        __database__.add_ips_to_IoC({
-            ip: json.dumps(ip_info)
-        })
         return ip_info
+
+    def is_ignored_domain(self, domain):
+        if not domain:
+            return True
+        # to reduce the number of requests sent, don't send google domains
+        # requests to abuse.ch, spamhaus and urlhaus domains are done by slips
+        ignored_TLDs = ('.arpa',
+                        '.local')
+
+        for keyword in ignored_TLDs:
+            if domain.endswith(keyword):
+                return True
+
 
     def urlhaus(self, ioc):
         """
         Supports IPs, domains, and hashes (MD5, sha256) lookups
-        #todo support domains and hashes
+        :param ioc: can be domain or ip
+        #todo support hashes
         """
-        def get_description(urls:list):
+        def get_description(url: dict):
             """
             returns a meaningful description from the given list of urls
-            """
-            if urls == []:
-                return ''
 
-            url_dict = urls[0]
-            description = f"{url_dict['threat']}, url status: {url_dict['url_status']}"
+            """
+
+            description = f"{url['threat']}, url status: {url['url_status']}"
             return description
 
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
@@ -559,8 +570,9 @@ class Module(Module, multiprocessing.Process):
             'domain': 'host',
             'md5': 'md5',
         }
-        indicator_type = types[utils.detect_data_type(ioc)]
-
+        ioc_type = utils.detect_data_type(ioc)
+        # get the urlhause supported type
+        indicator_type = types[ioc_type]
         urlhaus_data = {
             indicator_type: ioc
         }
@@ -582,27 +594,29 @@ class Module(Module, multiprocessing.Process):
             self.create_urlhaus_session()
             return
 
-        if urlhaus_api_response.status_code != 200: #or urlhaus_api_response == "{'query_status': 'no_results'}":
+        if urlhaus_api_response.status_code != 200:
             return
 
         response = json.loads(urlhaus_api_response.text)
-        if response['query_status'] == 'no_results':
+        if response['query_status'] == 'no_results' or response['urls'] == []:
+            # no response or empty response
             return
 
-        description = get_description(response['urls'])
-        tags = " ".join(tag for tag in response['urls'][0]['tags'])
-        ip_info = {
-            # get all the blacklists where thisip is lsited
+        # get the first description available
+        url = response['urls'][0]
+        description = get_description(url)
+        tags = " ".join(tag for tag in url['tags'])
+
+        info = {
+            # get all the blacklists where this ioc is lsited
             'source': 'URLhaus',
             'description': description,
             'therat_level': 'medium',
             'tags': tags
         }
 
-        __database__.add_ips_to_IoC({
-            ioc: json.dumps(ip_info)
-        })
-        return ip_info
+        return info
+
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -629,7 +643,9 @@ class Module(Module, multiprocessing.Process):
             if not ip_info:
                 # not malicious
                 return False
-
+        __database__.add_ips_to_IoC({
+                ip: json.dumps(ip_info)
+        })
         self.set_evidence_malicious_ip(
             ip,
             uid,
@@ -686,7 +702,7 @@ class Module(Module, multiprocessing.Process):
         return False, False
 
     def search_online_for_domain(self, domain):
-        pass
+        return self.urlhaus(domain)
 
     def is_malicious_domain(
             self,
@@ -696,7 +712,7 @@ class Module(Module, multiprocessing.Process):
             profileid,
             twid
     ):
-        if not (domain and not domain.endswith('.arpa') and not domain.endswith('.local')):
+        if self.is_ignored_domain(domain):
             return False
 
         domain_info, is_subdomain = self.search_offline_for_domain(domain)
