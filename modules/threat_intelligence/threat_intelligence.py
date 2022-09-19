@@ -33,6 +33,10 @@ class Module(Module, multiprocessing.Process):
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
 
+    def create_urlhaus_session(self):
+        self.urlhaus_session = requests.session()
+        self.urlhaus_session.verify = True
+
     def get_malicious_ip_ranges(self):
         """
         Cache the IoC IP ranges instead of retrieving them from the db
@@ -135,7 +139,7 @@ class Module(Module, multiprocessing.Process):
         # add this ip to our MaliciousIPs hash in the database
         __database__.set_malicious_ip(ip, profileid, twid)
 
-    def set_evidence_domain(
+    def set_evidence_malicious_domain(
         self,
         domain,
         uid,
@@ -462,15 +466,6 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
         return True
 
-    def search_offline(self, ip):
-        """ Searches the TI files for the given ip """
-        ip_info = __database__.search_IP_in_IoC(ip)
-        # check if it's a blacklisted ip
-        if not ip_info:
-            return False
-
-        return json.loads(ip_info)
-
     def spamhaus(self, ip):
         """
         Supports IP lookups only
@@ -540,11 +535,6 @@ class Module(Module, multiprocessing.Process):
         })
         return ip_info
 
-    def create_urlhaus_session(self):
-        self.urlhaus_session = requests.session()
-        self.urlhaus_session.verify = True
-
-
     def urlhaus(self, ioc):
         """
         Supports IPs, domains, and hashes (MD5, sha256) lookups
@@ -610,9 +600,16 @@ class Module(Module, multiprocessing.Process):
         })
         return ip_info
 
+    def search_offline_for_ip(self, ip):
+        """ Searches the TI files for the given ip """
+        ip_info = __database__.search_IP_in_IoC(ip)
+        # check if it's a blacklisted ip
+        if not ip_info:
+            return False
 
+        return json.loads(ip_info)
 
-    def search_online(self, ip):
+    def search_online_for_ip(self, ip):
         spamhaus_res = self.spamhaus(ip)
         if spamhaus_res:
             return spamhaus_res
@@ -620,13 +617,11 @@ class Module(Module, multiprocessing.Process):
         if urlhaus_res:
             return urlhaus_res
 
-
-
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
         """Search for this IP in our database of IoC"""
-        ip_info = self.search_offline(ip)
+        ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
-            ip_info = self.search_online(ip)
+            ip_info = self.search_online_for_ip(ip)
             if not ip_info:
                 # not malicious
                 return False
@@ -671,6 +666,62 @@ class Module(Module, multiprocessing.Process):
                     ip_state,
                 )
                 return True
+
+    def search_offline_for_domain(self, domain):
+        # Search for this domain in our database of IoC
+        (
+            domain_info,
+            is_subdomain,
+        ) = __database__.search_Domain_in_IoC(domain)
+        if (
+            domain_info != False
+        ):   # Dont change this condition. This is the only way it works
+            # If the domain is in the blacklist of IoC. Set an evidence
+            domain_info = json.loads(domain_info)
+            return domain_info, is_subdomain
+
+    def is_malicious_domain(
+            self,
+            domain,
+            uid,
+            timestamp,
+            profileid,
+            twid,
+    ):
+        if not (domain and not domain.endswith('.arpa') and not domain.endswith('.local')):
+            return False
+
+        domain_info, is_subdomain = self.search_offline_for_domain(domain)
+        if not domain_info:
+            is_subdomain = False
+            domain_info = self.search_online_for_domain(domain)
+            if not domain_info:
+                # not malicious
+                return False
+
+        self.set_evidence_malicious_domain(
+                domain,
+                uid,
+                timestamp,
+                domain_info,
+                is_subdomain,
+                profileid,
+                twid,
+            )
+
+        # mark this domain as malicious in our database
+        domain_info = {
+            'threatintelligence': domain_info
+        }
+        __database__.setInfoForDomains(
+            domain, domain_info
+        )
+
+        # add this domain to our MaliciousDomains hash in the database
+        __database__.set_malicious_domain(
+            domain, profileid, twid
+        )
+
 
     def run(self):
         try:
@@ -744,40 +795,9 @@ class Module(Module, multiprocessing.Process):
                             or data.get('server_name')
                             or data.get('query')
                         )
-                        if domain and not (domain.endswith('.arpa') or domain.endswith('.local')):
 
-                            # Search for this domain in our database of IoC
-                            (
-                                domain_info,
-                                is_subdomain,
-                            ) = __database__.search_Domain_in_IoC(domain)
-                            if (
-                                domain_info != False
-                            ):   # Dont change this condition. This is the only way it works
-                                # If the domain is in the blacklist of IoC. Set an evidence
-                                domain_info = json.loads(domain_info)
-                                self.set_evidence_domain(
-                                    domain,
-                                    uid,
-                                    timestamp,
-                                    domain_info,
-                                    is_subdomain,
-                                    profileid,
-                                    twid,
-                                )
 
-                                # mark this domain as malicious in our database
-                                domain_info = {
-                                    'threatintelligence': domain_info
-                                }
-                                __database__.setInfoForDomains(
-                                    domain, domain_info
-                                )
-
-                                # add this domain to our MaliciousDomains hash in the database
-                                __database__.set_malicious_domain(
-                                    domain, profileid, twid
-                                )
+                        self.is_malicious_domain()
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
