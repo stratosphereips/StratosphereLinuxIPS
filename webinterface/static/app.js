@@ -12,7 +12,10 @@ fetch("/info", {
                         document.getElementById("fileSize").textContent=data['size_in_MB'];
                         document.getElementById("analysisStart").textContent=data['analysis_start'];
                         document.getElementById("analysisEnd").textContent=data['analysis_end'];
-                    });    destroy: true,
+                    });
+
+$("#table_choose_redis").DataTable({
+    destroy: true,
     searching: false,
     ajax: '/redis',
     "bInfo": false,
