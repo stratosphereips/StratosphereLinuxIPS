@@ -13,6 +13,7 @@ import json
 import traceback
 import validators
 import dns
+import requests
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -470,6 +471,9 @@ class Module(Module, multiprocessing.Process):
         return json.loads(ip_info)
 
     def spamhaus(self, ip):
+        """
+        Supports IP lookups only
+        """
         # these are spamhaus datasets
         lists_names = {
             '127.0.0.2' :'SBL Data',
@@ -506,46 +510,125 @@ class Module(Module, multiprocessing.Process):
         except:
             spamhaus_result = 0
 
-        if spamhaus_result != 0:
-            # convert dns answer to text
-            lists_that_have_this_ip = [data.to_text() for data in spamhaus_result]
+        if not spamhaus_result:
+            return
 
-            # get the source and description of the ip
-            source_dataset = ''
-            for list in lists_that_have_this_ip:
-                name = lists_names.get(list, False)
-                if not name:
-                    continue
-                source_dataset += f'{name}, '
-                description = list_description.get(list, '')
-            if not source_dataset:
-                return False
+        # convert dns answer to text
+        lists_that_have_this_ip = [data.to_text() for data in spamhaus_result]
 
-            ip_info = {
-                'source': source_dataset[:-2],
-                'description': description,
-                'therat_level': 'medium',
-                'tags': 'malicious'
-            }
-            __database__.add_ips_to_IoC({
-                ip: json.dumps(ip_info)
-            })
-            return ip_info
+        # get the source and description of the ip
+        source_dataset = ''
+        description =''
+        for list in lists_that_have_this_ip:
+            name = lists_names.get(list, False)
+            if not name:
+                continue
+            source_dataset += f'{name}, '
+            description = list_description.get(list, '')
+        if not source_dataset:
+            return False
+
+        ip_info = {
+            'source': source_dataset[:-2],
+            'description': description,
+            'therat_level': 'medium',
+            'tags': 'spam'
+        }
+        __database__.add_ips_to_IoC({
+            ip: json.dumps(ip_info)
+        })
+        return ip_info
+
+    def urlhaus(self, ioc):
+        """
+        Supports IPs, domains, and hashes (MD5, sha256) lookups
+        #todo support domains and hashes
+        #todo do not create a session for each ip to speedup this function!
+        """
+        def get_description(urls:list):
+            """
+            returns a meaningful description from the given list of urls
+            """
+            if urls == []:
+                return ''
+
+            url_dict = urls[0]
+            description = f"{url_dict['threat']} url status: {url_dict['url_status']}"
+            return description
+
+        urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
+
+        # available types at urlhaus are host, md5 or sha256
+        types = {
+            'ip': 'host',
+            'domain': 'host',
+            'md5': 'md5',
+        }
+        indicator_type = types[utils.detect_data_type(ioc)]
+
+        urlhaus_session = requests.session()
+        urlhaus_session.verify = True
+
+        urlhaus_data = {
+            indicator_type: ioc
+        }
+
+        if indicator_type == 'host':
+            urlhaus_api_response = urlhaus_session.post(
+                f'{urlhaus_base_url}/host/',
+                urlhaus_data,
+                headers=urlhaus_session.headers
+            )
+        else:
+            urlhaus_api_response = urlhaus_session.post(
+                f'{urlhaus_base_url}/payload/',
+                urlhaus_data,
+                headers=urlhaus_session.headers
+            )
+
+        if urlhaus_api_response.status_code != 200: #or urlhaus_api_response == "{'query_status': 'no_results'}":
+            return
+
+        response = json.loads(urlhaus_api_response.text)
+        if response['query_status'] == 'no_results':
+            return
+
+        description = get_description(response['urls'])
+        tags = " ".join(tag for tag in response['urls'][0]['tags'])
+        ip_info = {
+            # get all the blacklists where thisip is lsited
+            'source': 'URLhaus',
+            'description': description,
+            'therat_level': 'medium',
+            'tags': tags
+        }
+
+        __database__.add_ips_to_IoC({
+            ioc: json.dumps(ip_info)
+        })
+        return ip_info
 
 
 
     def search_online(self, ip):
-        return self.spamhaus(ip)
+        spamhaus_res = self.spamhaus(ip)
+        if spamhaus_res:
+            return spamhaus_res
+        urlhaus_res = self.urlhaus(ip)
+        if urlhaus_res:
+            return urlhaus_res
+
+
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
         """Search for this IP in our database of IoC"""
         ip_info = self.search_offline(ip)
         if not ip_info:
             ip_info = self.search_online(ip)
+            if not ip_info:
+                # not malicious
+                return False
 
-        if not ip_info:
-            # not malicious
-            return False
         self.set_evidence_malicious_ip(
             ip,
             uid,
