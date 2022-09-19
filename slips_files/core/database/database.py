@@ -2104,7 +2104,7 @@ class Database(ProfilingFlowsDatabase, object):
                 pass
         return timestamp
 
-    def search_Domain_in_IoC(self, domain: str) -> tuple:
+    def is_domain_malicious(self, domain: str) -> tuple:
         """
         Search in the dB of malicious domains and return a
         description if we found a match

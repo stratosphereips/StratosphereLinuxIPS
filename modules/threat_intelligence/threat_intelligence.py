@@ -564,19 +564,23 @@ class Module(Module, multiprocessing.Process):
         urlhaus_data = {
             indicator_type: ioc
         }
+        try:
 
-        if indicator_type == 'host':
-            urlhaus_api_response = self.urlhaus_session.post(
-                f'{urlhaus_base_url}/host/',
-                urlhaus_data,
-                headers=self.urlhaus_session.headers
-            )
-        else:
-            urlhaus_api_response = self.urlhaus_session.post(
-                f'{urlhaus_base_url}/payload/',
-                urlhaus_data,
-                headers=self.urlhaus_session.headers
-            )
+            if indicator_type == 'host':
+                urlhaus_api_response = self.urlhaus_session.post(
+                    f'{urlhaus_base_url}/host/',
+                    urlhaus_data,
+                    headers=self.urlhaus_session.headers
+                )
+            else:
+                urlhaus_api_response = self.urlhaus_session.post(
+                    f'{urlhaus_base_url}/payload/',
+                    urlhaus_data,
+                    headers=self.urlhaus_session.headers
+                )
+        except requests.exceptions.ConnectionError:
+            self.create_urlhaus_session()
+            return
 
         if urlhaus_api_response.status_code != 200: #or urlhaus_api_response == "{'query_status': 'no_results'}":
             return
@@ -672,13 +676,17 @@ class Module(Module, multiprocessing.Process):
         (
             domain_info,
             is_subdomain,
-        ) = __database__.search_Domain_in_IoC(domain)
+        ) = __database__.is_domain_malicious(domain)
         if (
             domain_info != False
         ):   # Dont change this condition. This is the only way it works
             # If the domain is in the blacklist of IoC. Set an evidence
             domain_info = json.loads(domain_info)
             return domain_info, is_subdomain
+        return False, False
+
+    def search_online_for_domain(self, domain):
+        pass
 
     def is_malicious_domain(
             self,
@@ -686,7 +694,7 @@ class Module(Module, multiprocessing.Process):
             uid,
             timestamp,
             profileid,
-            twid,
+            twid
     ):
         if not (domain and not domain.endswith('.arpa') and not domain.endswith('.local')):
             return False
@@ -797,7 +805,13 @@ class Module(Module, multiprocessing.Process):
                         )
 
 
-                        self.is_malicious_domain()
+                        self.is_malicious_domain(
+                            domain,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid
+                        )
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
