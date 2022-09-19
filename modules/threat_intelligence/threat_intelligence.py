@@ -538,8 +538,11 @@ class Module(Module, multiprocessing.Process):
         if not domain:
             return True
         # to reduce the number of requests sent, don't send google domains
-        # requests to abuse.ch, spamhaus and urlhaus domains are done by slips
-        ignored_TLDs = ('.arpa',
+        # requests to spamhaus and urlhaus domains are done by slips
+        ignored_TLDs = (".zen.spamhaus.org",
+                        ".google.com"
+                        ".abuse.ch",
+                        '.arpa',
                         '.local')
 
         for keyword in ignored_TLDs:
