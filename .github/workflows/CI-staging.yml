@@ -31,5 +31,17 @@ jobs:
             - name: Start redis server
               run: redis-server --daemonize yes
 
-            - name: Run tests
-              run: chmod +x tests/run_all_tests.sh && ./tests/run_all_tests.sh
+            - name: Run unit tests
+              run: python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" -n 7 -p no:warnings -vv -s
+
+            - name: Run database unit tests
+              run: python3  -m pytest tests/test_database.py -p no:warnings -vv
+
+            - name: Run daemon unit tests
+              run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+
+            - name: Close servers opened by the unit tests
+              run: python3 tests/destrctor.py && ./slips.py -cc
+
+            - name: Test dataset
+              run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
