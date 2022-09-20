@@ -3,48 +3,31 @@
 name: CI-staging
 
 on:
-    push:
-        branches:
-            - 'alya-fix-ci'
-            - 'develop'
-            - '!master'
-    pull_request:
-        branches:
-            - 'alya-fix-ci'
-            - 'develop'
-            - '!master'
+  push:
+    branches:
+    - 'develop'
+    - '!master'
+  pull_request:
+    branches:
+    - 'develop'
+    - '!master'
 
 jobs:
 
-    run_unit_tests:
-        # specify the host OS
-        runs-on: ubuntu-latest
-        # 2 hours timeout
-        timeout-minutes: 7200
-        # start a container using slips dependencies image
-        container:
-            image: stratosphereips/slips_dependencies
+  run_unit_tests:
+    # specify the host OS
+    runs-on: ubuntu-latest
+    # 2 hours timeout
+    timeout-minutes: 7200
+    # start a container using slips dependencies image
+    container:
+      image: stratosphereips/slips_dependencies
 
-        steps:
-            - uses: actions/checkout@v2
+    steps:
+    - uses: actions/checkout@v2
 
-            - name: Start redis server
-              run: redis-server --daemonize yes
+    - name: Start redis server
+      run: redis-server --daemonize yes
 
-            - name: Run unit tests
-              run: python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" -n 7 -p no:warnings -vv -s
-
-            - name: Run database unit tests
-              run: python3  -m pytest tests/test_database.py -p no:warnings -vv
-
-            - name: Run daemon unit tests
-              run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-
-            - name: Close servers opened by the unit tests
-              run: python3 tests/destrctor.py
-
-            - name: Clear redis cache
-              run: ./slips.py -cc
-
-            - name: Test dataset
-              run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
+    - name: Run tests
+      run: chmod +x tests/run_all_tests.sh && ./tests/run_all_tests.sh
