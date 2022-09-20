@@ -41,7 +41,10 @@ jobs:
               run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
 
             - name: Close servers opened by the unit tests
-              run: python3 tests/destrctor.py && ./slips.py -cc
+              run: python3 tests/destrctor.py
+
+            - name: Clear redis cache
+              run: ./slips.py -cc
 
             - name: Test dataset
               run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
