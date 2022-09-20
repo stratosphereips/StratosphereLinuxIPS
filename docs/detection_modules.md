@@ -221,7 +221,13 @@ Slips has a complex system to deal with Threat Intelligence feeds.
 
 Slips supports different kinds of IoCs from TI feeds (IPs, IP ranges, domains, JA3 hashes, SSL hashes)
 
-File hashes and URLs aren't supported.
+File hashes and URLs aren't supported in TI feeds.
+
+Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
+
+URLhaus: for IPs and domains lookups
+Spamhaus: for IP lookups
+Circl.lu: for hash lookups (for each downloaded file)
 
 
 ### Matching of IPs
