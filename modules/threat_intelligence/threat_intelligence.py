@@ -626,6 +626,37 @@ class Module(Module, multiprocessing.Process):
 
         return info
 
+    def set_evidence_malicious_hash(self,
+                                    confidence,
+                                    file_info
+                                    ):
+
+
+        type_detection = 'file'
+        detection_info = file_info["md5"]
+        type_evidence = 'MaliciousDownloadedFile'
+        threat_level = 'critical'
+        saddr = file_info["saddr"]
+        ip_identification = __database__.getIPIdentification(saddr)
+        description = (
+            f'Malicious downloaded file {detection_info} size: {file_info["size"]} '
+            f'from IP: {saddr} Score: {confidence}. {ip_identification}'
+        )
+        category = 'Malware'
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            file_info["ts"],
+            category,
+            profileid=file_info["profileid"],
+            twid=file_info["twid"],
+            uid=file_info["uid"],
+        )
 
 
 
