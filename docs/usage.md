@@ -647,10 +647,16 @@ For example, if you want to add a zeek script called ```arp.zeek``` you should a
 
 Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
 
-## Getting slips version
+## Getting Slips version
 
 You can check out your running slips version using ```-V``` or ```--version``` flags.
 
+## Containing Slips resource consuption
+
+When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of 
+Slips by running:
+
+    renice -n 6 -p <Slips-PID>
 
 ## Running Slips from python
 

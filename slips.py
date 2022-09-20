@@ -1436,9 +1436,6 @@ class Main:
             slips_version += f' ({commit[:8]})'
         print(slips_version)
 
-    def change_nice_value(self):
-        command = f'renice -n 6 -p {os.getpid()} > /dev/null 2>&1'
-        os.system(command)
 
     def start(self):
         """Main Slips Function"""
@@ -1449,7 +1446,6 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            self.change_nice_value()
             """
             Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
             """
