@@ -227,7 +227,7 @@ class Module(Module, multiprocessing.Process):
             ip_identification = __database__.getIPIdentification(saddr)
             description = (
                 f'Malicious downloaded file {md5} size: {size} '
-                f'from IP: {saddr} Score: {score}. {ip_identification}'
+                f'from IP: {saddr}. Detected by virustotal. Score: {score}. {ip_identification}'
             )
             category = 'Malware'
 

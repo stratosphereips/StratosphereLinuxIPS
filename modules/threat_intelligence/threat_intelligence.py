@@ -28,6 +28,7 @@ class Module(Module, multiprocessing.Process):
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
+        self.c2 = __database__.subscribe('new_downloaded_file')
         self.timeout = 0.0000001
         self.__read_configuration()
         self.get_malicious_ip_ranges()
@@ -580,6 +581,10 @@ class Module(Module, multiprocessing.Process):
             'md5': 'md5',
         }
         ioc_type = utils.detect_data_type(ioc)
+        if not ioc_type:
+            # not a valid ip, domain or hash
+            return
+
         # get the urlhause supported type
         indicator_type = types[ioc_type]
         urlhaus_data = {
@@ -634,17 +639,22 @@ class Module(Module, multiprocessing.Process):
         """
 
         type_detection = 'file'
-        detection_info = file_info["md5"]
+        category = 'Malware'
         type_evidence = 'MaliciousDownloadedFile'
         threat_level = 'critical'
+
+        detection_info = file_info["md5"]
         saddr = file_info["saddr"]
         confidence = file_info["confidence"]
+
         ip_identification = __database__.getIPIdentification(saddr)
         description = (
-            f'Malicious downloaded file {detection_info} size: {file_info["size"]} '
-            f'from IP: {saddr} Score: {confidence}. {ip_identification}'
+            f'Malicious downloaded file {detection_info}. '
+            f'size: {file_info["size"]} '
+            f'from IP: {saddr}. Detected by: {file_info["blacklist"]}, circl.lu. '
+            f'Score: {confidence}. {ip_identification}'
         )
-        category = 'Malware'
+
 
         __database__.setEvidence(
             type_evidence,
@@ -678,9 +688,12 @@ class Module(Module, multiprocessing.Process):
         response = json.loads(circl_api_response.text)
         # KnownMalicious: List of source considering the hashed file as being malicious (CIRCL)
         # TODO Circl.lu has very low trust levels of known malicious files
+        if 'KnownMalicious' not in response:
+            return
+
         file_info = {
             'confidence': response["hashlookup:trust"],
-            'source': response["KnownMalicious"]
+            'blacklist': response["KnownMalicious"]
         }
         return file_info
 
@@ -704,36 +717,6 @@ class Module(Module, multiprocessing.Process):
         if urlhaus_res:
             return urlhaus_res
 
-    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
-        """Search for this IP in our database of IoC"""
-        ip_info = self.search_offline_for_ip(ip)
-        if not ip_info:
-            ip_info = self.search_online_for_ip(ip)
-            if not ip_info:
-                # not malicious
-                return False
-        __database__.add_ips_to_IoC({
-                ip: json.dumps(ip_info)
-        })
-        self.set_evidence_malicious_ip(
-            ip,
-            uid,
-            timestamp,
-            ip_info,
-            profileid,
-            twid,
-            ip_state,
-        )
-        return True
-
-    def is_malcicious_hash(self, md5, flow_info):
-        file_info:dict = self.search_online_for_hash()
-        if file_info:
-            # update the file info dict with uid, twid, ts etc.
-            file_info.update(flow_info)
-            self.set_evidence_malicious_hash(
-                file_info
-            )
 
     def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
         """ check if this ip belongs to any of our blacklisted ranges"""
@@ -780,6 +763,43 @@ class Module(Module, multiprocessing.Process):
 
     def search_online_for_domain(self, domain):
         return self.urlhaus(domain)
+
+    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
+        """Search for this IP in our database of IoC"""
+        ip_info = self.search_offline_for_ip(ip)
+        if not ip_info:
+            ip_info = self.search_online_for_ip(ip)
+            if not ip_info:
+                # not malicious
+                return False
+        __database__.add_ips_to_IoC({
+                ip: json.dumps(ip_info)
+        })
+        self.set_evidence_malicious_ip(
+            ip,
+            uid,
+            timestamp,
+            ip_info,
+            profileid,
+            twid,
+            ip_state,
+        )
+        return True
+
+    def is_malcicious_hash(self,flow_info):
+        """
+        :param flow_info: dict with uid, twid, ts, md5 etc.
+        """
+        md5 = flow_info['md5']
+        file_info:dict = self.search_online_for_hash(md5)
+        if file_info:
+            # is malicious.
+            # update the file_info dict with uid, twid, ts etc.
+            file_info.update(flow_info)
+            self.set_evidence_malicious_hash(
+                file_info
+            )
+
 
     def is_malicious_domain(
             self,
@@ -845,7 +865,6 @@ class Module(Module, multiprocessing.Process):
             self.print(traceback.format_exc())
             return True
 
-        # Main loop function
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
@@ -905,6 +924,14 @@ class Module(Module, multiprocessing.Process):
                             profileid,
                             twid
                         )
+
+                message = self.c2.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                    file_info = json.loads(message['data'])
+                    self.is_malcicious_hash(file_info)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
