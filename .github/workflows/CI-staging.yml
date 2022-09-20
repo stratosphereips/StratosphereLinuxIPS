@@ -3,33 +3,33 @@
 name: CI-staging
 
 on:
-  push:
-    branches:
-    - 'alya-fix-ci'
-    - 'develop'
-    - '!master'
-  pull_request:
-    branches:
-    - 'alya-fix-ci'
-    - 'develop'
-    - '!master'
+    push:
+        branches:
+            - 'alya-fix-ci'
+            - 'develop'
+            - '!master'
+    pull_request:
+        branches:
+            - 'alya-fix-ci'
+            - 'develop'
+            - '!master'
 
 jobs:
 
-  run_unit_tests:
-    # specify the host OS
-    runs-on: ubuntu-latest
-    # 2 hours timeout
-    timeout-minutes: 7200
-    # start a container using slips dependencies image
-    container:
-      image: stratosphereips/slips_dependencies
+    run_unit_tests:
+        # specify the host OS
+        runs-on: ubuntu-latest
+        # 2 hours timeout
+        timeout-minutes: 7200
+        # start a container using slips dependencies image
+        container:
+            image: stratosphereips/slips_dependencies
 
-    steps:
-    - uses: actions/checkout@v2
+        steps:
+            - uses: actions/checkout@v2
 
-    - name: Start redis server
-      run: redis-server --daemonize yes
+            - name: Start redis server
+              run: redis-server --daemonize yes
 
-    - name: Run tests
-      run: chmod +x tests/run_all_tests.sh && ./tests/run_all_tests.sh
+            - name: Run tests
+              run: chmod +x tests/run_all_tests.sh && ./tests/run_all_tests.sh
