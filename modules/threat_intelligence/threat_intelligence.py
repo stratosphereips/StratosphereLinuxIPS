@@ -561,7 +561,6 @@ class Module(Module, multiprocessing.Process):
         """
         Supports IPs, domains, and hashes (MD5, sha256) lookups
         :param ioc: can be domain or ip
-        #todo support hashes
         """
         def get_description(url: dict):
             """
@@ -581,7 +580,8 @@ class Module(Module, multiprocessing.Process):
             'md5': 'md5',
         }
         ioc_type = utils.detect_data_type(ioc)
-        if not ioc_type:
+        # urlhaus doesn't support ipv6
+        if not ioc_type or validators.ipv6(ioc):
             # not a valid ip, domain or hash
             return
 
@@ -599,6 +599,7 @@ class Module(Module, multiprocessing.Process):
                     headers=self.urlhaus_session.headers
                 )
             else:
+                # md5
                 urlhaus_api_response = self.urlhaus_session.post(
                     f'{urlhaus_base_url}/payload/',
                     urlhaus_data,
@@ -622,13 +623,12 @@ class Module(Module, multiprocessing.Process):
         tags = " ".join(tag for tag in url['tags'])
 
         info = {
-            # get all the blacklists where this ioc is lsited
+            # get all the blacklists where this ioc is listed
             'source': 'URLhaus',
             'description': description,
             'therat_level': 'medium',
             'tags': tags
         }
-
         return info
 
     def set_evidence_malicious_hash(self,
