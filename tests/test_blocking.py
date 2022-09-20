@@ -8,18 +8,13 @@ import pytest
 import os
 
 IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
-# ignore all tests if not using linux
-pytestmark = pytest.mark.skipif(
-    platform.system() != 'Linux',
-    reason='Blocking is supported only in Linux with root priveledges',
-)
 # When using docker in github actions,  we can't use --cap-add NET_ADMIN
 # so all blocking module unit tests will fail because we don't have admin privs
 # we use this environment variable to check if slips is
 # running in github actions
 pytestmark = pytest.mark.skipif(
-    os.geteuid() != 0 or IS_DEPENDENCY_IMAGE != False,
-    reason='Blocking is supported only with root priveledges',
+    os.geteuid() != 0 or IS_DEPENDENCY_IMAGE or platform.system() != 'Linux',
+    reason='Blocking is supported only with root privileges in Linux',
 )
 
 
@@ -50,7 +45,7 @@ def is_slipschain_initialized(outputQueue) -> bool:
             return False
     return True
 
-
+@pytestmark
 def test_initialize_chains_in_firewall(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     # manually set the firewall
@@ -68,7 +63,7 @@ def test_initialize_chains_in_firewall(outputQueue, database):
 #     os.system('./slips.py -cb')
 #     assert is_slipschain_initialized(outputQueue) == False
 
-
+@pytestmark
 def test_block_ip(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     blocking.initialize_chains_in_firewall()
@@ -78,7 +73,7 @@ def test_block_ip(outputQueue, database):
         to = True
         assert blocking.block_ip(ip, from_, to) == True
 
-
+@pytestmark
 def test_unblock_ip(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     ip = '2.2.0.0'
