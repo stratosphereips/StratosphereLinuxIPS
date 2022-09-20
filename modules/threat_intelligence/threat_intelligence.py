@@ -627,16 +627,18 @@ class Module(Module, multiprocessing.Process):
         return info
 
     def set_evidence_malicious_hash(self,
-                                    confidence,
-                                    file_info
+                                    file_info: dict
                                     ):
-
+        """
+        :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
+        """
 
         type_detection = 'file'
         detection_info = file_info["md5"]
         type_evidence = 'MaliciousDownloadedFile'
         threat_level = 'critical'
         saddr = file_info["saddr"]
+        confidence = file_info["confidence"]
         ip_identification = __database__.getIPIdentification(saddr)
         description = (
             f'Malicious downloaded file {detection_info} size: {file_info["size"]} '
@@ -682,7 +684,8 @@ class Module(Module, multiprocessing.Process):
         }
         return file_info
 
-
+    def search_online_for_hash(self, md5):
+        return self.circl_lu(md5)
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -723,6 +726,14 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
+    def is_malcicious_hash(self, md5, flow_info):
+        file_info:dict = self.search_online_for_hash()
+        if file_info:
+            # update the file info dict with uid, twid, ts etc.
+            file_info.update(flow_info)
+            self.set_evidence_malicious_hash(
+                file_info
+            )
 
     def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
         """ check if this ip belongs to any of our blacklisted ranges"""
