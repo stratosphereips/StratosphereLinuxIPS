@@ -32,10 +32,16 @@ class Module(Module, multiprocessing.Process):
         self.__read_configuration()
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
+        self.create_circl_lu_session()
 
     def create_urlhaus_session(self):
         self.urlhaus_session = requests.session()
         self.urlhaus_session.verify = True
+
+    def create_circl_lu_session(self):
+        self.circl_session = requests.session()
+        self.circl_session.verify = True
+        self.circl_session.headers = {'accept':'application/json'}
 
     def get_malicious_ip_ranges(self):
         """
@@ -619,6 +625,32 @@ class Module(Module, multiprocessing.Process):
         }
 
         return info
+
+
+
+
+    def circl_lu(self, md5):
+        """
+        Supports lookup of MD5 hashes on Circl.lu
+        """
+        circl_base_url = 'https://hashlookup.circl.lu/lookup/'
+        circl_api_response = self.circl_session.get(
+            f"{circl_base_url}/md5/{md5}",
+           headers=self.circl_session.headers
+        )
+
+        if circl_api_response.status_code != 200:
+            return
+
+        response = json.loads(circl_api_response.text)
+        # KnownMalicious: List of source considering the hashed file as being malicious (CIRCL)
+        # TODO Circl.lu has very low trust levels of known malicious files
+        file_info = {
+            'confidence': response["hashlookup:trust"],
+            'source': response["KnownMalicious"]
+        }
+        return file_info
+
 
 
     def search_offline_for_ip(self, ip):
