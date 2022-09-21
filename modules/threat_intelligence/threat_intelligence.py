@@ -546,10 +546,7 @@ class Module(Module, multiprocessing.Process):
             return True
         # to reduce the number of requests sent, don't send google domains
         # requests to spamhaus and urlhaus domains are done by slips
-        ignored_TLDs = (".zen.spamhaus.org",
-                        ".google.com"
-                        ".abuse.ch",
-                        '.arpa',
+        ignored_TLDs = ('.arpa',
                         '.local')
 
         for keyword in ignored_TLDs:
@@ -565,7 +562,6 @@ class Module(Module, multiprocessing.Process):
         def get_description(url: dict):
             """
             returns a meaningful description from the given list of urls
-
             """
 
             description = f"{url['threat']}, url status: {url['url_status']}"
