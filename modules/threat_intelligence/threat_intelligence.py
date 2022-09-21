@@ -676,6 +676,18 @@ class Module(Module, multiprocessing.Process):
         """
         Supports lookup of MD5 hashes on Circl.lu
         """
+        def get_threat_level(circl_trust: str):
+            """
+            Converts circl.lu trust to a valid slips threat level
+            :param circl_trust: from 0 to 100, how legitimate the file is
+            """
+            # the lower the value, the more malicious the file is
+            benign_percentage = float(circl_trust)
+            malicious_percentage = 100 - benign_percentage
+            # scale the benign percentage from 0 to 1
+            threat_level = malicious_percentage/100
+            return threat_level
+
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
         circl_api_response = self.circl_session.get(
             f"{circl_base_url}/md5/{md5}",
@@ -692,7 +704,8 @@ class Module(Module, multiprocessing.Process):
             return
 
         file_info = {
-            'confidence': response["hashlookup:trust"],
+            'confidence': 0.5,
+            'threat_level': get_threat_level(response["hashlookup:trust"]),
             'blacklist': response["KnownMalicious"]
         }
         return file_info
