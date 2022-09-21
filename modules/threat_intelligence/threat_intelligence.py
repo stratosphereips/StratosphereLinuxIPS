@@ -637,15 +637,14 @@ class Module(Module, multiprocessing.Process):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-
         type_detection = 'file'
         category = 'Malware'
         type_evidence = 'MaliciousDownloadedFile'
-        threat_level = 'critical'
 
         detection_info = file_info["md5"]
         saddr = file_info["saddr"]
         confidence = file_info["confidence"]
+        threat_level = utils.threat_level_to_string(file_info["threat_level"])
 
         ip_identification = __database__.getIPIdentification(saddr)
         description = (
@@ -676,7 +675,7 @@ class Module(Module, multiprocessing.Process):
         """
         Supports lookup of MD5 hashes on Circl.lu
         """
-        def get_threat_level(circl_trust: str):
+        def calculate_threat_level(circl_trust: str):
             """
             Converts circl.lu trust to a valid slips threat level
             :param circl_trust: from 0 to 100, how legitimate the file is
@@ -687,6 +686,20 @@ class Module(Module, multiprocessing.Process):
             # scale the benign percentage from 0 to 1
             threat_level = malicious_percentage/100
             return threat_level
+
+        def calculate_confidence(blacklists):
+            """
+            calculates the confidence based on the number of blacklists detecting the file as malicious
+            """
+            blacklists = len(blacklists.split(' '))
+            if blacklists == 1:
+                confidence = 0.5
+            elif blacklists == 2:
+                confidence = 0.7
+            else:
+                confidence = 1
+            return confidence
+
 
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
         circl_api_response = self.circl_session.get(
@@ -704,8 +717,8 @@ class Module(Module, multiprocessing.Process):
             return
 
         file_info = {
-            'confidence': 0.5,
-            'threat_level': get_threat_level(response["hashlookup:trust"]),
+            'confidence': calculate_confidence(response["KnownMalicious"]),
+            'threat_level': calculate_threat_level(response["hashlookup:trust"]),
             'blacklist': response["KnownMalicious"]
         }
         return file_info

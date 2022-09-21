@@ -58,6 +58,13 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S'
 
+    def threat_level_to_string(self, threat_level: float):
+        for str_lvl, int_value in self.threat_levels.items():
+            if float(threat_level) <= int_value:
+                return str_lvl
+
+
+
     def sanitize(self, string):
         """
         Sanitize strings taken from the user
