@@ -5,7 +5,7 @@
 - Support looking up IPs and domains in URLhaus
 - Support looking up IPs in Spamhaus
 - Support looking up hashes in Circl.lu
-- 
+- Remove support for VT hash lookups to save quota
 
 
 -0.9.5

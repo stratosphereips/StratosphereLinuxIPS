@@ -366,7 +366,7 @@ tr:nth-child(even) {
 
 ### Virustotal Module
 
-This module is used to lookup IPs/domains/downloaded files on virustotal
+This module is used to lookup IPs, domains, and URLs on virustotal
 
 To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 

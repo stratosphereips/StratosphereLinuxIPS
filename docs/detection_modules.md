@@ -130,7 +130,7 @@ tr:nth-child(even) {
 
 ### Virustotal Module
 
-This module is used to lookup IPs/domains/downloaded files on virustotal
+This module is used to lookup IPs, domains, and URLs on virustotal.
 
 To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 
@@ -644,7 +644,7 @@ useragentstring.com -> For getting user agent info if no info was found in Zeek
 macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
-virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
+virustotal.com -> For getting scores about domains, IPs and URLs 
 urlhaus-api.abuse.ch -> For getting info about contacted IPs and domains
 
 ---
