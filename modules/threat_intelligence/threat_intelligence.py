@@ -616,7 +616,11 @@ class Module(Module, multiprocessing.Process):
         # get the first description available
         url = response['urls'][0]
         description = get_description(url)
-        tags = " ".join(tag for tag in url['tags'])
+        try:
+            tags = " ".join(tag for tag in url['tags'])
+        except TypeError:
+            # no tags available
+            tags = ''
 
         info = {
             # get all the blacklists where this ioc is listed
