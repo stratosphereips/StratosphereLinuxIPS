@@ -35,8 +35,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns_flow')
         self.c3 = __database__.subscribe('new_url')
-        self.c4 = __database__.subscribe('new_downloaded_file')
-
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -192,61 +190,6 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = as_owner
         __database__.setInfoForDomains(domain, data)
 
-    def scan_file(self, file_info: dict):
-        """
-        Function to scan the md5 of the file with vt and set evidence if malicious
-        """
-        uid = file_info['uid']
-        saddr = file_info['saddr']
-        size = file_info['size']
-        profileid = file_info['profileid']
-        twid = file_info['twid']
-        md5 = file_info['md5']
-        ts = file_info['ts']
-
-        response = self.api_query_(md5)
-
-        positives = int(response.get('positives', '0'))
-        total = response.get('total', 0)
-        score = f'{positives}/{total}'
-        self.counter += 1
-        if positives:
-            # set the confidence based on the number of AVs marked this file as malicious
-            if positives == 1:
-                confidence = 0.1
-            elif positives == 2:
-                confidence = 0.5
-            elif positives >= 3:
-                confidence = 1
-
-            # consider it malicious and alert
-            type_detection = 'file'
-            detection_info = md5
-            type_evidence = 'MaliciousDownloadedFile'
-            threat_level = 'critical'
-            ip_identification = __database__.getIPIdentification(saddr)
-            description = (
-                f'Malicious downloaded file {md5} size: {size} '
-                f'from IP: {saddr}. Detected by virustotal. Score: {score}. {ip_identification}'
-            )
-            category = 'Malware'
-
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                ts,
-                category,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
-            return 'malicious'
-        return 'benign'
-
     def API_calls_thread(self):
         """
         This thread starts if there's an API calls queue,
@@ -266,12 +209,6 @@ class Module(Module, multiprocessing.Process):
             while self.api_call_queue:
                 # get the first element in the queue
                 ioc = self.api_call_queue.pop(0)
-                if type(ioc) == dict:
-                    # this is a file
-                    if hasattr(self, 'file_info'):
-                        self.scan_file(self.file_info)
-                    continue
-
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type == 'ip':
                     cached_data = __database__.getIPData(ioc)
@@ -297,21 +234,6 @@ class Module(Module, multiprocessing.Process):
                         # cached data is either False or {}
                         self.set_url_data_in_URLInfo(ioc, cached_data)
 
-    def get_file_score(self, md5):
-        """returns the vt scores for the specified md5"""
-        vt_scores, passive_dns, as_owner = self.get_vt_data_of_file(md5)
-        ts = time.time()
-        data = {
-            'VirusTotal': {
-                'md5': vt_scores[0],
-                'down_file': vt_scores[1],
-                'ref_file': vt_scores[2],
-                'com_file': vt_scores[3],
-                'timestamp': ts,
-            }
-        }
-
-        __database__.setInfoForFile(md5, data)
 
     def get_as_owner(self, response):
         """
@@ -418,9 +340,6 @@ class Module(Module, multiprocessing.Process):
         elif ioc_type == 'url':
             self.url = 'https://www.virustotal.com/vtapi/v2/url/report'
             params['resource'] = ioc
-        elif ioc_type == 'md5':
-            self.url = 'https://www.virustotal.com/vtapi/v2/file/report'
-            params['resource'] = ioc
         else:
             # unsupported ioc
             return {}
@@ -439,11 +358,7 @@ class Module(Module, multiprocessing.Process):
             # than allowed. You have exceeded one of your quotas (minute, daily or monthly).
             if response.status == 204:
                 # Add to the queue of api calls in case of api limit reached.
-                if ioc_type == 'md5':
-                    # we need to add the entire dict to the queue because we'll be using it to setEvidence later
-                    self.api_call_queue.append(self.file_info)
-                else:
-                    self.api_call_queue.append(ioc)
+                self.api_call_queue.append(ioc)
             # 403 means you don't have enough privileges to make the request or wrong API key
             elif response.status == 403:
                 # don't add to the api call queue because the user will have to restart slips anyway
@@ -728,14 +643,7 @@ class Module(Module, multiprocessing.Process):
                         ) > self.update_period:
                             self.set_url_data_in_URLInfo(url, cached_data)
 
-                message = self.c4.get_message(timeout=self.timeout)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    self.file_info = json.loads(message['data'])
-                    file_info = self.file_info.copy()
-                    self.scan_file(file_info)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
