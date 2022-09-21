@@ -36,6 +36,11 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
 	./slips.py -c slips.conf -f dataset/some-pcap-file.pcap
 
+
+Note that some GPUs don't support tensorflow in docker which may cause "Illegal instruction" errors when running slips.
+
+To fix this you can disable all machine learning based modules when running Slips in docker, or run Slips locally.
+
 ## Installing Slips in your own computer.
 
 Slips is dependent on three major elements: 
