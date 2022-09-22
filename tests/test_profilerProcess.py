@@ -32,7 +32,7 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
 
 
 @pytest.mark.parametrize(
-    'file,expected_value', [('dataset/suricata-flows.json', 'suricata')]
+    'file,expected_value', [('dataset/test6-malicious.suricata.json', 'suricata')]
 )
 def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
@@ -51,7 +51,7 @@ def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
 
 @pytest.mark.parametrize(
     'file,expected_value',
-    [('dataset/sample_zeek_files-2/conn.log', 'zeek-tabs')],
+    [('dataset/test9-mixed-zeek-dir-2/conn.log', 'zeek-tabs')],
 )
 def test_define_type_zeek_tab(outputQueue, inputQueue, file, expected_value):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
@@ -66,7 +66,7 @@ def test_define_type_zeek_tab(outputQueue, inputQueue, file, expected_value):
 
 
 @pytest.mark.parametrize(
-    'file,expected_value', [('dataset/sample_zeek_files/conn.log', 'zeek')]
+    'file,expected_value', [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek')]
 )
 def test_define_type_zeek_dict(outputQueue, inputQueue, file, expected_value):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
@@ -81,7 +81,7 @@ def test_define_type_zeek_dict(outputQueue, inputQueue, file, expected_value):
     assert profilerProcess.define_type(sample_flow) == expected_value
 
 
-@pytest.mark.parametrize('nfdump_file', [('dataset/test.nfdump')])
+@pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
 def test_define_type_nfdump(outputQueue, inputQueue, nfdump_file):
     # nfdump files aren't text files so we need to process them first
     command = 'nfdump -b -N -o csv -q -r ' + nfdump_file
@@ -106,7 +106,7 @@ def test_define_type_nfdump(outputQueue, inputQueue, nfdump_file):
     'file,separator,expected_value',
     [
         (
-            'dataset/sample_zeek_files-2/conn.log',
+            'dataset/test9-mixed-zeek-dir-2/conn.log',
             '	',
             {'dur': 9, 'proto': 7, 'state': 12},
         )
@@ -130,9 +130,9 @@ def test_define_columns(
 
 
 # pcaps are treated as zeek files in slips, no need to test twice
-# @pytest.mark.parametrize("pcap_file",[('dataset/hide-and-seek-short.pcap')])
+# @pytest.mark.parametrize("pcap_file",[('dataset/test7-malicious.pcap')])
 # def test_define_type_pcap(outputQueue, inputQueue, pcap_file):
-#     # ('dataset/hide-and-seek-short.pcap','zeek')
+#     # ('dataset/test7-malicious.pcap','zeek')
 #     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
 #
 #     # pcap files aren't text files so we need to process them first
@@ -148,12 +148,12 @@ def test_define_columns(
 @pytest.mark.parametrize(
     'file,type_',
     [
-        ('dataset/sample_zeek_files/dns.log', 'dns'),
-        ('dataset/sample_zeek_files/conn.log', 'conn'),
-        ('dataset/sample_zeek_files/http.log', 'http'),
-        ('dataset/sample_zeek_files/ssl.log', 'ssl'),
-        ('dataset/sample_zeek_files/notice.log', 'notice'),
-        ('dataset/sample_zeek_files/files.log', 'files.log'),
+        ('dataset/test9-mixed-zeek-dir/dns.log', 'dns'),
+        ('dataset/test9-mixed-zeek-dir/conn.log', 'conn'),
+        ('dataset/test9-mixed-zeek-dir/http.log', 'http'),
+        ('dataset/test9-mixed-zeek-dir/ssl.log', 'ssl'),
+        ('dataset/test9-mixed-zeek-dir/notice.log', 'notice'),
+        ('dataset/test9-mixed-zeek-dir/files.log', 'files.log'),
     ],
 )
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):

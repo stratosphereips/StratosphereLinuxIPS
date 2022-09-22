@@ -235,7 +235,7 @@ To build a Docker image of Slips for linux follow the next steps:
     docker run -it --rm --net=host --name slips slips
     
     # run Slips using the default configuration in one of the provided test datasets
-    ./slips.py -c slips.conf -f dataset/test3.binetflow
+    ./slips.py -c slips.conf -f dataset/test3-mixed.binetflow
 ```
 
 #### Limitations

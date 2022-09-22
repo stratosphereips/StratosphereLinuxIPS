@@ -35,7 +35,7 @@ def do_nothing(*args):
 #         clearcache=False,
 #         config='slips.conf',
 #         debug=None,
-#         filepath='dataset/hide-and-seek-short.pcap',
+#         filepath='dataset/test7-malicious.pcap',
 #         gui=False,
 #         interactive=False,
 #         interface=None,
@@ -51,7 +51,7 @@ def do_nothing(*args):
 #
 # def test_setup_std_streams():
 #     daemon = create_Daemon_instance()
-#     os.system('./slips.py -f dataset/hide-and-seek-short.pcap -D')
+#     os.system('./slips.py -f dataset/test7-malicious.pcap -D')
 #     # __init__ calls read_configuration which calls setup_std_streams
 #     # we need to make sure that all files are there
 #     assert os.path.exists(daemon.logsfile)
@@ -78,7 +78,7 @@ def do_nothing(*args):
 # def test_pidfile():
 #     """tests creating, writing to and deleting pidfile"""
 #     # run slips in a parallel process
-#     cmd = './slips.py -f dataset/hide-and-seek-short.pcap -D'
+#     cmd = './slips.py -f dataset/test7-malicious.pcap -D'
 #     subprocess.Popen([cmd], shell=True, stdin=None, stdout=None, stderr=None)
 #     # wait until the pid is written to the file
 #     time.sleep(2)
@@ -108,7 +108,7 @@ def test_stop():
     # """tests if the daemon is successfully killed after running the daemon stop function"""
     # # run slips in a parallel process
     # cmd = (
-    #     './slips.py -f dataset/hide-and-seek-short.pcap -D'
+    #     './slips.py -f dataset/test7-malicious.pcap -D'
     # )
     # subprocess.Popen([cmd], shell=True)
     # # wait until the pid is written to the file

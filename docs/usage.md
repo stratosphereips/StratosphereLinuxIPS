@@ -664,7 +664,7 @@ You can run Slips from python using the following script
 
 ```py
 import subprocess
-command = './slips.py -f dataset/test3.binetflow -o /data/test'
+command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```

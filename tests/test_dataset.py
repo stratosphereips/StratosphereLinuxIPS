@@ -2,9 +2,7 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
-import os
 import pytest
-# from test_slips import create_Main_instance
 from ..slips import *
 
 alerts_file = 'alerts.log'
@@ -67,13 +65,13 @@ def create_Main_instance(input_information):
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
         (
-            'dataset/hide-and-seek-short.pcap',
+            'dataset/test7-malicious.pcap',
             15,
             'pcap/',
             'horizontal port scan to port  23',
             6666,
         ),
-        ('dataset/arp-only.pcap', 3, 'pcap2/', 'performing an arp scan', 6665),
+        ('dataset/test8-malicious.pcap', 3, 'pcap2/', 'performing an arp scan', 6665),
     ],
 )
 def test_pcap(
@@ -107,27 +105,27 @@ def test_pcap(
     'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
     [
         (
-            'dataset/test2.binetflow',
+            'dataset/test2-malicious.binetflow',
             1,
             'Detected Long Connection.',
             'test2/',
             6664,
         ),
         (
-            'dataset/test3.binetflow',
+            'dataset/test3-mixed.binetflow',
             20,
             'horizontal port scan to port  3389',
             'test3/',
             6663,
         ),
         (
-            'dataset/test4.binetflow',
+            'dataset/test4-mixed.binetflow',
             2,
             'horizontal port scan to port  81',
             'test4/',
             6662,
         ),
-        ('dataset/test5.binetflow', 4, 'Long Connection', 'test5/', 6655),
+        ('dataset/test5-mixed.binetflow', 4, 'Long Connection', 'test5/', 6655),
     ],
 )
 def test_binetflow(
@@ -164,7 +162,7 @@ def test_binetflow(
     'zeek_dir_path,expected_profiles, expected_evidence,  output_dir, redis_port',
     [
         (
-            'dataset/sample_zeek_files',
+            'dataset/test9-mixed-zeek-dir',
             4,
             [
                 'SSL certificate validation failed with (certificate is not yet valid)',
@@ -174,14 +172,14 @@ def test_binetflow(
                 'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
                 'Incompatible certificate CN'
             ],
-            'sample_zeek_files/',
+            'test9-mixed-zeek-dir/',
             6661,
         ),
         (
-            'dataset/sample_zeek_files-2',
+            'dataset/test9-mixed-zeek-dir-2',
             20,
             'horizontal port scan',
-            'sample_zeek_files-2/',
+            'test9-mixed-zeek-dir-2/',
             6660,
         ),
     ],
@@ -224,14 +222,14 @@ def test_zeek_dir(
     'conn_log_path, expected_profiles, expected_evidence,  output_dir, redis_port',
     [
         (
-            'dataset/sample_zeek_files/conn.log',
+            'dataset/test9-mixed-zeek-dir/conn.log',
             4,
             'a connection without DNS resolution to IP: 185.33.223.203',
             'conn_log/',
             6659,
         ),
         (
-            'dataset/sample_zeek_files-2/conn.log',
+            'dataset/test9-mixed-zeek-dir-2/conn.log',
             5,
             'a connection without DNS resolution',
             'conn_log-2/',
@@ -269,7 +267,7 @@ def test_zeek_conn_log(
 
 @pytest.mark.parametrize(
     'suricata_path,  output_dir, redis_port',
-    [('dataset/suricata-flows.json', 'suricata/', 6657)],
+    [('dataset/test6-malicious.suricata.json', 'suricata/', 6657)],
 )
 def test_suricata(database, suricata_path, output_dir, redis_port):
     try:
@@ -301,9 +299,13 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
 )
 @pytest.mark.parametrize(
     'nfdump_path,  output_dir, redis_port',
-    [('dataset/test.nfdump', 'nfdump/', 6656)],
+    [('dataset/test1-normal.nfdump', 'nfdump/', 6656)],
 )
 def test_nfdump(database, nfdump_path, output_dir, redis_port):
+    """
+    checks that slips is reading nfdump no issue,
+     the file is not malicious so there's no evidence that should be present
+    """
     try:
         os.mkdir(output_dir)
     except FileExistsError:
@@ -333,7 +335,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
     [
         (
-            'dataset/hide-and-seek-short.pcap',
+            'dataset/test7-malicious.pcap',
             290,
             'pcap_test_conf/',
             'horizontal port scan to port  23',
@@ -401,7 +403,7 @@ def test_conf_file(
     'pcap_path, expected_profiles, output_dir, redis_port',
     [
         (
-            'dataset/arp-only.pcap',
+            'dataset/test8-malicious.pcap',
             1,
             'pcap_test_conf2/',
             6668,
