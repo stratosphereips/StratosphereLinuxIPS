@@ -1469,6 +1469,31 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+            elif self.column_values['type'] == 'ssh':
+                try:
+                    self.column_values['client'] = line['ssh']['client']['software_version']
+                except KeyError:
+                    self.column_values['client'] = ''
+
+                try:
+                    self.column_values['version'] = line['ssh']['client']['proto_version']
+                except KeyError:
+                    self.column_values['version'] = ''
+
+                try:
+                    self.column_values['server'] = line['ssh']['server']['software_version']
+                except KeyError:
+                    self.column_values['server'] = ''
+                # these fields aren't available in suricata, they're available in zeek only
+                self.column_values['auth_success'] = ''
+                self.column_values['auth_attempts'] = ''
+                self.column_values['cipher_alg'] = ''
+                self.column_values['mac_alg'] = ''
+                self.column_values['kex_alg'] = ''
+                self.column_values['compression_alg'] = ''
+                self.column_values['host_key_alg'] = ''
+                self.column_values['host_key'] = ''
+
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
