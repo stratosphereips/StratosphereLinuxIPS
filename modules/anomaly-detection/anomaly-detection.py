@@ -123,13 +123,26 @@ class Module(Module, multiprocessing.Process):
         except KeyError:
             pass
 
+    def is_there_models_to_test(self):
+        # Check if there's models to test or not
+        if (not os.path.isdir(self.models_path)
+                or not os.listdir(self.models_path)):
+            self.print("No models found! "
+                       "Please train first. "
+                       "https://stratospherelinuxips.readthedocs.io/en/develop/")
+            return False
+
     def run(self):
         # Main loop function
         while True:
             try:
+                if self.mode.lower() in ('none', ''):
+                    # ignore this module
+                    return True
+
                 if 'train' in self.mode:
                     # start the saving thread only once
-                    if self.thread_started == False:
+                    if not self.thread_started :
                         self.saving_thread.start()
                         self.thread_started = True
 
@@ -141,54 +154,54 @@ class Module(Module, multiprocessing.Process):
                         return True
 
                     if utils.is_msg_intended_for(msg, 'tw_closed'):
-                        data = msg["data"]
-                        if type(data) == str:
-                            # data example: profile_192.168.1.1_timewindow1
-                            data = data.split('_')
-                            self.new_srcip = data[1]
+                        profileid_twid = msg["data"]
+                        # example: profile_192.168.1.1_timewindow1
+                        profileid_twid = profileid_twid.split('_')
+                        self.new_srcip = profileid_twid[1]
+                        twid = profileid_twid[2]
 
-                            # make sure it is not first run so we don't save an empty model to disk
-                            if not self.is_first_run and self.current_srcip != self.new_srcip:
-                                # srcip changed
-                                self.current_srcip = self.new_srcip
-                                try:
-                                    # there is a dataframe for this src ip, append to it
-                                    self.bro_df = self.dataframes[self.current_srcip]
-                                except KeyError:
-                                    # there's no saved df for this ip, save it
-                                    self.dataframes[self.current_srcip] = None
-                                    # empty the current dataframe so we can create a new one for the new srcip
-                                    self.bro_df = None
+                        # make sure it is not first run so we don't save an empty model to disk
+                        if not self.is_first_run and self.current_srcip != self.new_srcip:
+                            # srcip changed
+                            self.current_srcip = self.new_srcip
+                            try:
+                                # there is a dataframe for this src ip, append to it
+                                self.bro_df = self.dataframes[self.current_srcip]
+                            except KeyError:
+                                # there's no saved df for this ip, save it
+                                self.dataframes[self.current_srcip] = None
+                                # empty the current dataframe so we can create a new one for the new srcip
+                                self.bro_df = None
 
-                            profileid = f'{data[0]}_{data[1]}'
-                            twid = data[2]
-                            # get all flows in the tw
-                            flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
-                            if not flows: continue
+                        profileid = f'{profileid_twid[0]}_{profileid_twid[1]}'
 
-                            # flows is a dict {uid: serialized flow dict}
-                            for flow in flows.values():
-                                flow = json.loads(flow)
-                                try:
-                                    # Is there a dataframe? append to it
-                                    self.bro_df = self.bro_df.append(flow, ignore_index=True)
-                                except (UnboundLocalError, AttributeError):
-                                    # There's no dataframe, create one
-                                    # current srcip will be used as the model name
-                                    self.current_srcip = data[1]
-                                    self.bro_df = pd.DataFrame(flow, index=[0])
+                        # get all flows in the tw
+                        flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+                        if not flows: continue
 
-                            # In case you need a label, due to some models being able to work in a
-                            # semisupervized mode, then put it here. For now everything is
-                            # 'normal', but we are not using this for detection
-                            self.bro_df['label'] = 'normal'
-                            self.normalize_col_with_no_data('sbytes', 'int32')
-                            self.normalize_col_with_no_data('dbytes', 'int32')
-                            self.normalize_col_with_no_data('orig_ip_bytes', 'int32')
-                            self.normalize_col_with_no_data('dpkts', 'int32')
-                            self.normalize_col_with_no_data('resp_ip_bytes', 'int32')
-                            self.normalize_col_with_no_data('dur', 'float64')
-                            self.is_first_run = False
+                        # flows is a dict {uid: serialized flow dict}
+                        for flow in flows.values():
+                            flow = json.loads(flow)
+                            try:
+                                # Is there a dataframe? append to it
+                                self.bro_df = self.bro_df.append(flow, ignore_index=True)
+                            except (UnboundLocalError, AttributeError):
+                                # There's no dataframe, create one
+                                # current srcip will be used as the model name
+                                self.current_srcip = profileid_twid[1]
+                                self.bro_df = pd.DataFrame(flow, index=[0])
+
+                        # In case you need a label, due to some models being able to work in a
+                        # semisupervized mode, then put it here. For now everything is
+                        # 'normal', but we are not using this for detection
+                        self.bro_df['label'] = 'normal'
+                        self.normalize_col_with_no_data('sbytes', 'int32')
+                        self.normalize_col_with_no_data('dbytes', 'int32')
+                        self.normalize_col_with_no_data('orig_ip_bytes', 'int32')
+                        self.normalize_col_with_no_data('dpkts', 'int32')
+                        self.normalize_col_with_no_data('resp_ip_bytes', 'int32')
+                        self.normalize_col_with_no_data('dur', 'float64')
+                        self.is_first_run = False
 
                 elif 'test' in self.mode:
                     msg = self.c2.get_message(timeout=self.timeout)
@@ -197,58 +210,54 @@ class Module(Module, multiprocessing.Process):
                         return True
 
                     if utils.is_msg_intended_for(msg, 'new_flow'):
-                        data = msg["data"]
-                        if type(data) == str:
-                            # Check if there's models to test or not
-                            if (not os.path.isdir(self.models_path)
-                                    or not os.listdir(self.models_path)):
-                                self.print("No models found! "
-                                           "Please train first. "
-                                           "https://stratospherelinuxips.readthedocs.io/en/develop/")
-                                return True
-
-                            data = json.loads(data)
-                            profileid = data['profileid']
-                            twid = data['twid']
-                            # flow is a json serialized dict of one key {'uid' : str(flow)}
-                            flow = json.loads(data['flow'])
-                            #  flow contains only one key(uid). Get it.
-                            uid = list(flow.keys())[0]
-                            # Get the flow as dict
-                            flow_dict = json.loads(flow[uid])
-                            self.new_srcip = flow_dict['saddr']
-                            if self.is_first_run:
-                                self.current_srcip = self.new_srcip
-                            # Create a dataframe
-                            bro_df = pd.DataFrame(flow_dict, index=[0])
-                            # Get the values we're interested in from the flow in a list to give the model
-                            try:
-                                X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-                            except KeyError:
-                                # This flow doesn't have the fields we're interested in
-                                continue
-                            # if the srcip changed open the right model (don't reopen the same model on every run)
-                            if self.current_srcip != self.new_srcip or (self.current_srcip is self.new_srcip and self.is_first_run):
-                                path_to_model = self.get_model()
-                                try:
-                                    with open(path_to_model, 'rb') as model:
-                                        clf = pickle.load(model)
-                                except FileNotFoundError :
-                                    # probably because slips wasn't run in train mode first
-                                    self.print("No models found in modules/anomaly-detection. Stopping.")
-                                    return True
-                            # Get the prediction on the test data
-                            y_test_scores = clf.decision_function(X_test)  # outlier scores
-                            # Convert the ndarrays of scores and predictions to  pandas series
-                            scores_series = pd.Series(y_test_scores)
-                            # Add the score to the flow
-                            __database__.set_module_label_to_flow(profileid, twid, uid, 'anomaly-detection-score',
-                                                                str(scores_series.values[0]))
-                            # update the current srcip
+                        if not self.is_there_models_to_test():
+                            return True
+                        flow = msg["data"]
+                        flow = json.loads(flow)
+                        profileid = flow['profileid']
+                        twid = flow['twid']
+                        # flow is a json serialized dict of one key {'uid' : str(flow)}
+                        flow = json.loads(flow['flow'])
+                        #  flow contains only one key(uid). Get it.
+                        uid = list(flow.keys())[0]
+                        # Get the flow as dict
+                        flow_dict = json.loads(flow[uid])
+                        self.new_srcip = flow_dict['saddr']
+                        if self.is_first_run:
                             self.current_srcip = self.new_srcip
-                elif self.mode.lower() is 'none' or self.mode is '':
-                    #  ignore this module
-                    return True
+                        # Create a dataframe
+                        bro_df = pd.DataFrame(flow_dict, index=[0])
+                        # Get the values we're interested in from the flow in a list to give the model
+                        try:
+                            X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+                        except KeyError:
+                            # This flow doesn't have the fields we're interested in
+                            continue
+                        # if the srcip changed open the right model (don't reopen the same model on every run)
+                        if self.current_srcip != self.new_srcip or (self.current_srcip is self.new_srcip and self.is_first_run):
+                            path_to_model = self.get_model()
+                            try:
+                                with open(path_to_model, 'rb') as model:
+                                    clf = pickle.load(model)
+                            except FileNotFoundError :
+                                # probably because slips wasn't run in train mode first
+                                self.print("No models found in modules/anomaly-detection. Stopping.")
+                                return True
+                        # Get the prediction on the test data
+                        y_test_scores = clf.decision_function(X_test)  # outlier scores
+                        # Convert the ndarrays of scores and predictions to  pandas series
+                        scores_series = pd.Series(y_test_scores)
+
+                        # Add the score to the flow
+                        __database__.set_module_label_to_flow(
+                            profileid,
+                            twid,
+                            uid,
+                            'anomaly-detection-score',
+                            str(scores_series.values[0])
+                        )
+                        # update the current srcip
+                        self.current_srcip = self.new_srcip
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: "
                                f"training or testing. anomaly-detection module stopping.")
