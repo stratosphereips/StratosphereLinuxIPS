@@ -91,7 +91,7 @@ class ConfigParser(object):
             'detection', 'evidence_detection_threshold', 2
         )
         try:
-            threshold = int(threshold)
+            threshold = float(threshold)
         except ValueError:
             threshold = 2
         return threshold
