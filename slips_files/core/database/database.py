@@ -205,7 +205,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-                if self.deletePrevdb and not '-S' in sys.argv:
+                if self.deletePrevdb and not ('-S' in sys.argv or '-cb' in sys.argv) :
                     # when stopping the daemon, don't flush bc we need to get the pids
                     # to close slips files
                     self.r.flushdb()
