@@ -6,6 +6,7 @@
 - Support looking up IPs in Spamhaus
 - Support looking up hashes in Circl.lu
 - Remove support for VT hash lookups to save quota
+- Add support for suricata ssh flows
 
 
 -0.9.5
