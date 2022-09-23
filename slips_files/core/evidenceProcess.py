@@ -412,7 +412,6 @@ class EvidenceProcess(multiprocessing.Process):
         :param ip_direction: either src or dst ip
         profileid and twid are used to log the blocking to alerts.log and other log files.
         """
-
         # # ip_direction is the direction of the last evidence, it's irrelevant! #TODO
         # if ip_direction != 'dstip':
         #     return False
@@ -423,17 +422,15 @@ class EvidenceProcess(multiprocessing.Process):
 
         # Make sure we don't block our own IP
         if ip in self.our_ips:
-            #todo our ips are only valid in case of an interface
             return False
 
         #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
-        # blocking_data = {
-        #     'ip':str(detection_info),
-        #     'block' : True,
-        # }
-        # blocking_data = json.dumps(blocking_data)
-        # # If the blocking module is loaded after this module this line won't work!!!
-        # __database__.publish('new_blocking', blocking_data)
+        blocking_data = {
+            'ip': ip,
+            'block' : True,
+        }
+        blocking_data = json.dumps(blocking_data)
+        __database__.publish('new_blocking', blocking_data)
         return True
 
     def mark_as_blocked(
@@ -699,7 +696,6 @@ class EvidenceProcess(multiprocessing.Process):
                             if not __database__.checkBlockedProfTW(
                                 profileid, twid
                             ):
-                                self.print(f"[evidenceprocess] {profileid} {twid} is not blocked, so will block it")
                                 # store the alert in our database
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
@@ -724,14 +720,12 @@ class EvidenceProcess(multiprocessing.Process):
                                 )
                                 self.print(f'{alert_to_print}', 1, 0)
 
-
-
                                 # alerts.json should only contain alerts in idea format,
                                 # blocked srcips should only be printed in alerts.log
                                 # self.addDataToJSONFile(blocked_srcip_dict)
 
                                 if self.popup_alerts:
-                                    # remove the colors from the aletss before printing
+                                    # remove the colors from the alerts before printing
                                     alert_to_print = (
                                         alert_to_print.replace(Fore.RED, '')
                                         .replace(Fore.CYAN, '')
@@ -739,17 +733,17 @@ class EvidenceProcess(multiprocessing.Process):
                                     )
                                     self.notify.show_popup(alert_to_print)
 
-
-                                    if self.decide_blocking(
+                                if (
+                                    self.decide_blocking(
                                         detection_info, profileid, twid, type_detection
-                                    ):
-                                        self.mark_as_blocked(
-                                            profileid,
-                                            twid,
-                                            flow_datetime,
-                                            accumulated_threat_level
-                                        )
-
+                                    )
+                                ):
+                                    self.mark_as_blocked(
+                                        profileid,
+                                        twid,
+                                        flow_datetime,
+                                        accumulated_threat_level
+                                    )
                 message = self.c2.get_message(timeout=self.timeout)
                 if utils.is_msg_intended_for(message, 'new_blame'):
                     data = message['data']
@@ -796,11 +790,11 @@ class EvidenceProcess(multiprocessing.Process):
                 self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.outputqueue.put(
-            #         f'01|[Evidence] Error in the Evidence Process line {exception_line}'
-            #     )
-            #     self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-            #     self.outputqueue.put('01|[Evidence] {}'.format(inst))
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.outputqueue.put(
+                    f'01|[Evidence] Error in the Evidence Process line {exception_line}'
+                )
+                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|[Evidence] {}'.format(inst))
+                return True
