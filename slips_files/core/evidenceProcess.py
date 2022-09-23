@@ -416,7 +416,7 @@ class EvidenceProcess(multiprocessing.Process):
         # if ip_direction != 'dstip':
         #     return False
 
-        if '-i' not in sys.argv:
+        if not ('-i' in sys.argv and '-p' in sys.argv):
             # blocking is only supported when running on an interface
             return False
 
@@ -487,7 +487,7 @@ class EvidenceProcess(multiprocessing.Process):
 
 
     def get_evidence_for_tw(self, profileid, twid):
-        # Get all the evidence for the TW
+        # Get all the evidence for this profile in this TW
         tw_evidence = __database__.getEvidenceForTW(
             profileid, twid
         )
@@ -531,7 +531,7 @@ class EvidenceProcess(multiprocessing.Process):
             # Compute the moving average of evidence
             new_threat_level = threat_level * confidence
             self.print(
-                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
+                f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0
             )
             accumulated_threat_level += new_threat_level
             self.print(
@@ -692,7 +692,6 @@ class EvidenceProcess(multiprocessing.Process):
                             accumulated_threat_level
                             >= self.detection_threshold_in_this_width
                         ):
-                            # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(
                                 profileid, twid
                             ):
