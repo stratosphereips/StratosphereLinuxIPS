@@ -51,7 +51,7 @@ def test_handle_pcap_and_interface(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_folder', 'dataset/test9-mixed-zeek-dir-2/'),
+        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'),
         ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'),
     ],
 )

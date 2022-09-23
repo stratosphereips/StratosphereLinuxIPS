@@ -51,7 +51,7 @@ def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
 
 @pytest.mark.parametrize(
     'file,expected_value',
-    [('dataset/test9-mixed-zeek-dir-2/conn.log', 'zeek-tabs')],
+    [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek-tabs')],
 )
 def test_define_type_zeek_tab(outputQueue, inputQueue, file, expected_value):
     profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
@@ -106,7 +106,7 @@ def test_define_type_nfdump(outputQueue, inputQueue, nfdump_file):
     'file,separator,expected_value',
     [
         (
-            'dataset/test9-mixed-zeek-dir-2/conn.log',
+            'dataset/test10-mixed-zeek-dir/conn.log',
             '	',
             {'dur': 9, 'proto': 7, 'state': 12},
         )
@@ -116,7 +116,11 @@ def test_define_columns(
     outputQueue, inputQueue, file, separator, expected_value
 ):
     # define_columns is called on header lines
-    # line = '#fields ts      uid     id.orig_h       id.orig_p       id.resp_h       id.resp_p       proto   service duration        orig_bytes      resp_bytes       conn_state      local_orig      local_resp      missed_bytes    history orig_pkts       orig_ip_bytes   resp_pkts       resp_ip_bytes   tunnel_parents'
+    # line = '#fields ts      uid     id.orig_h       id.orig_p
+    # id.resp_h       id.resp_p       proto   service duration
+    # orig_bytes      resp_bytes       conn_state      local_orig
+    # local_resp      missed_bytes    history orig_pkts
+    # orig_ip_bytes   resp_pkts       resp_ip_bytes   tunnel_parents'
     with open(file) as f:
         while True:
             # read from the file until you find the header

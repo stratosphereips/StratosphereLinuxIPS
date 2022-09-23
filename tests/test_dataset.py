@@ -176,10 +176,10 @@ def test_binetflow(
             6661,
         ),
         (
-            'dataset/test9-mixed-zeek-dir-2',
+            'dataset/test10-mixed-zeek-dir',
             20,
             'horizontal port scan',
-            'test9-mixed-zeek-dir-2/',
+            'test10-mixed-zeek-dir/',
             6660,
         ),
     ],
@@ -229,7 +229,7 @@ def test_zeek_dir(
             6659,
         ),
         (
-            'dataset/test9-mixed-zeek-dir-2/conn.log',
+            'dataset/test10-mixed-zeek-dir/conn.log',
             5,
             'a connection without DNS resolution',
             'conn_log-2/',
