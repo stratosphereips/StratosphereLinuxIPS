@@ -230,11 +230,13 @@ class Main:
 
     def terminate_slips(self):
         """
-        Do all necessary stuff to stop process any clear any files.
+        Shutdown slips, is called when stopping slips before
+        starting all modules. for example using -cb
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
         sys.exit(-1)
+
 
     def get_modules(self, to_ignore):
         """
@@ -1332,19 +1334,23 @@ class Main:
             else:
                 # start only the blocking module process and the db
                 from slips_files.core.database.database import __database__
-                from multiprocessing import Queue
+                from multiprocessing import Queue, active_children
                 from modules.blocking.blocking import Module
 
                 blocking = Module(Queue())
                 blocking.start()
                 blocking.delete_slipsBlocking_chain()
-                # Tell the blocking module to clear the slips chain
-                self.shutdown_gracefully()
+                # kill the blocking module manually because we can't
+                # run shutdown_gracefully here (not all modules has started)
+                for child in active_children():
+                    child.kill()
+                self.terminate_slips()
+
 
         # Check if user want to save and load a db at the same time
         if self.args.save and self.args.db:
-                print("Can't use -s and -d together")
-                self.terminate_slips()
+            print("Can't use -s and -d together")
+            self.terminate_slips()
 
     def set_input_metadata(self):
         """
