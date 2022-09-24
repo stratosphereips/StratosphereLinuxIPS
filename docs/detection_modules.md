@@ -599,25 +599,24 @@ This module is responsibe for detecting scans such as:
 
 ### Vertical port scans
 
-Slips checks both TCP and UDP connections for port scans.
+Slips considers an IP performing a vertical port scan if it contacts 6 or more different destination ports in the same destination IP. The flows can be TCP or UDP, and both Established or Not Established. The initial threshold is 5 destination ports. On each flow the check is performed.
 
+After detecting a vertical port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-Slips considers an IP performing a vertical port scan if it scans 6 or more different
-destination ports, either the connection was established or not established.
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new ports in that dst IP) then the counter resets and the same attacker needs to do _again_ more than threshold destinations ports in one IP to be detected. This avoids the problem that after 5 flows that generated an alert, the 6 flow also generates an alert.
 
-We detect when there is 6, 9, 12, etc. scanned destination ports per destination IP.
+The total number of _packets_ in all flows in the scan give us the confidence of the scan.
+
 
 ### Horizontal port scans
 
-Slips checks both TCP and UDP connections for horizontal port scans.
+Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans. The initial threshold is now 6 destination IPs using the same destination ports. 
 
+After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-Slips considers an IP performing a horizontal port scan if it contacted more than 3
-destination IPs on a specific port with not established connections.
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
 
-
-We detect a scan every threshold. So we detect when 
-there is 6, 9, 12, etc. destination destination IPs.
+Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 
 
 ### PING Sweeps
