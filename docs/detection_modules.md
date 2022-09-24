@@ -621,17 +621,9 @@ Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 
 ### PING Sweeps
 
-PING sweeps or ICMP sweeps is used to find out
-which hosts are alive in a network or large number of IP addresses using PING/ICMP.
+ICMP messages can be used to find out which hosts are alive in a network. Slips relies on Zeek detecions for this, but it is done with our own Zeek scripts located in zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
-
-We detect a scan every threshold. So we generate an evidence when there is 
-5,10,15, .. etc. ICMP established connections to different IPs.
-
-
-We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
-and ICMP-AddressMaskScan using Slips' own zeek script located in 
-zeek-scripts/icmps-scans.zeek
+The initial threshold is 25 ICMP flows.
 
 # Connections Made By Slips
 
