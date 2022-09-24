@@ -1375,9 +1375,9 @@ class UpdateFileManager:
             elif blacklists_ip_appeard_in == 3:
                 ips_in_3_bl += 1
 
-        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}')
-        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}')
-        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}')
+        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}', 1, 0)
+        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 1, 0)
+        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 1, 0)
 
     def update_mac_db(self, response):
         if response.status_code != 200:
