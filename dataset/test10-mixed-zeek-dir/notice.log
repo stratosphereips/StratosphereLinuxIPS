@@ -1,0 +1,22 @@
+#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	notice
+#open	2018-05-21-21-03-43
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc	proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for	dropped	remote_location.country_code	remote_location.region	remote_location.city	remote_location.latitude	remote_location.longitude
+#types	time	string	addr	port	addr	port	string	string	string	enum	enum	string	string	addr	addr	port	count	string	set[enum]	interval	bool	string	string	string	double	double
+1601998373.487779	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 23/tcp in 1m14s	remote	147.32.83.156	-	23	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487780	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 8080/tcp in 2m51s	remote	147.32.83.156	-	8080	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487781	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 8080/tcp in 3m10s	remote	147.32.83.156	-	8080	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487782	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 8080/tcp in 4m2s	remote	147.32.83.156	-	8080	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487783	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 23/tcp in 1m30s	remote	147.32.83.156	-	23	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487784	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 2323/tcp in 3m24s	remote	147.32.83.156	-	2323	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487785	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 8080/tcp in 3m52s	remote	147.32.83.156	-	8080	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487786	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 23/tcp in 1m22s	remote	147.32.83.156	-	23	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487787	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 23/tcp in 1m24s	remote	147.32.83.156	-	23	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487788	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 23/tcp in 1m54s	remote	147.32.83.156	-	23	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487789	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 2323/tcp in 3m39s	remote	147.32.83.156	-	2323	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487790	-	-	-	-	-	-	-	-	tcp	Scan::Address_Scan	147.32.83.156 scanned at least 25 unique hosts on port 2323/tcp in 3m51s	remote	147.32.83.156	-	2323	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+1601998373.487791	-	-	-	-	-	-	-	-	- SSH::Password_Guessing	222.186.30.112 appears to be guessing SSH passwords (seen in 30 connections). Sampled servers: 147.32.85.117, 147.32.85.117, 147.32.81.196, 147.32.81.95, 147.32.81.83 222.186.30.112	remote	222.186.30.112	-	bro	Notice::ACTION_LOG	3600.000000	F	-	-	-	-	-
+#close	2018-05-21-21-05-56
