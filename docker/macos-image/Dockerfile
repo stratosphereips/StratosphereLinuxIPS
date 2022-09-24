@@ -41,6 +41,11 @@ RUN apt update && apt install -y --no-install-recommends \
     git \
     whois \
     vim \
+    less \
+    tcpdump \
+    screen \
+    mc \
+    iputils-ping \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara
