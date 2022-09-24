@@ -424,7 +424,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
-                        f'Not established. Tot pkts sent to all ports: {pkts_sent}. '
+                        f'Tot pkts sent to all ports: {pkts_sent}. '
                         f'Confidence: {confidence}'
                     )
         __database__.setEvidence(
