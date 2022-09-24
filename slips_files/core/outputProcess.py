@@ -27,7 +27,11 @@ import os
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
-    """A class process to output everything we need. Manages all the output"""
+    """
+    A class to process the output of everything Slips need. Manages all the output
+    If any Slips module or process needs to output anything to screen, or logs,
+    it should use always the output queue. Then this output class will handle how to deal with it
+    """
 
     def __init__(
         self,
