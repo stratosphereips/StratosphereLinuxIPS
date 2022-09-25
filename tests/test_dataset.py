@@ -119,7 +119,7 @@ def test_pcap(
             6663,
         ),
         (
-            'dataset/test4-mixed.binetflow',
+            'dataset/test4-malicious.binetflow',
             2,
             'horizontal port scan to port  81',
             'test4/',

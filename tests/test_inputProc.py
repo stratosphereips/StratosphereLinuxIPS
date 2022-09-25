@@ -103,7 +103,7 @@ def test_handle_nfdump(
     ],
 )
 #                                                           ('binetflow','dataset/test3-mixed.binetflow'),
-#                                                           ('binetflow','dataset/test4-mixed.binetflow'),
+#                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(
     outputQueue, profilerQueue, input_type, input_information
 ):
