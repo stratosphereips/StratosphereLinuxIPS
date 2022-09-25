@@ -157,7 +157,14 @@ class PortScanProcess(Module, multiprocessing.Process):
                         and prev_amount_dips < amount_of_dips
                     ):
                         # Get the total amount of pkts sent to the same port from all IPs
-                        pkts_sent = sum(dstips[dip]['spkts'] for dip in dstips)
+                        pkts_sent = 0
+                        for dip in dstips:
+                            if not dstips[dip]["spkts"]:
+                                # In argus files there are no src pkts, only pkts.
+                                # So it is better to have the total pkts than to have no packets count
+                                pkts_sent += dstips[dip]["pkts"]
+                            else:
+                                pkts_sent += dstips[dip]["spkts"]
 
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
@@ -496,7 +503,14 @@ class PortScanProcess(Module, multiprocessing.Process):
                             and prev_amount_dports < amount_of_dports
                     ):
                         # Get the total amount of pkts sent to the same port to all IPs
-                        pkts_sent = sum(dstports[dport] for dport in dstports)
+                        pkts_sent = 0
+                        for dip in dstips:
+                            if not dstips[dip]["spkts"]:
+                                # In argus files there are no src pkts, only pkts.
+                                # So it is better to have the total pkts than to have no packets count
+                                pkts_sent += dstips[dip]["pkts"]
+                            else:
+                                pkts_sent += dstips[dip]["spkts"]
                         uid = dstips[dstip]['uid']
                         timestamp = dstips[dstip]['stime']
 
