@@ -105,7 +105,7 @@ class LogsProcess(multiprocessing.Process):
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)
             self.print(
-                'Using the folder {} for storing results.'.format(
+                'Using the dir {}/ for storing logs.'.format(
                     self.mainfoldername
                 )
             )
