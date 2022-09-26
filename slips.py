@@ -1266,6 +1266,15 @@ class Main:
         check the flags that don't reuiqre starting slips
         for ex: clear db, clear blocking, killling all servers, stopping the daemon, etc.
         """
+
+        if self.args.help:
+            self.print_version()
+            arg_parser = self.conf.get_parser(help=True)
+            arg_parser.parse_arguments()
+            arg_parser.print_help()
+            self.terminate_slips()
+
+
         if (self.args.verbose and int(self.args.verbose) > 3) or (
             self.args.debug and int(self.args.debug) > 3
         ):
