@@ -523,15 +523,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                             amount_of_dports % self.port_scan_minimum_dports_threshold == 0
                             and prev_amount_dports < amount_of_dports
                     ):
-                        # Get the total amount of pkts sent to the same port to all IPs
-                        pkts_sent = 0
-                        for dip in dstips:
-                            if not dstips[dip]["spkts"]:
-                                # In argus files there are no src pkts, only pkts.
-                                # So it is better to have the total pkts than to have no packets count
-                                pkts_sent += dstips[dip]["pkts"]
-                            else:
-                                pkts_sent += dstips[dip]["spkts"]
+                        # Get the total amount of pkts sent different ports on the same host
+                        pkts_sent = sum(dstports[dport] for dport in dstports)
                         uid = dstips[dstip]['uid']
                         timestamp = dstips[dstip]['stime']
 
