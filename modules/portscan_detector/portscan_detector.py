@@ -146,8 +146,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
                     prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
 
-                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key,
-                    # prev_amount_dips, amount_of_dips))
+                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
 
                     # We detect a scan every Threshold. So, if threshold is 3,
                     # we detect when there are 3, 6, 9, 12, etc. dips per port.
@@ -303,6 +302,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dips = evidence
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
+            combined_evidence = 0
 
             while True:
                 try:
@@ -332,6 +332,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dips = amount_of_dips2
                     pkts_sent = pkts_sent2
                     uids += uids2
+
+                    # max evidence to combine before calling setevidence is 5
+                    # if we don't set a max evidence,
+                    # this loop will keep going forever without setting evidence
+                    combined_evidence += 1
+                    if combined_evidence == 5:
+                        break
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
