@@ -159,7 +159,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         # Get the total amount of pkts sent to the same port from all IPs
                         pkts_sent = 0
                         for dip in dstips:
-                            if not dstips[dip]["spkts"]:
+                            if 'spkts' not in dstips[dip]:
                                 # In argus files there are no src pkts, only pkts.
                                 # So it is better to have the total pkts than to have no packets count
                                 pkts_sent += dstips[dip]["pkts"]
