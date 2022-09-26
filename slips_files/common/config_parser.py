@@ -28,7 +28,7 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf is the default file
         """
-        config = configparser.ConfigParser(interpolation=None)
+        config = configparser.ConfigParser(interpolation=None, comment_prefixes='#')
         try:
             with open(self.configfile) as source:
                 config.read_file(source)

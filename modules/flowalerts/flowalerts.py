@@ -655,6 +655,10 @@ class Module(Module, multiprocessing.Process):
             except KeyError:
                 pass
 
+        if answers == ['']:
+            # If no IPs are in the answer, we can not expect the computer to connect to anything
+            # self.print(f'No ips in the answer, so ignoring')
+            return False
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(
@@ -663,13 +667,10 @@ class Module(Module, multiprocessing.Process):
         # If contacted_ips is empty it can be because we didnt read yet all the flows.
         # This is automatically captured later in the for loop and we start a Timer
 
-        # every dns answer is a list of ips that correspond to a spicific query,
+        # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-        if answers == ['']:
-            # If no IPs are in the answer, we can not expect the computer to connect to anything
-            # self.print(f'No ips in the answer, so ignoring')
-            return False
+
         # to avoid checking the same answer twice
         answers = set(answers)
         for ip in answers:
@@ -677,7 +678,6 @@ class Module(Module, multiprocessing.Process):
             if ip in contacted_ips:
                 # this dns resolution has a connection. We can exit
                 return False
-
         # Check if there was a connection to any of the CNAMEs
         if self.is_CNAME_contacted(answers, contacted_ips):
             # this is not a DNS without resolution
