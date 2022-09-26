@@ -226,6 +226,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
+            combined_evidence = 0
 
             while True:
                 try:
@@ -255,6 +256,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # we shouldn't accumulate
                     amount_of_dports = amount_of_dports2
                     pkts_sent = pkts_sent2
+
+                    # max evidence to combine before calling setevidence is 5
+                    # if we don't set a max evidence,
+                    # this loop will keep going forever for the same dstip without setting evidence
+                    combined_evidence += 1
+                    if combined_evidence == 5:
+                        break
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
@@ -335,7 +343,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     # max evidence to combine before calling setevidence is 5
                     # if we don't set a max evidence,
-                    # this loop will keep going forever without setting evidence
+                    # this loop will keep going forever for the same dport without setting evidence
                     combined_evidence += 1
                     if combined_evidence == 5:
                         break
@@ -437,7 +445,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         srcip = profileid.split('_')[-1]
         detection_info = srcip
         confidence = self.calculate_confidence(pkts_sent)
-        cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
