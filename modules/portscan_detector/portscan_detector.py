@@ -257,6 +257,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dports = amount_of_dports2
                     pkts_sent = pkts_sent2
 
+                    # set evidence if there's no more evidence to combine
+                    if self.pending_vertical_ps_evidence.empty():
+                        break
                     # max evidence to combine before calling setevidence is 5
                     # if we don't set a max evidence,
                     # this loop will keep going forever for the same dstip without setting evidence
@@ -340,7 +343,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dips = amount_of_dips2
                     pkts_sent = pkts_sent2
                     uids += uids2
-
+                    # set evidence if there's no more evidence to combine
+                    if self.pending_horizontal_ps_evidence.empty():
+                        break
                     # max evidence to combine before calling setevidence is 5
                     # if we don't set a max evidence,
                     # this loop will keep going forever for the same dport without setting evidence
