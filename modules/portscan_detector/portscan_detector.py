@@ -3,7 +3,6 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -146,7 +145,9 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
                     prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
-                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
+
+                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key,
+                    # prev_amount_dips, amount_of_dips))
 
                     # We detect a scan every Threshold. So, if threshold is 3,
                     # we detect when there are 3, 6, 9, 12, etc. dips per port.
@@ -169,6 +170,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
 
+                        self.cache_det_thresholds[cache_key] = amount_of_dips
                         if not self.alerted_once_horizontal_ps:
                             self.alerted_once_horizontal_ps = True
                             self.set_evidence_horizontal_portscan(
@@ -309,7 +311,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # queue is empty
                     break
 
-                # These are the variables of the combined evidence we are generating
+                # These are the variables of the evidence that we should combine
+                # if they match the variable of the evidence above
                 timestamp, \
                     pkts_sent2, \
                     protocol2, \
@@ -318,7 +321,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uids2, \
                     dport2, \
                     amount_of_dips2 = new_evidence
-
                 if (
                         dport == dport2
                         and profileid == profileid2
@@ -335,6 +337,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # store it back in the queue until we're done with the current one
                     ports_counter += 1
                     self.pending_horizontal_ps_evidence.put(new_evidence)
+                    # after 5 evidence that are not detecting the same port, we alert the ones we already accumulated,
+                    # and start accumulating again
                     if ports_counter == 5:
                         ports_counter = 0
                         break
@@ -349,7 +353,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 dport,
                 amount_of_dips
             )
-        #todo we are not detecting second port scans
 
     def set_evidence_horizontal_portscan(
             self,
@@ -381,6 +384,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'Threat Level: {threat_level}. '
             f'Confidence: {confidence}'
         )
+
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -403,8 +407,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             profileid, type_evidence, self.malicious_label
         )
         self.print(description, 3, 0)
-        # Store in our local cache how many dips were there:
-        self.cache_det_thresholds[cache_key] = amount_of_dips
+
 
 
 
@@ -454,8 +457,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
-        # Store in our local cache how many dips were there:
-        self.cache_det_thresholds[cache_key] = amount_of_dports
+
 
 
     def calculate_confidence(self, pkts_sent):
@@ -514,6 +516,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                         uid = dstips[dstip]['uid']
                         timestamp = dstips[dstip]['stime']
 
+                        # Store in our local cache how many dips were there:
+                        self.cache_det_thresholds[cache_key] = amount_of_dports
                         if not self.alerted_once_vertical_ps:
                             self.alerted_once_vertical_ps = True
                             self.set_evidence_vertical_portscan(
