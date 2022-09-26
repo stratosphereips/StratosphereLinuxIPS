@@ -342,7 +342,7 @@ class Main:
 
         do_logs = self.conf.create_log_files()
         # if -l is provided or create_log_files is yes then we will create log files
-        if self.args.createlogfiles and do_logs:
+        if self.args.createlogfiles or do_logs:
             # Create a folder for logs
             logs_dir = self.create_folder_for_logs()
             # Create the logsfile thread if by parameter we were told,
@@ -358,7 +358,7 @@ class Main:
             )
             logs_process.start()
             self.print(
-                f'Started logsfiles thread '
+                f'Started logs process '
                 f'[PID {logs_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
@@ -1531,7 +1531,7 @@ class Main:
 
             self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
             self.print(f'Started main program [PID {self.pid}]', 1, 0)
-            self.print(f'Started output thread [PID {output_process.pid}]', 1, 0)
+            self.print(f'Started output process [PID {output_process.pid}]', 1, 0)
             self.print('Starting modules', 0, 1)
 
 
@@ -1563,7 +1563,7 @@ class Main:
             )
             evidence_process.start()
             self.print(
-                f'Started Evidence Process '
+                f'Started evidence process '
                 f'[PID {evidence_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
@@ -1585,7 +1585,7 @@ class Main:
             )
             profiler_process.start()
             self.print(
-                f'Started Profiler Process '
+                f'Started profiler process '
                 f'[PID {profiler_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
@@ -1608,7 +1608,7 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started input thread '
+                f'Started input process '
                 f'[PID {inputProcess.pid}]', 1, 0
             )
             __database__.store_process_PID(
