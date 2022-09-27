@@ -622,6 +622,9 @@ class ConfigParser(object):
         )
 
     def get_disabled_modules(self, input_type) -> list:
+        """
+        Uses input type to enable leak detector only on pcaps
+        """
         to_ignore = self.read_configuration(
             'modules', 'disable', '[template , ensembling]'
         )

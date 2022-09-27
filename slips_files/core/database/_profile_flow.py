@@ -880,9 +880,17 @@ class ProfilingFlowsDatabase(object):
 
     def get_zeek_output_dir(self, ):
         """
-        gets name, size, analysis dates, and zeek output dir in the db
+        gets zeek output dir from the db
         """
         return self.r.hget('analysis', 'zeek_dir')
+
+    def get_input_type(self):
+        """
+        gets input type from the db
+        """
+        return self.r.hget('analysis', 'input_type')
+
+
 
     def get_flow(self, profileid, twid, uid):
         """
