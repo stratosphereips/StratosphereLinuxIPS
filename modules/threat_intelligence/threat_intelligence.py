@@ -609,7 +609,11 @@ class Module(Module, multiprocessing.Process):
             return
 
         response = json.loads(urlhaus_api_response.text)
-        if response['query_status'] == 'no_results' or response['urls'] == []:
+        if (
+                response['query_status'] == 'no_results'
+                or 'urls' not in response
+                or response['urls'] == []
+        ):
             # no response or empty response
             return
 
