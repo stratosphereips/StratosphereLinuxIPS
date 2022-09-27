@@ -376,7 +376,7 @@ class Module(Module, multiprocessing.Process):
             # It can be that the dns_resolution sometimes gives back a list and gets this error
             return False
 
-    def check_if_connection_was_made_by_different_version(
+    def is_connection_made_by_different_version(
         self, profileid, twid, daddr
     ):
         """
@@ -609,7 +609,7 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_dns_without_connection(
-            self, domain, answers, timestamp, profileid, twid, uid
+            self, domain, answers: list, timestamp, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -632,8 +632,7 @@ class Module(Module, multiprocessing.Process):
             or domain == 'WPAD'
         ):
             return False
-
-        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain,
+        # One DNS query may not be answered exactly by UID, but the computer can re-ask the domain,
         # and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
@@ -644,18 +643,15 @@ class Module(Module, multiprocessing.Process):
         # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
         # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
+        prev_domain_resolutions = __database__.getDomainData(domain)
+        if prev_domain_resolutions:
+            prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
+            # if there's a domain in the cache (prev_domain_resolutions) that is not in the
+            # current answers given to this function, append it to the answers list
+            answers.extend([ans for ans in prev_domain_resolutions if ans not in answers])
 
-        previous_data_for_domain = __database__.getDomainData(domain)
-        if previous_data_for_domain:
-            try:
-                previous_ips_for_domain = previous_data_for_domain['IPs']
-                if type(answers) == set:
-                    answers = list(answers)
-                answers.extend(previous_ips_for_domain)
-            except KeyError:
-                pass
 
-        if answers == ['']:
+        if answers == ['-']:
             # If no IPs are in the answer, we can not expect the computer to connect to anything
             # self.print(f'No ips in the answer, so ignoring')
             return False
@@ -670,24 +666,22 @@ class Module(Module, multiprocessing.Process):
         # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-
-        # to avoid checking the same answer twice
-        answers = set(answers)
         for ip in answers:
             # self.print(f'Checking if we have a connection to ip {ip}')
-            if ip in contacted_ips:
+            if (
+                ip in contacted_ips
+                or
+                self.is_connection_made_by_different_version(
+                    profileid, twid, ip)
+            ):
                 # this dns resolution has a connection. We can exit
                 return False
+
         # Check if there was a connection to any of the CNAMEs
         if self.is_CNAME_contacted(answers, contacted_ips):
             # this is not a DNS without resolution
             return False
 
-        for ip in answers:
-            if self.check_if_connection_was_made_by_different_version(
-                    profileid, twid, ip
-            ):
-                return False
 
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
@@ -1219,7 +1213,6 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
                     # saddr is multicast.
