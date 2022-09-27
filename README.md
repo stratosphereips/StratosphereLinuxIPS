@@ -61,7 +61,7 @@ The following table summarizes all active modules in Slips, its status and purpo
 | HTTPS               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
 | Port scan detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
 | RNN C&C etection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
-| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |
+| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
 | Flow ML detection   |   ✅   | detects malicious flows using ML pretrained models |
 | Leak detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
 | Threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
@@ -84,7 +84,7 @@ There are two ways to run Slips:
 
 i. bare metal installation on Linux
 
-ii. using Docker which is our preferred option.
+ii. using Docker, which is our preferred option.
 
 In this section we guide you through how to get started with Slips.
 
@@ -237,6 +237,32 @@ To build a Docker image of Slips for linux follow the next steps:
     # run Slips using the default configuration in one of the provided test datasets
     ./slips.py -c slips.conf -f dataset/test3-mixed.binetflow
 ```
+
+#### First run
+
+Be aware that the first time you run Slips it will start updating all the databases and threat intelligence files in the background. However, it will give you as many detections as possible _while_ updating. This means that if you run Slips again after the updates finished, you may have more detections. Slips behaves like this so you don't have to wait for the updates to finish in order to have some detections.
+
+Downloading and updating the DB may take up to 4 minutes depending on the remote sites.
+
+All this information is stored in a cache Redis database, which is kept in memory when Slips stops. Next time Slips runs, it will read from this database. The information in the DB is updated periodically acording to the configuration file (usually one day).
+
+You can check if the DB is running this by looking at your processes:
+
+```
+    ps afx|grep redis
+    9078 ?        Ssl    1:25 redis-server *:6379
+```
+
+You can destroy this database by running:
+
+```
+    ./slips.py -k
+    Choose which one to kill [0,1,2 etc..]
+    [0] Close all servers
+    [1] conn.log - port 6379
+```
+
+
 
 #### Limitations
 
