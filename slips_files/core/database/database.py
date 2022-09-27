@@ -102,7 +102,7 @@ class Database(ProfilingFlowsDatabase, object):
             #   that will be played again at server startup
             self.redis_options.update({
                 'save': '60 10000',
-                'appendonly': 'yes'
+                'appendonly': 'yes',
             })
 
         with open(self.redis_conf_file, 'w') as f:
@@ -2302,15 +2302,15 @@ class Database(ProfilingFlowsDatabase, object):
         If you -s the same file twice the old backup will be overwritten.
         """
 
-        # print statements in this function won't work becaus eby the time this
+        # use print statements in this function won't work because by the time this
         # function is executed, the redis database would have already stopped
 
-        # Saves to /var/lib/redis/dump.rdb
+        # saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
         self.r.save()
 
         # Saves to dump.rdb in the cwd
-        redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
+        redis_db_path = os.path.join('/var/lib/redis', 'dump.rdb')
 
         if os.path.exists(redis_db_path):
             command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
@@ -2329,7 +2329,7 @@ class Database(ProfilingFlowsDatabase, object):
         Load the db from disk to the db on port 32850
         backup_file should be the full path of the .rdb
         """
-        # do not use self.print here! the outputqueue isn't initialized yet
+        # do not use self.print here! the output queue isn't initialized yet
         if not os.path.exists(backup_file):
             print("{} doesn't exist.".format(backup_file))
             return False

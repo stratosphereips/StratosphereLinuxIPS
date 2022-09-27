@@ -522,12 +522,13 @@ class Main:
 
 
     def save_the_db(self):
-        # Create a new dir to store backups
-        backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
-        try:
-            os.mkdir(backups_dir)
-        except FileExistsError:
-            pass
+        # save the db to the output dir of this analysis
+        # backups_dir = os.path.join(os.getcwd(), 'redis_backups/')
+        # try:
+        #     os.mkdir(backups_dir)
+        # except FileExistsError:
+        #     pass
+        backups_dir = self.args.output
         # The name of the interface/pcap/nfdump/binetflow used is in self.input_information
         # if the input is a zeek dir, remove the / at the end
         if self.input_information.endswith('/'):
@@ -1279,6 +1280,9 @@ class Main:
             arg_parser.print_help()
             self.terminate_slips()
 
+        if (self.args.save or self.args.db) and os.getuid() != 0:
+            print('Saving and loading the database requires root privileges.')
+            self.terminate_slips()
 
         if (self.args.verbose and int(self.args.verbose) > 3) or (
             self.args.debug and int(self.args.debug) > 3
