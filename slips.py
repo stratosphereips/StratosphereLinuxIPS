@@ -1372,7 +1372,8 @@ class Main:
             'slips_version': version,
             'name': self.input_information,
             'analysis_start': now,
-            'disabled_modules': json.dumps(to_ignore)
+            'disabled_modules': json.dumps(to_ignore),
+            'output_dir': self.args.output
         }
 
         if hasattr(self, 'zeek_folder'):
@@ -1389,7 +1390,7 @@ class Main:
         info.update({
             'size_in_MB': size_in_mb,
         })
-        # analysis end date will be set in shutdowngracefully
+        # analysis end date will be set in shutdown_gracefully
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
 

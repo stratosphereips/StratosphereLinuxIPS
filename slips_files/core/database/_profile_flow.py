@@ -884,6 +884,14 @@ class ProfilingFlowsDatabase(object):
         """
         return self.r.hget('analysis', 'zeek_dir')
 
+
+    def get_output_dir(self, info:dict):
+        """
+        returns the currently used output dir
+        """
+        return self.r.hget('analysis', 'output_dir')
+
+
     def get_flow(self, profileid, twid, uid):
         """
         Returns the flow in the specific time
