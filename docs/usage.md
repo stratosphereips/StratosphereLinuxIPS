@@ -618,7 +618,7 @@ Slips supports reading input flows in text format from stdin in interactive mode
 
 Supported flow from stdin are zeek conn.log files (json form), suricata and argus.
 
-For example you can run slips using:
+For example, you can run slips using:
 
 ```./slips.py -f zeek```
 
