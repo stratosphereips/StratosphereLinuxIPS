@@ -248,25 +248,26 @@ title="Web Interface">
 
 ## Saving the database
 
-Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, 
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```,
 
 For example:
 
-```./slips.py -f dataset/hide-and-seek-short.pcap -s```
+```sudo ./slips.py -f dataset/hide-and-seek-short.pcap -s```
 
-Your .rdb saved database will be stored in ```redis_backups/```.
+Your .rdb saved database will be stored in the default output dir.
 
 Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
 
 You can load it again using ```-d```, For example:
 
-```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb ```
 
-And then use ```./kalipso``` and select the entry on port 32850 to view the loaded database.
+And then use ```./kalipso``` or ```./webinterface.sh``` and select the entry on port 32850 to view the loaded database.
+
+Note: saving and loading the database requires **root privileges** and is only supported in linux.
 
 This feature isn't supported in docker due to problems with redis in docker.
 
-Slips will ask for root access when saving the db to be able to restart the redis service.
 
 _DISCLAIMER_: When saving the database you will see the following
 warning 
@@ -282,8 +283,9 @@ the saved database will contain all analyzed flows.
 
 
 ## Whitelisting
+
 Slips allows you to whitelist some pieces of data in order to avoid its processing. 
-In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. 
+In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization. 
 You can choose to whitelist what is going __to__ them and what is coming __from__ them. 
 You can also choose to whitelist the flows, so they are not processed, or the alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
