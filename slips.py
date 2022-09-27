@@ -808,7 +808,7 @@ class Main:
         """
         open_servers = {}
         to_print = f"Choose which one to kill [0,1,2 etc..]\n" \
-                   f"[0] Close all servers\n"
+                   f"[0] Close all Redis servers\n"
         there_are_ports_to_print = False
         try:
             with open(self.running_logfile, 'r') as f:

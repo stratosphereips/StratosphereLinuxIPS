@@ -816,7 +816,7 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
-    def is_malcicious_hash(self,flow_info):
+    def is_malicious_hash(self,flow_info):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
@@ -961,7 +961,7 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
-                    self.is_malcicious_hash(file_info)
+                    self.is_malicious_hash(file_info)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
