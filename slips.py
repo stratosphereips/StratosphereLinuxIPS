@@ -1048,24 +1048,29 @@ class Main:
 
     def log_redis_server_PID(self, redis_port, redis_pid):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
+        try:
+            # used in case we need to remove the line using 6379 from running logfile
+            with open(self.running_logfile, 'a') as f:
+                # add the header lines if the file is newly created
+                if f.tell() == 0:
+                    f.write(
+                        '# This file contains a list of used redis ports.\n'
+                        '# Once a server is killed, it will be removed from this file.\n'
+                        'Date, File or interface, Used port, Server PID,'
+                        ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
+                    )
 
-        # used in case we need to remove the line using 6379 from running logfile
-        with open(self.running_logfile, 'a') as f:
-            # add the header lines if the file is newly created
-            if f.tell() == 0:
                 f.write(
-                    '# This file contains a list of used redis ports.\n'
-                    '# Once a server is killed, it will be removed from this file.\n'
-                    'Date, File or interface, Used port, Server PID,'
-                    ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
+                    f'{now},{self.input_information},{redis_port},'
+                    f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                    f'{os.getpid()},'
+                    f'{bool(self.args.daemon)},{self.args.save}\n'
                 )
-
-            f.write(
-                f'{now},{self.input_information},{redis_port},'
-                f'{redis_pid},{self.zeek_folder},{self.args.output},'
-                f'{os.getpid()},'
-                f'{bool(self.args.daemon)},{self.args.save}\n'
-            )
+        except PermissionError:
+            # last run was by root, change the file ownership to non-root
+            os.remove(self.running_logfile)
+            open(self.running_logfile, 'w').close()
+            self.log_redis_server_PID(redis_port, redis_pid)
 
         if redis_port == 6379:
             # remove the old logline using this port
@@ -1263,8 +1268,8 @@ class Main:
 
     def check_given_flags(self):
         """
-        check the flags that don't reuiqre starting slips
-        for ex: clear db, clear blocking, killling all servers, stopping the daemon, etc.
+        check the flags that don't require starting slips
+        for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
         """
 
         if self.args.help:
