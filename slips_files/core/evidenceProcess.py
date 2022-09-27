@@ -732,12 +732,14 @@ class EvidenceProcess(multiprocessing.Process):
                                     )
                                     self.notify.show_popup(alert_to_print)
 
-                                # make sure we're blocking IPs only
+                                # make sure we're blocking IPs only.
+                                # for now, always mark as blocked until we have working logic for the blocking module
                                 if (
-                                    'ip' in type_detection
-                                    and self.decide_blocking(
-                                        detection_info, profileid, twid, type_detection
-                                    )
+                                        ('ip' in type_detection
+                                            and self.decide_blocking(
+                                                detection_info, profileid, twid, type_detection
+                                            )
+                                        ) or True
                                 ):
                                     self.mark_as_blocked(
                                         profileid,
