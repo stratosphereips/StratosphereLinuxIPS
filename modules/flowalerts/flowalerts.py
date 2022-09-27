@@ -1172,7 +1172,21 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
             )
 
+    def check_malicious_ssl(self, ssl_info):
+        source = ssl_info.get('source', '')
+        analyzers = ssl_info.get('analyzers', '')
+        sha1 = ssl_info.get('sha1', '')
+        if 'SSL' not in source or 'SHA1' not in analyzers:
+            # not an ssl cert
+            return False
 
+        # check if we have this sha1 marked as malicious from one of our feeds
+        ssl_info_from_db = __database__.get_ssl_info(sha1)
+        if not ssl_info_from_db:
+            return False
+        self.helper.set_evidence_malicious_ssl(
+            ssl_info, ssl_info_from_db
+        )
 
     def run(self):
         utils.drop_root_privs()
@@ -1528,10 +1542,7 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data'].split('_')
                     profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
-
                     self.detect_data_upload_in_twid(profileid, twid)
-
-
 
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
                 message = self.c6.get_message(timeout=self.timeout)
@@ -1578,21 +1589,8 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    data = json.loads(message['data'])
-                    source = data.get('source', '')
-                    analyzers = data.get('analyzers', '')
-                    sha1 = data.get('sha1', '')
-                    if 'SSL' not in source or 'SHA1' not in analyzers:
-                        # not an ssl cert
-                        continue
-
-                    # check if we have this sha1 marked as malicious from one of our feeds
-                    ssl_info_from_db = __database__.get_ssl_info(sha1)
-                    if not ssl_info_from_db:
-                        continue
-                    self.helper.set_evidence_malicious_ssl(
-                        data, ssl_info_from_db
-                    )
+                    ssl_info = json.loads(message['data'])
+                    self.check_malicious_ssl(ssl_info)
 
                 # --- Detect Bad SMTP logins ---
                 message = self.c8.get_message(timeout=self.timeout)
