@@ -402,7 +402,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'From {srcip} to {amount_of_dips} unique dst IPs. '
             f'Tot pkts sent: {pkts_sent}. '
             f'Threat Level: {threat_level}. '
-            f'Confidence: {confidence}'
+            f'Confidence: {confidence}. by Slips'
         )
 
         __database__.setEvidence(
@@ -454,7 +454,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
                         f'Tot pkts sent to all ports: {pkts_sent}. '
-                        f'Confidence: {confidence}'
+                        f'Confidence: {confidence}. by Slips'
                     )
         __database__.setEvidence(
             type_evidence,
