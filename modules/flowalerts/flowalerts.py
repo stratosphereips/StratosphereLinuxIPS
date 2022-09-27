@@ -527,6 +527,12 @@ class Module(Module, multiprocessing.Process):
         self, daddr, twid, profileid, timestamp, uid
     ):
         """Checks if there's a flow to a dstip that has no cached DNS answer"""
+
+        # disable this alert when running on a zeek conn.log file
+        # because there's no dns.log to know i the dns was made
+        if __database__.get_input_type() == 'zeek_log_file':
+            return False
+
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
