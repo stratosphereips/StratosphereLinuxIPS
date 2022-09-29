@@ -403,12 +403,17 @@ class InputProcess(multiprocessing.Process):
 
             # slips supports zeek json only, tabs arent supported
             if self.line_type == 'zeek':
-                line = json.loads(line)
+                try:
+                    line = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    self.print(f'Invalid json line')
+                    continue
 
             line_info['data'] = line
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.profilerqueue.put(line_info)
             self.lines += 1
+            self.print('Done reading 1 flow.\n ')
 
         self.stop_queues()
         return True
