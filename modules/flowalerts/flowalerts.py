@@ -1408,29 +1408,29 @@ class Module(Module, multiprocessing.Process):
                             )
 
                         # --- Detect SSL cert validation failed ---
-                        if (
-                            'SSL certificate validation failed' in msg
-                            and 'unable to get local issuer certificate'
-                            not in msg
-                        ):
-                            ip = flow['daddr']
-                            # get the description inside parenthesis
-                            ip_identification = (
-                                __database__.getIPIdentification(ip)
-                            )
-                            description = (
-                                msg
-                                + f' Destination IP: {ip}. {ip_identification}'
-                            )
-                            self.helper.set_evidence_for_invalid_certificates(
-                                profileid,
-                                twid,
-                                ip,
-                                description,
-                                uid,
-                                timestamp,
-                            )
-                            # self.print(description, 3, 0)
+                        # if (
+                        #     'SSL certificate validation failed' in msg
+                        #     and 'unable to get local issuer certificate'
+                        #     not in msg
+                        # ):
+                        #     ip = flow['daddr']
+                        #     # get the description inside parenthesis
+                        #     ip_identification = (
+                        #         __database__.getIPIdentification(ip)
+                        #     )
+                        #     description = (
+                        #         msg
+                        #         + f' Destination IP: {ip}. {ip_identification}'
+                        #     )
+                        #     self.helper.set_evidence_for_invalid_certificates(
+                        #         profileid,
+                        #         twid,
+                        #         ip,
+                        #         description,
+                        #         uid,
+                        #         timestamp,
+                        #     )
+                        #     # self.print(description, 3, 0)
 
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
@@ -1495,7 +1495,6 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
 
                         if ja3 or ja3s:
-
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
 
