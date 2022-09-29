@@ -227,14 +227,14 @@ def test_zeek_dir(
         (
             'dataset/test9-mixed-zeek-dir/conn.log',
             4,
-            'a connection without DNS resolution to IP: 185.33.223.203',
+            'horizontal port scan',
             'conn_log/',
             6659,
         ),
         (
             'dataset/test10-mixed-zeek-dir/conn.log',
             5,
-            'a connection without DNS resolution',
+            'horizontal port scan',
             'conn_log-2/',
             6658,
         ),

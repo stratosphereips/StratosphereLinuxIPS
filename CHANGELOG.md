@@ -7,6 +7,7 @@
 - Support looking up hashes in Circl.lu
 - Remove support for VT hash lookups to save quota
 - Add support for suricata ssh flows
+- Fix saving the redis database
 
 
 -0.9.5
