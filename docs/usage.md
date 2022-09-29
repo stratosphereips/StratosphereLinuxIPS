@@ -75,6 +75,11 @@ tr:nth-child(even) {
 		<td>./slips.py -f test.nfdump </td>
 	</tr>
     <tr>
+		<td>Suricata flows</td>
+		<td>-f</td>
+		<td>./slips.py -f suricata.json </td>
+	</tr>
+    <tr>
 		<td>stdin</td>
 		<td>-f</td>
 		<td>./slips.py -f zeek </td>
