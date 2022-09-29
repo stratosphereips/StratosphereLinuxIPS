@@ -1153,10 +1153,8 @@ class Main:
         else:
             # to be able to use running_slips_info later as a non-root user,
             # we shouldn't modify it as root
-            utils.drop_root_privs()
             redis_port = 32850
             self.input_information = os.path.basename(self.args.db)
-            __database__.connect_to_redis_server(redis_port)
             redis_pid = self.get_pid_of_redis_server(redis_port)
             self.zeek_folder = '""'
             self.log_redis_server_PID(redis_port, redis_pid)

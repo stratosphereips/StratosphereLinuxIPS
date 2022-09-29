@@ -97,12 +97,15 @@ class Database(ProfilingFlowsDatabase, object):
             #   Will save the DB if both the given number of seconds and the given
             #   number of write operations against the DB occurred.
             #   In the example below the behaviour will be to save:
-            #   after 60 sec if at least 10000 keys changed
+            #   after 30 sec if at least 500 keys changed
             #   AOF persistence logs every write operation received by the server,
             #   that will be played again at server startup
+            # saved the db to <Slips-dir>/dump.rdb
             self.redis_options.update({
-                'save': '60 10000',
+                'save': '30 500',
                 'appendonly': 'yes',
+                'dir': os.getcwd(),
+                'dbfilename': 'dump.rdb',
             })
 
         with open(self.redis_conf_file, 'w') as f:
@@ -171,7 +174,12 @@ class Database(ProfilingFlowsDatabase, object):
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
             # if the port is used for another instance, slips.py is going to detect it
-            self.close_redis_server(port)
+            if port != 32850:
+                # 32850 is where we have the loaded rdb file when loading a saved db
+                # we shouldn't close it because this is what kalipso will
+                # use to view the loaded the db
+
+                self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -205,7 +213,11 @@ class Database(ProfilingFlowsDatabase, object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-                if self.deletePrevdb and not ('-S' in sys.argv or '-cb' in sys.argv) :
+                # don't flush the loaded db when using '-db'
+                if (
+                        self.deletePrevdb
+                        and not ('-S' in sys.argv or '-cb' in sys.argv or '-d'  in sys.argv)
+                ):
                     # when stopping the daemon, don't flush bc we need to get the pids
                     # to close slips files
                     self.r.flushdb()

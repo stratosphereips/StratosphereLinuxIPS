@@ -8,6 +8,7 @@
 - Remove support for VT hash lookups to save quota
 - Add support for suricata ssh flows
 - Fix saving the redis database
+- Fix false positive connection without DNS
 
 
 -0.9.5
