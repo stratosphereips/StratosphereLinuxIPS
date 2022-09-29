@@ -9,10 +9,9 @@ import ipaddress
 import validators
 import traceback
 import requests
-import datetime
 import sys
 import asyncio
-from datetime import datetime
+import datetime
 from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
@@ -1460,7 +1459,6 @@ class UpdateFileManager:
                     self.log('Successfully updated RiskIQ domains.')
                 else:
                     self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
-
             # wait for all TI files to update
             try:
                 await task
