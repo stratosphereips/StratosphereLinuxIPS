@@ -384,17 +384,14 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['rcode_name'] = ''
             try:
-                self.column_values['answers'] = line[21]
-                if type(self.column_values['answers']) == str:
+                answers = line[21]
+                if type(answers) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    self.column_values['answers'] = [
-                        self.column_values['answers']
-                    ]
-                if type(self.column_values['answers']) == str:
-                    # If the answer is only 1, Zeek gives a string
-                    # so convert to a list
-                    self.column_values['answers'] = [self.column_values['answers']]
+                    answers = answers.split(',')
+                # ignore dns TXT records
+                answers = [answer for answer in answers if 'TXT ' not in answer]
+                self.column_values['answers'] = answers
             except IndexError:
                 self.column_values['answers'] = ''
             try:

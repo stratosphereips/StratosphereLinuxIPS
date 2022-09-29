@@ -1383,6 +1383,7 @@ class Main:
             'analysis_start': now,
             'disabled_modules': json.dumps(to_ignore),
             'output_dir': self.args.output
+            'input_type': self.input_type,
         }
 
         if hasattr(self, 'zeek_folder'):
