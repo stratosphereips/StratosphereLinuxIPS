@@ -1321,6 +1321,9 @@ class Main:
         if self.args.clearcache:
             print('Deleting Cache DB in Redis.')
             self.clear_redis_cache_database()
+            self.input_information = ''
+            self.zeek_folder = ''
+            self.log_redis_server_PID(6379, self.get_pid_of_redis_server(6379))
             self.terminate_slips()
 
 
