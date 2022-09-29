@@ -4,6 +4,8 @@ It checks a random evidence and the total number of profiles in every file
 """
 import pytest
 from ..slips import *
+from pathlib import Path
+
 
 alerts_file = 'alerts.log'
 
@@ -26,6 +28,15 @@ def is_evidence_present(log_file, expected_evidence):
         # evidence not found in any line
         return False
 
+def create_output_dir(dirname):
+    """
+    creates this output dir inside output/integration_tests/
+    returns a full path to the created output dir
+    """
+
+    path = Path(os.path.join('output/integration_tests/', dirname))
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 def has_errors(output_dir):
     """function to parse slips_output file and check for errors"""
@@ -77,10 +88,7 @@ def create_Main_instance(input_information):
 def test_pcap(
     pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
 ):
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
@@ -92,7 +100,8 @@ def test_pcap(
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
-    log_file = output_dir + alerts_file
+    # log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
@@ -136,10 +145,7 @@ def test_binetflow(
     output_dir,
     redis_port,
 ):
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
@@ -152,7 +158,7 @@ def test_binetflow(
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
-    log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
 
     shutil.rmtree(output_dir)
@@ -193,10 +199,7 @@ def test_zeek_dir(
     redis_port,
 ):
 
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
@@ -208,7 +211,7 @@ def test_zeek_dir(
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
-    log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     if type(expected_evidence) == list:
         # make sure all the expected evidence are there
         for evidence in expected_evidence:
@@ -245,10 +248,7 @@ def test_zeek_conn_log(
     output_dir,
     redis_port,
 ):
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
@@ -260,7 +260,7 @@ def test_zeek_conn_log(
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
-    log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
@@ -270,10 +270,7 @@ def test_zeek_conn_log(
     [('dataset/test6-malicious.suricata.json', 'suricata/', 6657)],
 )
 def test_suricata(database, suricata_path, output_dir, redis_port):
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
     expected_evidence = 'Connection to unknown destination port 2509/TCP'
     expected_evidence2 = 'vertical port scan'
 
@@ -288,7 +285,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     profiles = int(database.getProfilesLen())
     assert profiles > 60
 
-    log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     assert (is_evidence_present(log_file, expected_evidence)
             or is_evidence_present(log_file, expected_evidence2))
     shutil.rmtree(output_dir)
@@ -306,10 +303,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     checks that slips is reading nfdump no issue,
      the file is not malicious so there's no evidence that should be present
     """
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
 
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
@@ -326,7 +320,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     # doesn't generate a const number of profiles per file)
     assert profiles > 0
 
-    # log_file = output_dir + alerts_file
+    # log_file = os.path.join(output_dir, alerts_file)
     # assert is_evidence_present(log_file, expected_evidence) == True
     shutil.rmtree(output_dir)
 
@@ -349,10 +343,7 @@ def test_conf_file(
     """
     In this test we're using tests/test.conf
     """
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test.conf  ' \
               f'-P {redis_port} > {output_file} 2>&1'
@@ -366,7 +357,7 @@ def test_conf_file(
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
 
-    log_file = output_dir + alerts_file
+    log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) == True
 
     # testing disabled_detections param in the configuration file
@@ -417,10 +408,7 @@ def test_conf_file2(
     In this test we're using tests/test2.conf
     """
 
-    try:
-        os.mkdir(output_dir)
-    except FileExistsError:
-        pass
+    output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test2.conf  ' \
               f'-P {redis_port} > {output_file} 2>&1'
