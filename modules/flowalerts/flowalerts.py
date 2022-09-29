@@ -82,31 +82,6 @@ class Module(Module, multiprocessing.Process):
         # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
         self.flow_upload_threshold = 100
 
-    def is_ignored_ip(self, ip) -> bool:
-        """
-        This function checks if an IP is a special list of IPs that
-        should not be alerted for different reasons
-        """
-        try:
-            ip_obj = ipaddress.ip_address(ip)
-            # Is the IP multicast, private? (including localhost)
-            # local_link or reserved?
-            # The broadcast address 255.255.255.255 is reserved.
-            if (
-                ip_obj.is_multicast
-                or ip_obj.is_private
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-                or '.255' in ip_obj.exploded
-            ):
-                return True
-            return False
-        except Exception as inst:
-            self.print('Problem on function is_ignored_ip()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return False
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -1318,7 +1293,7 @@ class Module(Module, multiprocessing.Process):
                     if (
                         flow_type == 'conn'
                         and appproto != 'dns'
-                        and not self.is_ignored_ip(daddr)
+                        and not utils.is_ignored_ip(daddr)
                     ):
 
                         self.check_connection_without_dns_resolution(

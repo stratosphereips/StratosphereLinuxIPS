@@ -256,6 +256,25 @@ class Utils(object):
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
 
+    def is_ignored_ip(self, ip) -> bool:
+        """
+        This function checks if an IP is a special list of IPs that
+        should not be alerted for different reasons
+        """
+        ip_obj = ipaddress.ip_address(ip)
+        # Is the IP multicast, private? (including localhost)
+        # local_link or reserved?
+        # The broadcast address 255.255.255.255 is reserved.
+        if (
+            ip_obj.is_multicast
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or '.255' in ip_obj.exploded
+        ):
+            return True
+        return False
+
     def get_hash_from_file(self, filename):
         """
         Compute the sha256 hash of a file
