@@ -561,7 +561,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
         Use our own Zeek scripts to detect ICMP scans. 
-        Threshold is on the scripts and it is 25 icmp flows
+        Threshold is on the scrips and it is 25 icmp flows
         """
 
         if 'TimestampScan' in note:
