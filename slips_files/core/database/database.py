@@ -107,7 +107,6 @@ class Database(ProfilingFlowsDatabase, object):
                 'dir': os.getcwd(),
                 'dbfilename': 'dump.rdb',
             })
-
         with open(self.redis_conf_file, 'w') as f:
             for option, val in self.redis_options.items():
                 f.write(f'{option} {val}\n')
@@ -2321,8 +2320,8 @@ class Database(ProfilingFlowsDatabase, object):
         # this path is only accessible by root
         self.r.save()
 
-        # Saves to dump.rdb in the cwd
-        redis_db_path = os.path.join('/var/lib/redis', 'dump.rdb')
+        # gets the db saved to dump.rdb in the cwd
+        redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
             command = f'{self.sudo} cp {redis_db_path} {backup_file}.rdb'
@@ -2342,39 +2341,42 @@ class Database(ProfilingFlowsDatabase, object):
         backup_file should be the full path of the .rdb
         """
         # do not use self.print here! the output queue isn't initialized yet
-        if not os.path.exists(backup_file):
-            print("{} doesn't exist.".format(backup_file))
-            return False
+        def is_valid_rdb_file():
+            if not os.path.exists(backup_file):
+                print("{} doesn't exist.".format(backup_file))
+                return False
 
+            # Check if valid .rdb file
+            command = 'file ' + backup_file
+            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            file_type = result.stdout.decode('utf-8')
+            if not 'Redis' in file_type:
+                print(
+                    f'{backup_file} is not a valid redis database file.'
+                )
+                return False
+            return True
 
-        # Check if valid .rdb file
-        command = 'file ' + backup_file
-        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        file_type = result.stdout.decode('utf-8')
-        if not 'Redis' in file_type:
-            print(
-                f'{backup_file} is not a valid redis database file.'
-            )
+        if not is_valid_rdb_file():
             return False
 
         try:
             self.redis_options.update({
                 'dbfilename': os.path.basename(backup_file),
-                'dir': os.path.dirname(backup_file)
+                'dir': os.path.dirname(backup_file),
+                'port': 32850,
             })
 
             with open(self.redis_conf_file, 'w') as f:
                 for option, val in self.redis_options.items():
                     f.write(f'{option} {val}\n')
-
-            self.print(f"Stopping redis server requires root access")
             # Stop the server first in order for redis to load another db
             os.system(self.sudo + 'service redis-server stop')
 
-            # Start the server again
-            os.system('redis-server redis.conf')
+            # Start the server again, but make sure it's flushed and doesnt have any keys
+            os.system(f'redis-server redis.conf > /dev/null 2>&1')
             return True
-        except:
+        except Exception as e:
             self.print(
                 f'Error loading the database {backup_file}.'
             )

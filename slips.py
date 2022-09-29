@@ -1148,12 +1148,20 @@ class Main:
         # self.input_information = 'database'
         from slips_files.core.database.database import __database__
         __database__.start(6379)
+
+        # this is where the db will be loaded
+        redis_port = 32850
+        # make sure the db on 32850 is flushed and ready for the new db to be loaded
+        if pid := self.get_pid_of_redis_server(redis_port):
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
+
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
             # to be able to use running_slips_info later as a non-root user,
             # we shouldn't modify it as root
-            redis_port = 32850
+
             self.input_information = os.path.basename(self.args.db)
             redis_pid = self.get_pid_of_redis_server(redis_port)
             self.zeek_folder = '""'
