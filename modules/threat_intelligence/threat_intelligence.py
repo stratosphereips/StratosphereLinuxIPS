@@ -482,7 +482,6 @@ class Module(Module, multiprocessing.Process):
         Check whether this IP is our computer sending an ICMP unreacheable packet to
         a blacklisted IP or not.
         """
-
         return protocol == 'ICMP' and ip_state == 'dstip'
 
     def shutdown_gracefully(self):
@@ -809,7 +808,7 @@ class Module(Module, multiprocessing.Process):
     def search_online_for_domain(self, domain):
         return self.urlhaus(domain)
 
-    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state):
+    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
@@ -938,10 +937,7 @@ class Module(Module, multiprocessing.Process):
                     self.is_dns_response = data.get('is_dns_response')
                     self.dns_query = data.get('dns_query')
                     # IP is the IP that we want the TI for. It can be a SRC or DST IP
-                    to_lookup = (
-                        data.get('ip')
-                        or data.get('domain')
-                    )
+                    to_lookup = data.get('to_lookup', '')
                     # detect the type given because sometimes, http.log host field has ips OR domains
                     type_ = utils.detect_data_type(to_lookup)
 
