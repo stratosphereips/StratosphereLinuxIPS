@@ -324,6 +324,15 @@ class Database(ProfilingFlowsDatabase, object):
         Used to associate this profile with it's used software and version
         :param uid:  uid of the flow using the given versions
         """
+        if cached_sw := self.get_software_from_profile(profileid):
+            if cached_sw['software'] == software:
+                # we already have an ssh client for this proileid.
+                # dont store this one, let flowalerts detect the incompatibility
+                return
+
+        if 'SSH' not in software:
+            return
+
         sw_dict = {
             'software': software,
             'version-major': version_major,
