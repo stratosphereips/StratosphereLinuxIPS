@@ -162,6 +162,9 @@ class Module(Module, multiprocessing.Process):
         :param domain_info: is all the info we have about this domain in the db source, confidence , description etc...
         """
 
+        if not domain_info:
+            return
+
         type_detection = 'dstdomain'
         detection_info = domain
         category = 'Anomaly.Traffic'

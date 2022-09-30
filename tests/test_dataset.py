@@ -171,7 +171,6 @@ def test_binetflow(
             'dataset/test9-mixed-zeek-dir',
             4,
             [
-                'SSL certificate validation failed with (certificate is not yet valid)',
                 'bad SMTP login to 80.75.42.226',
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
