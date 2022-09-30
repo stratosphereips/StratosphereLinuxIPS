@@ -921,37 +921,30 @@ class Module(Module, multiprocessing.Process):
                     uid = data.get('uid')
                     protocol = data.get('proto')
                     # IP is the IP that we want the TI for. It can be a SRC or DST IP
-                    ip = data.get('ip')
+                    to_lookup = (
+                        data.get('ip')
+                        or data.get('domain')
+                    )
+                    # detect the type given because sometimes, http.log host field has ips OR domains
+                    type_ = utils.detect_data_type(to_lookup)
+
                     # ip_state will say if it is a srcip or if it was a dst_ip
                     ip_state = data.get('ip_state')
                     # self.print(ip)
 
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if ip:
-                        ip_obj = ipaddress.ip_address(ip)
+                    if type_ == 'ip':
+                        ip = to_lookup
                         if not (
-                                ip_obj.is_multicast
-                                or ip_obj.is_private
-                                or ip_obj.is_link_local
-                                or ip_obj.is_reserved
+                                utils.is_ignored_ip(ip)
                                 or self.is_outgoing_icmp_packet(protocol, ip_state)
                             ):
                             self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
-                    else:
-                        # We were not given an IP. Check if we were given a domain
-
-                        # Process any type of domain. Each connection will have only of of these each time
-                        domain = (
-                            data.get('host')
-                            or data.get('server_name')
-                            or data.get('query')
-                        )
-
-
+                    elif type_ == 'domain':
                         self.is_malicious_domain(
-                            domain,
+                            to_lookup,
                             uid,
                             timestamp,
                             profileid,
