@@ -109,10 +109,15 @@ class Module(Module, multiprocessing.Process):
             direction = 'to'
         ip_identification = __database__.getIPIdentification(ip)
 
-        description = (
-            f'connection {direction} blacklisted IP {ip} {ip_identification}.'
-            f' Source: {ip_info["source"]}.'
-        )
+        if self.is_dns_response :
+            description = (
+                f'DNS answer with a blacklisted ip {ip} '
+            )
+        else:
+            description = f'connection {direction} blacklisted IP {ip} '
+
+        description += f'{ip_identification}. Source: {ip_info["source"]}.'
+
         tags = ''
         if tags_temp := ip_info.get('tags', False):
             # We need tags_temp so we avoid doing a replace on a bool.
@@ -177,19 +182,24 @@ class Module(Module, multiprocessing.Process):
         threat_level = domain_info.get('threat_level', 'high')
 
         tags = (
-            domain_info.get('tags', False)
+            domain_info.get('tags', '')
                 .replace('[', '')
                 .replace(']', '')
                 .replace("'", '')
         )
         source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
-        description = (
-            f'connection to a blacklisted domain {domain}. '
-            f'Description: {domain_info.get("description", "")}, '
-            f'Found in feed: {domain_info["source"]}, '
-            f'with tags: {tags}. '
-            f'Confidence: {confidence}.'
-        )
+
+        if self.is_dns_response:
+            description = f'DNS answer with a blacklisted domain {domain} '
+        else:
+            description = f'connection to a blacklisted domain {domain}. '
+
+        description += f'Description: {domain_info.get("description", "")}, '\
+                       f'Found in feed: {domain_info["source"]}, '\
+                       f'with tags: {tags}. '\
+                       f'Confidence: {confidence}.'
+
+
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -920,6 +930,7 @@ class Module(Module, multiprocessing.Process):
                     timestamp = data.get('stime')
                     uid = data.get('uid')
                     protocol = data.get('proto')
+                    self.is_dns_response = data.get('is_dns_response')
                     # IP is the IP that we want the TI for. It can be a SRC or DST IP
                     to_lookup = (
                         data.get('ip')
