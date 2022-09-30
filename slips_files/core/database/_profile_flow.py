@@ -1553,13 +1553,6 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
         }
 
-        # Add DNS resolution to the db if there are answers for the query
-        if answers:
-            srcip = profileid.split('_')[1]
-
-            self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip, twid
-            )
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1582,7 +1575,7 @@ class ProfilingFlowsDatabase(object):
         # publish a dns with its flow
         self.publish('new_dns_flow', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 3, 0)
-        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        # Check if the dns is detected by the threat intelligence.
         data_to_send = {
             'domain': str(query),
             'profileid': str(profileid),
@@ -1590,8 +1583,18 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
             'uid': uid,
         }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        self.publish('give_threat_intelligence', json.dumps(data_to_send))
 
-        # Store this DNS resolution into the Info of the IPs resolved
-        # self.setInfoForIPs(ip, domain)
+        # Add DNS resolution to the db if there are answers for the query
+        if answers and answers !=  ['-'] :
+            srcip = profileid.split('_')[1]
+            self.set_dns_resolution(
+                query, answers, stime, uid, qtype_name, srcip, twid
+            )
+            # send each dns response to TI module
+            data_to_send['is_dns_response'] = True
+            data_to_send['ip_state'] = 'dst'
+            for answer in answers:
+                data_to_send['domain'] = answer
+                self.publish('give_threat_intelligence', json.dumps(data_to_send))
+
