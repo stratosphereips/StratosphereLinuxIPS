@@ -568,7 +568,7 @@ class Helper:
         ioc='',
     ):
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
-        tags = malicious_ja3_dict['tags']
+        tags = malicious_ja3_dict.get('tags','')
         ja3_description = malicious_ja3_dict['description']
         threat_level = malicious_ja3_dict['threat_level']
 
