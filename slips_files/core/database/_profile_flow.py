@@ -1594,6 +1594,7 @@ class ProfilingFlowsDatabase(object):
             # send each dns response to TI module
             data_to_send['is_dns_response'] = True
             data_to_send['ip_state'] = 'dst'
+            data_to_send['dns_query'] = query
             for answer in answers:
                 data_to_send['domain'] = answer
                 self.publish('give_threat_intelligence', json.dumps(data_to_send))

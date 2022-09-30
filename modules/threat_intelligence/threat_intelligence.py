@@ -111,7 +111,8 @@ class Module(Module, multiprocessing.Process):
 
         if self.is_dns_response :
             description = (
-                f'DNS answer with a blacklisted ip {ip} '
+                f'DNS answer with a blacklisted ip: {ip} '
+                f'for query: {self.dns_query} '
             )
         else:
             description = f'connection {direction} blacklisted IP {ip} '
@@ -190,7 +191,8 @@ class Module(Module, multiprocessing.Process):
         source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
 
         if self.is_dns_response:
-            description = f'DNS answer with a blacklisted domain {domain} '
+            description = f'DNS answer with a blacklisted CNAME: {domain} ' \
+                          f'for query: {self.dns_query} '
         else:
             description = f'connection to a blacklisted domain {domain}. '
 
@@ -930,7 +932,11 @@ class Module(Module, multiprocessing.Process):
                     timestamp = data.get('stime')
                     uid = data.get('uid')
                     protocol = data.get('proto')
+                    # these 2 are only available when looking up dns answers
+                    # the query is needed when a malicious answer is found,
+                    # for more detailed description of the evidence
                     self.is_dns_response = data.get('is_dns_response')
+                    self.dns_query = data.get('dns_query')
                     # IP is the IP that we want the TI for. It can be a SRC or DST IP
                     to_lookup = (
                         data.get('ip')
