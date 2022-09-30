@@ -991,7 +991,7 @@ class ProfilingFlowsDatabase(object):
 
         # We are giving only new server_name to the threat_intelligence module.
         data_to_send = {
-            'server_name': server_name,
+            'domain': server_name,
             'profileid': str(profileid),
             'twid': str(twid),
             'stime': stime,
@@ -1114,15 +1114,17 @@ class ProfilingFlowsDatabase(object):
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
         # Check if the host domain is detected by the threat intelligence.
-        data_to_send = {
-            'host': host,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        # not all flows have a host value so don't send empty hosts to ti module.
+        if len(host) > 2:
+            data_to_send = {
+                'ip': host,
+                'profileid': str(profileid),
+                'twid': str(twid),
+                'stime': stime,
+                'uid': uid,
+            }
+            data_to_send = json.dumps(data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_ssh(
         self,
@@ -1245,7 +1247,7 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
         data_to_send = {
-            'query': daddr,
+            'ip': daddr,
             'profileid': profileid,
             'twid': twid,
             'stime': stime,
@@ -1582,7 +1584,7 @@ class ProfilingFlowsDatabase(object):
         self.print('Adding DNS flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
-            'query': str(query),
+            'domain': str(query),
             'profileid': str(profileid),
             'twid': str(twid),
             'stime': stime,
