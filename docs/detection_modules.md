@@ -232,9 +232,11 @@ Circl.lu: for hash lookups (for each downloaded file)
 
 ### Matching of IPs
 
-Slips gets every IP it can find in the network and tries to see if it is in any blacklist.
+Slips gets every IP it can find in the network (DNS answers, HTTP destination IPs, SSH destination IPs, etc.) 
+and tries to see if it is in any blacklist.
 
-If a match is found, it generates an evidence, if no exact match is found, it searches the Blacklisted ranges taken from different TI feeds
+If a match is found, it generates an evidence, if no exact match is found, 
+it searches the Blacklisted ranges taken from different TI feeds.
 
 
 ### Matching of Domains

@@ -1,4 +1,5 @@
 -0.9.6
+- Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek
 - Make rotating zeek files configurable. how many days you want to keep the rotated files and how often to rotate 
 - Support running slips on a growing zeek dir. for example a zeek dir of an interface.
