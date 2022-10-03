@@ -183,7 +183,9 @@ class Whitelist:
             if not src_mac:
                 src_mac = __database__.get_mac_addr_from_profile(
                     f'profile_{saddr}'
-                )[0]
+                )
+                if src_mac:
+                    src_mac = src_mac[0]
 
             if src_mac and src_mac in list(whitelisted_mac.keys()):
                 # the src mac of this flow is whitelisted, but which direction?
@@ -253,7 +255,7 @@ class Whitelist:
                         try:
                             if self.is_ip_in_org(column_values['daddr'], org):
                                 # self.print(f"The dst IP {column_values['daddr']} "
-                                # f"is in the range {network} or org {org}. Whitelisted.")
+                                # f"is in the network range of org {org}. Whitelisted.")
                                 return True
                         except ValueError:
                             # Some flows don't have IPs, but mac address or just - in some cases
@@ -499,7 +501,37 @@ class Whitelist:
             if ip_obj in ipaddress.ip_network(range):
                 return True
         return False
+    
+    def profile_has_whitelisted_mac(self, profile_ip, whitelisted_macs, is_srcip, is_dstip) -> bool:
+        mac = __database__.get_mac_addr_from_profile(
+            f'profile_{profile_ip}'
+        )
+        
+        if not mac:
+            # we have no mac for this profile
+            return False
 
+        mac = mac[0]
+        if mac in list(whitelisted_macs.keys()):
+            # src or dst and
+            from_ = whitelisted_macs[mac]['from']
+            what_to_ignore = whitelisted_macs[mac]['what_to_ignore']
+            # do we want to whitelist alerts?
+            if (
+                'alerts' in what_to_ignore
+                or 'both' in what_to_ignore
+            ):
+                if is_srcip and (
+                    'src' in from_ or 'both' in from_
+                ):
+                    return True
+                if is_dstip and (
+                    'dst' in from_ or 'both' in from_
+                ):
+                    return True
+
+    
+    
     def is_whitelisted_evidence(
             self, srcip, data, type_detection, description
         ) -> bool:
@@ -542,9 +574,9 @@ class Whitelist:
             except (IndexError, KeyError):
                 whitelisted_orgs = {}
             try:
-                whitelisted_mac = json.loads(whitelist['mac'])
+                whitelisted_macs = json.loads(whitelist['mac'])
             except (IndexError, KeyError):
-                whitelisted_mac = {}
+                whitelisted_macs = {}
 
             # Set data type
             if 'domain' in type_detection:
@@ -609,30 +641,13 @@ class Whitelist:
 
                     # Now we know this ipv4 or ipv6 isn't whitelisted
                     # is the mac address of this ip whitelisted?
-                    if whitelisted_mac:
-                        # getthe mac addr of this ip from our db
+                    if whitelisted_macs:
+                        # get the mac addr of this profile from our db
                         # this mac can be src or dst mac, based on the type of ip (is_srcip or is_dstip)
-                        mac = __database__.get_mac_addr_from_profile(
-                            f'profile_{ip}'
-                        )[0]
-                        if mac and mac in list(whitelisted_mac.keys()):
-                            # src or dst and
-                            from_ = whitelisted_mac[mac]['from']
-                            what_to_ignore = whitelisted_mac[mac]['what_to_ignore']
-                            # do we want to whitelist alerts?
-                            if (
-                                'alerts' in what_to_ignore
-                                or 'both' in what_to_ignore
-                            ):
-                                if is_srcip and (
-                                    'src' in from_ or 'both' in from_
-                                ):
-                                    return True
-                                if is_dstip and (
-                                    'dst' in from_ or 'both' in from_
-                                ):
-                                    return True
-
+                        if self.profile_has_whitelisted_mac(ip, whitelisted_macs, is_srcip, is_dstip):
+                            return True
+                        
+                        
             # Check domains
             if data_type == 'domain':
                 is_srcdomain = type_detection in ('srcdomain')
