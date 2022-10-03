@@ -62,7 +62,7 @@ class Whitelist:
 
     def is_ignored_flow_type(self, flow_type) -> bool:
         """
-        Function reduce the number of checks we make if we fon't need to check this type of flow
+        Function reduce the number of checks we make if we don't need to check this type of flow
         """
         if flow_type in self.ignored_flow_types:
             return True
