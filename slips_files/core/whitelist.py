@@ -175,11 +175,12 @@ class Whitelist:
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
 
-        if whitelisted_mac := __database__.get_whitelist('mac'):
+        if whitelisted_macs := __database__.get_whitelist('mac'):
             # try to get the mac address of the current flow
             src_mac = column_values.get('src_mac', False)
             if not src_mac:
                 src_mac = column_values.get('mac', False)
+
             if not src_mac:
                 src_mac = __database__.get_mac_addr_from_profile(
                     f'profile_{saddr}'
@@ -187,18 +188,30 @@ class Whitelist:
                 if src_mac:
                     src_mac = src_mac[0]
 
-            if src_mac and src_mac in list(whitelisted_mac.keys()):
+            if src_mac and src_mac in list(whitelisted_macs.keys()):
                 # the src mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[src_mac]['from']
-                if 'src' in from_ or 'both' in from_:
+                from_ = whitelisted_macs[src_mac]['from']
+                what_to_ignore = whitelisted_macs[src_mac]['what_to_ignore']
+
+                if (
+                    ('src' in from_ or 'both' in from_)
+                    and
+                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                ):
                     # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
                     return True
 
             dst_mac = column_values.get('dst_mac', False)
-            if dst_mac and dst_mac in list(whitelisted_mac.keys()):
+            if dst_mac and dst_mac in list(whitelisted_macs.keys()):
                 # the dst mac of this flow is whitelisted, but which direction?
-                from_ = whitelisted_mac[dst_mac]['from']
-                if 'dst' in from_ or 'both' in from_:
+                from_ = whitelisted_macs[dst_mac]['from']
+                what_to_ignore = whitelisted_macs[dst_mac]['what_to_ignore']
+
+                if (
+                    ('dst' in from_ or 'both' in from_)
+                    and
+                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                ):
                     # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
                     return True
 
@@ -502,7 +515,12 @@ class Whitelist:
                 return True
         return False
     
-    def profile_has_whitelisted_mac(self, profile_ip, whitelisted_macs, is_srcip, is_dstip) -> bool:
+    def profile_has_whitelisted_mac(
+            self, profile_ip, whitelisted_macs, is_srcip, is_dstip
+    ) -> bool:
+        """
+        Checks for alerts whitelist
+        """
         mac = __database__.get_mac_addr_from_profile(
             f'profile_{profile_ip}'
         )
