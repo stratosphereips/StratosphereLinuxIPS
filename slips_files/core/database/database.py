@@ -7,7 +7,6 @@ import redis
 import time
 import json
 from typing import Tuple
-import configparser
 import traceback
 import subprocess
 from datetime import datetime
@@ -1110,6 +1109,7 @@ class Database(ProfilingFlowsDatabase, object):
             this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
         """
 
+
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(type_evidence):
             return False
@@ -1165,32 +1165,35 @@ class Database(ProfilingFlowsDatabase, object):
         evidence_to_send = json.dumps(evidence_to_send)
 
 
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
+        # Check if we have and get the current evidence stored in the DB for
+        # this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
 
+        # make ure it's not a duplicate evidence
         should_publish = False
         if evidence_ID not in current_evidence.keys():
             should_publish = True
-        # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
+
+        # update our current evidence for this profileid and twid.
+        # now the evidence_ID is used as the key
         current_evidence.update({evidence_ID: evidence_to_send})
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
-
         self.r.hset(
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
+
         self.r.hset('evidence' + profileid, twid, current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
         if should_publish:
             self.publish('evidence_added', evidence_to_send)
-
         # an alert is generated for this profile,
         # change the score to = 1, and confidence = 1
         if type_detection in ('sip', 'srcip'):
@@ -1199,8 +1202,17 @@ class Database(ProfilingFlowsDatabase, object):
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
             self.set_score_confidence(detection_info, 'critical', 1)
-
         return True
+
+    def mark_evidence_as_processed(self, profileid, twid, evidence_ID):
+        """
+        If an evidence was processed by the evidenceprocess, mark it in the db
+        """
+        self.r.sadd('Processed_evidence', evidence_ID)
+
+    def is_evidence_processed(self, evidence_ID):
+        return self.r.sismember('whitelisted_evidence', evidence_ID)
+
 
     def set_evidence_for_profileid(self, evidence):
         """
@@ -1231,7 +1243,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Delete evidence from the database
         """
-        # 1. delete veidence from 'evidence' key
+        # 1. delete evidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
@@ -1243,10 +1255,9 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.hset(
             profileid + self.separator + twid,
             'Evidence',
-            str(current_evidence_json),
+            current_evidence_json,
         )
         self.r.hset('evidence' + profileid, twid, current_evidence_json)
-
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
         if not profile_alerts:

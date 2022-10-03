@@ -385,6 +385,7 @@ class EvidenceProcess(multiprocessing.Process):
             detection_info = evidence.get('detection_info')
             type_evidence = evidence.get('type_evidence')
             description = evidence.get('description')
+            evidence_ID = evidence.get('ID')
 
             # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
             evidence_string = self.format_evidence_string(
@@ -478,10 +479,17 @@ class EvidenceProcess(multiprocessing.Process):
         """
         delete the hash of all whitelisted evidence from the given dict of evidence ids
         """
-
         res = {}
         for evidence_ID, evidence_info in evidence.items():
-            if not __database__.is_whitelisted_evidence(evidence_ID):
+            # sometimes the db has evidence that didnt come yet to evidenceprocess
+            # and they are alerted without checking the whitelist!
+            # to fix this, we have processed evidence which are
+            # evidence that came to new_evidence channel and were processed by it
+            # so they are ready to be a part of an alerted
+            if (
+                    not __database__.is_whitelisted_evidence(evidence_ID)
+                    and __database__.is_evidence_processed(evidence_ID)
+            ):
                 res[evidence_ID] = evidence_info
         return res
 
@@ -505,7 +513,6 @@ class EvidenceProcess(multiprocessing.Process):
         # to store all the ids causing this alerts in the database
         self.IDs_causing_an_alert = []
         for evidence in tw_evidence.values():
-            # Deserialize evidence
             evidence = json.loads(evidence)
             # type_detection = evidence.get('type_detection')
             # detection_info = evidence.get('detection_info')
@@ -591,9 +598,14 @@ class EvidenceProcess(multiprocessing.Process):
                     proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
                     evidence_ID = data.get('ID', False)
-                    # Ignore alert if IP is whitelisted
                     flow = __database__.get_flow(profileid, twid, uid)
 
+                    # FP whitelisted alerts happen when the db returns an evidence
+                    # that isn't processed in this channel, in the tw_evidence below
+                    # to avoid this, we only alert on processed evidence
+                    __database__.mark_evidence_as_processed(profileid, twid, evidence_ID)
+
+                    # Ignore alert if IP is whitelisted
                     if flow and self.whitelist.is_whitelisted_evidence(
                         srcip, detection_info, type_detection, description
                     ):
