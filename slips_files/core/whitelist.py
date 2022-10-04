@@ -573,7 +573,7 @@ class Whitelist:
                 # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
                 max_tries -= 1
                 whitelist = __database__.get_all_whitelist()
-            if max_tries is 0:
+            if max_tries == 0:
                 # we tried 10 times to get the whitelist, it's probably empty.
                 return False
 
