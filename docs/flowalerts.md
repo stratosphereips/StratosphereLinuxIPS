@@ -52,10 +52,9 @@ This detection will ignore certain IP addresses for which a connection without D
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
 doesn't know about the DNS resolution because the resolved domain won't be in dns.log
-so we simply ignore alerts of thiss time about well known org such as (facebook, apple, google, twitter, and microsoft)
+so we simply ignore alerts of this type when connected to well known organizations. In particular Facebook, Apple, Google, Twitter, and Microsoft.
 
-Slips uses it's own lists of organizations info (IPs, IP ranges, domains, and ASNs) stored in ```slips_files/organizations_info``` to check
-whether the IP/domain of each flow belong to a known org or not.
+Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs). They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain of each flow belong to a known org or not.
 
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
 of the docs for info on how slips detects DoH.
