@@ -35,9 +35,9 @@ Slips v0.9.5
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
 <hr>
 
-<h1>
-Behavioral Machine Learning Based Intrusion Prevention System
-</h1>
+
+# Slips: Behavioral Machine Learning-Based Intrusion Prevention System
+
 
 Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in the
 network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to
