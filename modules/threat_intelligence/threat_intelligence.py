@@ -14,10 +14,12 @@ import traceback
 import validators
 import dns
 import requests
+import threading
+import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'threatintelligence1'
+    name = 'threatintelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
@@ -34,6 +36,30 @@ class Module(Module, multiprocessing.Process):
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
         self.create_circl_lu_session()
+        self.circllu_queue = []
+        self.api_calls_thread = threading.Thread(
+            target=self.circllu_calls_thread, daemon=True
+        )
+
+    def circllu_calls_thread(self):
+        """
+        This thread starts if there's an API calls queue,
+        it operates every 2 mins, and executes 4 api calls
+        from the queue then sleeps again.
+        """
+
+        while True:
+            time.sleep(120)
+            # if there's nothing in the queue wait exra 2 min
+            if not hasattr(self, 'circllu_queue'):
+                continue
+
+            while self.circllu_queue:
+                # get the first element in the queue
+                flow_info = self.circllu_queue.pop(0)
+                self.is_malicious_hash(flow_info)
+
+
 
     def create_urlhaus_session(self):
         self.urlhaus_session = requests.session()
@@ -689,7 +715,7 @@ class Module(Module, multiprocessing.Process):
 
 
 
-    def circl_lu(self, md5):
+    def circl_lu(self, flow_info):
         """
         Supports lookup of MD5 hashes on Circl.lu
         """
@@ -718,19 +744,22 @@ class Module(Module, multiprocessing.Process):
                 confidence = 1
             return confidence
 
-
+        md5 = flow_info['md5']
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
-        circl_api_response = self.circl_session.get(
+        try:
+            circl_api_response = self.circl_session.get(
             f"{circl_base_url}/md5/{md5}",
            headers=self.circl_session.headers
-        )
+            )
+        except:
+            # add the hash to the cirllu queue and ask for it later
+            self.circllu_queue.append(flow_info)
+            return
 
         if circl_api_response.status_code != 200:
             return
-
         response = json.loads(circl_api_response.text)
         # KnownMalicious: List of source considering the hashed file as being malicious (CIRCL)
-        # TODO Circl.lu has very low trust levels of known malicious files
         if 'KnownMalicious' not in response:
             return
 
@@ -741,8 +770,8 @@ class Module(Module, multiprocessing.Process):
         }
         return file_info
 
-    def search_online_for_hash(self, md5):
-        return self.circl_lu(md5)
+    def search_online_for_hash(self, flow_info):
+        return self.circl_lu(flow_info)
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -830,12 +859,12 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
-    def is_malicious_hash(self,flow_info):
+    def is_malicious_hash(self, flow_info):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
-        md5 = flow_info['md5']
-        file_info:dict = self.search_online_for_hash(md5)
+
+        file_info:dict = self.search_online_for_hash(flow_info)
         if file_info:
             # is malicious.
             # update the file_info dict with uid, twid, ts etc.

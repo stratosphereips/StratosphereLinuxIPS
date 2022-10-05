@@ -1006,7 +1006,11 @@ class ProfilingFlowsDatabase(object):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
-        SNI_port = {'server_name': server_name, 'dport': dport}
+
+        SNI_port = {
+            'server_name': server_name,
+            'dport': dport
+        }
         # We do not want any duplicates.
         if SNI_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS resolution
