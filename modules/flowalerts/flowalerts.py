@@ -676,7 +676,7 @@ class Module(Module, multiprocessing.Process):
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
             timer = TimerThread(
-                15, self.check_dns_without_connection, params
+                40, self.check_dns_without_connection, params
             )
             timer.start()
         else:

@@ -11,27 +11,28 @@ Slips v0.9.5
 ##### Repo Stars Over Time
 
 [![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)
-[![GitHub watchers](https://badgen.net/github/watchers/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
-[![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
-[![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
-[![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
-[![GitHub open-pull-requests](https://badgen.net/github/open-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
-[![GitHub pull-requests closed](https://badgen.net/github/closed-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
-[![GitHub version](https://badge.fury.io/gh/stratosphereips%2FStratosphereLinuxIPS.svg)](https://github.com/stratosphereips/StratosphereLinuxIPS)
-![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS)
-[![License](https://img.shields.io/badge/license-GPLv2-green)](./LICENSE)
-![GitHub Org's stars](https://img.shields.io/github/stars/stratosphereips/StratosphereLinuxIPS?style=plastic)
-![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=green&style=plastic)
+
+[![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
+[![GitHub version](https://img.shields.io/github/v/tag/stratosphereips/StratosphereLinuxIPS?label=version)](https://github.com/stratosphereips/StratosphereLinuxIPS)
+![Python](https://img.shields.io/badge/python-3.8-blue)
 ![GitHub language count](https://img.shields.io/github/languages/count/stratosphereips/StratosphereLinuxIPS)
-![Docker Image Size (tag)](https://img.shields.io/docker/image-size/stratosphereips/slips/latest?color=yellow&label=docker%20image%20size)
-![GitHub repo size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
+![GitHub repository size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
+![Docker Image Size (tag)](https://img.shields.io/docker/image-size/stratosphereips/slips/latest?color=blue&label=docker%20image%20size)
 ![Docker Pulls](https://img.shields.io/docker/pulls/stratosphereips/slips)
-![Python](https://img.shields.io/badge/Python-3.8-yellow)
 
+[![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
+[![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
+[![GitHub open-pull-requests](https://badgen.net/github/open-prs/stratosphereips/StratosphereLinuxIPS?color=green)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
+[![GitHub pull-requests closed](https://badgen.net/github/closed-prs/stratosphereips/StratosphereLinuxIPS?color=green)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
 
+[![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
+![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS?color=orange)
+![GitHub Org's stars](https://img.shields.io/github/stars/stratosphereips/StratosphereLinuxIPS?color=orange)
+[![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
+
+[![License](https://img.shields.io/badge/Blog-Stratosphere-cyan)](https://www.stratosphereips.org/blog/tag/slips)
+[![Docker](https://img.shields.io/badge/Docker-latest-success?color=cyan)](https://hub.docker.com/r/stratosphereips/slips_p2p)
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
-[![License](https://img.shields.io/badge/Blog-Stratosphere-red)](https://www.stratosphereips.org/blog/tag/slips)
-[![Docker](https://img.shields.io/badge/Docker-latest-success)](https://hub.docker.com/r/stratosphereips/slips_p2p)
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
 <hr>
 

@@ -179,6 +179,12 @@ class Module(Module, multiprocessing.Process):
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
         confidence = 0.7 if is_subdomain else 1
+
+        if 'URLhaus' in domain_info["source"]:
+            # this is because URLhause detects google drive and github as malicious
+            # because we're only checking domains not URLS
+            confidence = 0.1
+
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
