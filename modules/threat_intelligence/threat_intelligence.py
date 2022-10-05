@@ -37,28 +37,30 @@ class Module(Module, multiprocessing.Process):
         self.create_urlhaus_session()
         self.create_circl_lu_session()
         self.circllu_queue = []
-        self.api_calls_thread = threading.Thread(
-            target=self.circllu_calls_thread, daemon=True
+        self.circllu_calls_thread = threading.Thread(
+            target=self.make_pending_query, daemon=True
         )
         self.should_shutdown = False
 
-    def circllu_calls_thread(self):
+    def make_pending_query(self):
         """
-        This thread starts if there's an API calls queue,
-        it operates every 2 mins, and executes 4 api calls
+        This thread starts if there's a circllu calls queue,
+        it operates every 2 mins, and does 10 queries
         from the queue then sleeps again.
         """
-
         while True:
             time.sleep(120)
+
             # if there's nothing in the queue wait exra 2 min
             if not hasattr(self, 'circllu_queue'):
                 continue
 
-            while self.circllu_queue:
+            queries_done = 1
+            while self.circllu_queue != [] and queries_done <= 10:
                 # get the first element in the queue
                 flow_info = self.circllu_queue.pop(0)
                 self.is_malicious_hash(flow_info)
+                queries_done +=1
 
 
 
@@ -749,8 +751,8 @@ class Module(Module, multiprocessing.Process):
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
         try:
             circl_api_response = self.circl_session.get(
-            f"{circl_base_url}/md5/{md5}",
-           headers=self.circl_session.headers
+                f"{circl_base_url}/md5/{md5}",
+               headers=self.circl_session.headers
             )
         except:
             # add the hash to the cirllu queue and ask for it later
@@ -930,6 +932,7 @@ class Module(Module, multiprocessing.Process):
                 self.print(
                     f'Could not load the local TI files {self.path_to_local_ti_files}'
                 )
+            self.circllu_calls_thread.start()
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -942,12 +945,9 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time
-                # (see at logsProcess.py), we will stop slips automatically.
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 
-                # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
                 if utils.is_msg_intended_for(
                     message, 'give_threat_intelligence'
