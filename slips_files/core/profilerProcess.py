@@ -1500,26 +1500,26 @@ class ProfilerProcess(multiprocessing.Process):
         :param ip: src/dst ip
         src macs should be passed with srcips, dstmac with dstips
         """
-        if not mac:
+        if not mac or mac in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff'):
             return
         # get the src and dst addresses as objects
         try:
             ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_multicast:
+                return
         except ValueError:
             return
-        if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
-            ip_obj.is_multicast or ip_obj.is_link_local
-        ):
-            # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-            to_send = {
-                'MAC': mac,
-                'profileid': f'profile_{ip}'
-            }
-            if host_name:
-                to_send.update({
-                    'host_name': host_name
-                })
-            __database__.publish('new_MAC', json.dumps(to_send))
+
+        # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+        to_send = {
+            'MAC': mac,
+            'profileid': f'profile_{ip}'
+        }
+        if host_name:
+            to_send.update({
+                'host_name': host_name
+            })
+        __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
 

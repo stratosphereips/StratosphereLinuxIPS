@@ -300,7 +300,8 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp, state
+            self, dport, proto, daddr,
+            profileid, twid, uid, timestamp, state
     ):
         """
         Checks dports that are not in our
@@ -316,7 +317,7 @@ class Module(Module, multiprocessing.Process):
             return False
         # we don't have port info in our database
         # is it a port that is known to be used by
-        # a specific organization
+        # a specific organization?
         if self.port_belongs_to_an_org(daddr, portproto, profileid):
             return False
 
@@ -1136,7 +1137,8 @@ class Module(Module, multiprocessing.Process):
                 return
 
             uids = saddrs[saddr]['uid']
-            description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
+            description = f'Connection to multiple ports {dstports} ' \
+                          f'of Source IP: {saddr}'
 
             self.helper.set_evidence_for_connection_to_multiple_ports(
                 profileid,
