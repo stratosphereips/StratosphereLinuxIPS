@@ -17,7 +17,7 @@ import requests
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'threatintelligence1'
+    name = 'threatintelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
@@ -57,7 +57,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv4_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv4_ranges[first_octet] = [range]
             else:
                 # ipv6 range
@@ -65,7 +65,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv6_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv6_ranges[first_octet] = [range]
 
     def __read_configuration(self):

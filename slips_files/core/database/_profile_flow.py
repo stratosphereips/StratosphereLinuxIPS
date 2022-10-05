@@ -1281,10 +1281,11 @@ class ProfilingFlowsDatabase(object):
         ip_info = self.get_dns_resolution(ip)
         if ip_info == {}:
             return False
-        # IP is resolved, was it resolved in the past 24 hrs?
+
         # these are the tws this ip was resolved in
         tws = ip_info['timewindows']
 
+        # IP is resolved, was it resolved in the past x hrs?
         tws_to_search = self.get_equivalent_tws(hrs)
 
         current_twid = 0   # number of the tw we're looking for

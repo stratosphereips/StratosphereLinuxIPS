@@ -501,7 +501,9 @@ class Module(Module, multiprocessing.Process):
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
     ):
-        """Checks if there's a flow to a dstip that has no cached DNS answer"""
+        """
+        Checks if there's a flow to a dstip that has no cached DNS answer
+        """
 
         # disable this alert when running on a zeek conn.log file
         # because there's no dns.log to know i the dns was made
@@ -522,7 +524,7 @@ class Module(Module, multiprocessing.Process):
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
             if diff >= self.conn_without_dns_interface_wait_time:
-                # less than 2=30 minutes have passed
+                # less than 30 minutes have passed
                 return False
 
         # search 24hs back for a dns resolution
@@ -1547,6 +1549,7 @@ class Module(Module, multiprocessing.Process):
                         self.detect_DGA(
                             rcode_name, domain, stime, profileid, twid, uid
                         )
+
                     if domain:
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
                         self.detect_young_domains(
