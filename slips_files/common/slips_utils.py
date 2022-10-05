@@ -56,7 +56,7 @@ class Utils(object):
 
          )
         # this format will be used accross all modules and logfiles of slips
-        self.alerts_format = '%Y/%m/%d %H:%M:%S'
+        self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
 
     def threat_level_to_string(self, threat_level: float):
         for str_lvl, int_value in self.threat_levels.items():

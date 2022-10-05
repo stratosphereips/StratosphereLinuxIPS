@@ -86,7 +86,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv4_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv4_ranges[first_octet] = [range]
             else:
                 # ipv6 range
@@ -94,7 +94,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv6_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv6_ranges[first_octet] = [range]
 
     def __read_configuration(self):
