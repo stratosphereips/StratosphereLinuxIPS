@@ -36,7 +36,7 @@ class Module(Module, multiprocessing.Process):
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
         self.create_circl_lu_session()
-        self.circllu_queue = []
+        self.circllu_queue = multiprocessing.Queue()
         self.circllu_calls_thread = threading.Thread(
             target=self.make_pending_query, daemon=True
         )
@@ -48,19 +48,19 @@ class Module(Module, multiprocessing.Process):
         it operates every 2 mins, and does 10 queries
         from the queue then sleeps again.
         """
+        max_queries = 10
         while True:
             time.sleep(120)
-
-            # if there's nothing in the queue wait exra 2 min
-            if not hasattr(self, 'circllu_queue'):
+            try:
+                flow_info = self.circllu_queue.get(timeout=0.5)
+            except:
+                # queue is empty wait extra 2 min
                 continue
 
-            queries_done = 1
-            while self.circllu_queue != [] and queries_done <= 10:
-                # get the first element in the queue
-                flow_info = self.circllu_queue.pop(0)
+            queries_done = 0
+            while self.circllu_queue != [] and queries_done <= max_queries:
                 self.is_malicious_hash(flow_info)
-                queries_done +=1
+                queries_done += 1
 
 
 
@@ -756,7 +756,7 @@ class Module(Module, multiprocessing.Process):
             )
         except:
             # add the hash to the cirllu queue and ask for it later
-            self.circllu_queue.append(flow_info)
+            self.circllu_queue.put(flow_info)
             return
 
         if circl_api_response.status_code != 200:
