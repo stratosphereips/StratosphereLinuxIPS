@@ -22,8 +22,8 @@ Slips v0.9.5
 
 [![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
 [![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
-[![GitHub open-pull-requests](https://badgen.net/github/open-prs/stratosphereips/StratosphereLinuxIPS?color=green)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
-[![GitHub pull-requests closed](https://badgen.net/github/closed-prs/stratosphereips/StratosphereLinuxIPS?color=green)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
+[![GitHub open-pull-requests](https://img.shields.io/github/issues-pr-raw/stratosphereips/StratosphereLinuxIPS?color=green&label=open%20PRs)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
+[![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed-raw/stratosphereips/StratosphereLinuxIPS?color=green&label=closed%20PRs)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
 
 [![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
 ![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS?color=orange)
@@ -31,7 +31,6 @@ Slips v0.9.5
 [![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
 
 [![License](https://img.shields.io/badge/Blog-Stratosphere-cyan)](https://www.stratosphereips.org/blog/tag/slips)
-[![Docker](https://img.shields.io/badge/Docker-latest-success?color=cyan)](https://hub.docker.com/r/stratosphereips/slips_p2p)
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
 <hr>
