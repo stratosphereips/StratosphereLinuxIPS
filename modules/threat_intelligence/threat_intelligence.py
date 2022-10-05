@@ -1000,8 +1000,9 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
                     self.is_malicious_hash(file_info)
+                    continue
 
-                elif self.should_shutdown:
+                if self.should_shutdown:
                      self.shutdown_gracefully()
 
             except KeyboardInterrupt:
