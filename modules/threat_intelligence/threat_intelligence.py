@@ -40,6 +40,7 @@ class Module(Module, multiprocessing.Process):
         self.api_calls_thread = threading.Thread(
             target=self.circllu_calls_thread, daemon=True
         )
+        self.should_shutdown = False
 
     def circllu_calls_thread(self):
         """
@@ -944,8 +945,7 @@ class Module(Module, multiprocessing.Process):
                 # if timewindows are not updated for a long time
                 # (see at logsProcess.py), we will stop slips automatically.
                 if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+                    self.should_shutdown = True
 
                 # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
@@ -995,11 +995,14 @@ class Module(Module, multiprocessing.Process):
 
                 message = self.c2.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+                    self.should_shutdown = True
+
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
                     self.is_malicious_hash(file_info)
+
+                elif self.should_shutdown:
+                     self.shutdown_gracefully()
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
