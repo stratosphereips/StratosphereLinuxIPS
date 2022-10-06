@@ -817,7 +817,6 @@ class Module(Module, multiprocessing.Process):
                 # ip was found in one of the blacklisted ranges
                 ip_info = __database__.get_malicious_ip_ranges()[range]
                 ip_info = json.loads(ip_info)
-                # Set the evidence on this detection
                 self.set_evidence_malicious_ip(
                     ip,
                     uid,

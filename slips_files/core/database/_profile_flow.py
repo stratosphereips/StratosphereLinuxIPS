@@ -996,6 +996,7 @@ class ProfilingFlowsDatabase(object):
             'twid': str(twid),
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip'
         }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
@@ -1126,6 +1127,7 @@ class ProfilingFlowsDatabase(object):
                 'twid': str(twid),
                 'stime': stime,
                 'uid': uid,
+                'ip_state': 'dstip'
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence', data_to_send)
@@ -1587,6 +1589,7 @@ class ProfilingFlowsDatabase(object):
             'twid': twid,
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip',
         }
         self.publish('give_threat_intelligence', json.dumps(data_to_send))
 
@@ -1598,7 +1601,7 @@ class ProfilingFlowsDatabase(object):
             )
             # send each dns response to TI module
             data_to_send['is_dns_response'] = True
-            data_to_send['ip_state'] = 'dst'
+            data_to_send['ip_state'] = 'dstip'
             data_to_send['dns_query'] = query
             for answer in answers:
                 if 'TXT' in answer:

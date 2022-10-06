@@ -115,10 +115,10 @@ class ConfigParser(object):
         return timeout
 
     def popup_alerts(self):
-        popups =  self.read_configuration(
+        popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'true' in popups.lower() else False
+        return True if 'yes' in popups.lower() else False
 
     def rotation(self):
         rotation = self.read_configuration(

@@ -341,8 +341,8 @@ class EvidenceProcess(multiprocessing.Process):
             while twid_start_time == None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
-            # iso
-            tw_start_time_str = utils.convert_format(twid_start_time, utils.alerts_format)
+
+            tw_start_time_str = utils.convert_format(twid_start_time,  '%Y/%m/%d %H:%M:%S')
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -355,7 +355,7 @@ class EvidenceProcess(multiprocessing.Process):
 
             tw_stop_time_str = utils.convert_format(
                 tw_stop_time_datetime,
-                utils.alerts_format
+                 '%Y/%m/%d %H:%M:%S'
             )
 
             hostname = __database__.get_hostname_from_profile(profileid)
