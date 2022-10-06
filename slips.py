@@ -466,6 +466,7 @@ class Main:
             commit, branch = branch_info[0], branch_info[1]
 
         now = datetime.now()
+        now = utils.convert_format(now, utils.alerts_format)
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
         with open(self.info_path, 'w') as f:
@@ -481,8 +482,8 @@ class Main:
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
-        pid = int(self.PIDs[module_name])
         try:
+            pid = int(self.PIDs[module_name])
             os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
             # process hasn't started yet

@@ -36,11 +36,16 @@ class UpdateManager(Module, multiprocessing.Process):
         self.timer_manager = InfiniteTimer(
             self.update_period, self.update_ti_files
         )
+        # Timer to update the MAC db
+        self.mac_db_update_manager = InfiniteTimer(
+            self.mac_db_update_period, self.update_ti_files
+        )
         self.timeout = 0.000001
 
     def read_configuration(self):
         conf = ConfigParser()
         self.update_period = conf.update_period()
+        self.mac_db_update_period = conf.mac_db_update_period()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -67,6 +72,7 @@ class UpdateManager(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # terminating the timer for the process to be killed
         self.timer_manager.cancel()
+        self.mac_db_update_manager.cancel()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return True
@@ -86,6 +92,7 @@ class UpdateManager(Module, multiprocessing.Process):
             asyncio.run(self.update_ti_files())
             # Starting timer to update files
             self.timer_manager.start()
+            self.mac_db_update_manager.start()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
