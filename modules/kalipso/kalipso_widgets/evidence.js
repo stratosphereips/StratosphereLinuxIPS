@@ -1,4 +1,4 @@
-const box  = require('./kalipso_box.js')
+const box  = require('../lib_widgets/box.js')
 const async = require('async')
 const color = require('chalk')
 
