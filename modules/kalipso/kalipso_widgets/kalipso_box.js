@@ -55,4 +55,4 @@ class Box{
     }
 }
 
-module.exports = Box;
+module.exports  = { BoxClass: Box }
