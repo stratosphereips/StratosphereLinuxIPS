@@ -1701,7 +1701,7 @@ class Main:
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
                 if self.mode != 'daemonized':
-                    now = utils.convert_format(datetime.now(), utils.alerts_format)
+                    now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
