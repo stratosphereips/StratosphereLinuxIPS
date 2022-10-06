@@ -1,11 +1,10 @@
 var async = require('async')
 var fs = require('fs')
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
 
 class ListTable{
-    constructor(grid, blessed, contrib, redis_database,screen, characteristics,limit_letter_outtuple=0){
-        this.contrib = contrib
+    constructor(grid,  redis_database,screen, characteristics,limit_letter_outtuple=0){
         this.screen = screen
-        this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
         this.widget = this.initListTable(characteristics);
@@ -15,7 +14,7 @@ class ListTable{
 }
     /*Initialise the widget ListTable and its parameters*/
     initListTable(characteristics){
-        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.blessed.listtable, {
+        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed.listtable, {
           keys: true,
           mouse: true,
           vi:true,

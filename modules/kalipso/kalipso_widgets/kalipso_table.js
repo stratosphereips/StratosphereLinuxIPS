@@ -1,16 +1,16 @@
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
+
 var async = require('async')
 var color = require('chalk')
 var stripAnsi = require('strip-ansi')
 
 class Table{
 
-    constructor(grid, blessed, contrib, redis_database,screen, characteristics){
-        this.contrib = contrib
+    constructor(grid, redis_database,screen, characteristics){
         this.screen = screen
-        this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
-        this.widget = this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.contrib.table,
+        this.widget = this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed_contrib.table,
         {
           keys: true
         , vi:true

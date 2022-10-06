@@ -1,10 +1,9 @@
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
+
 class screen {
-    constructor(blessed, contrib, redis_database,tree_class, timeline_class, box_class,
+    constructor(redis_database, tree_class, timeline_class, box_class,
               listtable_class, gauge_class, combine_listtable_gauge_class,
               listbar_class,limit_letter_outtuple) {
-
-        this.blessed = blessed
-        this.contrib = contrib
         this.tree_class = tree_class
         this.redis_database = redis_database
         this.timeline_class= timeline_class
@@ -53,12 +52,12 @@ class screen {
 
     /*Initialize the screen*/
     initScreen(){
-        this.screen =this.blessed.screen()
+        this.screen = new blessed.screen()
     }
 
     /*Initialize grid*/
     initGrid(){
-    	this.grid =  new this.contrib.grid({
+    	this.grid =  new blessed_contrib.grid({
 		  rows: 6,
 		  cols: 6,
 		  screen: this.screen
@@ -67,64 +66,64 @@ class screen {
 
     /*Initialize help bar on the screen*/
     initHelpTable(){
-        this.helptable = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
+        this.helptable = new this.listtable_class(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
         this.helptable.setHelp()
         this.helptable.hide()
     }
 
     /*initialize Listbar with hotkeys on the screen*/
     initListBar(){
-      this.helpbar = new this.listbar_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen)
+      this.helpbar = new this.listbar_class(this.grid, this.redis_database, this.screen)
       this.helpbar.show()
     }
 
     /*Initialize Tuple on the screen*/
     initTuple(){
-      this.tuple_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,5.7,6], this.limit_letter_outtuple)
+      this.tuple_widget = new this.listtable_class(this.grid, this.redis_database, this.screen, [0,0,5.7,6], this.limit_letter_outtuple)
       this.tuple_widget.hide()
     }
 
     /*Initializ evidence box on the screen*/
     initBoxEvidence(){
-      this.evidence_box_widget = new this.box_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
+      this.evidence_box_widget = new this.box_class(this.grid, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
     }
 
     /*Initialize timeline on screen and fill in data*/
     initTimeline(){
-      this.timeline_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
+      this.timeline_widget = new this.timeline_class(this.grid, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
     }
 
     /*Initialize profile evidences on the screen.*/
     initEvidencesInProfile(){
-      this.profile_evidences_widget = new this.timeline_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      this.profile_evidences_widget = new this.timeline_class(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
       this.profile_evidences_widget.hide()
     }
 
     /*Initialize ipinfo widget on the screen*/
     initIPInfo(){
-      this.ipinfo_widget = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
+      this.ipinfo_widget = new this.listtable_class(this.grid, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
     }
 
     /*Initialize listtable1, listtable2, gauge1, gauge2 on the screen*/
     initListtableGauge(){
-      this.listtable1 = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0,0,2.8,2])
+      this.listtable1 = new this.listtable_class(this.grid, this.redis_database, this.screen, [0,0,2.8,2])
       this.listtable1.hide()
-      this.listtable2 = new this.listtable_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [2.8,0,2.8,2])
+      this.listtable2 = new this.listtable_class(this.grid, this.redis_database, this.screen, [2.8,0,2.8,2])
       this.listtable2.hide()
-      this.gauge1 = new this.gauge_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [0.3, 2, 2.6, 4])
+      this.gauge1 = new this.gauge_class(this.grid, this.redis_database, this.screen, [0.3, 2, 2.6, 4])
       this.gauge1.hide()
-      this.gauge2 = new this.gauge_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, [3.1, 2, 2.6, 4])
+      this.gauge2 = new this.gauge_class(this.grid, this.redis_database, this.screen, [3.1, 2, 2.6, 4])
       this.gauge2.hide()
     }
 
     /*Initialize the combination of listtable1, listtable2, gauge1, gauge2 on screen*/
     initCombine(){
-      this.combine_listtable_gauge = new this.combine_listtable_gauge_class(this.grid, this.blessed, this.contrib, this.redis_database, this.screen, this.listtable1, this.listtable2, this.gauge1, this.gauge2)
+      this.combine_listtable_gauge = new this.combine_listtable_gauge_class(this.grid, this.redis_database, this.screen, this.listtable1, this.listtable2, this.gauge1, this.gauge2)
     }
 
     /*Initialize tree on the screen*/
     initTree(){
-        this.tree_widget = new this.tree_class(this.grid, this.blessed, this.contrib, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
+        this.tree_widget = new this.tree_class(this.grid, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
         this.tree_widget.getTreeDataFromDatabase()
         this.tree_widget.focus()
         this.tree_widget.on()

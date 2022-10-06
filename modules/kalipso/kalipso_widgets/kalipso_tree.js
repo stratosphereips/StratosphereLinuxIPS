@@ -1,18 +1,18 @@
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
+
 var async = require('async')
 var stripAnsi = require('strip-ansi')
 var color = require('chalk')
 
 class Tree{
-    constructor(grid, blessed, contrib, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
-		  this.contrib = contrib
+    constructor(grid, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){
 		  this.screen = screen
-		  this.blessed = blessed
 		  this.grid = grid
 		  this.redis_database = redis_database
 		  this.timeline = timeline_widget
 		  this.evidence = evidence_widget
 		  this.ipinfo = ipinfo_widget
-		  this.widget =this.grid.set(0,0,5.7,1,this.contrib.tree,
+		  this.widget =this.grid.set(0,0,5.7,1, blessed_contrib.tree,
 			  { vi:true
 			  , style: {fg:'green',border: {fg:'blue'}}
 			  , template: { lines: true }

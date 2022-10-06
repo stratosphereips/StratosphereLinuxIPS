@@ -1,11 +1,10 @@
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
 var async = require('async')
 var SortedArray = require('sorted-array-async');
 
 class combine_Listtable_Gauge{
-    constructor(grid, blessed, contrib, redis_database,screen, listtable1, listtable2, gauge1, gauge2){
-        this.contrib = contrib
+    constructor(grid,  redis_database,screen, listtable1, listtable2, gauge1, gauge2){
         this.screen = screen
-        this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
         this.listtable1 = listtable1

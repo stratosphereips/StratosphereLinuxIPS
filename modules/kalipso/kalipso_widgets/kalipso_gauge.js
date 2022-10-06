@@ -1,10 +1,10 @@
+const { redis, blessed, blessed_contrib } = require("./libraries.js");
+
 var async = require('async')
 
 class Gauge{
-    constructor(grid, blessed, contrib, redis_database,screen, characteristics){
-        this.contrib = contrib
+    constructor(grid, redis_database,screen, characteristics){
         this.screen = screen
-        this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
         this.widget = this.initGauge(characteristics);
@@ -12,7 +12,7 @@ class Gauge{
 
     /*Initialize the widget gauge and its parameters*/
     initGauge(characteristics){
-        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.contrib.gaugeList,
+        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed_contrib.gaugeList,
             {style:{
                     border:{ fg:'blue'},
                     focus: {border:{ fg:'magenta'}}},
