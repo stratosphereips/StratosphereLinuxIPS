@@ -1381,16 +1381,15 @@ class UpdateFileManager:
     def update_mac_db(self, response):
         if response.status_code != 200:
             return
+        self.log(f'Updating the MAC database.')
+        path_to_mac_db = 'databases/macaddress-db.json'
 
-        path_to_mac_db = 'databases/macaddr-db.json'
-
-        # write to filee the info as 1 json per line
+        # write to file the info as 1 json per line
         mac_info = response.text.replace(']','').replace('[','').replace(',{','\n{')
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
-        # todo the basename doesn't make sense
-        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
+        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
     async def update(self) -> bool:
         """
