@@ -41,6 +41,7 @@ RUN apt update && apt install -y --no-install-recommends \
     whois \
     golang \
     vim \
+    yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/

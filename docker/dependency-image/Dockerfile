@@ -52,6 +52,7 @@ RUN apt update && apt install -y --no-install-recommends \
     nfdump \
     tshark \
     whois \
+    yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 

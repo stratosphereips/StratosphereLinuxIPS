@@ -46,6 +46,7 @@ RUN apt update && apt install -y --no-install-recommends \
     screen \
     mc \
     iputils-ping \
+    yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 # Requirements for compiling yara

@@ -50,6 +50,7 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
     golang \
     nodejs \
     notify-osd \
+    yara \
     libnotify-bin
 
 

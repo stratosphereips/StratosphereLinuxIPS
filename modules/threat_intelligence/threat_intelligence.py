@@ -572,18 +572,21 @@ class Module(Module, multiprocessing.Process):
 
         # get the source and description of the ip
         source_dataset = ''
-        description =''
+        description = ''
         for list in lists_that_have_this_ip:
             name = lists_names.get(list, False)
             if not name:
                 continue
             source_dataset += f'{name}, '
             description = list_description.get(list, '')
+
         if not source_dataset:
             return False
 
+        source_dataset += 'spamhaus'
+
         ip_info = {
-            'source': source_dataset[:-2],
+            'source': source_dataset,
             'description': description,
             'therat_level': 'medium',
             'tags': 'spam'
