@@ -1,6 +1,7 @@
 const { redis, blessed, blessed_contrib } = require("./libraries.js");
 const evidence = require('./evidence.js')
 const timeline = require('./timeline.js')
+const profile_evidences = require('./profile_evidences.js')
 
 class screen {
     constructor(redis_database, tree_class,
@@ -95,7 +96,7 @@ class screen {
 
     /*Initialize profile evidences on the screen.*/
     initEvidencesInProfile(){
-      this.profile_evidences_widget = new timeline.TimelineClass(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      this.profile_evidences_widget = new profile_evidences.ProfileEvidencesClass(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
       this.profile_evidences_widget.hide()
     }
 
