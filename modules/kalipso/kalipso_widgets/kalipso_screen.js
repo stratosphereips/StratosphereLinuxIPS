@@ -1,13 +1,13 @@
 const { redis, blessed, blessed_contrib } = require("./libraries.js");
+const evidence = require('./evidence.js')
+const timeline = require('./timeline.js')
 
 class screen {
-    constructor(redis_database, tree_class, timeline_class, box_class,
+    constructor(redis_database, tree_class,
               listtable_class, gauge_class, combine_listtable_gauge_class,
               listbar_class,limit_letter_outtuple) {
         this.tree_class = tree_class
         this.redis_database = redis_database
-        this.timeline_class= timeline_class
-        this.box_class = box_class
         this.listtable_class = listtable_class
         this.gauge_class = gauge_class
         this.combine_listtable_gauge_class = combine_listtable_gauge_class
@@ -85,17 +85,17 @@ class screen {
 
     /*Initializ evidence box on the screen*/
     initBoxEvidence(){
-      this.evidence_box_widget = new this.box_class(this.grid, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
+      this.evidence_box_widget = new evidence.EvidenceClass(this.grid, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
     }
 
     /*Initialize timeline on screen and fill in data*/
     initTimeline(){
-      this.timeline_widget = new this.timeline_class(this.grid, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
+      this.timeline_widget = new timeline.TimelineClass(this.grid, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
     }
 
     /*Initialize profile evidences on the screen.*/
     initEvidencesInProfile(){
-      this.profile_evidences_widget = new this.timeline_class(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      this.profile_evidences_widget = new timeline.TimelineClass(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
       this.profile_evidences_widget.hide()
     }
 
