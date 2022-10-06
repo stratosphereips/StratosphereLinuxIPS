@@ -37,6 +37,7 @@ class Module(Module, multiprocessing.Process):
         self.compiled_yara_rules_path = (
             'modules/leak_detector/yara_rules/compiled/'
         )
+        self.bin_found = False
         if self.is_yara_installed():
             self.bin_found = True
 
@@ -47,7 +48,7 @@ class Module(Module, multiprocessing.Process):
         """
         cmd = 'yara -h > /dev/null 2>&1'
         returncode = os.system(cmd)
-        if returncode == 256:
+        if returncode == 256 or returncode == 0:
             # it is installed
             return True
         # elif returncode == 32512:
@@ -247,24 +248,25 @@ class Module(Module, multiprocessing.Process):
             os.mkdir(self.compiled_yara_rules_path)
         except FileExistsError:
             pass
+
         for yara_rule in os.listdir(self.yara_rules_path):
             compiled_rule_path = os.path.join(
                 self.compiled_yara_rules_path, f'{yara_rule}_compiled'
             )
-            # if we already have the rule compiled, don't compiler again
+            # if we already have the rule compiled, don't compile again
             if os.path.exists(compiled_rule_path):
                 # we already have the rule compiled
                 continue
 
             # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
-            # ignore yara_rules/compiled/
-            if not os.path.isfile(rule_path):
-                continue
-            # compile the rule
-            compiled_rule = yara.compile(filepath=rule_path)
-            # save the compiled rule
-            compiled_rule.save(compiled_rule_path)
+            # compile
+            cmd = f'yarac {rule_path} {compiled_rule_path} >/dev/null 2>&1'
+            return_code = os.system(cmd)
+            if return_code != 0:
+                self.print(f"Error compiling {yara_rule}.")
+                return False
+            return True
 
     def find_matches(self):
         """Run yara rules on the given pcap and find matches"""
@@ -288,9 +290,9 @@ class Module(Module, multiprocessing.Process):
                 return True
 
             # if we we don't have compiled rules, compile them
-            self.compile_and_save_rules()
-            # run the yara rules on the given pcap
-            self.find_matches()
+            if self.compile_and_save_rules():
+                # run the yara rules on the given pcap
+                self.find_matches()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
