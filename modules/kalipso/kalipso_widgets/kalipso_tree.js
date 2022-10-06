@@ -1,8 +1,4 @@
-const { redis, blessed, blessed_contrib } = require("./libraries.js");
-
-var async = require('async')
-var stripAnsi = require('strip-ansi')
-var color = require('chalk')
+const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("./libraries.js");
 
 class Tree{
     constructor(grid, redis_database, timeline_widget, screen, evidence_widget,ipinfo_widget){

@@ -1,8 +1,5 @@
-const { redis, blessed, blessed_contrib } = require("./libraries.js");
+const { redis, blessed, blessed_contrib, async } = require("./libraries.js");
 const table = require("../lib_widgets/table.js")
-var async = require('async')
-var color = require('chalk')
-var stripAnsi = require('strip-ansi')
 
 class ProfileEvidences extends table.TableClass{
 
