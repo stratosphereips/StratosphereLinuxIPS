@@ -233,8 +233,8 @@ class Module(Module, multiprocessing.Process):
             type_evidence = 'SSHSuccessful'
         # This dict contains each type and the way we should describe it in STIX name attribute
         type_evidence_descriptions = {
-            'PortScanType1': 'Vertical port scan',
-            'PortScanType2': 'Horizontal port scan',
+            'VerticalPortscan': 'Vertical port scan',
+            'HorizontalPortscan': 'Horizontal port scan',
             'ThreatIntelligenceBlacklistIP': 'Blacklisted IP',
             'SelfSignedCertificate': 'Self-signed certificate',
             'LongConnection': 'Long Connection',
