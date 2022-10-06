@@ -37,6 +37,22 @@ class Module(Module, multiprocessing.Process):
         self.compiled_yara_rules_path = (
             'modules/leak_detector/yara_rules/compiled/'
         )
+        if self.is_yara_installed():
+            self.bin_found = True
+
+
+    def is_yara_installed(self) -> bool:
+        """
+        Checks if notify-send bin is installed
+        """
+        cmd = 'yara -h > /dev/null 2>&1'
+        returncode = os.system(cmd)
+        if returncode == 256:
+            # it is installed
+            return True
+        # elif returncode == 32512:
+        self.print(f"yara is not installed. install it using:\nsudo apt-get install yara")
+        return False
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -231,7 +247,6 @@ class Module(Module, multiprocessing.Process):
             os.mkdir(self.compiled_yara_rules_path)
         except FileExistsError:
             pass
-
         for yara_rule in os.listdir(self.yara_rules_path):
             compiled_rule_path = os.path.join(
                 self.compiled_yara_rules_path, f'{yara_rule}_compiled'
@@ -240,6 +255,7 @@ class Module(Module, multiprocessing.Process):
             if os.path.exists(compiled_rule_path):
                 # we already have the rule compiled
                 continue
+
             # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
             # ignore yara_rules/compiled/
@@ -268,6 +284,9 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         try:
+            if not self.bin_found:
+                return True
+
             # if we we don't have compiled rules, compile them
             self.compile_and_save_rules()
             # run the yara rules on the given pcap
