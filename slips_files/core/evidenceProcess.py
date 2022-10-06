@@ -398,7 +398,7 @@ class EvidenceProcess(multiprocessing.Process):
                 description,
             )
             alert_to_print += (
-                f'\t{Fore.CYAN}• {evidence_string}{Style.RESET_ALL}\n'
+                f'\t{Fore.CYAN}- {evidence_string}{Style.RESET_ALL}\n'
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
