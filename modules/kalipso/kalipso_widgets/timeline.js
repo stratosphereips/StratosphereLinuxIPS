@@ -34,6 +34,22 @@ class Timeline extends table.TableClass{
         return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
     }
 
+    /*Set IP info of the IP selected in the timeline to the widget 'Table'*/
+    on(ip_info_widget){
+        this.widget.rows.on('select', (item, index) => {
+            try{
+              var timeline_line = stripAnsi(item.content)
+              var ip = timeline_line.substring(
+              timeline_line.lastIndexOf("[") + 1,
+              timeline_line.lastIndexOf("]")
+              )
+              if(ip && !ip.includes("'")){
+                ip_info_widget.setIPInfo(ip)}
+              }
+            catch(err){console.log('Error in the function on() in kalipso_table.js. Error: ')}
+        })
+    }
+
     /*Set timeline data in the widget "Table".*/
     setTimeline(ip, timewindow){
         try{
