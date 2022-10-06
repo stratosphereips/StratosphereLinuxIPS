@@ -5,7 +5,6 @@ const { redis } = require("./kalipso_widgets/libraries.js");
 var screen_class = require('./kalipso_widgets/kalipso_screen')
 var redis_database_class = require('./kalipso_widgets/kalipso_redis')
 var tree = require('./kalipso_widgets/kalipso_tree')
-var listtable = require('./kalipso_widgets/kalipso_listtable')
 var gauge = require('./kalipso_widgets/kalipso_gauge')
 var combine_listtable_gauge = require('./kalipso_widgets/kalipso_connect_listtable_gauge')
 var listbar = require("./kalipso_widgets/kalipso_listbar")
@@ -35,7 +34,7 @@ const redis_database = new redis_database_class(redis, redis_port)
 redis_database.createClient()
 
 // Initialize screen with all necessary widgets.
-const screen = new screen_class(redis_database, tree,listtable, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
+const screen = new screen_class(redis_database, tree, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
 screen.init()
 screen.render()
 
