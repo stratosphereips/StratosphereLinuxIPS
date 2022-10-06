@@ -1,6 +1,4 @@
-var async = require('async')
-var color = require('chalk')
-const { redis, blessed, blessed_contrib } = require("./libraries.js");
+const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/libraries.js");
 
 class Box{
     constructor(grid, redis_database,screen, characteristics){
