@@ -3,22 +3,16 @@ const { redis, blessed, blessed_contrib } = require("./libraries.js");
 var async = require('async')
 
 class Gauge{
-    constructor(grid, characteristics){
+    constructor(grid, gridParameters, widgetParameters){
         this.grid = grid
-        this.widget = this.initGauge(characteristics);
+        this.widget = this.initGauge(gridParameters,widgetParameters);
     }
 
     /*Initialize the widget gauge and its parameters*/
-    initGauge(characteristics){
-        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed_contrib.gaugeList,
-            {style:{
-                    border:{ fg:'blue'},
-                    focus: {border:{ fg:'magenta'}}},
-            keys:true,
-            gaugeSpacing: 1,
-            gaugeHeight: 1,
-            gauges:[]
-            })
+    initGauge(gridParameters, widgetParameters){
+        return this.grid.set(gridParameters[0],gridParameters[1],gridParameters[2], gridParameters[3],
+                    blessed_contrib.gaugeList,
+                    widgetParameters)
         }
 
     /*Hide the widget on the screen*/
