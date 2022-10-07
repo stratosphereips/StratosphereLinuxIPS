@@ -50,6 +50,7 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
     golang \
     nodejs \
     notify-osd \
+    yara \
     libnotify-bin
 
 
@@ -62,22 +63,6 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
  echo "[+] Executing 'sudo npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs '\n"
  sudo npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
-
- echo "[+] Installing YARA ...\n"
- sudo apt install -y automake libtool make gcc pkg-config
- wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
-   && tar -zxf v4.1.3.tar.gz \
-   && cd yara-4.1.3 \
-   && ./bootstrap.sh \
-   && ./configure \
-   && make \
-   && make install
-
- git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
- python3 setup.py build && python3 setup.py install
-
- echo "[+] Executing 'python3 -m pip install yara-python'\n"
- python3 -m pip install yara-python && cd ..
 
 
  echo "[+] Installing p2p4slips\n"
