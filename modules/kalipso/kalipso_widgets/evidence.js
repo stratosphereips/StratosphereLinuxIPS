@@ -5,7 +5,9 @@ const color = require('chalk')
 class Evidence extends box.BoxClass{
 
     constructor(grid, redis_database,screen, characteristics){
-      super(grid, redis_database,screen, characteristics)
+        super(grid, characteristics)
+        this.redis_database = redis_database
+        this.screen = screen
     }
 
     /*Widget 'Box' is used to display the evidences in the main screen of Kalipso.

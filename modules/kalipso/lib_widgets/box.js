@@ -1,10 +1,8 @@
 const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/libraries.js");
 
 class Box{
-    constructor(grid, redis_database,screen, characteristics){
-      this.screen = screen
+    constructor(grid, characteristics){
       this.grid = grid
-      this.redis_database = redis_database
       this.widget = this.initBox(characteristics);
     }
 
