@@ -164,3 +164,7 @@ running_slips_info.txt
 
 # ignore changes to redis.conf
 redis.conf
+modules/flowmldetection/scaler.bin
+modules/flowmldetection/model.bin
+databases/macaddress-db.json
+modules/flowmldetection/model.bin

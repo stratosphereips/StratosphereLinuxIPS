@@ -2,8 +2,7 @@ var fs = require('fs')
 const { redis, blessed, blessed_contrib, async } = require("../kalipso_widgets/libraries.js");
 
 class ListTable{
-    constructor(grid,  redis_database,screen, characteristics,limit_letter_outtuple=0){
-        this.screen = screen
+    constructor(grid,  redis_database, characteristics,limit_letter_outtuple=0){
         this.grid = grid
         this.redis_database = redis_database
         this.widget = this.initListTable(characteristics);
@@ -89,7 +88,6 @@ class ListTable{
             this.widget.setLabel(ip_info_dict['reverse_dns'])
             ipInfo_data.push([ip_info_dict['asn'], ip_info_dict['geo'], ip_info_dict['url'], ip_info_dict['down'],ip_info_dict['ref'],ip_info_dict['com']])
             this.setData(ipInfo_data)
-            this.screen.render()
         })
     }
         catch (err){
