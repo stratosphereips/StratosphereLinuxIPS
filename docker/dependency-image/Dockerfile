@@ -68,16 +68,4 @@ RUN pip3 install --upgrade pip
 RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
 
 
-# Requirements for compiling yara
-RUN apt install -y automake libtool make gcc pkg-config
-
-# Compile and install YARA
-RUN wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz \
-  && tar -zxf v4.1.3.tar.gz \
-  && cd yara-4.1.3 \
-  && ./bootstrap.sh \
-  && ./configure \
-  && make \
-  && make install
-
 CMD redis-server --daemonize yes && /bin/bash
