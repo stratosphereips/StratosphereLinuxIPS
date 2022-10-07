@@ -35,8 +35,6 @@ redis_database.createClient()
 
 // Initialize screen with all necessary widgets.
 const screen = new screen_class(redis_database, tree, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
-screen.init()
-screen.render()
 
 // Register all keypresses in the screen.
 screen.registerEvents()
