@@ -1,33 +1,16 @@
 const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/libraries.js");
 
 class Box{
-    constructor(grid, characteristics){
+    constructor(grid, gridParameters, widgetParameters){
       this.grid = grid
-      this.widget = this.initBox(characteristics);
+      this.widget = this.initBox(gridParameters, widgetParameters);
     }
 
     /*Initialize the parameters for the widgets 'Box'.*/
-    initBox(characteristics){
-        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed.box,{
-            top: 'center',
-            left: 'center',
-            width: '50%',
-            height: '50%',
-            label:characteristics[4],
-            tags: true,
-            keys: true,
-            style:{
-              border:{ fg:'blue',type: 'line'},
-              focus: {border:{ fg:'magenta'}}
-            },
-            vi:true,
-            scrollable: true,
-            alwaysScroll: true,
-            scrollbar: {
-              ch: ' ',
-              inverse: true
-            }
-        })
+    initBox(gridParameters, widgetParameters){
+        return this.grid.set(gridParameters[0], gridParameters[1], gridParameters[2], gridParameters[3],
+                            blessed.box,
+                            widgetParameters)
     }
 
     /*Set data in the widget*/
