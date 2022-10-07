@@ -1,6 +1,4 @@
-const { redis, blessed, blessed_contrib } = require("./libraries.js");
-var async = require('async')
-var SortedArray = require('sorted-array-async');
+const { redis, blessed, blessed_contrib, async, sortedArray } = require("./libraries.js");
 
 class combine_Listtable_Gauge{
     constructor(grid,  redis_database,screen, listtable1, listtable2, gauge1, gauge2){
@@ -85,7 +83,7 @@ class combine_Listtable_Gauge{
         else{
             try{
                 let obj= JSON.parse(redis_data);
-                var instance  = new SortedArray(Object.keys(obj), function(a, b){
+                var instance  = new sortedArray(Object.keys(obj), function(a, b){
                 return obj[b]['totalbytes'] - obj[a]['totalbytes'];
                 });
                 instance.getArray().then(keys=>{async.each(keys, (key, callback)=>{
@@ -304,4 +302,4 @@ class combine_Listtable_Gauge{
 
 }
 
-module.exports = combine_Listtable_Gauge
+module.exports = {combineClass: combine_Listtable_Gauge}
