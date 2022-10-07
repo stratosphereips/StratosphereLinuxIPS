@@ -2,13 +2,13 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
 from subprocess import check_output
 import base64
+import time
 import binascii
 import os
 import subprocess
@@ -105,7 +105,8 @@ class Module(Module, multiprocessing.Process):
 
             packet_data_length = True
             while packet_data_length:
-                # the number of the packet we're currently working with, since packets start from 1 in tshark , the first packet should be 1
+                # the number of the packet we're currently working with,
+                # since packets start from 1 in tshark , the first packet should be 1
                 packet_number += 1
                 # this offset is exactly when the packet starts
                 start_offset = f.tell() + 1
@@ -153,7 +154,7 @@ class Module(Module, multiprocessing.Process):
                             proto = 'udp'
                         else:
                             # probably ipv6.hopopt
-                            continue
+                            return
 
                         try:
                             ts = json_packet['frame']['frame.time_epoch']
@@ -162,7 +163,7 @@ class Module(Module, multiprocessing.Process):
                             sport = json_packet[proto][f'{proto}.srcport']
                             dport = json_packet[proto][f'{proto}.dstport']
                         except KeyError:
-                            continue
+                            return
 
                         return (srcip, dstip, proto, sport, dport, ts)
 
@@ -171,71 +172,88 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_yara_match(self, info: dict):
         """
         This function is called when yara finds a match
-        :param info: a dict with info about the matched rule, example keys 'vars_matched', 'rule', 'srings_matched'
+        :param info: a dict with info about the matched rule, example keys 'vars_matched', 'index',
+        'rule', 'srings_matched'
         """
-        rule = info.get('rule')
-        index = info.get('index')
+        rule = info.get('rule').replace('_', ' ')
+        offset = info.get('offset')
         vars_matched = info.get('vars_matched')
-        # strings is a list of tuples containing information about the matching strings.
-        # Each tuple has the form: (<offset>, <string identifier>, <string data>).
         strings_matched = info.get('strings_matched')
-        #todo
+        # we now know there's a match at offset x, we need to know offset x belongs to which packet
+        if packet_info := self.get_packet_info(offset):
+            srcip, dstip, proto, sport, dport, ts = (
+                packet_info[0],
+                packet_info[1],
+                packet_info[2],
+                packet_info[3],
+                packet_info[4],
+                packet_info[5],
+            )
 
-        # offset, string_found = match[0], match[1]
-        # # we now know there's a match at offset x, we need to know offset x belongs to which packet
-        # if packet_info := self.get_packet_info(offset):
-        #     srcip, dstip, proto, sport, dport, ts = (
-        #         packet_info[0],
-        #         packet_info[1],
-        #         packet_info[2],
-        #         packet_info[3],
-        #         packet_info[4],
-        #         packet_info[5],
-        #     )
-        #     detection_info = dstip
-        #     portproto = f'{dport}/{proto}'
-        #     port_info = __database__.get_port_info(portproto)
-        #     ip_identification = __database__.getIPIdentification(dstip)
-        #     description = (
-        #         f'IP: {srcip} detected {rule} to destination address: {dstip} {ip_identification} '
-        #         f"port: {port_info if port_info else ''} {portproto}"
-        #     )
-        #     # generate a random uid
-        #     uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
-        #         'utf-8'
-        #     )
-        #     profileid = f'profile_{srcip}'
-        #     # make sure we have this profileid
-        #     if __database__.hasProfile(profileid):
-        #         # in which tw is this ts?
-        #         twid = __database__.getTWofTime(profileid, ts)
-        #         # convert ts to a readable format
-        #         ts = utils.convert_format(ts, utils.alerts_format)
-        #         if twid:
-        #             twid = twid[0]
-        #             type_detection = 'dstip'
-        #             source_target_tag = 'CC'
-        #             # TODO: this needs to be changed if add more rules to the rules/dir
-        #             type_evidence = 'NETWORK_gps_location_leaked'
-        #             category = 'Malware'
-        #             confidence = 0.9
-        #             threat_level = 'high'
-        #             __database__.setEvidence(
-        #                 type_evidence,
-        #                 type_detection,
-        #                 detection_info,
-        #                 threat_level,
-        #                 confidence,
-        #                 description,
-        #                 ts,
-        #                 category,
-        #                 source_target_tag=source_target_tag,
-        #                 port=dport,
-        #                 proto=proto,
-        #                 profileid=profileid,
-        #                 twid=twid,
-        #                 uid=uid,
-        #             )
+            portproto = f'{dport}/{proto}'
+            port_info = __database__.get_port_info(portproto)
+
+            # generate a random uid
+            uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+                'utf-8'
+            )
+            src_profileid = f'profile_{srcip}'
+            dst_profileid = f'profile_{dstip}'
+            # sometimes this module tries to find the profile before it's created. so
+            # wait a while before alerting.
+            time.sleep(4)
+            # make sure we have a profile for any of the above IPs
+            if __database__.hasProfile(src_profileid):
+                type_detection = 'dstip'
+                profileid = src_profileid
+                detection_info = dstip
+                ip_identification = __database__.getIPIdentification(dstip)
+                description = (
+                    f'{rule} to destination address: {dstip} {ip_identification} '
+                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
+                )
+            elif __database__.hasProfile(dst_profileid):
+                type_detection = 'srcip'
+                profileid = dst_profileid
+                detection_info = srcip
+                ip_identification = __database__.getIPIdentification(srcip)
+                description = (
+                    f'{rule} to destination address: {srcip} {ip_identification} '
+                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
+                )
+
+            else:
+                # no profiles in slips for either IPs
+                return
+
+            # in which tw is this ts?
+            twid = __database__.getTWofTime(profileid, ts)
+            # convert ts to a readable format
+            ts = utils.convert_format(ts, utils.alerts_format)
+            if twid:
+                twid = twid[0]
+                source_target_tag = 'CC'
+                # TODO: this needs to be changed if add more rules to the rules/dir
+                type_evidence = 'NETWORK_gps_location_leaked'
+                category = 'Malware'
+                confidence = 0.9
+                threat_level = 'high'
+                __database__.setEvidence(
+                    type_evidence,
+                    type_detection,
+                    detection_info,
+                    threat_level,
+                    confidence,
+                    description,
+                    ts,
+                    category,
+                    source_target_tag=source_target_tag,
+                    port=dport,
+                    proto=proto,
+                    profileid=profileid,
+                    twid=twid,
+                    uid=uid,
+                )
 
     def compile_and_save_rules(self):
         """
@@ -275,24 +293,23 @@ class Module(Module, multiprocessing.Process):
             # -f to stop searching for strings when they were already found
             # -s prints the found string
             cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
-            output = check_output(cmd.split()).decode().splitlines()
-
-            matching_rule = output[0].split()[0]
-            # example of matching_str: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
-            matching_str = output[1].split(':')
-            # index: pcap index where the rule was matched
-            index = int(matching_str[0], 16)
+            lines = check_output(cmd.split()).decode().splitlines()
+            matching_rule = lines[0].split()[0]
+            # example of lines: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
+            matching_str = lines[1].split(':')
+            # offset: pcap index where the rule was matched
+            offset = int(matching_str[0], 16)
             # var is either $rgx_gps_loc, $rgx_gps_lon or $rgx_gps_lat
             var = matching_str[1].replace('$', '')
             # strings_matched is exactly the string that was found that triggered this detection
-            strings_matched = matching_str[2]
-
+            strings_matched = lines[1][lines[1].index(var)+ len(var):]
             self.set_evidence_yara_match({
                 'rule': matching_rule,
                 'vars_matched': var,
                 'strings_matched': strings_matched,
-                'index':index,
+                'offset': offset,
             })
+            #todo test this with no match
 
     def run(self):
         utils.drop_root_privs()
