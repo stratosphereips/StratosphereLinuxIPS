@@ -1357,11 +1357,6 @@ class UpdateFileManager:
             # when the ti files are already updated, from a previous run, we don't
             return
 
-        ips = {
-            'in 1 blacklist': 0,
-            'in 2 blacklist': 0,
-            'in 3 blacklist': 0,
-        }
         ips_in_1_bl = 0
         ips_in_2_bl = 0
         ips_in_3_bl = 0
@@ -1373,10 +1368,9 @@ class UpdateFileManager:
                 ips_in_2_bl += 1
             elif blacklists_ip_appeard_in == 3:
                 ips_in_3_bl += 1
-
-        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}', 1, 0)
-        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 1, 0)
-        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 1, 0)
+        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 2, 0)
 
     def update_mac_db(self, response):
         if response.status_code != 200:
