@@ -4,8 +4,30 @@ const color = require('chalk')
 
 class Evidence extends box.BoxClass{
 
-    constructor(grid, redis_database,screen, characteristics){
-        super(grid, characteristics)
+    constructor(grid, redis_database, screen, gridParameters){
+        const widgetParameters = {
+            top: 'center',
+            left: 'center',
+            width: '50%',
+            height: '50%',
+            label:characteristics[4],
+            tags: true,
+            keys: true,
+            style:{
+              border:{ fg:'blue',type: 'line'},
+              focus: {border:{ fg:'magenta'}}
+            },
+            vi:true,
+            scrollable: true,
+            alwaysScroll: true,
+            scrollbar: {
+              ch: ' ',
+              inverse: true
+            }
+        }
+
+        super(grid, gridParameters, widgetParameters)
+
         this.redis_database = redis_database
         this.screen = screen
     }
