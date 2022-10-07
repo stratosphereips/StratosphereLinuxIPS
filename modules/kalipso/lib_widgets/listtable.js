@@ -1,6 +1,5 @@
-var async = require('async')
 var fs = require('fs')
-const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/libraries.js");
+const { redis, blessed, blessed_contrib, async } = require("../kalipso_widgets/libraries.js");
 
 class ListTable{
     constructor(grid,  redis_database,screen, characteristics,limit_letter_outtuple=0){
