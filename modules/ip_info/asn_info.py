@@ -87,7 +87,7 @@ class ASN:
     def cache_ip_range(self, ip) -> bool:
         """
         Get the range of the given ip and
-        caches the asn of the whole ip range
+        cache the asn of the whole ip range
         """
         try:
             # Cache the range of this ip

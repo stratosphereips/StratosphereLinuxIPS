@@ -176,7 +176,8 @@ def test_binetflow(
                 'multiple empty HTTP connections to bing.com',
                 'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
                 'Incompatible certificate CN',
-                'Malicious JA3: 6734f37431670b3ab4292b8f60f29984'
+                'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
+                'sending arp packet to a destination address outside of local network',
             ],
             'test9-mixed-zeek-dir/',
             6661,

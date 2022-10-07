@@ -288,7 +288,7 @@ class Module(Module, multiprocessing.Process):
             confidence = 0.6
             threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'{saddr} sending arp packet to a destination address outside of local network: {daddr}. {ip_identification}'
+            description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
             type_detection = 'srcip'
