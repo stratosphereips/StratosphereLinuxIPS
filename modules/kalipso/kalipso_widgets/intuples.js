@@ -1,13 +1,11 @@
 const { redis, blessed, blessed_contrib, async } = require("./libraries.js");
 const listTable = require("../lib_widgets/listtable.js")
-var async = require('async')
 
 class InTuples extends listTable.ListTableClass{
 
     constructor(grid, redis_database,screen, characteristics){
         super(grid, redis_database, screen, characteristics)
     }
-
 
     /*Combine data for InTuples*/
     setInTuples(ip, timewindow){
