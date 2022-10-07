@@ -295,21 +295,25 @@ class Module(Module, multiprocessing.Process):
             cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
             lines = check_output(cmd.split()).decode().splitlines()
             matching_rule = lines[0].split()[0]
-            # example of lines: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
-            matching_str = lines[1].split(':')
-            # offset: pcap index where the rule was matched
-            offset = int(matching_str[0], 16)
-            # var is either $rgx_gps_loc, $rgx_gps_lon or $rgx_gps_lat
-            var = matching_str[1].replace('$', '')
-            # strings_matched is exactly the string that was found that triggered this detection
-            strings_matched = lines[1][lines[1].index(var)+ len(var):]
-            self.set_evidence_yara_match({
-                'rule': matching_rule,
-                'vars_matched': var,
-                'strings_matched': strings_matched,
-                'offset': offset,
-            })
-            #todo test this with no match
+
+            # each match (line) should be a separate detection
+            for line in lines[1:]:
+                # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
+                line = line.split(':')
+                # offset: pcap index where the rule was matched
+                offset = int(line[0], 16)
+                # var is either $rgx_gps_loc, $rgx_gps_lon or $rgx_gps_lat
+                var = line[1].replace('$', '')
+                # strings_matched is exactly the string that was found that triggered this detection
+                # starts from the var until the end of the line
+                strings_matched = ' '.join([s for s in line[2:]])
+                self.set_evidence_yara_match({
+                    'rule': matching_rule,
+                    'vars_matched': var,
+                    'strings_matched': strings_matched,
+                    'offset': offset,
+                })
+                #todo test this with no match
 
     def run(self):
         utils.drop_root_privs()
