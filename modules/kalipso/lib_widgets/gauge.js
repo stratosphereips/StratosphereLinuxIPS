@@ -3,10 +3,8 @@ const { redis, blessed, blessed_contrib } = require("./libraries.js");
 var async = require('async')
 
 class Gauge{
-    constructor(grid, redis_database,screen, characteristics){
-        this.screen = screen
+    constructor(grid, characteristics){
         this.grid = grid
-        this.redis_database = redis_database
         this.widget = this.initGauge(characteristics);
     }
 
@@ -44,4 +42,4 @@ class Gauge{
     } 
 }
 
-module.exports = Gauge
+module.exports = {GaugeClass:Gauge}
