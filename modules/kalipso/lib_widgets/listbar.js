@@ -2,10 +2,8 @@ const { redis, blessed, blessed_contrib } = require("./libraries.js");
 
 class ListBar{
 
-    constructor(grid, redis_database,screen ){
-        this.screen = screen
+    constructor(grid){
         this.grid = grid
-        this.redis_database = redis_database
         this.widget = this.initWidget()
     }
 
@@ -72,4 +70,4 @@ class ListBar{
     }
 }
 
-module.exports = ListBar
+module.exports = {ListBarClass:ListBar}
