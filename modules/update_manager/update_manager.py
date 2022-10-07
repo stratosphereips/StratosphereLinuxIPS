@@ -85,6 +85,7 @@ class UpdateManager(Module, multiprocessing.Process):
         update_finished = asyncio.create_task(self.update_manager.update())
         # wait for UpdateFileManager to finish before starting all the modules
         await update_finished
+        self.print(f'{__database__.get_loaded_ti_files()} TI files successfully loaded.')
 
     def run(self):
         utils.drop_root_privs()

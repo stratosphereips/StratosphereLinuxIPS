@@ -1459,8 +1459,7 @@ class UpdateFileManager:
                 # in case all our files are updated, we don't have task defined, skip
                 pass
 
-            self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
-
+            __database__.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:

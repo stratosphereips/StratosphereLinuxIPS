@@ -269,6 +269,18 @@ class Database(ProfilingFlowsDatabase, object):
 
         return False
 
+    def set_loaded_ti_files(self, number_of_loaded_files: int):
+        """
+        Stores the number of successfully loaded TI files
+        """
+        self.r.set('loaded TI files', number_of_loaded_files)
+
+    def get_loaded_ti_files(self):
+        """
+        returns the number of successfully loaded TI files. or 0 if none is loaded
+        """
+        return self.r.get('loaded TI files') or 0
+
     def addProfile(self, profileid, starttime, duration):
         """
         Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
