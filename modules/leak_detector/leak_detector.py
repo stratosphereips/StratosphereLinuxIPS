@@ -294,8 +294,12 @@ class Module(Module, multiprocessing.Process):
             # -s prints the found string
             cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
             lines = check_output(cmd.split()).decode().splitlines()
-            matching_rule = lines[0].split()[0]
 
+            if not lines:
+                # no match
+                return
+
+            matching_rule = lines[0].split()[0]
             # each match (line) should be a separate detection
             for line in lines[1:]:
                 # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
@@ -313,7 +317,6 @@ class Module(Module, multiprocessing.Process):
                     'strings_matched': strings_matched,
                     'offset': offset,
                 })
-                #todo test this with no match
 
     def run(self):
         utils.drop_root_privs()
