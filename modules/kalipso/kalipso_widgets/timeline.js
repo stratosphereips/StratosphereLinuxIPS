@@ -3,8 +3,10 @@ const table = require("../lib_widgets/table.js")
 
 class Timeline extends table.TableClass{
 
-    constructor(grid, redis_database,screen, characteristics){
-        super(grid, redis_database, screen, characteristics)
+    constructor(grid, redis_database, screen, characteristics){
+        super(grid, characteristics)
+        this.redis_database = redis_database
+        this.screen = screen
     }
 
     capitalizeFirstLetter(data){

@@ -2,10 +2,8 @@ const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/librarie
 
 class Table{
 
-    constructor(grid, redis_database,screen, characteristics){
-        this.screen = screen
+    constructor(grid, characteristics){
         this.grid = grid
-        this.redis_database = redis_database
         this.widget = this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed_contrib.table,
         {
           keys: true
@@ -23,7 +21,6 @@ class Table{
     setData(widget_headers, widget_data){
         this.widget.setData({headers:widget_headers, data:widget_data})
     }
-
     /*Hide the widget on the screen*/
     hide(){
         this.widget.hide()
@@ -38,7 +35,6 @@ class Table{
     focus(){
         this.widget.focus()
     }
-
 }
 
 module.exports = {TableClass: Table};

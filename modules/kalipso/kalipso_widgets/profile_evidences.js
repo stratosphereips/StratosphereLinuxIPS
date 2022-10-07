@@ -4,7 +4,9 @@ const table = require("../lib_widgets/table.js")
 class ProfileEvidences extends table.TableClass{
 
     constructor(grid, redis_database,screen, characteristics){
-        super(grid, redis_database, screen, characteristics)
+        super(grid, characteristics)
+        this.redis_database = redis_database
+        this.screen = screen
     }
 
     /*Set evidence for all the timewindows in profile.*/
