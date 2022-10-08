@@ -4,7 +4,8 @@ const listTable = require("../lib_widgets/listtable.js")
 class InTuples extends listTable.ListTableClass{
 
     constructor(grid, redis_database,screen, characteristics){
-        super(grid, redis_database, screen, characteristics)
+        super(grid, redis_database, characteristics)
+                this.screen = screen
     }
 
     /*Combine data for InTuples*/

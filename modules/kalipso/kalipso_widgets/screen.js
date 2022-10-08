@@ -17,12 +17,9 @@ const help = require('./help.js')
 const profile_evidences = require('./profile_evidences.js')
 
 class screen {
-    constructor(redis_database, tree_class,
-              listbar_class, limit_letter_outtuple) {
+    constructor(redis_database, limit_letter_outtuple) {
 
-        this.tree_class = tree_class
         this.redis_database = redis_database
-
         this.limit_letter_outtuple = limit_letter_outtuple
 
         this.screen = this.initScreen()
@@ -31,7 +28,6 @@ class screen {
         this.tree_widget = undefined
         this.timeline_widget = undefined
         this.evidence_box_widget = undefined
-        this.ipinfo_widget = undefined
         this.focus_widget = undefined
         this.focus_hotkey = false
         this.combine_listtable_gauge = undefined

@@ -7,7 +7,9 @@ var stripAnsi = require('strip-ansi')
 class IpInfo extends listTable.ListTableClass{
 
     constructor(grid, redis_database,screen, characteristics){
-        super(grid, redis_database, screen, characteristics)
+        super(grid, redis_database, characteristics)
+                this.screen = screen
+
     }
 
 }

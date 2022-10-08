@@ -4,7 +4,7 @@ const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("..
 class Gauge{
     constructor(grid, gridParameters, widgetParameters){
         this.grid = grid
-        this.widget = this.initGauge(gridParameters,widgetParameters);
+        this.widget = this.initGauge(gridParameters, widgetParameters);
     }
 
     /*Initialize the widget gauge and its parameters*/
