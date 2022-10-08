@@ -2,17 +2,20 @@ const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("..
 
 
 class Gauge{
-    constructor(grid, gridParameters, widgetParameters){
+    constructor(grid, gridParameters ){
         this.grid = grid
-        this.widget = this.initGauge(gridParameters, widgetParameters);
-    }
-
-    /*Initialize the widget gauge and its parameters*/
-    initGauge(gridParameters, widgetParameters){
-        return this.grid.set(gridParameters[0],gridParameters[1],gridParameters[2], gridParameters[3],
+        const widgetParameters =                {style:{
+                    border:{ fg:'blue'},
+                    focus: {border:{ fg:'magenta'}}},
+            keys:true,
+            gaugeSpacing: 1,
+            gaugeHeight: 1,
+            gauges:[]
+            }
+        this.widget = this.grid.set(gridParameters[0],gridParameters[1],gridParameters[2], gridParameters[3],
                     blessed_contrib.gaugeList,
-                    widgetParameters)
-        }
+                    widgetParameters);
+    }
 
     /*Hide the widget on the screen*/
     hide(){

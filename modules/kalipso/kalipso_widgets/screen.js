@@ -70,13 +70,13 @@ class screen {
     }
 
     initEDRPTHotkey(){
-      let listtable1 = new listtable.ListTableClass(this.grid, this.redis_database, this.screen, [0,0,2.8,2])
+      let listtable1 = new listtable.ListTableClass(this.grid, this.redis_database, [0,0,2.8,2])
       listtable1.hide()
-      let listtable2 = new listtable.ListTableClass(this.grid, this.redis_database, this.screen, [2.8,0,2.8,2])
+      let listtable2 = new listtable.ListTableClass(this.grid, this.redis_database, [2.8,0,2.8,2])
       listtable2.hide()
-      let gauge1 = new gauge.GaugeClass(this.grid, this.redis_database, this.screen, [0.3, 2, 2.6, 4])
+      let gauge1 = new gauge.GaugeClass(this.grid, [0.3, 2, 2.6, 4])
       gauge1.hide()
-      let gauge2 = new gauge.GaugeClass(this.grid, this.redis_database, this.screen, [3.1, 2, 2.6, 4])
+      let gauge2 = new gauge.GaugeClass(this.grid,  [3.1, 2, 2.6, 4])
       gauge2.hide()
 
       this.combine_listtable_gauge = new combine.combineClass(this.grid, this.redis_database, this.screen, listtable1, listtable2, gauge1, gauge2)

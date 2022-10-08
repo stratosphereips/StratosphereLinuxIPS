@@ -2,7 +2,7 @@ var fs = require('fs')
 const { redis, blessed, blessed_contrib, async } = require("../kalipso_widgets/libraries.js");
 
 class ListTable{
-    constructor(grid,  redis_database, characteristics,limit_letter_outtuple=0){
+    constructor(grid,  redis_database, characteristics, limit_letter_outtuple=0){
         this.grid = grid
         this.redis_database = redis_database
         this.widget = this.initListTable(characteristics);
