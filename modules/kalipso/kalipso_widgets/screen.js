@@ -106,17 +106,18 @@ class screen {
     /* Separate all main page widgets*/
     initMain(){
         this.evidence_box_widget = new evidence.EvidenceClass(this.grid, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
-        this.ipinfo_widget = new ipinfo.IpInfoClass(this.grid, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
+        let ipinfo_widget = new ipinfo.IpInfoClass(this.grid, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
         this.timeline_widget = new timeline.TimelineClass(this.grid, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
-        this.tree_widget = new this.tree_class(this.grid, this.redis_database, this.timeline_widget, this.screen, this.evidence_box_widget, this.ipinfo_widget)
+        this.tree_widget = new profile_tws.ProfileTWsClass(this.grid, this.redis_database, this.timeline_widget, this.evidence_box_widget, ipinfo_widget)
 
+        this.timeline_widget.on(ipinfo_widget)
         this.tree_widget.getTreeDataFromDatabase()
         this.tree_widget.focus()
         this.tree_widget.on()
         this.tree_widget.widget.style.border.fg = 'magenta'
         this.focus_widget = this.tree_widget
-
-        return [this.tree_widget.widget, this.ipinfo_widget,  this.evidence_box_widget.widget, this.timeline_widget.widget]
+        this.render()
+        return [this.tree_widget.widget, ipinfo_widget,  this.evidence_box_widget.widget, this.timeline_widget.widget]
     }
 
 
@@ -281,8 +282,7 @@ class screen {
             this.focus_widget = this.timeline_widget
             this.tree_widget.widget.style.border.fg = 'blue'
             this.timeline_widget.widget.style.border.fg='magenta'
-            this.timeline_widget.widget.focus();
-            this.timeline_widget.on(this.ipinfo_widget)}
+            this.timeline_widget.widget.focus();}
           else if(this.focus_widget == this.timeline_widget){
             this.timeline_widget.widget.style.border.fg='blue'
             this.focus_widget = this.evidence_box_widget
