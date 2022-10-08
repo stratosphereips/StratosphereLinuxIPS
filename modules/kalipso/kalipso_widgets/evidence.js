@@ -10,7 +10,7 @@ class Evidence extends box.BoxClass{
             left: 'center',
             width: '50%',
             height: '50%',
-            label:characteristics[4],
+            label:gridParameters[4],
             tags: true,
             keys: true,
             style:{
