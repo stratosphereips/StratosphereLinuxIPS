@@ -2,12 +2,8 @@
 const { redis } = require("./kalipso_widgets/libraries.js");
 
 /*Import all the widgets.*/
-var screen_class = require('./kalipso_widgets/kalipso_screen')
-var redis_database_class = require('./kalipso_widgets/kalipso_redis')
-var tree = require('./kalipso_widgets/kalipso_tree')
-var gauge = require('./kalipso_widgets/kalipso_gauge')
-var combine_listtable_gauge = require('./kalipso_widgets/kalipso_connect_listtable_gauge')
-var listbar = require("./kalipso_widgets/kalipso_listbar")
+var screen_class = require('./kalipso_widgets/screen')
+var redis_database_class = require('./kalipso_widgets/database')
 
 var {argv} = require('yargs').option('l',{
 

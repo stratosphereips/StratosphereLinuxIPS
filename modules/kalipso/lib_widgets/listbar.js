@@ -1,4 +1,4 @@
-const { redis, blessed, blessed_contrib } = require("./libraries.js");
+const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("../kalipso_widgets/libraries.js");
 
 class ListBar{
 

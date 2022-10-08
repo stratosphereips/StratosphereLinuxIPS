@@ -1,4 +1,4 @@
-const { redis, blessed, blessed_contrib, async } = require("./libraries.js");
+const { redis, blessed, blessed_contrib, async, stripAnsi } = require("./libraries.js");
 const tree = require("../lib_widgets/tree.js")
 
 class ProfileTWs extends tree.TreeClass{

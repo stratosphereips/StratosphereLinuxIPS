@@ -4,9 +4,12 @@ const timeline = require('./timeline.js')
 const outtuples = require('./outtuples.js')
 const intuples = require('./intuples.js')
 const ipinfo = require('./ipinfo.js')
+const profile_tws = require('./profile_tws.js')
+
 const listtable = require('../lib_widgets/listtable.js')
-const gauge = require('./kalipso_gauge.js')
+const gauge = require('../lib_widgets/gauge.js')
 const combine = require('./kalipso_connect_listtable_gauge.js')
+const listbar = require('../lib_widgets/listbar.js')
 
 
 const help = require('./help.js')
