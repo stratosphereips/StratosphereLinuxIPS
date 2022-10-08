@@ -66,7 +66,7 @@ class screen {
 
     /*initialize Listbar with hotkeys on the screen*/
     initListBar(){
-      return new this.listbar_class(this.grid, this.redis_database, this.screen)
+      return new listbar.ListBarClass(this.grid)
     }
 
     initEDRPTHotkey(){
