@@ -85,8 +85,8 @@ class screen {
 
 
     initZHotkey(){
-      let profile_evidences_widget = new profile_evidences.ProfileEvidencesClass(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
-      profile_evidences_widget.hide()
+      let profile_evidences_widget = new profile_evidences.ProfileEvidencesClass(this.grid, this.redis_database,this.screen, [0, 0, 5.7, 6,'ProfileEvidence',[30,200], true])
+      profile_evidences_widget.widget.hide()
       return [profile_evidences_widget]
     }
 
