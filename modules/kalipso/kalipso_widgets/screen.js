@@ -106,8 +106,8 @@ class screen {
     initMain(){
         this.evidence_box_widget = new evidence.EvidenceClass(this.grid, this.redis_database, this.screen, [4.8,1, 0.9, 5,'Evidence'])
         let ipinfo_widget = new ipinfo.IpInfoClass(this.grid, this.redis_database, this.screen, [0, 1, 0.6, 5,'IPInfo',[30,30,10,10,10,10], false])
-        this.timeline_widget = new timeline.TimelineClass(this.grid, this.redis_database, this.screen, [0.6, 1, 4.3, 5,'Timeline',[200], true])
-        this.tree_widget = new profile_tws.ProfileTWsClass(this.grid, this.redis_database, this.timeline_widget, this.evidence_box_widget, ipinfo_widget)
+        this.timeline_widget = new timeline.TimelineClass(this.grid, this.screen, this.redis_database, [0.6, 1, 4.3, 5,'Timeline',[200], true])
+        this.tree_widget = new profile_tws.ProfileTWsClass(this.grid, this.screen, this.redis_database, this.timeline_widget, this.evidence_box_widget, ipinfo_widget)
 
         this.timeline_widget.on(ipinfo_widget)
         this.tree_widget.getTreeDataFromDatabase()
