@@ -2,18 +2,10 @@ const { redis, blessed, blessed_contrib } = require("../kalipso_widgets/librarie
 
 class Table{
 
-    constructor(grid, characteristics){
-        this.grid = grid
-        this.widget = this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], blessed_contrib.table,
-        {
-          keys: true
-        , vi:true
-        , style:{border:{ fg:'blue'}}
-        , interactive:characteristics[6]
-        , scrollbar: true
-        , label: characteristics[4]
-        , columnWidth: characteristics[5]
-        }
+    constructor(grid, gridParameters, widgetParameters){
+        this.widget = grid.set(gridParameters[0],gridParameters[1],gridParameters[2],gridParameters[3],
+        blessed_contrib.table,
+        widgetParameters
         )
     }
 
