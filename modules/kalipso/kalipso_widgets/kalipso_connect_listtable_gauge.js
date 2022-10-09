@@ -22,12 +22,22 @@ class combine_Listtable_Gauge{
         this.gauge_number = 9
         this.listtable1_column_names = []
         this.listtable2_column_names = []
+        this.focus = this.gauge1
         }
 
     /*Round numbers by specific decimals*/
     round(value, decimals) {
         return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
     };
+
+    changeFocus(){
+        if(this.focus == this.gauge1){
+            this.focus = this.gauge2
+            this.gauge2.focus()}
+        else{
+            this.focus = this.gauge1
+            this.gauge1.focus()}
+    }
 
     format_tcp_udp_data_with_IPs(redis_data, tcp_or_udp){
     /*
