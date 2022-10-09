@@ -6,8 +6,8 @@ var stripAnsi = require('strip-ansi')
 
 class Help extends listTable.ListTableClass{
 
-    constructor(grid, redis_database,screen, characteristics){
-        super(grid, redis_database, screen, characteristics)
+    constructor(grid, redis_database, characteristics){
+        super(grid, redis_database, characteristics)
     }
 
 
@@ -20,8 +20,8 @@ class Help extends listTable.ListTableClass{
                     ['-r','dst ports when the IP of the profile as server. Total flows, packets and bytes going TO a specific dst IP.'],
                     ['-f','dst ports when the IP of the profile acted as client. Total flows, packets and bytes going TO a specific dst port.'],
                     ['-t','dst ports when the IP of the profile acted  as client. The amount of connections to a dst IP on a specific port .'],
-                    ['-i','outTuples ‘IP-port-protocol’combined together with outTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
-                    ['-y','inTuples ‘IP-port-protocol’combined together with inTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
+                    ['-i','outTuples "IP-port-protocol" combined together with outTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
+                    ['-y','inTuples "IP-port-protocol" combined together with inTuples Behavioral letters, DNS resolution  of the IP, ASN, geo country and Virus Total summary.'],
                     ['-z', 'evidences from all timewindows in the selected profile.' ],
                     ['-o','manually update the tree with profiles and timewindows. Default is 2 minutes. '],
                     ['-q','exit the hotkey'],
