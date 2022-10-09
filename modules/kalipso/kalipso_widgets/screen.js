@@ -346,9 +346,21 @@ class screen {
         else if(key.name == 'h'){
           this.helpbar.selectTab(12)
           this.h_hotkey_routine()
+          this.activePage = this.helptable
+        }
+        else if(this.activePage == this.edprthotkey && (key.name == 'down' || key.name == 'j')){
+            this.combine_listtable_gauge.down()
+        }
+        else if(this.activePage == this.edprthotkey && (key.name == 'up' || key.name == 'k')){
+            this.combine_listtable_gauge.up()
+        }
+        else if(key.name == 'tab' && this.activePage == this.edprthotkey){
+            this.combine_listtable_gauge.changeFocus()
         }
 
+        this.render()
       })
+
     }
 
     /*Render the screen*/
