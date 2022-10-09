@@ -289,7 +289,7 @@ class screen {
             this.focus_widget = this.tree_widget
             this.tree_widget.widget.style.border.fg = 'magenta'
             this.tree_widget.focus();}
-            this.render();
+          this.render();
         }
         else if(key.name == 'q' || key.name == "C-c"){
             return process.exit(0)
@@ -298,65 +298,54 @@ class screen {
           this.helpbar.selectTab(0)
           this.main_page_routine()
           this.activePage = this.mainPage
-          this.focus_hotkey = false
         }
         else if(key.name == 'p'){
           this.helpbar.selectTab(4)
           this.p_hotkey_routine()
           this.activePage = this.edprthotkey
-          this.focus_hotkey = true
         }
         else if(key.name == 'r'){
           this.helpbar.selectTab(3)
           this.r_hotkey_routine()
           this.activePage = this.edprthotkey
-          this.focus_hotkey = true
         }
         else if(key.name == 'd'){
           this.helpbar.selectTab(2)
           this.d_hotkey_routine()
           this.activePage = this.edprthotkey
-          this.focus_hotkey = true
         }
         else if(key.name == 't'){
           this.helpbar.selectTab(5)
           this.t_hotkey_routine()
           this.activePage = this.edprthotkey
-          this.focus_hotkey = true
         }
         else if(key.name == 'e'){
           this.helpbar.selectTab(1)
           this.e_hotkey_routine()
           this.activePage = this.edprthotkey
-          this.focus_hotkey = true
         }
         else if(key.name == 'i'){
           this.helpbar.selectTab(6)
           this.i_hotkey_routine()
           this.activePage = this.ihotkey
-          this.focus_hotkey = false
         }
         else if(key.name == 'z'){
           this.helpbar.selectTab(8)
           this.z_hotkey_routine()
           this.activePage = this.zhotkey
-          this.focus_hotkey = false
         }
         else if(key.name == 'y'){
           this.helpbar.selectTab(7)
           this.y_hotkey_routine()
           this.activePage = this.yhotkey
-          this.focus_hotkey = false
         }
         else if(key.name == 'o'){
           this.helpbar.selectTab(0)
           this.o_hotkey_routine() 
-          this.focus_hotkey = false
         }
         else if(key.name == 'h'){
           this.helpbar.selectTab(12)
           this.h_hotkey_routine()
-          this.focus_hotkey = false
         }
 
       })
