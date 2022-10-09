@@ -10,10 +10,7 @@ const listtable = require('../lib_widgets/listtable.js')
 const gauge = require('../lib_widgets/gauge.js')
 const combine = require('./kalipso_connect_listtable_gauge.js')
 const listbar = require('../lib_widgets/listbar.js')
-
-
-const help = require('./help.js')
-
+const help_lib = require('./help.js')
 const profile_evidences = require('./profile_evidences.js')
 
 class screen {
@@ -38,9 +35,10 @@ class screen {
         this.zhotkey = this.initZHotkey()
         this.edprthotkey = this.initEDRPTHotkey()
         this.helpbar = this.initListBar()
+        this.helptable = this.initHelpTable()
 
         this.activePage = this.mainPage
-
+        this.render()
     }
 
     /*Initialize the screen*/
@@ -59,9 +57,10 @@ class screen {
 
     /*Initialize help bar on the screen*/
     initHelpTable(){
-        this.helptable = new help.HelpClass(this.grid, this.redis_database, this.screen, [0, 0, 5.7, 6,'help'])
-        this.helptable.setHelp()
-        this.helptable.hide()
+        const helptable = new help_lib.HelpClass(this.grid, this.redis_database, [0, 0, 5.7, 6,'help'])
+        helptable.setHelp()
+        helptable.hide()
+        return [helptable]
     }
 
     /*initialize Listbar with hotkeys on the screen*/
@@ -238,8 +237,7 @@ class screen {
     /*Function to display help hotkey*/
     h_hotkey_routine(){
       this.activePage.forEach(item => item.hide());
-
-      this.helptable.show()
+      this.helptable[0].show()
       this.render()
     }
 
