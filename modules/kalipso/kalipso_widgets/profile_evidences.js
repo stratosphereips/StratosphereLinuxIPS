@@ -4,7 +4,16 @@ const table = require("../lib_widgets/table.js")
 class ProfileEvidences extends table.TableClass{
 
     constructor(grid, redis_database,screen, characteristics){
-        super(grid, characteristics)
+    const widgetParameters =         {
+          keys: true
+        , vi:true
+        , style:{border:{ fg:'blue'}}
+        , interactive:characteristics[6]
+        , scrollbar: true
+        , label: characteristics[4]
+        , columnWidth: characteristics[5]
+        }
+        super(grid, characteristics, widgetParameters)
         this.redis_database = redis_database
         this.screen = screen
     }
