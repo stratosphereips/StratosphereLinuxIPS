@@ -259,24 +259,8 @@ class screen {
     /*Function to monitor all keypresses happening on the screen*/
     registerEvents(){
       this.screen.on('keypress', (ch, key)=>{
-        if(key.name == 'down' || key.name == 'j'){
-          if(this.focus_hotkey){
-            this.combine_listtable_gauge.down()
-          }
-        }
-        else if(key.name == 'up' || key.name == 'k'){
-          if(this.focus_hotkey){
-            this.combine_listtable_gauge.up()
-          }
-        }
-        else if(key.name == 'tab'){
-          if(this.gauge1.widget.focused == true){
-            this.gauge2.focus()
-          }
-          else if(this.gauge2.widget.focused == true){
-            this.gauge1.focus()
-          }
-          else if(this.focus_widget == this.tree_widget){
+        if(key.name == 'tab' && this.activePage == this.mainPage){
+          if(this.focus_widget == this.tree_widget){
             this.focus_widget = this.timeline_widget
             this.tree_widget.widget.style.border.fg = 'blue'
             this.timeline_widget.widget.style.border.fg='magenta'
