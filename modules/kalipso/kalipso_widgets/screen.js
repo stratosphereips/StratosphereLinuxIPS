@@ -115,7 +115,6 @@ class screen {
         this.tree_widget.on()
         this.tree_widget.widget.style.border.fg = 'magenta'
         this.focus_widget = this.tree_widget
-        this.render()
         return [this.tree_widget.widget, ipinfo_widget,  this.evidence_box_widget.widget, this.timeline_widget.widget]
     }
 
@@ -133,8 +132,6 @@ class screen {
         ['estSrcPortClient', 'totalflows', 'totalpkts','totalbytes'],
         ['NotEstSrcPortClient', 'totalflows', 'totalpkts','totalbytes']
       )
-      this.render()
-      return;
     }
 
     /*Display data for dstIPsClient established and not established*/
@@ -180,7 +177,6 @@ class screen {
         'DstPortsServerTCPNotEstablished', 'DstPortsServerUDPNotEstablished',
         ['estDstPortServer', 'totalflows', 'totalpkts','totalbytes'],
         ['NotEstDstPortServer', 'totalflows', 'totalpkts','totalbytes'])
-
     }
 
     /*Display data for DstPortsClient established and not established*/
@@ -246,7 +242,6 @@ class screen {
     main_page_routine(){
       this.activePage.forEach(item => item.hide());
       this.mainPage.forEach(item => item.show());
-
       this.focus_widget.focus()      
       this.render()
     }
