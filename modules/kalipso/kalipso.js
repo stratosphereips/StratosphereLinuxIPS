@@ -1,16 +1,9 @@
+
+const { redis } = require("./kalipso_widgets/libraries.js");
+
 /*Import all the widgets.*/
-var screen_class = require('./kalipso_widgets/kalipso_screen')
-var blessed = require('blessed')
-var contrib = require('blessed-contrib')
-var redis = require('redis')
-var redis_database_class = require('./kalipso_widgets/kalipso_redis')
-var tree = require('./kalipso_widgets/kalipso_tree')
-var table = require('./kalipso_widgets/kalipso_table')
-var box = require('./kalipso_widgets/kalipso_box')
-var listtable = require('./kalipso_widgets/kalipso_listtable')
-var gauge = require('./kalipso_widgets/kalipso_gauge')
-var combine_listtable_gauge = require('./kalipso_widgets/kalipso_connect_listtable_gauge')
-var listbar = require("./kalipso_widgets/kalipso_listbar")
+var screen_class = require('./kalipso_widgets/screen')
+var redis_database_class = require('./kalipso_widgets/database')
 
 var {argv} = require('yargs').option('l',{
 
@@ -37,9 +30,7 @@ const redis_database = new redis_database_class(redis, redis_port)
 redis_database.createClient()
 
 // Initialize screen with all necessary widgets.
-const screen = new screen_class(blessed, contrib, redis_database,tree, table, box,listtable, gauge, combine_listtable_gauge, listbar,limit_letter_outtuple)
-screen.init()
-screen.render()
+const screen = new screen_class(redis_database,limit_letter_outtuple)
 
 // Register all keypresses in the screen.
 screen.registerEvents()
