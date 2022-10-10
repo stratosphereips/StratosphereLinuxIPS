@@ -15,21 +15,22 @@ class ProfileTWs extends tree.TreeClass{
     }
 
         /*Function to sort timewindows in ascending order*/
-	sortTWs(blocked,tws_dict, ip){
+	sortTWs(tws, blocked_tws){
+	    tws.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))});
+	    let temp_tws_dict = {};
 
-		var blocked_tws = blocked[ip];
-	    var keys = Object.keys(tws_dict);
-	    keys.sort(function(a,b){return(Number(a.match(/(\d+)/g)[0]) - Number((b.match(/(\d+)/g)[0])))});
-	    var temp_tws_dict = {};
-	    for (var i=0; i<keys.length; i++){
-		    var key = keys[i];
+	    for (let i=0; i < tws.length; i++){
+		    let key = tws[i];
+
 		    if(blocked_tws != undefined && blocked_tws.includes(key)){
-		    temp_tws_dict[color.red(key)] = {}
+		        temp_tws_dict[color.red(key)] = {}
 			}
 		    else{
-		    temp_tws_dict[key] = {}
+		        temp_tws_dict[key] = {}
 			}
+
 	    }
+
 	    return temp_tws_dict;
 	}
 
