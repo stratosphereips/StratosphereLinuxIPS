@@ -54,7 +54,7 @@ class ProfileTWs extends tree.TreeClass{
 
     /*Prepare needed data from Redis to fill the tree and call the next function to format data*/
 	getTreeDataFromDatabase(){
-		return Promise.all([this.redis_database.getAllKeys(),this.redis_database.getBlockedIPsTWs(), this.redis_database.getHostIP()]).then(values=>{this.fillTreeData(values)})
+		return Promise.all([this.redis_database.getAllProfiles(), this.redis_database.getBlockedIPsTWs(), this.redis_database.getHostIP()]).then(values=>{this.fillTreeData(values)})
 	}
 
     /*Get profiles and timewindows that are blocked*/
