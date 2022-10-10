@@ -1190,7 +1190,6 @@ class Main:
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-
         if 'pcap' in cmd_result:
             input_type = 'pcap'
         elif 'dBase' in cmd_result:
@@ -1225,16 +1224,22 @@ class Main:
                 except json.decoder.JSONDecodeError:
                     # this is a tab separated file
                     # is it zeek log file or binetflow file?
-                    tabs_found = re.search(
+
+                    # zeek tab files are separated by several spaces or tabs
+                    sequential_spaces_found = re.search(
                         '\s{1,}-\s{1,}', first_line
                     )
+                    tabs_found = re.search(
+                        '\t{1,}', first_line
+                    )
+
                     if (
                             '->' in first_line
                             or 'StartTime' in first_line
                     ):
                         # tab separated files are usually binetflow tab files
                         input_type = 'binetflow-tabs'
-                    elif tabs_found:
+                    elif sequential_spaces_found or tabs_found:
                         input_type = 'zeek_log_file'
 
         return input_type
