@@ -79,53 +79,44 @@ class ProfileTWs extends tree.TreeClass{
 
 
     /*Fill tree with Profile IPs and their timewindows, highlight blocked timewindows and the host*/
-    setTree(values, blockedIPsTWs,hostIP){
-        return new Promise(resolve=>{
-            var ips_tws = this.tree_data
-            var result = {};
-            var ips_with_profiles = Object.keys(ips_tws)
-            async.forEachOf(ips_with_profiles, (ip, ind, callback)=>{
-                // get the twids of each ip
-                var tw = ips_tws[ip];
-                var sorted_tws = this.sortTWs(blockedIPsTWs, tw[0], ip)
-                var decorated_ip = ip
-                // get the length of the hostIP list
-                var length_hostIP = hostIP.length
+    setTree(values, blockedIPsTWs, hostIP){
+        if(blockedIPsTWs == null){ blockedIPsTWs = {}}
+        let ips_tws = values
+        let result = {};
+        let ips_with_profiles = Object.keys(values)
+        ips_with_profiles.forEach((ip)=>{
+            // get the twids of each ip
+            let tw = values[ip];
+            let sorted_tws = this.sortTWs(tw, blockedIPsTWs[ip])
+            let decorated_ip = ip
 
-                this.redis_database.getHostnameOfIP("profile_" + ip).then(res => {
-                    if(res){decorated_ip += " " +res;}
+            // get the length of the hostIP list
+            let length_hostIP = hostIP.length
 
-                    // check if the current ip aka child aka new_child is the same as any of the Host IPs
-                    async.forEachOf(hostIP,(host_ip, ind, callback)=>{
-                        // the last ip in hostIP list is the current host ip, this is the one we'll be adding (me) to
-                        if(ip.includes(host_ip) && ind == length_hostIP - 1 )
-                        {
-                            // found a child that is also a host ip, add (me) next to the ip
-                            decorated_ip += ' (me)'
-                        }
-                        else if(ip.includes(host_ip)){
-                            decorated_ip += ' (old me)'
-                        }
-                        callback();
-                    }, (err)=>{
-                        if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
-                        // no errors, color the malicious ips in red
-                        if(Object.keys(blockedIPsTWs).includes(ip))
-                        {
-                            result[ip] = { name:color.red(decorated_ip), extended:false, children: sorted_tws}
-                        }
-                        else
-                        {
-                            result[ip] = { name:decorated_ip, extended:false, children: sorted_tws}
-                        }
-                        resolve (result)})
-                })
-                callback();
-            },
-                 (err)=>{
-                    if(err) {console.log('Check setTree in kalipso_tree.js. Error: ',err)}
+            this.redis_database.getHostnameOfIP("profile_" + ip).then(res => {
+                if(res){decorated_ip += " " +res;}
             })
+
+            if(hostIP.includes(ip) && hostIP.indexOf(ip) == (length_hostIP - 1 ))
+                {
+                    decorated_ip += ' (me)'
+                }
+            else if(hostIP.includes(ip)){
+                    decorated_ip += ' (old me)'
+                }
+
+            if(Object.keys(blockedIPsTWs).includes(ip)){
+                result[ip] = { name:color.red(decorated_ip), extended:false, children: sorted_tws}
+            }
+            else{
+                result[ip] = { name:ip, extended:false, children: sorted_tws}
+            }
+
         })
+
+        this.setData(result);
+        this.screen.render();
+
     }
 
 
