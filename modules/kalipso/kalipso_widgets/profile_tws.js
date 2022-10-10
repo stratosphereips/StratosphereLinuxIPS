@@ -77,25 +77,6 @@ class ProfileTWs extends tree.TreeClass{
 		})
 	}
 
-    /*Get tree nodes. Node is an IP of profile*/
-	getTreeData(redis_key){
-		/* profiles added in kalipso are profiles that have keys with '_timeline' only */
-		if(redis_key.includes('timeline')){
-	        var redis_key_list = redis_key.split('_')
-	        if(!Object.keys(this.tree_data).includes(redis_key_list[1]))
-	        {
-	          this.tree_data[redis_key_list[1]]  = [];
-	          this.tree_data[redis_key_list[1]][0] = {};
-	          this.tree_data[redis_key_list[1]][0][redis_key_list[2]]={}
-	      	}
-	        else
-	        {
-	          this.tree_data[redis_key_list[1]][0][redis_key_list[2]]={};
-	    	}
-
-		}
-	}
-
 
     /*Fill tree with Profile IPs and their timewindows, highlight blocked timewindows and the host*/
     setTree(values, blockedIPsTWs,hostIP){
