@@ -153,6 +153,7 @@ class ProfileTWs extends tree.TreeClass{
 				// prepare timeline for this ip,tw
 		    	this.timeline.setTimeline(ip, timewindow)
 		    	}
+		    this.screen.render()
 			});
     }
 
