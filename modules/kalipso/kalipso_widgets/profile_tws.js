@@ -47,9 +47,9 @@ class ProfileTWs extends tree.TreeClass{
     /*Get profiles and timewindows that are blocked*/
 	getBlockedIPsTWs(reply_blockedIPsTWs){
 		return new Promise((resolve, reject)=>{
-			var blockedIPsTWs = {};
+			let blockedIPsTWs = {};
 			async.each(reply_blockedIPsTWs,(blockedIPTW_line,callback)=>{
-				var blockedIPTW_list = blockedIPTW_line.split('_');
+				let blockedIPTW_list = blockedIPTW_line.split('_');
 				if(!Object.keys(blockedIPsTWs).includes(blockedIPTW_list[1]))
 				{
 					blockedIPsTWs[blockedIPTW_list[1]] = [];
