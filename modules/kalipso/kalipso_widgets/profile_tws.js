@@ -128,7 +128,7 @@ class ProfileTWs extends tree.TreeClass{
         	// comes here when you press enter on an IP in the leftmost widget(the one that has iPs and tws)
 		  	if(!node.name.includes('timewindow')){
 		  		// get the ip of the host
-	    	  	var ip = node.name.replace(' (me)','')
+	    	  	let ip = node.name.replace(' (me)','')
 	    	    ip = ip.replace(' (old me)','')
 	    	  	ip = stripAnsi(ip)
 		      	this.current_ip = ip
@@ -137,10 +137,10 @@ class ProfileTWs extends tree.TreeClass{
 	        	}
 	      	else{
 	      		// comes here when you press enter on a tw in the leftmost widget(the one that has iPs and tws)
-		      	var ip  = stripAnsi(node.parent.name);
+		      	let ip  = stripAnsi(node.parent.name);
                 // remove '(me)', '(old me)' and host name from the profile
                 ip = ip.split(' ')[0]
-		    	var timewindow = stripAnsi(node.name);
+		    	let timewindow = stripAnsi(node.name);
 		    	this.current_ip = ip
 		    	this.current_tw = timewindow
 				// prepare what to show when pressing z
