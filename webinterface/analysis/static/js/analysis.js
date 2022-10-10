@@ -83,10 +83,10 @@ function hotkeyPress(e) {
     if (evtobj.keyCode == 78 && evtobj.ctrlKey){
         let table = $(active_tw_id).DataTable();
         $(table.row(active_timewindow_index).node()).removeClass('row_selected');
-        active_timewindow_index += 1
         if(active_timewindow_index == table.data().count() - 1){
-            active_timewindow_index = 0
+            active_timewindow_index = -1
         }
+        active_timewindow_index += 1
         $(table.row(active_timewindow_index).node()).addClass('row_selected');
         active_timewindow = table.row(active_timewindow_index).data()["tw"]
         updateAnalysisTable()
