@@ -65,7 +65,7 @@ of the docs for info on how slips detects DoH.
 Slips detects successful SSH connections using 2 ways
 
 1. Using Zeek. Zeek logs successful SSH connection to ssh.log by default
-2. if all bytes sent in a SSH connection is more than 4290 bytes
+2. If all bytes sent in a SSH connection is more than 4290 bytes
 
 ## DNS resolutions without a connection
 This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
