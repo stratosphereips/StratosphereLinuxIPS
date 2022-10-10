@@ -35,8 +35,21 @@ class ProfileTWs extends tree.TreeClass{
 	}
 
     /*Reprocess the necessary data for the tree*/
-	fillTreeData(redis_keys){
-		return Promise.all([redis_keys[0].map(key_redis =>this.getTreeData(key_redis)),this.getBlockedIPsTWs(redis_keys[1]), redis_keys[2]]).then(values=>{this.setTree(values[0],values[1],values[2]).then(values=>{this.setData(values);this.screen.render()})})
+	fillTreeData(values){
+        const p = values[0].map(key =>
+                this.redis_database.getProfileTWs("tws"+key)
+                .then(res => {
+                    let s = key.split("_")
+                    return {key: s[1], val: res};
+                })
+        )
+
+		return Promise.all(p)
+            .then(items => {
+                let result = {};
+                items.forEach(item => result[item.key] = item.val);
+                this.setTree(result, values[1], values[2])
+                })
     }
 
     /*Prepare needed data from Redis to fill the tree and call the next function to format data*/
