@@ -68,7 +68,7 @@ class Timeline extends table.TableClass{
             if(redis_timeline_data.length < 1){this.setData([ip+" "+timewindow], timeline_data); this.screen.render();}
             else{
                 // found timeline data, parse it
-                async.each(redis_timeline_data, (timeline, callback)=>{
+                redis_timeline_data.forEach((timeline)=>{
                     let row = [];
                     let timeline_json = JSON.parse(timeline)
                     // this one is coming from database.py: get_dns_resolution
@@ -142,22 +142,16 @@ class Timeline extends table.TableClass{
                                 timeline_data.push(row);
                             }
                         }
+                })
 
-              callback();
-              },(err)=>{
-                if(err) {console.log('Error in setTimeline() in kalipso_table.js. Error: ',err);}
-                else{
-                  this.redis_database.getStarttimeForTW(ip,timewindow).then(timewindow_starttime=>{
-                      this.setData([ip+" "+timewindow + " " + this.timeConverter(timewindow_starttime)], timeline_data);
-                      this.screen.render()
-
-                  })
-                  }
-              });
-            }
-        })
-    }
-    catch(err){console.log("Error in setTimeline() in kalipso_table.js. Error: ",err)}
+              this.redis_database.getStarttimeForTW(ip,timewindow).then(timewindow_starttime=>{
+                  this.setData([ip+" "+timewindow + " " + this.timeConverter(timewindow_starttime)], timeline_data);
+                  this.screen.render();
+              })
+              }
+            })
+        }
+        catch(err){console.log("Error in setTimeline() in kalipso_table.js. Error: ",err)}
   }
 }
 
