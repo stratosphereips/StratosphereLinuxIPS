@@ -311,7 +311,7 @@ class Helper:
         category = 'Recon.Scanning'
         type_detection = 'dstip'
         source_target_tag = 'Recon'
-        conn_count = int(msg.split('scanned')[1].split('ports')[0])
+        conn_count = int(msg.split('least ')[1].split(' unique')[0])
         detection_info = scanning_ip
         __database__.setEvidence(
             type_evidence,
