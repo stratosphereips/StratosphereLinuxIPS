@@ -120,11 +120,16 @@ class ProfileTWs extends tree.TreeClass{
     }
 
 
+
+
+
+
     /*Function to manipulate tree, timeline, evidence*/
     on(){
         // node is the widget name
 
         this.widget.on('select',node=>{
+
         	// comes here when you press enter on an IP in the leftmost widget(the one that has iPs and tws)
 		  	if(!node.name.includes('timewindow')){
 		  		// get the ip of the host
