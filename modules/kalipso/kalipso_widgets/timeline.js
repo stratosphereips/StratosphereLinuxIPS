@@ -24,16 +24,16 @@ class Timeline extends table.TableClass{
 
 
     timeConverter(UNIX_timestamp){
-        var a = new Date(UNIX_timestamp * 1000);
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        var year = a.getFullYear();
-        var month = a.getMonth() + 1 < 10 ? '0' + (a.getMonth() + 1) : (a.getMonth() + 1) ;
-        var date = a.getDate() < 10 ? '0' + a.getDate() : a.getDate() ;
-        var hour =  a.getHours() < 10 ? '0' + a.getHours() : a.getHours() ;
-        var min =  a.getMinutes() < 10 ? '0' + a.getMinutes() : a.getMinutes();
-        var sec = a.getSeconds() < 10 ? '0' + a.getSeconds() : a.getSeconds() ;
-        //  var time = date + ' ' + month + ' ' + year + ' ' + hour + ':' + min + ':' + sec ;
-        var time = year + '/' + month  + '/' + date + ' ' + hour + ':' + min + ':' + sec;
+        let a = new Date(UNIX_timestamp * 1000);
+        let months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        let year = a.getFullYear();
+        let month = a.getMonth() + 1 < 10 ? '0' + (a.getMonth() + 1) : (a.getMonth() + 1) ;
+        let date = a.getDate() < 10 ? '0' + a.getDate() : a.getDate() ;
+        let hour =  a.getHours() < 10 ? '0' + a.getHours() : a.getHours() ;
+        let min =  a.getMinutes() < 10 ? '0' + a.getMinutes() : a.getMinutes();
+        let sec = a.getSeconds() < 10 ? '0' + a.getSeconds() : a.getSeconds() ;
+        //  let time = date + ' ' + month + ' ' + year + ' ' + hour + ':' + min + ':' + sec ;
+        let time = year + '/' + month  + '/' + date + ' ' + hour + ':' + min + ':' + sec;
         return time;
     }
 
@@ -46,8 +46,8 @@ class Timeline extends table.TableClass{
     on(ip_info_widget){
         this.widget.rows.on('select', (item, index) => {
             try{
-              var timeline_line = stripAnsi(item.content)
-              var ip = timeline_line.substring(
+              let timeline_line = stripAnsi(item.content)
+              let ip = timeline_line.substring(
               timeline_line.lastIndexOf("[") + 1,
               timeline_line.lastIndexOf("]")
               )
