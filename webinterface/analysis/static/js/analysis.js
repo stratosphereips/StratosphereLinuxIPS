@@ -81,7 +81,7 @@ function addTableTWs(tableID) {
 function hotkeyPress(e) {
     let evtobj = window.event? event : e
     if (evtobj.keyCode == 78 && evtobj.ctrlKey){
-        var table = $(active_tw_id).DataTable();
+        let table = $(active_tw_id).DataTable();
         $(table.row(active_timewindow_index).node()).removeClass('row_selected');
         active_timewindow_index += 1
         if(active_timewindow_index == table.data().count() - 1){
@@ -92,7 +92,7 @@ function hotkeyPress(e) {
         updateAnalysisTable()
     }
     if (evtobj.keyCode == 80 && evtobj.ctrlKey){
-        var table = $(active_tw_id).DataTable();
+        let table = $(active_tw_id).DataTable();
         $(table.row(active_timewindow_index).node()).removeClass('row_selected');
         active_timewindow_index -= 1;
         if(active_timewindow_index < 0){
