@@ -1283,6 +1283,8 @@ class Module(Module, multiprocessing.Process):
                         self.helper.set_evidence_for_port_0_connection(
                             saddr,
                             daddr,
+                            sport,
+                            dport,
                             direction,
                             profileid,
                             twid,

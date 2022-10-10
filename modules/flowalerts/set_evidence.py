@@ -520,7 +520,7 @@ class Helper:
         )
 
     def set_evidence_for_port_0_connection(
-        self, saddr, daddr, direction, profileid, twid, uid, timestamp
+        self, saddr, daddr, sport, dport, direction, profileid, twid, uid, timestamp
     ):
         """:param direction: 'source' or 'destination'"""
         confidence = 0.8
@@ -531,12 +531,8 @@ class Helper:
         type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
 
-        if direction == 'source':
-            ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
-        else:
-            ip_identification = __database__.getIPIdentification(saddr)
-            description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Connection on port 0 from {saddr}:{sport} to {daddr}:{dport}. {ip_identification}.'
 
         conn_count = 1
 
