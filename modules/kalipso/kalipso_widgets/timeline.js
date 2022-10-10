@@ -65,7 +65,7 @@ class Timeline extends table.TableClass{
             this.redis_database.getTimeline(ip, timewindow).then(redis_timeline_data=>{
             let timeline_data = [];
             // handle no timeline data found
-            if(redis_timeline_data.length < 1){this.setData([ip+" "+timewindow], timeline_data);}
+            if(redis_timeline_data.length < 1){this.setData([ip+" "+timewindow], timeline_data); this.screen.render();}
             else{
                 // found timeline data, parse it
                 async.each(redis_timeline_data, (timeline, callback)=>{
