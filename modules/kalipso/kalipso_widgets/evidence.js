@@ -1,24 +1,16 @@
-var async = require('async')
-var color = require('chalk')
+const box  = require('../lib_widgets/box.js')
+const async = require('async')
+const color = require('chalk')
 
-class Box{
-    constructor(grid, blessed, contrib, redis_database,screen, characteristics){
-      this.contrib = contrib
-      this.screen = screen
-      this.blessed = blessed
-      this.grid = grid
-      this.redis_database = redis_database
-      this.widget = this.initBox(characteristics);
-    }
+class Evidence extends box.BoxClass{
 
-    /*Initialize the parameters for the widgets 'Box'.*/
-    initBox(characteristics){
-        return this.grid.set(characteristics[0],characteristics[1],characteristics[2],characteristics[3], this.blessed.box,{
+    constructor(grid, redis_database, screen, gridParameters){
+        const widgetParameters = {
             top: 'center',
             left: 'center',
             width: '50%',
             height: '50%',
-            label:characteristics[4],
+            label:gridParameters[4],
             tags: true,
             keys: true,
             style:{
@@ -32,27 +24,12 @@ class Box{
               ch: ' ',
               inverse: true
             }
-        })
-    }
+        }
 
-    /*Set data in the widget*/
-    setData(data){
-        this.widget.setContent(data)
-    }
+        super(grid, gridParameters, widgetParameters)
 
-    /*Hide the widget from the screen*/
-    hide(){
-        this.widget.hide()
-    }
-
-    /*Show the widget on the screen*/
-    show(){
-        this.widget.show()
-    }
-
-    /*Focus on the widget in the screen*/
-    focus(){
-        this.widget.focus()
+        this.redis_database = redis_database
+        this.screen = screen
     }
 
     /*Widget 'Box' is used to display the evidences in the main screen of Kalipso.
@@ -111,4 +88,4 @@ class Box{
     }
 }
 
-module.exports = Box;
+module.exports = {EvidenceClass: Evidence};

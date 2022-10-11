@@ -1,11 +1,9 @@
+const { redis, blessed, blessed_contrib, async, color, stripAnsi } = require("../kalipso_widgets/libraries.js");
+
 class ListBar{
 
-    constructor(grid, blessed, contrib, redis_database,screen ){
-        this.contrib = contrib
-        this.screen = screen
-        this.blessed = blessed
+    constructor(grid){
         this.grid = grid
-        this.redis_database = redis_database
         this.widget = this.initWidget()
     }
 
@@ -26,7 +24,7 @@ class ListBar{
 
     /*Initialize widget on the screen with its parameters*/
     initWidget(){
-    return this.grid.set(5.7,0,0.4,6,this.blessed.listbar,{
+    return this.grid.set(5.7,0,0.4,6, blessed.listbar,{
           keys: false,
           style: 
                 {
@@ -72,4 +70,4 @@ class ListBar{
     }
 }
 
-module.exports = ListBar
+module.exports = {ListBarClass:ListBar}

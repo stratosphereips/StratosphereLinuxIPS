@@ -7,6 +7,25 @@ class Redis{
     }
 
 
+    getAllProfiles(){
+        return new Promise((resolve, reject)=>{this.db.smembers("profiles",(err, reply) =>{
+            if(err){console.log("Error in getAllProfiles() in database.js to retrieve all profiles from the database. Error: ", err); reject(err);}
+            else{resolve(reply);}
+            })
+        })
+    }
+
+    getProfileTWs(key){
+        return new Promise((resolve, reject) => {this.db.zrange(key,  0, -1, (err, reply)=>{
+            if(err){console.log("Error in getProfileTWs in database.js to retrieve tws of the profile. Error: ",err); reject(err);}
+            else{
+            let d = {}
+            d[key] = reply;
+            resolve(reply);}
+            })
+        })
+    }
+
     /*Get all the keys from the database.*/
   	getAllKeys(){
   		return new Promise((resolve,reject)=>{this.db.keys('*',(err, reply)=>{
