@@ -225,7 +225,7 @@ File hashes and URLs aren't supported in TI feeds.
 
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-URLhaus: for IPs and domains lookups
+URLhaus: for domains and hashes lookups (for each downloaded file)
 Spamhaus: for IP lookups
 Circl.lu: for hash lookups (for each downloaded file)
 
@@ -639,7 +639,7 @@ maclookup.app -> For getting MAC vendor info if no info was found in the local m
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
 virustotal.com -> For getting scores about domains, IPs and URLs 
-urlhaus-api.abuse.ch -> For getting info about contacted IPs and domains
+urlhaus-api.abuse.ch -> For getting info about contacted domains and downloaded files 
 
 ---
 
