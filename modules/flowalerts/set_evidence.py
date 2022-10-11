@@ -247,7 +247,7 @@ class Helper:
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
-        description = f'password guessing by Zeek enegine. {msg}'
+        description = f'password guessing by Zeek engine. {msg}'
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'

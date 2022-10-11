@@ -798,9 +798,6 @@ class Module(Module, multiprocessing.Process):
         spamhaus_res = self.spamhaus(ip)
         if spamhaus_res:
             return spamhaus_res
-        urlhaus_res = self.urlhaus(ip)
-        if urlhaus_res:
-            return urlhaus_res
 
 
     def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
