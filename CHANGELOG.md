@@ -10,7 +10,9 @@
 - Add support for suricata ssh flows
 - Fix saving the redis database
 - Fix false positive connection without DNS
-
+- Fix reading zeek tab files
+- Fix vertical portscan detections by zeek
+- 
 
 -0.9.5
 * Slips
