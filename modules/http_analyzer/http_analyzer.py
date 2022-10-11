@@ -228,10 +228,11 @@ class Module(Module, multiprocessing.Process):
                 break
 
         if not found_vendor_tuple:
-            # mac vendor isn't apple, microsoft  or google
+            # MAC vendor isn't apple, microsoft  or google
             # we don't know how to check for incompatibility  #todo
             return False
 
+        # see if the os name and type has any keyword of the rest of the tuples
         for tuple_ in os_keywords:
             for keyword in tuple_:
                 if keyword in f'{os_name} {os_type}':
@@ -250,7 +251,6 @@ class Module(Module, multiprocessing.Process):
                     )
 
                     return True
-
 
     def get_ua_info_online(self, user_agent):
         """
@@ -390,8 +390,9 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
+        ua = cached_ua.get('user_agent', '')
         description = (
-            f'using multiple user-agents: {cached_ua} then {user_agent}'
+            f'using multiple user-agents: {ua} then {user_agent}'
         )
         __database__.setEvidence(
             type_evidence,
