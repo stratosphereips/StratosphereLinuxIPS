@@ -366,7 +366,7 @@ tr:nth-child(even) {
 
 ### Virustotal Module
 
-This module is used to lookup IPs/domains/downloaded files on virustotal
+This module is used to lookup IPs, domains, and URLs on virustotal
 
 To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 
@@ -507,7 +507,7 @@ You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```slip
 #### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
-it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_ips.csv``` by default,
+it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```slips.conf```.
 
 The format of the file is "IP address","Threat level", "Description"

@@ -36,7 +36,7 @@ def create_inputProcess_instance(
 
 @pytest.mark.parametrize(
     'input_type,input_information',
-    [('pcap', 'dataset/hide-and-seek-short.pcap')],
+    [('pcap', 'dataset/test7-malicious.pcap')],
 )
 def test_handle_pcap_and_interface(
     outputQueue, profilerQueue, input_type, input_information
@@ -51,8 +51,8 @@ def test_handle_pcap_and_interface(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_folder', 'dataset/sample_zeek_files-2/'),
-        ('zeek_folder', 'dataset/sample_zeek_files/'),
+        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'),
+        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'),
     ],
 )
 def test_read_zeek_folder(
@@ -67,8 +67,8 @@ def test_read_zeek_folder(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_log_file', 'dataset/sample_zeek_files-2/conn.log'),
-        ('zeek_log_file', 'dataset/sample_zeek_files/conn.log'),
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir-2/conn.log'),
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log'),
     ],
 )
 def test_handle_zeek_log_file(
@@ -81,7 +81,7 @@ def test_handle_zeek_log_file(
 
 
 @pytest.mark.parametrize(
-    'input_type,input_information', [('nfdump', 'dataset/test.nfdump')]
+    'input_type,input_information', [('nfdump', 'dataset/test1-normal.nfdump')]
 )
 def test_handle_nfdump(
     outputQueue, profilerQueue, input_type, input_information
@@ -98,12 +98,12 @@ def test_handle_nfdump(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('binetflow', 'dataset/test2.binetflow'),
-        ('binetflow', 'dataset/test5.binetflow'),
+        ('binetflow', 'dataset/test2-malicious.binetflow'),
+        ('binetflow', 'dataset/test5-mixed.binetflow'),
     ],
 )
-#                                                           ('binetflow','dataset/test3.binetflow'),
-#                                                           ('binetflow','dataset/test4.binetflow'),
+#                                                           ('binetflow','dataset/test3-mixed.binetflow'),
+#                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(
     outputQueue, profilerQueue, input_type, input_information
 ):
@@ -115,7 +115,7 @@ def test_handle_binetflow(
 
 @pytest.mark.parametrize(
     'input_type,input_information',
-    [('suricata', 'dataset/suricata-flows.json')],
+    [('suricata', 'dataset/test6-malicious.suricata.json')],
 )
 def test_handle_suricata(
     outputQueue, profilerQueue, input_type, input_information

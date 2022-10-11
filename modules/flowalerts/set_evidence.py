@@ -276,7 +276,7 @@ class Helper:
         confidence = 1
         threat_level = 'medium'
         description = f'horizontal port scan by Zeek engine. {msg}'
-        type_evidence = 'PortScanType2'
+        type_evidence = 'HorizontalPortscan'
         type_detection = 'dport'
         source_target_tag = 'Recon'
         detection_info = scanned_port
@@ -307,7 +307,7 @@ class Helper:
         threat_level = 'medium'
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description = f'vertical port scan by Zeek engine. {msg}'
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         category = 'Recon.Scanning'
         type_detection = 'dstip'
         source_target_tag = 'Recon'
@@ -568,7 +568,7 @@ class Helper:
         ioc='',
     ):
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
-        tags = malicious_ja3_dict['tags']
+        tags = malicious_ja3_dict.get('tags','')
         ja3_description = malicious_ja3_dict['description']
         threat_level = malicious_ja3_dict['threat_level']
 

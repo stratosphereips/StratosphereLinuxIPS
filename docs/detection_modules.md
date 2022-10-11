@@ -130,7 +130,7 @@ tr:nth-child(even) {
 
 ### Virustotal Module
 
-This module is used to lookup IPs/domains/downloaded files on virustotal
+This module is used to lookup IPs, domains, and URLs on virustotal.
 
 To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 
@@ -205,8 +205,8 @@ ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful,
 LongConnection, MultipleReconnectionAttempts,
 ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, 
 ConnectionWithoutDNS, DNSWithoutConnection,
-MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, 
-PortScanType2, Password_Guessing, MaliciousFlow,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, VerticalPortscan, 
+HorizontalPortscan, Password_Guessing, MaliciousFlow,
 SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
  Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
@@ -221,14 +221,22 @@ Slips has a complex system to deal with Threat Intelligence feeds.
 
 Slips supports different kinds of IoCs from TI feeds (IPs, IP ranges, domains, JA3 hashes, SSL hashes)
 
-File hashes and URLs aren't supported.
+File hashes and URLs aren't supported in TI feeds.
+
+Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
+
+URLhaus: for IPs and domains lookups
+Spamhaus: for IP lookups
+Circl.lu: for hash lookups (for each downloaded file)
 
 
 ### Matching of IPs
 
-Slips gets every IP it can find in the network and tries to see if it is in any blacklist.
+Slips gets every IP it can find in the network (DNS answers, HTTP destination IPs, SSH destination IPs, etc.) 
+and tries to see if it is in any blacklist.
 
-If a match is found, it generates an evidence, if no exact match is found, it searches the Blacklisted ranges taken from different TI feeds
+If a match is found, it generates an evidence, if no exact match is found, 
+it searches the Blacklisted ranges taken from different TI feeds.
 
 
 ### Matching of Domains
@@ -271,7 +279,7 @@ You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```slip
 ### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
-it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_ips.csv``` by default,
+it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```slips.conf```.
 
 The format of the file is "IP address","Threat level", "Description"
@@ -593,40 +601,31 @@ This module is responsibe for detecting scans such as:
 
 ### Vertical port scans
 
-Slips checks both TCP and UDP connections for port scans.
+Slips considers an IP performing a vertical port scan if it contacts 6 or more different destination ports in the same destination IP. The flows can be TCP or UDP, and both Established or Not Established. The initial threshold is 5 destination ports. On each flow the check is performed.
 
+After detecting a vertical port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-Slips considers an IP performing a vertical port scan if it scans 6 or more different
-destination ports, either the connection was established or not established.
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new ports in that dst IP) then the counter resets and the same attacker needs to do _again_ more than threshold destinations ports in one IP to be detected. This avoids the problem that after 5 flows that generated an alert, the 6 flow also generates an alert.
 
-We detect when there is 6, 9, 12, etc. scanned destination ports per destination IP.
+The total number of _packets_ in all flows in the scan give us the confidence of the scan.
+
 
 ### Horizontal port scans
 
-Slips checks both TCP and UDP connections for horizontal port scans.
+Slips considers an IP performing a horizontal port scan if it contacted more than 6 destination IPs on the same specific port with not established connections. Slips checks both TCP and UDP connections for horizontal port scans. The initial threshold is now 6 destination IPs using the same destination ports. 
 
+After detecting a horizontal port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
-Slips considers an IP performing a horizontal port scan if it contacted more than 3
-destination IPs on a specific port with not established connections.
+If one alert was generated (Slips waited 10 seconds and no more flows arrived to new IPs) then the counter resets and the same attacker needs to do _again_ more than threshold destinations IPs in the same port to be detected. This avoids the problem that after 6 flows that generated an alert, the 7 flow also generates an alert.
 
-
-We detect a scan every threshold. So we detect when 
-there is 6, 9, 12, etc. destination destination IPs.
+Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 
 
 ### PING Sweeps
 
-PING sweeps or ICMP sweeps is used to find out
-which hosts are alive in a network or large number of IP addresses using PING/ICMP.
+ICMP messages can be used to find out which hosts are alive in a network. Slips relies on Zeek detecions for this, but it is done with our own Zeek scripts located in zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
-
-We detect a scan every threshold. So we generate an evidence when there is 
-5,10,15, .. etc. ICMP established connections to different IPs.
-
-
-We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
-and ICMP-AddressMaskScan using Slips' own zeek script located in 
-zeek-scripts/icmps-scans.zeek
+The initial threshold is 25 ICMP flows.
 
 # Connections Made By Slips
 
@@ -634,12 +633,13 @@ Slips uses online databases to query information about many different things, fo
 
 The list below contains all connections made by Slips
 
-http://useragentstring.com -> For getting user agent info if no info was found in Zeek
-https://www.macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
-http://ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-http://ipinfo.io/json -> For getting your public IP
-https://www.virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs 
-
+useragentstring.com -> For getting user agent info if no info was found in Zeek
+macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
+maclookup.app -> For getting MAC vendor info if no info was found in the local maxmind db
+ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
+ipinfo.io -> For getting your public IP
+virustotal.com -> For getting scores about domains, IPs and URLs 
+urlhaus-api.abuse.ch -> For getting info about contacted IPs and domains
 
 ---
 

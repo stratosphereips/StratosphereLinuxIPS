@@ -55,14 +55,18 @@ let analysisTableDefs = {
             { data: 'dns_resolution' },
             { data: 'dport/proto' },
             { data: 'state' },
-            { data: 'Sent' },
-            { data: 'Recv' },
-            { data: 'Tot' },
-            { data: 'Duration' },
+            { data: 'sent' },
+            { data: 'recv' },
+            { data: 'tot' },
+            { data: 'duration' },
             { data: 'warning' },
-            { data: 'critical warning' },
-            { data: 'info' }
-        ]
+            { data: 'critical warning' }
+        ],
+        fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
+            if(aData['info']){
+                $('td', nRow).css('background-color', '#ECFEE8')
+            }
+        }
     },
     "outtuples": {
         destroy: true,

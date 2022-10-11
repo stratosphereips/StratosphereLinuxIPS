@@ -66,9 +66,6 @@ class Module(Module, multiprocessing.Process):
         Set an evidence for malicious Tuple
         """
 
-        # to reduce false positives
-        if score < 0.99:
-            return
         type_detection = 'outTuple'
         detection_info = tupleid
         source_target_tag = 'Botnet'
@@ -189,8 +186,8 @@ class Module(Module, multiprocessing.Process):
                     stime = data['stime']
 
                     if 'tcp' in tupleid.lower():
-                        # Define why this threshold
-                        threshold = 0.7
+                        # to reduce false positives
+                        threshold = 0.99
                         # function to convert each letter of behavioral model to ascii
                         behavioral_model = self.convert_input_for_module(
                             pre_behavioral_model

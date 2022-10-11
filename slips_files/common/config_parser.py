@@ -28,7 +28,7 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf is the default file
         """
-        config = configparser.ConfigParser(interpolation=None)
+        config = configparser.ConfigParser(interpolation=None, comment_prefixes='#')
         try:
             with open(self.configfile) as source:
                 config.read_file(source)
@@ -37,19 +37,21 @@ class ConfigParser(object):
         return config
 
     def get_config_file(self):
-        parser = ArgumentParser(
-            usage='./slips.py -c <configfile> [options] [file]', add_help=False
-        )
+        parser = self.get_parser()
         return parser.get_configfile()
+
+    def get_parser(self, help=False):
+        parser = ArgumentParser(
+            usage='./slips.py -c <configfile> [options] [file]', add_help=help
+        )
+        return parser
 
 
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
         """
-        parser = ArgumentParser(
-            usage='./slips.py -c <configfile> [options] [file]', add_help=False
-        )
+        parser = self.get_parser()
         return parser.parse_arguments()
 
     def read_configuration(self, section, name, default_value):
@@ -91,7 +93,7 @@ class ConfigParser(object):
             'detection', 'evidence_detection_threshold', 2
         )
         try:
-            threshold = int(threshold)
+            threshold = float(threshold)
         except ValueError:
             threshold = 2
         return threshold
@@ -113,10 +115,10 @@ class ConfigParser(object):
         return timeout
 
     def popup_alerts(self):
-        popups =  self.read_configuration(
+        popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'true' in popups.lower() else False
+        return True if 'yes' in popups.lower() else False
 
     def rotation(self):
         rotation = self.read_configuration(
@@ -587,6 +589,27 @@ class ConfigParser(object):
         )
         return False if delete == 'False' else True
 
+    def rotation_period(self):
+        rotation_period = self.read_configuration(
+             'parameters', 'rotation_period', '1d'
+        )
+        return utils.sanitize(rotation_period)
+
+    def keep_rotated_files_for(self) -> int:
+        """ returns period in seconds"""
+        keep_rotated_files_for = self.read_configuration(
+             'parameters', 'keep_rotated_files_for', '1 day'
+        )
+        try:
+            period = utils.sanitize(keep_rotated_files_for)
+            period = period.replace('day', '').replace(' ','').replace('s','')
+            period = int(period)
+        except ValueError:
+            period = 1
+
+        return period *24*60*60
+
+
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''
@@ -599,6 +622,9 @@ class ConfigParser(object):
         )
 
     def get_disabled_modules(self, input_type) -> list:
+        """
+        Uses input type to enable leak detector only on pcaps
+        """
         to_ignore = self.read_configuration(
             'modules', 'disable', '[template , ensembling]'
         )

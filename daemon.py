@@ -58,9 +58,7 @@ class Daemon():
         self.stdout = os.path.join(output_dir, self.stdout)
         self.logsfile = os.path.join(output_dir, self.logsfile)
 
-
     def read_configuration(self):
-        self.config = self.slips.read_conf_file()
         conf = ConfigParser()
         self.logsfile = conf.logsfile()
         self.stdout = conf.stdout()
@@ -119,7 +117,6 @@ class Daemon():
             self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
             # if an error happened it will be written in logsfile
             self.print('Either Daemon stopped normally or an error occurred.')
-
 
     def daemonize(self):
         """

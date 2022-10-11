@@ -27,7 +27,11 @@ import os
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
-    """A class process to output everything we need. Manages all the output"""
+    """
+    A class to process the output of everything Slips need. Manages all the output
+    If any Slips module or process needs to output anything to screen, or logs,
+    it should use always the output queue. Then this output class will handle how to deal with it
+    """
 
     def __init__(
         self,
@@ -89,7 +93,7 @@ class OutputProcess(multiprocessing.Process):
         """
         # don't log in daemon mode, all printed
         # lines are redirected to slips.log by default
-        if "-D" in sys.argv and 'update'.lower() not in sender:
+        if "-D" in sys.argv and 'update'.lower() not in sender and 'stopping' not in sender:
             # if the sender is the update manager, always log
             return
 
@@ -150,25 +154,28 @@ class OutputProcess(multiprocessing.Process):
             except ValueError as inst:
                 # We probably received some text instead of an int()
                 print(
-                    'Error receiving a text to output. Check that you are sending the format of the msg correctly: level|msg'
+                    'Error receiving a text to output. '
+                    'Check that you are sending the format of the msg correctly: level|msg'
                 )
                 print(inst)
                 sys.exit(-1)
+
             try:
                 sender = f"[{line.split('|')[1]}] "
             except KeyError:
                 sender = ''
                 print(
-                    'The sender passed to OutputProcess was wrongly formated.'
+                    'The sender passed to OutputProcess was wrongly formatted.'
                 )
                 sys.exit(-1)
+
             try:
                 # If there are more | inside the msg, we don't care, just print them
                 msg = ''.join(line.split('|')[2:])
             except KeyError:
                 msg = ''
                 print(
-                    'The message passed to OutputProcess was wrongly formated.'
+                    'The message passed to OutputProcess was wrongly formatted.'
                 )
                 sys.exit(-1)
             return (level, sender, msg)
@@ -204,16 +211,13 @@ class OutputProcess(multiprocessing.Process):
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
-
-
-        if (
+        if ((
             verbose_level > 0 and verbose_level <= 3
             and verbose_level <= self.verbose
-        ) or \
-        (
+        ) or (
             debug_level > 0 and debug_level <= 3
             and debug_level <= self.debug
-        ):
+        )):
             if 'Start' in msg:
                 print(f'{msg}')
                 return
@@ -226,6 +230,9 @@ class OutputProcess(multiprocessing.Process):
             self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
+        self.log_line('[Output Process]', 'Stopping output process. '
+                                        'Further evidence may be missing. '
+                                        'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
     def run(self):
@@ -254,7 +261,7 @@ class OutputProcess(multiprocessing.Process):
                 else:
                     # Here we should still print the lines coming in
                     # the input for a while after receiving a 'stop'. We don't know how to do it.
-                    print('Stopping the output thread')
+                    print('Stopping the output process')
                     self.shutdown_gracefully()
                     return True
 

@@ -67,7 +67,7 @@ class ProfilingFlowsDatabase(object):
 
     def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state):
         data_to_send = {
-                'ip': str(ip),
+                'to_lookup': str(ip),
                 'profileid': str(profileid),
                 'twid': str(twid),
                 'proto': str(proto),
@@ -880,9 +880,25 @@ class ProfilingFlowsDatabase(object):
 
     def get_zeek_output_dir(self, ):
         """
-        gets name, size, analysis dates, and zeek output dir in the db
+        gets zeek output dir from the db
         """
         return self.r.hget('analysis', 'zeek_dir')
+
+    def get_input_type(self):
+        """
+        gets input type from the db
+        """
+        return self.r.hget('analysis', 'input_type')
+
+
+
+
+    def get_output_dir(self, info:dict):
+        """
+        returns the currently used output dir
+        """
+        return self.r.hget('analysis', 'output_dir')
+
 
     def get_flow(self, profileid, twid, uid):
         """
@@ -975,11 +991,12 @@ class ProfilingFlowsDatabase(object):
 
         # We are giving only new server_name to the threat_intelligence module.
         data_to_send = {
-            'server_name': server_name,
+            'to_lookup': server_name,
             'profileid': str(profileid),
             'twid': str(twid),
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip'
         }
         data_to_send = json.dumps(data_to_send)
         self.publish('give_threat_intelligence', data_to_send)
@@ -990,7 +1007,11 @@ class ProfilingFlowsDatabase(object):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
-        SNI_port = {'server_name': server_name, 'dport': dport}
+
+        SNI_port = {
+            'server_name': server_name,
+            'dport': dport
+        }
         # We do not want any duplicates.
         if SNI_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS resolution
@@ -1098,15 +1119,18 @@ class ProfilingFlowsDatabase(object):
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
         # Check if the host domain is detected by the threat intelligence.
-        data_to_send = {
-            'host': host,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        # not all flows have a host value so don't send empty hosts to ti module.
+        if len(host) > 2:
+            data_to_send = {
+                'to_lookup': host,
+                'profileid': str(profileid),
+                'twid': str(twid),
+                'stime': stime,
+                'uid': uid,
+                'ip_state': 'dstip'
+            }
+            data_to_send = json.dumps(data_to_send)
+            self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_ssh(
         self,
@@ -1173,7 +1197,7 @@ class ProfilingFlowsDatabase(object):
         self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         data_to_send = {
-            'ip': daddr,
+            'to_lookup': daddr,
             'profileid': str(profileid),
             'twid': str(twid),
             'stime': stime,
@@ -1229,7 +1253,7 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
         data_to_send = {
-            'query': daddr,
+            'to_lookup': daddr,
             'profileid': profileid,
             'twid': twid,
             'stime': stime,
@@ -1263,10 +1287,11 @@ class ProfilingFlowsDatabase(object):
         ip_info = self.get_dns_resolution(ip)
         if ip_info == {}:
             return False
-        # IP is resolved, was it resolved in the past 24 hrs?
+
         # these are the tws this ip was resolved in
         tws = ip_info['timewindows']
 
+        # IP is resolved, was it resolved in the past x hrs?
         tws_to_search = self.get_equivalent_tws(hrs)
 
         current_twid = 0   # number of the tw we're looking for
@@ -1535,13 +1560,6 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
         }
 
-        # Add DNS resolution to the db if there are answers for the query
-        if answers:
-            srcip = profileid.split('_')[1]
-
-            self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip, twid
-            )
         # Convert to json string
         data = json.dumps(data)
         # Set the dns as alternative flow
@@ -1564,16 +1582,31 @@ class ProfilingFlowsDatabase(object):
         # publish a dns with its flow
         self.publish('new_dns_flow', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 3, 0)
-        # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        # Check if the dns is detected by the threat intelligence.
         data_to_send = {
-            'query': str(query),
-            'profileid': str(profileid),
-            'twid': str(twid),
+            'to_lookup': query,
+            'profileid': profileid,
+            'twid': twid,
             'stime': stime,
             'uid': uid,
+            'ip_state': 'dstip',
         }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        self.publish('give_threat_intelligence', json.dumps(data_to_send))
 
-        # Store this DNS resolution into the Info of the IPs resolved
-        # self.setInfoForIPs(ip, domain)
+        # Add DNS resolution to the db if there are answers for the query
+        if answers and answers !=  ['-'] :
+            srcip = profileid.split('_')[1]
+            self.set_dns_resolution(
+                query, answers, stime, uid, qtype_name, srcip, twid
+            )
+            # send each dns response to TI module
+            data_to_send['is_dns_response'] = True
+            data_to_send['ip_state'] = 'dstip'
+            data_to_send['dns_query'] = query
+            for answer in answers:
+                if 'TXT' in answer:
+                    continue
+
+                data_to_send['domain'] = answer
+                self.publish('give_threat_intelligence', json.dumps(data_to_send))
+

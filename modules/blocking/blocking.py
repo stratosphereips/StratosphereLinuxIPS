@@ -23,7 +23,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, redis_port=6379):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -435,7 +435,7 @@ class Module(Module, multiprocessing.Process):
                             blocking_details['sport'],
                             blocking_details['protocol'],
                         )
-                        # since ip is unblocked, remove it from dict
+                        # make a list of unblocked IPs to remove from dict
                         unblocked_ips.add(ip)
 
                 for ip in unblocked_ips:

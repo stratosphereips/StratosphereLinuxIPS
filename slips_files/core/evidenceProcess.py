@@ -341,8 +341,8 @@ class EvidenceProcess(multiprocessing.Process):
             while twid_start_time == None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
-            # iso
-            tw_start_time_str = utils.convert_format(twid_start_time, utils.alerts_format)
+
+            tw_start_time_str = utils.convert_format(twid_start_time,  '%Y/%m/%d %H:%M:%S')
             # datetime obj
             tw_start_time_datetime = utils.convert_to_datetime(tw_start_time_str)
 
@@ -355,7 +355,7 @@ class EvidenceProcess(multiprocessing.Process):
 
             tw_stop_time_str = utils.convert_format(
                 tw_stop_time_datetime,
-                utils.alerts_format
+                 '%Y/%m/%d %H:%M:%S'
             )
 
             hostname = __database__.get_hostname_from_profile(profileid)
@@ -385,6 +385,7 @@ class EvidenceProcess(multiprocessing.Process):
             detection_info = evidence.get('detection_info')
             type_evidence = evidence.get('type_evidence')
             description = evidence.get('description')
+            evidence_ID = evidence.get('ID')
 
             # format the string of this evidence only: for example Detected C&C channels detection, destination IP:xyz
             evidence_string = self.format_evidence_string(
@@ -397,7 +398,7 @@ class EvidenceProcess(multiprocessing.Process):
                 description,
             )
             alert_to_print += (
-                f'\t{Fore.CYAN}• {evidence_string}{Style.RESET_ALL}\n'
+                f'\t{Fore.CYAN}- {evidence_string}{Style.RESET_ALL}\n'
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
@@ -412,28 +413,25 @@ class EvidenceProcess(multiprocessing.Process):
         :param ip_direction: either src or dst ip
         profileid and twid are used to log the blocking to alerts.log and other log files.
         """
-
         # # ip_direction is the direction of the last evidence, it's irrelevant! #TODO
         # if ip_direction != 'dstip':
         #     return False
 
-        if '-i' not in sys.argv:
+        if not ('-i' in sys.argv and '-p' in sys.argv):
             # blocking is only supported when running on an interface
             return False
 
         # Make sure we don't block our own IP
         if ip in self.our_ips:
-            #todo our ips are only valid in case of an interface
             return False
 
         #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
-        # blocking_data = {
-        #     'ip':str(detection_info),
-        #     'block' : True,
-        # }
-        # blocking_data = json.dumps(blocking_data)
-        # # If the blocking module is loaded after this module this line won't work!!!
-        # __database__.publish('new_blocking', blocking_data)
+        blocking_data = {
+            'ip': ip,
+            'block' : True,
+        }
+        blocking_data = json.dumps(blocking_data)
+        __database__.publish('new_blocking', blocking_data)
         return True
 
     def mark_as_blocked(
@@ -481,16 +479,23 @@ class EvidenceProcess(multiprocessing.Process):
         """
         delete the hash of all whitelisted evidence from the given dict of evidence ids
         """
-
         res = {}
         for evidence_ID, evidence_info in evidence.items():
-            if not __database__.is_whitelisted_evidence(evidence_ID):
+            # sometimes the db has evidence that didnt come yet to evidenceprocess
+            # and they are alerted without checking the whitelist!
+            # to fix this, we have processed evidence which are
+            # evidence that came to new_evidence channel and were processed by it
+            # so they are ready to be a part of an alerted
+            if (
+                    not __database__.is_whitelisted_evidence(evidence_ID)
+                    and __database__.is_evidence_processed(evidence_ID)
+            ):
                 res[evidence_ID] = evidence_info
         return res
 
 
     def get_evidence_for_tw(self, profileid, twid):
-        # Get all the evidence for the TW
+        # Get all the evidence for this profile in this TW
         tw_evidence = __database__.getEvidenceForTW(
             profileid, twid
         )
@@ -508,7 +513,6 @@ class EvidenceProcess(multiprocessing.Process):
         # to store all the ids causing this alerts in the database
         self.IDs_causing_an_alert = []
         for evidence in tw_evidence.values():
-            # Deserialize evidence
             evidence = json.loads(evidence)
             # type_detection = evidence.get('type_detection')
             # detection_info = evidence.get('detection_info')
@@ -534,7 +538,7 @@ class EvidenceProcess(multiprocessing.Process):
             # Compute the moving average of evidence
             new_threat_level = threat_level * confidence
             self.print(
-                f'\t\tWeighted Threat Level: {new_threat_level}',3,0,
+                f'\t\tWeighted Threat Level: {new_threat_level}', 3, 0
             )
             accumulated_threat_level += new_threat_level
             self.print(
@@ -594,9 +598,14 @@ class EvidenceProcess(multiprocessing.Process):
                     proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
                     evidence_ID = data.get('ID', False)
-                    # Ignore alert if IP is whitelisted
                     flow = __database__.get_flow(profileid, twid, uid)
 
+                    # FP whitelisted alerts happen when the db returns an evidence
+                    # that isn't processed in this channel, in the tw_evidence below
+                    # to avoid this, we only alert on processed evidence
+                    __database__.mark_evidence_as_processed(profileid, twid, evidence_ID)
+
+                    # Ignore alert if IP is whitelisted
                     if flow and self.whitelist.is_whitelisted_evidence(
                         srcip, detection_info, type_detection, description
                     ):
@@ -695,11 +704,9 @@ class EvidenceProcess(multiprocessing.Process):
                             accumulated_threat_level
                             >= self.detection_threshold_in_this_width
                         ):
-                            # if this profile was not already blocked in this TW
                             if not __database__.checkBlockedProfTW(
                                 profileid, twid
                             ):
-                                self.print(f"[evidenceprocess] {profileid} {twid} is not blocked, so will block it")
                                 # store the alert in our database
                                 # the alert ID is profileid_twid + the ID of the last evidence causing this alert
                                 alert_ID = f'{profileid}_{twid}_{ID}'
@@ -724,14 +731,12 @@ class EvidenceProcess(multiprocessing.Process):
                                 )
                                 self.print(f'{alert_to_print}', 1, 0)
 
-
-
                                 # alerts.json should only contain alerts in idea format,
                                 # blocked srcips should only be printed in alerts.log
                                 # self.addDataToJSONFile(blocked_srcip_dict)
 
                                 if self.popup_alerts:
-                                    # remove the colors from the aletss before printing
+                                    # remove the colors from the alerts before printing
                                     alert_to_print = (
                                         alert_to_print.replace(Fore.RED, '')
                                         .replace(Fore.CYAN, '')
@@ -739,17 +744,21 @@ class EvidenceProcess(multiprocessing.Process):
                                     )
                                     self.notify.show_popup(alert_to_print)
 
-
-                                    if self.decide_blocking(
-                                        detection_info, profileid, twid, type_detection
-                                    ):
-                                        self.mark_as_blocked(
-                                            profileid,
-                                            twid,
-                                            flow_datetime,
-                                            accumulated_threat_level
-                                        )
-
+                                # make sure we're blocking IPs only.
+                                # for now, always mark as blocked until we have working logic for the blocking module
+                                if (
+                                        ('ip' in type_detection
+                                            and self.decide_blocking(
+                                                detection_info, profileid, twid, type_detection
+                                            )
+                                        ) or True
+                                ):
+                                    self.mark_as_blocked(
+                                        profileid,
+                                        twid,
+                                        flow_datetime,
+                                        accumulated_threat_level
+                                    )
                 message = self.c2.get_message(timeout=self.timeout)
                 if utils.is_msg_intended_for(message, 'new_blame'):
                     data = message['data']
@@ -796,11 +805,11 @@ class EvidenceProcess(multiprocessing.Process):
                 self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.outputqueue.put(
-            #         f'01|[Evidence] Error in the Evidence Process line {exception_line}'
-            #     )
-            #     self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-            #     self.outputqueue.put('01|[Evidence] {}'.format(inst))
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.outputqueue.put(
+                    f'01|[Evidence] Error in the Evidence Process line {exception_line}'
+                )
+                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
+                self.outputqueue.put('01|[Evidence] {}'.format(inst))
+                return True

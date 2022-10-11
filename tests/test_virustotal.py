@@ -4,9 +4,7 @@
 #####       if more than 4 calls to _api_query in a row winn cause unit tests to fail
 
 from ..modules.virustotal.virustotal import Module
-import configparser
 import pytest
-import time
 import requests
 import json
 
@@ -117,23 +115,4 @@ def test_get_domain_vt_data(outputQueue):
     assert virustotal.get_domain_vt_data('google.com') != False
 
 
-@pytest.mark.dependency(depends=["test_get_domain_vt_data"])
-def test_scan_file(outputQueue, database):
-    """
-    This one depends on the available quota
-    """
-    # this one always fails due to the 4 reqs/minute free quota
-    virustotal = create_virustotal_instance(outputQueue)
-    # test this function with a hash we know is malicious
-    file_info = {
-        'uid': 123,
-        'daddr': '8.8.8.8',
-        'saddr': '8.8.8.8',
-        'size': 123,
-        'profileid': 'profile_192.168.1.1',
-        'twid': 'timewindow0',
-        'md5': '7c401bde8cafc5b745b9f65effbd588f',
-        'ts': time.time(),
-    }
-    virustotal.file_info = file_info
-    assert virustotal.scan_file(file_info) == 'malicious', 'Server Error: Response code is not 200'
+

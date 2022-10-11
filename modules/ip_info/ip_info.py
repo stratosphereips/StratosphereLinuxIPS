@@ -297,7 +297,7 @@ class Module(Module, multiprocessing.Process):
 
             if oui in line:
                 line = json.loads(line)
-                vendor = line['companyName']
+                vendor = line['vendorName']
                 return vendor
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):

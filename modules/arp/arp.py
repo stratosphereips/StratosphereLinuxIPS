@@ -7,6 +7,7 @@ from slips_files.common.slips_utils import utils
 
 # Your imports
 import json
+import sys
 import ipaddress
 import time
 import threading
@@ -287,7 +288,7 @@ class Module(Module, multiprocessing.Process):
             confidence = 0.6
             threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'{saddr} sending arp packet to a destination address outside of local network: {daddr}. {ip_identification}'
+            description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
             type_detection = 'srcip'
@@ -320,7 +321,7 @@ class Module(Module, multiprocessing.Process):
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
-            description = 'detected sending unsolicited arp'
+            description = 'sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
             # This may be arp spoofing
             category = 'Information'
@@ -509,10 +510,10 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

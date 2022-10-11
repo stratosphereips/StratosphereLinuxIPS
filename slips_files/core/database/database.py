@@ -7,7 +7,6 @@ import redis
 import time
 import json
 from typing import Tuple
-import configparser
 import traceback
 import subprocess
 from datetime import datetime
@@ -97,14 +96,16 @@ class Database(ProfilingFlowsDatabase, object):
             #   Will save the DB if both the given number of seconds and the given
             #   number of write operations against the DB occurred.
             #   In the example below the behaviour will be to save:
-            #   after 60 sec if at least 10000 keys changed
+            #   after 30 sec if at least 500 keys changed
             #   AOF persistence logs every write operation received by the server,
             #   that will be played again at server startup
+            # saved the db to <Slips-dir>/dump.rdb
             self.redis_options.update({
-                'save': '60 10000',
-                'appendonly': 'yes'
+                'save': '30 500',
+                'appendonly': 'yes',
+                'dir': os.getcwd(),
+                'dbfilename': 'dump.rdb',
             })
-
         with open(self.redis_conf_file, 'w') as f:
             for option, val in self.redis_options.items():
                 f.write(f'{option} {val}\n')
@@ -171,7 +172,12 @@ class Database(ProfilingFlowsDatabase, object):
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
             # if the port is used for another instance, slips.py is going to detect it
-            self.close_redis_server(port)
+            if port != 32850:
+                # 32850 is where we have the loaded rdb file when loading a saved db
+                # we shouldn't close it because this is what kalipso will
+                # use to view the loaded the db
+
+                self.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -205,7 +211,11 @@ class Database(ProfilingFlowsDatabase, object):
                 # for pub-sub 4GB maximum buffer size
                 # and 2GB for soft limit
                 # The original values were 50MB for maxmem and 8MB for soft limit.
-                if self.deletePrevdb and not '-S' in sys.argv:
+                # don't flush the loaded db when using '-db'
+                if (
+                        self.deletePrevdb
+                        and not ('-S' in sys.argv or '-cb' in sys.argv or '-d'  in sys.argv)
+                ):
                     # when stopping the daemon, don't flush bc we need to get the pids
                     # to close slips files
                     self.r.flushdb()
@@ -258,6 +268,18 @@ class Database(ProfilingFlowsDatabase, object):
                 return True
 
         return False
+
+    def set_loaded_ti_files(self, number_of_loaded_files: int):
+        """
+        Stores the number of successfully loaded TI files
+        """
+        self.r.set('loaded TI files', number_of_loaded_files)
+
+    def get_loaded_ti_files(self):
+        """
+        returns the number of successfully loaded TI files. or 0 if none is loaded
+        """
+        return self.r.get('loaded TI files') or 0
 
     def addProfile(self, profileid, starttime, duration):
         """
@@ -313,6 +335,15 @@ class Database(ProfilingFlowsDatabase, object):
         Used to associate this profile with it's used software and version
         :param uid:  uid of the flow using the given versions
         """
+        if cached_sw := self.get_software_from_profile(profileid):
+            if cached_sw['software'] == software:
+                # we already have an ssh client for this proileid.
+                # dont store this one, let flowalerts detect the incompatibility
+                return
+
+        if 'SSH' not in software:
+            return
+
         sw_dict = {
             'software': software,
             'version-major': version_major,
@@ -1090,6 +1121,7 @@ class Database(ProfilingFlowsDatabase, object):
             this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
         """
 
+
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(type_evidence):
             return False
@@ -1145,32 +1177,35 @@ class Database(ProfilingFlowsDatabase, object):
         evidence_to_send = json.dumps(evidence_to_send)
 
 
-        # Check if we have and get the current evidence stored in the DB fot this profileid in this twid
+        # Check if we have and get the current evidence stored in the DB for
+        # this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
         else:
             current_evidence = {}
 
+        # make ure it's not a duplicate evidence
         should_publish = False
         if evidence_ID not in current_evidence.keys():
             should_publish = True
-        # update our current evidence for this profileid and twid. now the evidence_ID is used as the key
+
+        # update our current evidence for this profileid and twid.
+        # now the evidence_ID is used as the key
         current_evidence.update({evidence_ID: evidence_to_send})
 
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
-
         self.r.hset(
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
+
         self.r.hset('evidence' + profileid, twid, current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
         if should_publish:
             self.publish('evidence_added', evidence_to_send)
-
         # an alert is generated for this profile,
         # change the score to = 1, and confidence = 1
         if type_detection in ('sip', 'srcip'):
@@ -1179,8 +1214,17 @@ class Database(ProfilingFlowsDatabase, object):
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
             self.set_score_confidence(detection_info, 'critical', 1)
-
         return True
+
+    def mark_evidence_as_processed(self, profileid, twid, evidence_ID):
+        """
+        If an evidence was processed by the evidenceprocess, mark it in the db
+        """
+        self.r.sadd('Processed_evidence', evidence_ID)
+
+    def is_evidence_processed(self, evidence_ID):
+        return self.r.sismember('whitelisted_evidence', evidence_ID)
+
 
     def set_evidence_for_profileid(self, evidence):
         """
@@ -1211,7 +1255,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Delete evidence from the database
         """
-        # 1. delete veidence from 'evidence' key
+        # 1. delete evidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
         if current_evidence:
             current_evidence = json.loads(current_evidence)
@@ -1223,10 +1267,9 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.hset(
             profileid + self.separator + twid,
             'Evidence',
-            str(current_evidence_json),
+            current_evidence_json,
         )
         self.r.hset('evidence' + profileid, twid, current_evidence_json)
-
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
         if not profile_alerts:
@@ -1337,6 +1380,15 @@ class Database(ProfilingFlowsDatabase, object):
                 uid,
                 data,
             )
+
+    def set_growing_zeek_dir(self):
+        """
+        Mark a dir as growing so it can be treated like the zeek logs generated by an interface
+        """
+        self.r.set('growing_zeek_dir', 'yes')
+
+    def is_growing_zeek_dir(self):
+        return True if 'yes' in str(self.r.get('growing_zeek_dir')) else False
 
     def set_module_label_to_flow(
         self, profileid, twid, uid, module_name, module_label
@@ -1824,8 +1876,10 @@ class Database(ProfilingFlowsDatabase, object):
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
         Store a group of IPs in the db as they were obtained from an IoC source
-        :param ips_and_description: is {ip: json.dumps{'source':..,'tags':..,
-                                                        'threat_level':... ,'description'}}
+        :param ips_and_description: is {ip: json.dumps{'source':..,
+                                                        'tags':..,
+                                                        'threat_level':... ,
+                                                        'description':...}}
 
         """
         if ips_and_description:
@@ -2093,7 +2147,7 @@ class Database(ProfilingFlowsDatabase, object):
                 pass
         return timestamp
 
-    def search_Domain_in_IoC(self, domain: str) -> tuple:
+    def is_domain_malicious(self, domain: str) -> tuple:
         """
         Search in the dB of malicious domains and return a
         description if we found a match
@@ -2291,14 +2345,14 @@ class Database(ProfilingFlowsDatabase, object):
         If you -s the same file twice the old backup will be overwritten.
         """
 
-        # print statements in this function won't work becaus eby the time this
+        # use print statements in this function won't work because by the time this
         # function is executed, the redis database would have already stopped
 
-        # Saves to /var/lib/redis/dump.rdb
+        # saves to /var/lib/redis/dump.rdb
         # this path is only accessible by root
         self.r.save()
 
-        # Saves to dump.rdb in the cwd
+        # gets the db saved to dump.rdb in the cwd
         redis_db_path = os.path.join(os.getcwd(), 'dump.rdb')
 
         if os.path.exists(redis_db_path):
@@ -2318,40 +2372,43 @@ class Database(ProfilingFlowsDatabase, object):
         Load the db from disk to the db on port 32850
         backup_file should be the full path of the .rdb
         """
-        # do not use self.print here! the outputqueue isn't initialized yet
-        if not os.path.exists(backup_file):
-            print("{} doesn't exist.".format(backup_file))
-            return False
+        # do not use self.print here! the output queue isn't initialized yet
+        def is_valid_rdb_file():
+            if not os.path.exists(backup_file):
+                print("{} doesn't exist.".format(backup_file))
+                return False
 
+            # Check if valid .rdb file
+            command = 'file ' + backup_file
+            result = subprocess.run(command.split(), stdout=subprocess.PIPE)
+            file_type = result.stdout.decode('utf-8')
+            if not 'Redis' in file_type:
+                print(
+                    f'{backup_file} is not a valid redis database file.'
+                )
+                return False
+            return True
 
-        # Check if valid .rdb file
-        command = 'file ' + backup_file
-        result = subprocess.run(command.split(), stdout=subprocess.PIPE)
-        file_type = result.stdout.decode('utf-8')
-        if not 'Redis' in file_type:
-            print(
-                f'{backup_file} is not a valid redis database file.'
-            )
+        if not is_valid_rdb_file():
             return False
 
         try:
             self.redis_options.update({
                 'dbfilename': os.path.basename(backup_file),
-                'dir': os.path.dirname(backup_file)
+                'dir': os.path.dirname(backup_file),
+                'port': 32850,
             })
 
             with open(self.redis_conf_file, 'w') as f:
                 for option, val in self.redis_options.items():
                     f.write(f'{option} {val}\n')
-
-            self.print(f"Stopping redis server requires root access")
             # Stop the server first in order for redis to load another db
             os.system(self.sudo + 'service redis-server stop')
 
-            # Start the server again
-            os.system('redis-server redis.conf')
+            # Start the server again, but make sure it's flushed and doesnt have any keys
+            os.system(f'redis-server redis.conf > /dev/null 2>&1')
             return True
-        except:
+        except Exception as e:
             self.print(
                 f'Error loading the database {backup_file}.'
             )

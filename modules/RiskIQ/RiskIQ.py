@@ -14,7 +14,7 @@ import sys
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RiskIQ'
-    description = 'Module to get different information from RiskIQ'
+    description = 'Module to get passive DNS info about IPs from RiskIQ'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
@@ -107,15 +107,17 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
+
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_ip'):
                     ip = message['data']
+                    if utils.is_ignored_ip(ip):
+                        continue
                     # Only get passive total dns data if we don't have it in the db
-                    if __database__.get_passive_dns(ip) == '':
+                    if passive_dns_info := __database__.get_passive_dns(ip) == '':
                         # we don't have it in the db , get it from passive total
                         passive_dns = self.get_passive_dns(ip)
                         if passive_dns:

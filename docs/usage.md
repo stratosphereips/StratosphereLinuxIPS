@@ -75,6 +75,11 @@ tr:nth-child(even) {
 		<td>./slips.py -f test.nfdump </td>
 	</tr>
     <tr>
+		<td>Suricata flows</td>
+		<td>-f</td>
+		<td>./slips.py -f suricata.json </td>
+	</tr>
+    <tr>
 		<td>stdin</td>
 		<td>-f</td>
 		<td>./slips.py -f zeek </td>
@@ -248,25 +253,26 @@ title="Web Interface">
 
 ## Saving the database
 
-Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```, 
+Slips uses redis to store analysis information. you can save your analysis for later use by running slips with ```-s```,
 
 For example:
 
-```./slips.py -f dataset/hide-and-seek-short.pcap -s```
+```sudo ./slips.py -f dataset/hide-and-seek-short.pcap -s```
 
-Your .rdb saved database will be stored in ```redis_backups/```.
+Your .rdb saved database will be stored in the default output dir.
 
 Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
 
 You can load it again using ```-d```, For example:
 
-```./slips.py -d redis_backups/hide-and-seek-short.rdb ```
+```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb ```
 
-And then use ```./kalipso``` and select the entry on port 32850 to view the loaded database.
+And then use ```./kalipso``` or ```./webinterface.sh``` and select the entry on port 32850 to view the loaded database.
+
+Note: saving and loading the database requires **root privileges** and is only supported in linux.
 
 This feature isn't supported in docker due to problems with redis in docker.
 
-Slips will ask for root access when saving the db to be able to restart the redis service.
 
 _DISCLAIMER_: When saving the database you will see the following
 warning 
@@ -282,8 +288,9 @@ the saved database will contain all analyzed flows.
 
 
 ## Whitelisting
+
 Slips allows you to whitelist some pieces of data in order to avoid its processing. 
-In particular you can whitelist an IP address, a domain, a MAC address or a complete organization. 
+In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization. 
 You can choose to whitelist what is going __to__ them and what is coming __from__ them. 
 You can also choose to whitelist the flows, so they are not processed, or the alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
@@ -386,7 +393,7 @@ Slips doesn't need root permissions unless you
 If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
 
 ```
-setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
+sudo setcap cap_net_raw,cap_net_admin=eip /<path-to-zeek-bin/zeek
 ```
 
 Even when Slips is run using sudo, it drops root privileges  in modules that don't need them.
@@ -508,6 +515,8 @@ interface. this is called zeek rotation and is enabled by default.
 
 You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf```
 
+Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info 
+
 But you can also enable storing a copy of zeek log files in the output 
 directory by setting ```store_a_copy_of_zeek_files``` to yes.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
@@ -519,11 +528,38 @@ DISCLAIMER: Once slips knows you do not want a copy of zeek log files after slip
  ```delete_zeek_files``` and disabling ```store_a_copy_of_zeek_files``` parameters,
 it deletes large log files periodically (like arp.log).
 
+
+#### Rotation
+
+Rotation is done in zeek files to avoid growing zeek log files and save disk space.
+
+Rotating is only enabled when running on an interface.
+
+By default, Slips rotates zeek files every 1 day. this can be changed in ```slips.conf```
+by changing the value of ```rotation_period```
+
+```rotation_period``` value can be written as a numeric constant followed by a time unit where
+the time unit is one of usec, msec, sec, min, hr, or day which respectively
+represent microseconds, milliseconds, seconds, minutes, hours, and days.
+Whitespace between the numeric constant and time unit is optional. Appending the letter s to the
+time unit in order to pluralize it is also optional. 
+Check [Zeek rotation interval](https://docs.zeek.org/en/master/script-reference/types.html#type-interval) for more details
+
+Slips has an option to not delete the rotated zeek files immediately by setting the
+```keep_rotated_files_for``` parameter.
+
+This is equivalent to telling slips, Delete all logs that happened before the last  ```keep_rotated_files_for``` days.
+
+```keep_rotated_files_for``` value supports days only.
+
+
 ####  Running Slips with verbose and debug flags
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
-Default value for both of them is 0
+Default value for debug is 0. so no errors are printed by default.
+
+Default value for verbose is 1. so basic operations and proof of work are printed by default.
 
 To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
@@ -591,7 +627,7 @@ Slips supports reading input flows in text format from stdin in interactive mode
 
 Supported flow from stdin are zeek conn.log files (json form), suricata and argus.
 
-For example you can run slips using:
+For example, you can run slips using:
 
 ```./slips.py -f zeek```
 
@@ -620,10 +656,16 @@ For example, if you want to add a zeek script called ```arp.zeek``` you should a
 
 Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
 
-## Getting slips version
+## Getting Slips version
 
 You can check out your running slips version using ```-V``` or ```--version``` flags.
 
+## Containing Slips resource consuption
+
+When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of 
+Slips by running:
+
+    renice -n 6 -p <Slips-PID>
 
 ## Running Slips from python
 
@@ -631,7 +673,7 @@ You can run Slips from python using the following script
 
 ```py
 import subprocess
-command = './slips.py -f dataset/test3.binetflow -o /data/test'
+command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```

@@ -384,17 +384,14 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['rcode_name'] = ''
             try:
-                self.column_values['answers'] = line[21]
-                if type(self.column_values['answers']) == str:
+                answers = line[21]
+                if type(answers) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    self.column_values['answers'] = [
-                        self.column_values['answers']
-                    ]
-                if type(self.column_values['answers']) == str:
-                    # If the answer is only 1, Zeek gives a string
-                    # so convert to a list
-                    self.column_values['answers'] = [self.column_values['answers']]
+                    answers = answers.split(',')
+                # ignore dns TXT records
+                answers = [answer for answer in answers if 'TXT ' not in answer]
+                self.column_values['answers'] = answers
             except IndexError:
                 self.column_values['answers'] = ''
             try:
@@ -1469,6 +1466,31 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+            elif self.column_values['type'] == 'ssh':
+                try:
+                    self.column_values['client'] = line['ssh']['client']['software_version']
+                except KeyError:
+                    self.column_values['client'] = ''
+
+                try:
+                    self.column_values['version'] = line['ssh']['client']['proto_version']
+                except KeyError:
+                    self.column_values['version'] = ''
+
+                try:
+                    self.column_values['server'] = line['ssh']['server']['software_version']
+                except KeyError:
+                    self.column_values['server'] = ''
+                # these fields aren't available in suricata, they're available in zeek only
+                self.column_values['auth_success'] = ''
+                self.column_values['auth_attempts'] = ''
+                self.column_values['cipher_alg'] = ''
+                self.column_values['mac_alg'] = ''
+                self.column_values['kex_alg'] = ''
+                self.column_values['compression_alg'] = ''
+                self.column_values['host_key_alg'] = ''
+                self.column_values['host_key'] = ''
+
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
@@ -1478,26 +1500,26 @@ class ProfilerProcess(multiprocessing.Process):
         :param ip: src/dst ip
         src macs should be passed with srcips, dstmac with dstips
         """
-        if not mac:
+        if not mac or mac in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff'):
             return
         # get the src and dst addresses as objects
         try:
             ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_multicast:
+                return
         except ValueError:
             return
-        if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
-            ip_obj.is_multicast or ip_obj.is_link_local
-        ):
-            # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-            to_send = {
-                'MAC': mac,
-                'profileid': f'profile_{ip}'
-            }
-            if host_name:
-                to_send.update({
-                    'host_name': host_name
-                })
-            __database__.publish('new_MAC', json.dumps(to_send))
+
+        # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+        to_send = {
+            'MAC': mac,
+            'profileid': f'profile_{ip}'
+        }
+        if host_name:
+            to_send.update({
+                'host_name': host_name
+            })
+        __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
 

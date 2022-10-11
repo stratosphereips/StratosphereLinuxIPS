@@ -9,10 +9,9 @@ import ipaddress
 import validators
 import traceback
 import requests
-import datetime
 import sys
 import asyncio
-from datetime import datetime
+import datetime
 from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
@@ -1358,11 +1357,6 @@ class UpdateFileManager:
             # when the ti files are already updated, from a previous run, we don't
             return
 
-        ips = {
-            'in 1 blacklist': 0,
-            'in 2 blacklist': 0,
-            'in 3 blacklist': 0,
-        }
         ips_in_1_bl = 0
         ips_in_2_bl = 0
         ips_in_3_bl = 0
@@ -1374,24 +1368,22 @@ class UpdateFileManager:
                 ips_in_2_bl += 1
             elif blacklists_ip_appeard_in == 3:
                 ips_in_3_bl += 1
-
-        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}')
-        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}')
-        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}')
+        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 2, 0)
 
     def update_mac_db(self, response):
         if response.status_code != 200:
             return
+        self.log(f'Updating the MAC database.')
+        path_to_mac_db = 'databases/macaddress-db.json'
 
-        path_to_mac_db = 'databases/macaddr-db.json'
-
-        # write to filee the info as 1 json per line
+        # write to file the info as 1 json per line
         mac_info = response.text.replace(']','').replace('[','').replace(',{','\n{')
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
-        # todo the basename doesn't make sense
-        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
+        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
     async def update(self) -> bool:
         """
@@ -1460,7 +1452,6 @@ class UpdateFileManager:
                     self.log('Successfully updated RiskIQ domains.')
                 else:
                     self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
-
             # wait for all TI files to update
             try:
                 await task
@@ -1468,8 +1459,7 @@ class UpdateFileManager:
                 # in case all our files are updated, we don't have task defined, skip
                 pass
 
-            self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
-
+            __database__.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:

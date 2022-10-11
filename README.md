@@ -11,57 +11,50 @@ Slips v0.9.5
 ##### Repo Stars Over Time
 
 [![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)
-[![GitHub watchers](https://badgen.net/github/watchers/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
-[![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
-[![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
-[![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
-[![GitHub open-pull-requests](https://badgen.net/github/open-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
-[![GitHub pull-requests closed](https://badgen.net/github/closed-prs/stratosphereips/StratosphereLinuxIPS)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
-[![GitHub version](https://badge.fury.io/gh/stratosphereips%2FStratosphereLinuxIPS.svg)](https://github.com/stratosphereips/StratosphereLinuxIPS)
-![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS)
-[![License](https://img.shields.io/badge/license-GPLv2-green)](./LICENSE)
-![GitHub Org's stars](https://img.shields.io/github/stars/stratosphereips/StratosphereLinuxIPS?style=plastic)
-![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=green&style=plastic)
+
+[![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
+[![GitHub version](https://img.shields.io/github/v/tag/stratosphereips/StratosphereLinuxIPS?label=version)](https://github.com/stratosphereips/StratosphereLinuxIPS)
+![Python](https://img.shields.io/badge/python-3.8-blue)
 ![GitHub language count](https://img.shields.io/github/languages/count/stratosphereips/StratosphereLinuxIPS)
-![Docker Image Size (tag)](https://img.shields.io/docker/image-size/stratosphereips/slips/latest?color=yellow&label=docker%20image%20size)
-![GitHub repo size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
+![GitHub repository size](https://img.shields.io/github/repo-size/stratosphereips/StratosphereLinuxIPS)
+![Docker Image Size (tag)](https://img.shields.io/docker/image-size/stratosphereips/slips/latest?color=blue&label=docker%20image%20size)
 ![Docker Pulls](https://img.shields.io/docker/pulls/stratosphereips/slips)
-![Python](https://img.shields.io/badge/Python-3.8-yellow)
 
+[![GitHub issues](https://img.shields.io/github/issues/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues/)
+[![GitHub issues-closed](https://img.shields.io/github/issues-closed/stratosphereips/StratosphereLinuxIPS.svg?color=green)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/issues?q=is%3Aissue+is%3Aclosed)
+[![GitHub open-pull-requests](https://img.shields.io/github/issues-pr-raw/stratosphereips/StratosphereLinuxIPS?color=green&label=open%20PRs)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aopen)
+[![GitHub pull-requests closed](https://img.shields.io/github/issues-pr-closed-raw/stratosphereips/StratosphereLinuxIPS?color=green&label=closed%20PRs)](https://github.com/stratosphereips/StratosphereLinuxIPS/pulls?q=is%3Aclosed)
+[![GitHub contributors](https://img.shields.io/github/contributors/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/contributors/)
+![GitHub forks](https://img.shields.io/github/forks/stratosphereips/StratosphereLinuxIPS?color=orange)
+![GitHub Org's stars](https://img.shields.io/github/stars/stratosphereips/StratosphereLinuxIPS?color=orange)
+[![GitHub watchers](https://img.shields.io/github/watchers/stratosphereips/StratosphereLinuxIPS?color=orange)](https://GitHub.com/stratosphereips/StratosphereLinuxIPS/watchers/)
 
+[![License](https://img.shields.io/badge/Blog-Stratosphere-cyan)](https://www.stratosphereips.org/blog/tag/slips)
 [![Discord](https://img.shields.io/discord/761894295376494603?label=&logo=discord&logoColor=ffffff&color=7389D8&labelColor=6A7EC2)](https://discord.gg/zu5HwMFy5C)
-[![License](https://img.shields.io/badge/Blog-Stratosphere-red)](https://www.stratosphereips.org/blog/tag/slips)
-[![Docker](https://img.shields.io/badge/Docker-latest-success)](https://hub.docker.com/r/stratosphereips/slips_p2p)
 ![Twitter Follow](https://img.shields.io/twitter/follow/StratosphereIPS?style=social)
 <hr>
 
-<h1>
-Behavioral Machine Learning Based Intrusion Prevention System
-</h1>
 
-Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in the
-network traffic. Slips is designed to focus on targeted attacks, detection of command and control channels, and to
-provide a good visualisation for the analyst. It can analyze network traffic in real time, network captures such as pcap
-files, and network flows produced by Suricata, Zeek/Bro and Argus. Slips processes the input, analyzes it, and
-highlights suspicious behaviour that needs the analyst's attention.
+# Slips: Behavioral Machine Learning-Based Intrusion Prevention System
+
+
+Slips is a behavioral intrusion prevention system that uses machine learning to detect malicious behaviors in network traffic. Slips focus on targeted attacks, detection of command and control channels, and providing a good visualization for the analyst. It can analyze network traffic in real-time, network captures such as pcap files, and network flows produced by Suricata, Zeek/Bro, and Argus. Slips processes the input data, analyzes it, and highlights suspicious behavior that needs the analyst's attention.
 
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/slips.gif" width="850px"
 title="Slips in action.">
 
-
-
 # Modules
 
-Slips is written in Python and is highly modular. Each module is designed to perform a specific detection in the network traffic. The complete documentation of Slips internal architecture and instructions how to implement a new module are available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
-
-The following table summarizes all active modules in Slips, its status and purpose:
+Slips is written in Python and is highly modular. Each module performs a specific detection in the network traffic. The complete documentation of Slips' internal architecture and instructions on how to implement a new module is available [here](https://stratospherelinuxips.readthedocs.io/en/develop/).
+    
+The following table summarizes all active modules in Slips, their status, and their purpose:
 
 |   Module            | Status | Description | 
 | --------------------|   :-:  |------------ |  
 | HTTPS               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
 | Port scan detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
 | RNN C&C etection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
-| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. Current measures are: long duration of the connection, successful ssh |
+| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
 | Flow ML detection   |   ✅   | detects malicious flows using ML pretrained models |
 | Leak detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
 | Threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
@@ -80,60 +73,28 @@ The following table summarizes all active modules in Slips, its status and purpo
 
 # Installation
 
-There are two ways to run Slips: 
-
-i. bare metal installation on Linux
-
-ii. using Docker which is our preferred option.
-
-In this section we guide you through how to get started with Slips.
+There are two ways to run Slips: i. using Docker, which is our preferred option, and i. bare metal installation on Linux. This section guides you through how to get started with Slips.
 
 ## Running Slips Using Docker
 
-The easiest way to run Slips is using Docker. The latest Slips docker image ```stratosphereips/slips:latest``` can analyze
-multiple type of network data, including pcaps, Zeek flows, Argus flows, and others.
-In Linux systems, it is possible to use the docker image to analyze real time traffic from the host's interface.
+The easiest way to run Slips is using Docker. The latest Slips docker image ```stratosphereips/slips:latest``` can analyze multiple types of network data, including pcaps, Zeek flows, Argus flows, and others. In Linux systems, it is possible to use the docker image to analyze real-time traffic from the host's interface. [Check the documentation](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html) for a more detailed usage explanation.
 
-### Getting started with Slips docker
+Follow the next steps to perform a Slips test-run:
 
-Get started with Slips in three simple steps: 
+- Create a new container from the latest Slips docker image: `docker run -it -d --name slips stratosphereips/slips:latest`
+- Access the container: `docker container exec -ti slips /bin/bash`
+- Run Slips on a sample pcap to test things work as expected: `python3 slips.py -e 1 -f dataset/hide-and-seek-short.pcap` 
+- Checking Slips output files: `cd output/hide-and-seek-short.pcap_<ts>/` && `cat alerts.log`
 
-- create a new container from the latest Slips docker image, 
-
-- access the container
-
-- run Slips on a sample pcap to test things work as expected. 
-
-Below you can find the step by step guide on how to proceed.
-
-The following line downloads the latest docker image, spawns a Slips container in daemon mode and runs slips on a 
-test pcap:
-
+To download the Slips docker image, spawn a new container in daemon mode and run Slips on a 
+test pcap in one command from your host computer:
+```bash
     docker run -it -d --name slips stratosphereips/slips ./slips.py -e 1 -f dataset/hide-and-seek-short.pcap
-
-You can see slips logs using:
-    
-    docker container logs slips
-
-You can also see the alerts generated by slips by going into the container
-And checking the log files generated by slips
-
-1. Get a terminal on Slips container 
-
-        docker exec -it slips /bin/bash
-
-2. Check out the logs directory
-
-    root@26e6d057545f:/StratosphereLinuxIPS#  cd output/hide-and-seek-short.pcap_<ts>/ && cat alerts.log
-
-
-[Check the documentation](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html) for more detailed usage
-explanation 
+```
 
 ### Run Slips sharing files between the host and the container
 
-The following instructions will guide you on how to run a Slips docker container with file sharing between the host 
-and the container.
+The following instructions will guide you on how to run a Slips docker container with file sharing between the host and the container.
 
 ```bash
     # create a directory to load pcaps in your host computer
@@ -145,38 +106,29 @@ and the container.
     # create a new Slips container mapping the folder in the host to a folder in the container
     docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
     
-    # run slips on the pcap file mapped to the container
+    # run Slips on the pcap file mapped to the container
     ./slips.py -c slips.conf -f dataset/myfile.pcap
 ```
 
 ### Run Slips with access to block traffic on the host network
 
-To allow the Slips docker container to analyze and block the traffic in your Linux host network interface, 
-it is necessary to run the docker container with the option `--cap-add=NET_ADMIN`. 
-
-This option allows the container to interact with the network stack of the host computer. 
-To allow blocking malicious behavior, run Slips with the parameter `-p`.
+In Linux OS, the Slips can be used to analyze and **block** network traffic on the host network interface. To allow the container to see the host interface traffic and block malicious connections, it needs to run with the option `--cap-add=NET_ADMIN`. This option enables the container to interact with the network stack of the host computer. To block malicious behavior, run Slips with the parameter `-p`.
 
 ```bash
     # run a new Slips container with the option to interact with the network stack of the host
     docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
     
-    # run slips on the host interface `eno1` with active blocking `-p`
+    # run Slips on the host interface `eno1` with active blocking `-p`
     ./slips.py -c slips.conf -i eno1 -p
 ```
 
-Note that this feature is only available in Linux OS.
-
 ### Build Slips from the Dockerfile
 
-You can build the Docker of Slips, but consider that different operating systems have different requirements.
-This is because tensorflow access the hardware directly and therefore docker won't always work well.
-For example in MacOS M1 computers the use of tensorflow from inside docker is still not supported. 
+You can build the Docker of Slips, but consider that system requirements vary depending on the operating system, primarily because of TensorFlow. TensorFlow accesses the hardware directly, so Docker will not always work well. For example, in macOS M1 computers, the use of TensorFlow from inside Docker is still not supported. 
 
 
-
-#### Building a Docker For MacOS
-To build a Docker image of Slips for macos follow the next steps:
+#### Building a Docker For macOS
+To build a Docker image of Slips for macOS follow the next steps:
 
 ```bash
     # clone the Slips repository in your host computer
@@ -185,11 +137,11 @@ To build a Docker image of Slips for macos follow the next steps:
     # access the Slips repository directory
     cd StratosphereLinuxIPS/
     
-    # build the docker image from the recommended Dockerfile
+    # build the MacOS image from the recommended Dockerfile
     docker build --no-cache -t slips -f docker/macos-image/Dockerfile .
 ```
 
-To use Slips with files alredy inside the docker you can do;
+To use Slips with files already inside the Docker you can do;
     
 ```
     # run a new Slips container from the freshly built local image
@@ -211,15 +163,16 @@ To use Slips with files shared with the host, run:
     ./slips.py -c slips.conf -f dataset/yourfile.pcap
 ```
 
-To use Slips with packets from the host interface, run the following. BUT beware that the big limitation of using Docker in macos for interface capture is that until 2022/06/28 Docker for macos does not completely passes all packets to the container when run in mode --cap-add=NET_ADMIN.
+To use Slips with packets from the host interface, run the following. BUT beware that the big limitation of using Docker in macOS for interface capture is that until 2022/06/28, Docker for macOS does not entirely pass all packets to the container when run in mode `--cap-add=NET_ADMIN`.
+    
 ```
     docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips slips
 ```
 
 
-
 #### Building a Docker For Linux
-To build a Docker image of Slips for linux follow the next steps:
+    
+To build a Docker image of Slips for Linux follow the next steps:
 
 ```bash
     # clone the Slips repository in your host computer
@@ -235,16 +188,36 @@ To build a Docker image of Slips for linux follow the next steps:
     docker run -it --rm --net=host --name slips slips
     
     # run Slips using the default configuration in one of the provided test datasets
-    ./slips.py -c slips.conf -f dataset/test3.binetflow
+    ./slips.py -c slips.conf -f dataset/test3-mixed.binetflow
 ```
+
+#### First run
+
+Be aware that the first time you run Slips it will start updating all the databases and threat intelligence files in the background. However, it will give you as many detections as possible _while_ updating. You may have more detections if you rerun Slips after the updates. Slips behaves like this, so you don't have to wait for the updates to finish to have some detections.
+
+Depending on the remote sites, downloading and updating the DB may take up to 4 minutes. Slips stores this information in a cache Redis database, which is kept in memory when Slips stops. Next time Slips runs, it will read from this database. The information in the DB is updated periodically according to the configuration file (usually one day).
+
+You can check if the DB is running this by looking at your processes:
+
+```
+    ps afx|grep redis
+    9078 ?        Ssl    1:25 redis-server *:6379
+```
+
+You can destroy this database by running:
+
+```
+    ./slips.py -k
+    Choose which one to kill [0,1,2 etc..]
+    [0] Close all servers
+    [1] conn.log - port 6379
+```
+
+
 
 #### Limitations
 
-The main limitation of running Slips in a Docker is that everytime the container is stopped, 
-the redis database of cached data is deleted and you lose all your Threat Intelligence (TI) data and previous detections. 
-This usually means that the next time your run Slips,
-it will start making detections without all the TI data until the data is downloaded again. 
-The only option to solve this is to keep the container up between scans.
+The main limitation of running Slips in a Docker is that every time the container stops, all files inside the container are deleted, including the Redis database of cached data, and you lose all your Threat Intelligence (TI) data and previous detections. Next time you run Slips, it will start making detections without all the TI data until downloading the data again. The only solution is to keep the container up between scans.
 
 ## Slips Bare Metal Installation
 
@@ -256,7 +229,7 @@ To install Slips in your host computer there are three core things needed:
 
 - installing `zeek` (formerly `bro`) for network analysis. 
 
-You can install slips using out ```install.sh``` using:
+You can install Slips using out ```install.sh``` using:
     
     chmod +x install.sh
     ./install.sh
@@ -310,8 +283,7 @@ installation instructions.
 
 ### Run Slips
 
-After all dependencies are installed and Redis is running, 
-you are ready to run Slips. Copy pcap files or other flow files in the ./dataset/ directory and analyze them:
+After all dependencies are installed and Redis is running,  you are ready to run Slips. Copy pcap files or other flow files in the ./dataset/ directory and analyze them:
 
 ```bash
     # run Slips with the default configuration
@@ -321,7 +293,7 @@ you are ready to run Slips. Copy pcap files or other flow files in the ./dataset
 
 ## Viewing Slips Output
 
-You can view slips output using kalipso in your terminal using:
+You can view Slips output using kalipso in your terminal using:
 
    ./kalipso.sh
 

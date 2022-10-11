@@ -3,7 +3,6 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -144,8 +143,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # If we contacted more than 3 dst IPs on this port with not established
                     # connections, we have evidence.
 
-                    cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
+                    cache_key = f'{profileid}:{twid}:dstip:{dport}:HorizontalPortscan'
                     prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
+
                     # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
 
                     # We detect a scan every Threshold. So, if threshold is 3,
@@ -157,11 +157,19 @@ class PortScanProcess(Module, multiprocessing.Process):
                         and prev_amount_dips < amount_of_dips
                     ):
                         # Get the total amount of pkts sent to the same port from all IPs
-                        pkts_sent = sum(dstips[dip]['spkts'] for dip in dstips)
+                        pkts_sent = 0
+                        for dip in dstips:
+                            if 'spkts' not in dstips[dip]:
+                                # In argus files there are no src pkts, only pkts.
+                                # So it is better to have the total pkts than to have no packets count
+                                pkts_sent += dstips[dip]["pkts"]
+                            else:
+                                pkts_sent += dstips[dip]["spkts"]
 
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
 
+                        self.cache_det_thresholds[cache_key] = amount_of_dips
                         if not self.alerted_once_horizontal_ps:
                             self.alerted_once_horizontal_ps = True
                             self.set_evidence_horizontal_portscan(
@@ -218,6 +226,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
+            combined_evidence = 0
 
             while True:
                 try:
@@ -247,6 +256,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # we shouldn't accumulate
                     amount_of_dports = amount_of_dports2
                     pkts_sent = pkts_sent2
+
+                    # set evidence if there's no more evidence to combine
+                    if self.pending_vertical_ps_evidence.empty():
+                        break
+                    # max evidence to combine before calling setevidence is 5
+                    # if we don't set a max evidence,
+                    # this loop will keep going forever for the same dstip without setting evidence
+                    combined_evidence += 1
+                    if combined_evidence == 5:
+                        break
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
@@ -294,6 +313,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dips = evidence
             # wait 10s if a new evidence arrived
             time.sleep(self.time_to_wait)
+            combined_evidence = 0
 
             while True:
                 try:
@@ -302,7 +322,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # queue is empty
                     break
 
-                # These are the variables of the combined evidence we are generating
+                # These are the variables of the evidence that we should combine
+                # if they match the variable of the evidence above
                 timestamp, \
                     pkts_sent2, \
                     protocol2, \
@@ -311,7 +332,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     uids2, \
                     dport2, \
                     amount_of_dips2 = new_evidence
-
                 if (
                         dport == dport2
                         and profileid == profileid2
@@ -323,11 +343,22 @@ class PortScanProcess(Module, multiprocessing.Process):
                     amount_of_dips = amount_of_dips2
                     pkts_sent = pkts_sent2
                     uids += uids2
+                    # set evidence if there's no more evidence to combine
+                    if self.pending_horizontal_ps_evidence.empty():
+                        break
+                    # max evidence to combine before calling setevidence is 5
+                    # if we don't set a max evidence,
+                    # this loop will keep going forever for the same dport without setting evidence
+                    combined_evidence += 1
+                    if combined_evidence == 5:
+                        break
                 else:
                     # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
                     # store it back in the queue until we're done with the current one
                     ports_counter += 1
                     self.pending_horizontal_ps_evidence.put(new_evidence)
+                    # after 5 evidence that are not detecting the same port, we alert the ones we already accumulated,
+                    # and start accumulating again
                     if ports_counter == 5:
                         ports_counter = 0
                         break
@@ -342,7 +373,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 dport,
                 amount_of_dips
             )
-        #todo we are not detecting second port scans
 
     def set_evidence_horizontal_portscan(
             self,
@@ -355,7 +385,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             dport,
             amount_of_dips
     ):
-        type_evidence = 'PortScanType2'
+        type_evidence = 'HorizontalPortscan'
         type_detection = 'srcip'
         source_target_tag = 'Recon'
         srcip = profileid.split('_')[-1]
@@ -372,8 +402,9 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'From {srcip} to {amount_of_dips} unique dst IPs. '
             f'Tot pkts sent: {pkts_sent}. '
             f'Threat Level: {threat_level}. '
-            f'Confidence: {confidence}'
+            f'Confidence: {confidence}. by Slips'
         )
+
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -396,8 +427,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             profileid, type_evidence, self.malicious_label
         )
         self.print(description, 3, 0)
-        # Store in our local cache how many dips were there:
-        self.cache_det_thresholds[cache_key] = amount_of_dips
+
 
 
 
@@ -413,19 +443,18 @@ class PortScanProcess(Module, multiprocessing.Process):
             dstip
     ):
         type_detection = 'srcip'
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         source_target_tag = 'Recon'
         threat_level = 'medium'
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
         detection_info = srcip
         confidence = self.calculate_confidence(pkts_sent)
-        cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
                         f'Total {amount_of_dports} dst {protocol} ports were scanned. '
-                        f'Not established. Tot pkts sent to all ports: {pkts_sent}. '
-                        f'Confidence: {confidence}'
+                        f'Tot pkts sent to all ports: {pkts_sent}. '
+                        f'Confidence: {confidence}. by Slips'
                     )
         __database__.setEvidence(
             type_evidence,
@@ -447,8 +476,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
-        # Store in our local cache how many dips were there:
-        self.cache_det_thresholds[cache_key] = amount_of_dports
+
 
 
     def calculate_confidence(self, pkts_sent):
@@ -469,7 +497,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         for state in ('Not Established', 'Established'):
             for protocol in ('TCP', 'UDP'):
                 dstips = __database__.getDataFromProfileTW(
@@ -495,11 +523,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                             amount_of_dports % self.port_scan_minimum_dports_threshold == 0
                             and prev_amount_dports < amount_of_dports
                     ):
-                        # Get the total amount of pkts sent to the same port to all IPs
+                        # Get the total amount of pkts sent different ports on the same host
                         pkts_sent = sum(dstports[dport] for dport in dstports)
                         uid = dstips[dstip]['uid']
                         timestamp = dstips[dstip]['stime']
 
+                        # Store in our local cache how many dips were there:
+                        self.cache_det_thresholds[cache_key] = amount_of_dports
                         if not self.alerted_once_vertical_ps:
                             self.alerted_once_vertical_ps = True
                             self.set_evidence_vertical_portscan(
@@ -529,6 +559,10 @@ class PortScanProcess(Module, multiprocessing.Process):
 
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
+        """
+        Use our own Zeek scripts to detect ICMP scans. 
+        Threshold is on the scrips and it is 25 icmp flows
+        """
 
         if 'TimestampScan' in note:
             type_evidence = 'ICMP-Timestamp-Scan'
