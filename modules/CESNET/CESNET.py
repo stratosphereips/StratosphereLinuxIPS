@@ -313,6 +313,7 @@ class Module(Module, multiprocessing.Process):
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
             return False
+
         # create the warden client
         wclient = Client(**read_cfg(self.configuration_file))
 
@@ -338,7 +339,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if 'yes' in self.receive_from_warden:
+                if self.receive_from_warden:
                     last_update = __database__.get_last_warden_poll_time()
                     now = time.time()
                     # did we wait the poll_delay period since last poll?
@@ -350,7 +351,7 @@ class Module(Module, multiprocessing.Process):
                 # in case of an interface or a file, push every time we get an alert
                 if (
                     utils.is_msg_intended_for(message, 'new_alert')
-                    and 'yes' in self.send_to_warden
+                    and self.send_to_warden
                 ):
                     # alert_ID is profile_10.0.2.15_timewindow1_919fea8e-47ba-489f-a882-2c1d8fcf2b8f for example
                     alert_ID = message['data']
@@ -364,10 +365,10 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
