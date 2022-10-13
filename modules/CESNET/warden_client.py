@@ -242,6 +242,20 @@ class Client(object):
         self.ciphers = 'TLS_RSA_WITH_AES_256_CBC_SHA'
         self.getInfo()  # Call to align limits with server opinion
 
+
+    def create_file(self, filepath):
+        """
+        create the file and dir if they don't exist
+        """
+        if path.exists(filepath):
+            return
+        dir = path.dirname(filepath)
+        # filename = path.basename(filepath)
+        p = Path(dir)
+        p.mkdir(parents=True, exist_ok=True)
+        open(filepath, 'w').close()
+
+
     def init_log(self, errlog: dict, syslog: dict, filelog: dict):
         def loglevel(lev):
             try:
@@ -277,9 +291,7 @@ class Client(object):
 
         if errlog is not None:
             # create the file and dir if they don't exist
-            path = Path(errlog['file'])
-            path.mkdir(parents=True, exist_ok=True)
-
+            self.create_file(errlog['file'])
             el = logging.StreamHandler(stderr)
             el.setFormatter(format_time)
             el.setLevel(loglevel(errlog.get('level', 'info')))
@@ -287,15 +299,9 @@ class Client(object):
 
         if filelog is not None:
             try:
-                # create the file and dir if they don't exist
-                path = Path(filelog['file'])
-                path.mkdir(parents=True, exist_ok=True)
-
+                self.create_file(filelog['file'])
                 fl = logging.FileHandler(
-                    filename=path.join(
-                        path.dirname(__file__),
-                        filelog.get('file', '%s.log' % self.name),
-                    ),
+                    filename= filelog['file'],
                     encoding='utf-8',
                 )
                 fl.setLevel(loglevel(filelog.get('level', 'debug')))
@@ -307,11 +313,8 @@ class Client(object):
                 ).log(self.logger)
 
         if syslog is not None:
+            self.create_file(syslog['file'])
             try:
-                # create the file and dir if they don't exist
-                path = Path(syslog['file'])
-                path.mkdir(parents=True, exist_ok=True)
-
                 sl = logging.handlers.SysLogHandler(
                     address=syslog.get('socket', '/dev/log'),
                     facility=facility(syslog.get('facility', 'local7')),
