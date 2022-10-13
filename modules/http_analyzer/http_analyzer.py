@@ -62,30 +62,31 @@ class Module(Module, multiprocessing.Process):
             'jndi',
             'tesseract',
         )
-        if user_agent.lower() in suspicious_user_agents:
-            type_detection = 'srcip'
-            source_target_tag = 'UsingSuspiciousUserAgent'
-            detection_info = profileid.split('_')[1]
-            type_evidence = 'SuspiciousUserAgent'
-            threat_level = 'high'
-            category = 'Anomaly.Behaviour'
-            confidence = 1
-            description = f'Suspicious user agent: {user_agent} while connecting to {host}{uri}'
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                timestamp,
-                category,
-                source_target_tag=source_target_tag,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
-            return True
+        for suspicious_ua in suspicious_user_agents:
+            if suspicious_ua.lower() in user_agent.lower():
+                type_detection = 'srcip'
+                source_target_tag = 'SuspiciousUserAgent'
+                detection_info = profileid.split('_')[1]
+                type_evidence = 'SuspiciousUserAgent'
+                threat_level = 'high'
+                category = 'Anomaly.Behaviour'
+                confidence = 1
+                description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
+                __database__.setEvidence(
+                    type_evidence,
+                    type_detection,
+                    detection_info,
+                    threat_level,
+                    confidence,
+                    description,
+                    timestamp,
+                    category,
+                    source_target_tag=source_target_tag,
+                    profileid=profileid,
+                    twid=twid,
+                    uid=uid,
+                )
+                return True
         return False
 
     def check_multiple_empty_connections(
@@ -151,7 +152,7 @@ class Module(Module, multiprocessing.Process):
         self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid
     ):
         type_detection = 'srcip'
-        source_target_tag = 'UsingSuspiciousUserAgent'
+        source_target_tag = 'IncompatibleUserAgent'
         detection_info = profileid.split('_')[1]
         type_evidence = 'IncompatibleUserAgent'
         threat_level = 'high'
@@ -388,7 +389,7 @@ class Module(Module, multiprocessing.Process):
                 return False
 
         type_detection = 'srcip'
-        source_target_tag = 'UsingSuspiciousUserAgent'
+        source_target_tag = 'MultipleUserAgent'
         detection_info = profileid.split('_')[1]
         type_evidence = 'IncompatibleUserAgent'
         threat_level = 'info'
