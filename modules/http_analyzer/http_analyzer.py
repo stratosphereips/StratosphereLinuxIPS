@@ -123,7 +123,7 @@ class Module(Module, multiprocessing.Process):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            type_evidence = 'MultipleConnections'
+            type_evidence = 'EmptyConnections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
             threat_level = 'medium'

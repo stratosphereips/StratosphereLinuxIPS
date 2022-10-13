@@ -87,7 +87,7 @@ Slips supports exporting alerts to warden servers, as well as importing alerts.
   
 To enable the exporting, set ```receive_alerts``` to ```yes``` in slips.conf  
   
-The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
+The default configuration file path is specified in the ```configuration_file``` variable in ```slips.conf```  
   
 The default path is ```modules/CESNET/warden.conf```  
   
@@ -113,9 +113,11 @@ You can change how often you get alerts (import) from warden server
   
 By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
 
-Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
+Slips logs all alerts to ```output/alerts.json``` in
+[CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
 
-Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) for detailed instructions on how CESNET importing.
+Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module)
+for detailed instructions on how CESNET importing works.
 
 
 ## Logstash

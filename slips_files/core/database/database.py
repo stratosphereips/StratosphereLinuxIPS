@@ -1051,7 +1051,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence: str):
+    def is_detection_disabled(self, evidence_type: str):
         """
         Function to check if detection is disabled in slips.conf
         """
@@ -1061,7 +1061,7 @@ class Database(ProfilingFlowsDatabase, object):
             # check if any disabled detection is a part of our evidence.
             # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
             # is disabled,  'SSHSuccessful-by-addr' should also be disabled
-            if disabled_detection in evidence:
+            if disabled_detection in evidence_type:
                 return True
         return False
 
