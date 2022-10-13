@@ -99,8 +99,8 @@ The format of ```warden.conf``` should be the following:
    "keyfile": "key.pem", 
    "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
    "timeout": 600, 
-   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
-   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "errlog": {"file": "output/warden_logs/warden.err", "level": "debug"}, 
+   "filelog": {"file": "output/warden_logs/warden.log", "level": "warning"}, 
    "name": "com.example.warden.test" }  
 ```
 To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
