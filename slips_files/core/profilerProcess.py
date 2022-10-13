@@ -734,7 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Generic fields in Zeek
         self.column_values = {}
-        # We need to set it to empty at the beggining so any new flow has the key 'type'
+        # We need to set it to empty at the beginning so any new flow has the key 'type'
         self.column_values['type'] = ''
 
         # to set the default value to '' if ts isn't found

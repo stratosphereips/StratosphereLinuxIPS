@@ -157,8 +157,12 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'high'
         category = 'Anomaly.Behaviour'
         confidence = 1
+        os_type = user_agent.get('os_type', '').lower()
+        os_name = user_agent.get('os_name', '').lower()
+        browser = user_agent.get('browser', '').lower()
+        user_agent = user_agent.get('user_agent', '')
         description = (
-            f'using incompatible user-agent: {user_agent} '
+            f'using incompatible user-agent that belongs to OS: {os_name} type: {os_type} browser: {browser}. '
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
@@ -198,7 +202,7 @@ class Module(Module, multiprocessing.Process):
         os_type = user_agent.get('os_type', '').lower()
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
-        user_agent = user_agent.get('user_agent', '')
+        # user_agent = user_agent.get('user_agent', '')
         if 'safari' in browser and 'apple' not in vendor:
             self.set_evidence_incompatible_user_agent(
                 host, uri, vendor, user_agent, timestamp, profileid, twid, uid
