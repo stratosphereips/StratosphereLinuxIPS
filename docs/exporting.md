@@ -115,6 +115,9 @@ By default Slips imports alerts every 1 day, you can change this by changing the
 
 Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
 
+Make sure that the DigiCert_Assured_ID_Root_CA is somewhere accessible by slips. or run slips with 
+root if you want to leave it in ```/etc/ssl/certs/```
+
 Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) for detailed instructions on how CESNET importing.
 
 
