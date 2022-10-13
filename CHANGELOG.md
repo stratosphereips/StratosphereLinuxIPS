@@ -12,6 +12,7 @@
 - Fix false positive connection without DNS
 - Fix reading zeek tab files
 - Fix vertical portscan detections by zeek
+- Better detection of suspicious user agents
 - 
 
 -0.9.5
