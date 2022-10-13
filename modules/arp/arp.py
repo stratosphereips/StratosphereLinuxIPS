@@ -346,10 +346,13 @@ class Module(Module, multiprocessing.Process):
 
     def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
         """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (arp cache attack)"""
+        # Todo in rare cases, the vendor and IP of this mac is known AFTER returning from this function so detection is missed
 
         # to test this add these 2 flows to arp.log
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
 
         # todo will we get FPs when an ip changes?
         # todo what if the ip of the attacker came to us first and we stored it in the db?
