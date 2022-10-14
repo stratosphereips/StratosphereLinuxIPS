@@ -10,8 +10,7 @@ from slack import WebClient
 from slack.errors import SlackApiError
 import os
 import json
-from stix2 import Indicator
-from stix2 import Bundle
+from stix2 import Indicator, Bundle
 import ipaddress
 from cabby import create_client
 import time
@@ -40,10 +39,10 @@ class Module(Module, multiprocessing.Process):
             self.get_slack_token()
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
-        self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = 0.00000001
+        self.input_type = __database__.get_input_type()
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -62,6 +61,7 @@ class Module(Module, multiprocessing.Process):
             self.use_https = conf.use_https()
             self.discovery_path = conf.discovery_path()
             self.inbox_path = conf.inbox_path()
+            # push_delay is only used when slips is running using -i
             self.push_delay = conf.push_delay()
             self.collection_name = conf.collection_name()
             self.taxii_username = conf.taxii_username()
@@ -182,6 +182,7 @@ class Module(Module, multiprocessing.Process):
                 username=self.taxii_username,
                 password=self.taxii_password,
             )
+
         # Check the available services to make sure inbox service is there
         services = client.discover_services()
         # Check if inbox is there
@@ -215,6 +216,8 @@ class Module(Module, multiprocessing.Process):
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
+        It keeps appending the given indicator to STIX_data.json until they're sent to the
+        taxii server
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
             type_detection: e.g dip sip dport sport
@@ -234,28 +237,10 @@ class Module(Module, multiprocessing.Process):
         if 'SSHSuccessful' in type_evidence:
             type_evidence = 'SSHSuccessful'
         # This dict contains each type and the way we should describe it in STIX name attribute
-        type_evidence_descriptions = {
-            'VerticalPortscan': 'Vertical port scan',
-            'HorizontalPortscan': 'Horizontal port scan',
-            'ThreatIntelligenceBlacklistIP': 'Blacklisted IP',
-            'SelfSignedCertificate': 'Self-signed certificate',
-            'LongConnection': 'Long Connection',
-            'SSHSuccessful': 'SSH connection from ip',  # SSHSuccessful-by-ip
-            'C&C channels detection': 'C&C channels detection',
-            'ThreatIntelligenceBlacklistDomain': 'Threat Intelligence Blacklist Domain',
-        }
+
         # Get the right description to use in stix
-        try:
-            name = type_evidence_descriptions[type_evidence]
-        except KeyError:
-            self.print(
-                "Can't find the description for type_evidence: {}".format(
-                    type_evidence
-                ),
-                0,
-                3,
-            )
-            return False
+        name = type_evidence
+
         # ---------------- set pattern attribute ----------------
         if 'port' in type_detection:
             # detection_info is a port probably coming from a portscan we need the ip instead
@@ -281,6 +266,7 @@ class Module(Module, multiprocessing.Process):
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
         # ID will be generated randomly
+        # ref https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_6khi84u7y58g
         indicator = Indicator(
             name=name, pattern=pattern, pattern_type='stix'
         )  # the pattern language that the indicator pattern is expressed in.
@@ -302,10 +288,12 @@ class Module(Module, multiprocessing.Process):
                 stix_file.seek(0, os.SEEK_END)
                 stix_file.seek(stix_file.tell() - 4, 0)
                 stix_file.truncate()
+
             # Append mode to add the new indicator to the objects array
             with open('STIX_data.json', 'a') as stix_file:
                 # Append the indicator in the objects array
                 stix_file.write(',' + str(indicator) + ']\n}\n')
+
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
         self.print('Indicator added to STIX_data.json', 2, 0)
@@ -344,6 +332,7 @@ class Module(Module, multiprocessing.Process):
 
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+        return
 
     def run(self):
         utils.drop_root_privs()
@@ -375,18 +364,7 @@ class Module(Module, multiprocessing.Process):
                             self.print('Problem in export_to_STIX()', 0, 3)
                             continue
 
-                        # This thread is responsible for waiting n seconds before each push to the stix server
-                        # it starts the timer when the first alert happens
-                        # push_delay should be an int when slips is running using -i
-                        if (
-                            not self.is_thread_created
-                            and '-i' in sys.argv
-                        ):
-                            # this thread is started only once
-                            _thread.start_new_thread(
-                                self.send_to_server, ()
-                            )
-                            self.is_thread_created = True
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
