@@ -179,7 +179,8 @@ def test_binetflow(
                 'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
                 'sending arp packet to a destination address outside of local network',
                 'Detected sending unsolicited ARP',
-                'Detected using incompatible user-agent'
+                'Detected using incompatible user-agent',
+                'suspicious user-agent'
             ],
             'test9-mixed-zeek-dir/',
             6661,
