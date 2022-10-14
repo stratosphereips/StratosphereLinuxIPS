@@ -336,6 +336,13 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        if self.input_type == 'interface':
+            # This thread is responsible for waiting n seconds before each push to the stix server
+            # it starts the timer when the first alert happens
+            _thread.start_new_thread(
+                self.send_to_server, ()
+            )
+
         while True:
             try:
                 msg = self.c1.get_message(timeout=self.timeout)
