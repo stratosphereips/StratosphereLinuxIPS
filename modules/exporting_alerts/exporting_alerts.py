@@ -21,7 +21,7 @@ import validators
 
 class Module(Module, multiprocessing.Process):
     """
-    Module to export alerts to slack and/or STX
+    Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module
     """
 
@@ -66,9 +66,10 @@ class Module(Module, multiprocessing.Process):
             self.collection_name = conf.collection_name()
             self.taxii_username = conf.taxii_username()
             self.taxii_password = conf.taxii_password()
-            self.jwt_auth_url = conf.jwt_auth_url()
+            self.jwt_auth_path = conf.jwt_auth_path()
             # push delay exists -> create thread that waits
-            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
+            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before
+            # stopping
 
     def get_slack_token(self):
         if not hasattr(self, 'slack_token_filepath'):
@@ -168,15 +169,15 @@ class Module(Module, multiprocessing.Process):
             discovery_path=self.discovery_path,
         )
         # jwt_auth_url is optional
-        if self.jwt_auth_url is not '':
+        if self.jwt_auth_path is not '':
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
                 # URL used to obtain JWT token
-                jwt_auth_url=self.jwt_auth_url,
+                jwt_auth_url=self.jwt_auth_path,
             )
         else:
-            # User didn't provide jwt_auth_url in slips.conf
+            # User didn't provide jwt_auth_path in slips.conf
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
@@ -191,9 +192,10 @@ class Module(Module, multiprocessing.Process):
             # Comes here if it cant find inbox in services
             self.print(
                 "Server doesn't have inbox available. "
-                "Exporting STIX_data.json is cancelled.", 0,2,
+                "Exporting STIX_data.json is cancelled.", 0, 2
             )
             return False
+
         # Get the data that we want to send
         with open('STIX_data.json') as stix_file:
             stix_data = stix_file.read()
@@ -310,8 +312,13 @@ class Module(Module, multiprocessing.Process):
         return True
 
     def send_to_server(self):
-        """Responsible for publishing STIX_data.json to the taxii server every n seconds"""
+        """
+        Responsible for publishing STIX_data.json to the taxii server every
+        self.push_delay seconds when running on an interface only
+        """
         while True:
+            # on an interface, we use the push eklay from slips.conf
+            # on files, we push once when slips is stopping
             time.sleep(self.push_delay)
             # Sometimes the time's up and we need to send to server again but there's no
             # new alerts in stix_data.json yet
@@ -363,11 +370,16 @@ class Module(Module, multiprocessing.Process):
                             evidence['detection_info'],
                             description,
                         )
+                        exported_to_stix = self.export_to_STIX(msg_to_send)
+                        if not exported_to_stix:
+                            self.print('Problem in export_to_STIX()', 0, 3)
+                            continue
+
                         # This thread is responsible for waiting n seconds before each push to the stix server
                         # it starts the timer when the first alert happens
                         # push_delay should be an int when slips is running using -i
                         if (
-                            self.is_thread_created is False
+                            not self.is_thread_created
                             and '-i' in sys.argv
                         ):
                             # this thread is started only once
@@ -375,9 +387,7 @@ class Module(Module, multiprocessing.Process):
                                 self.send_to_server, ()
                             )
                             self.is_thread_created = True
-                        exported_to_stix = self.export_to_STIX(msg_to_send)
-                        if not exported_to_stix:
-                            self.print('Problem in export_to_STIX()', 0, 3)
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True

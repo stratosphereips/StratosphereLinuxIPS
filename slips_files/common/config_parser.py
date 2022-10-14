@@ -423,9 +423,9 @@ class ConfigParser(object):
             'exporting_alerts', 'taxii_password', False
         )
 
-    def jwt_auth_url(self):
+    def jwt_auth_path(self):
         return self.read_configuration(
-            'exporting_alerts', 'jwt_auth_url', False
+            'exporting_alerts', 'jwt_auth_path', False
         )
 
 
