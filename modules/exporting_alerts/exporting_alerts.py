@@ -14,7 +14,7 @@ from stix2 import Indicator, Bundle
 import ipaddress
 from cabby import create_client
 import time
-import _thread
+import threading
 import sys
 import validators
 
@@ -42,7 +42,10 @@ class Module(Module, multiprocessing.Process):
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
         self.timeout = 0.00000001
-        self.input_type = __database__.get_input_type()
+        self.is_running_on_interface = True if '-i' in sys.argv else False
+        self.export_to_taxii_thread = threading.Thread(
+            target=self.send_to_server, daemon=True
+        )
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -336,12 +339,14 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        if self.input_type == 'interface':
-            # This thread is responsible for waiting n seconds before each push to the stix server
+        if (
+            self.is_running_on_interface
+            and 'stix' in self.export_to
+        ):
+            # This thread is responsible for waiting n seconds before
+            # each push to the stix server
             # it starts the timer when the first alert happens
-            _thread.start_new_thread(
-                self.send_to_server, ()
-            )
+            self.export_to_taxii_thread.start()
 
         while True:
             try:
