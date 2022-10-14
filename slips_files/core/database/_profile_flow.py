@@ -890,9 +890,6 @@ class ProfilingFlowsDatabase(object):
         """
         return self.r.hget('analysis', 'input_type')
 
-
-
-
     def get_output_dir(self, info:dict):
         """
         returns the currently used output dir
