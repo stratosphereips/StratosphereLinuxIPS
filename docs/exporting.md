@@ -107,7 +107,8 @@ To get your key and the certificate, you need to run ```warden_apply.sh``` with 
   
 The ```name``` key is your registered warden node name.   
   
-All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+All evidence causing an alert are exported to warden server once an alert is generated. 
+See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
   
 You can change how often you get alerts (import) from warden server  
   

@@ -190,7 +190,7 @@ class Module(Module, multiprocessing.Process):
         try:
             # no errors
             self.print(
-                f'Done uploading {result["saved"]} events to warden server.\n'
+                f'Done uploading {result["saved"]} events to warden server.\n', 2, 0
             )
         except KeyError:
             self.print(result, 0, 1)

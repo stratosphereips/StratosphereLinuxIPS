@@ -12,7 +12,7 @@
 - Fix false positive connection without DNS
 - Fix reading zeek tab files
 - Fix vertical portscan detections by zeek
-- 
+- Fix importing and exporting to warden servers
 
 -0.9.5
 * Slips
