@@ -64,17 +64,18 @@ inbox_path = /services/inbox-a
 
 ```collection_name```: the collection on the server you want to push your STIX data to.
 
-```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
+```push_delay```: the time to wait before pushing STIX data to server (in seconds). 
+It is used when slips is running non-stop (e.g with -i )
 
 ```taxii_username```: TAXII server user credentials
 
 ```taxii_password```: TAXII server user password
 
-```jwt_auth_url```: auth url if JWT based authentication is used.
+```jwt_auth_path```: auth path if JWT based authentication is used. It's usually /management/auth. this is what we 
+use to get a token.
 
-If running on a file not an interface, Slips will export to server after analysis is done. 
-
-More details on how to [export to slack or TAXII server here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)
+If running on a file, Slips will export to server after analysis is done. 
+If running on an interface, Slips will export to server every push_delay seconds. by default it's 1h. 
 
 ## JSON format
 

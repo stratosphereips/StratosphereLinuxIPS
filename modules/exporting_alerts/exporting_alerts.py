@@ -213,7 +213,7 @@ class Module(Module, multiprocessing.Process):
                 collection_names=[self.collection_name],
                 uri=self.inbox_path,
             )
-            self.print(f'Successfully exported to {self.TAXII_server}.', 1, 0)
+            self.print(f'Successfully exported to TAXII server: {self.TAXII_server}.', 1, 0)
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
@@ -308,7 +308,7 @@ class Module(Module, multiprocessing.Process):
         self.push_delay seconds when running on an interface only
         """
         while True:
-            # on an interface, we use the push eklay from slips.conf
+            # on an interface, we use the push delay from slips.conf
             # on files, we push once when slips is stopping
             time.sleep(self.push_delay)
             # Sometimes the time's up and we need to send to server again but there's no
