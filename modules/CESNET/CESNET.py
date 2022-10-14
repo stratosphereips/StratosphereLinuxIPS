@@ -29,7 +29,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.read_configuration()
-        self.c1 = __database__.subscribe('new_alert')
+        self.c1 = __database__.subscribe('export_evidence')
         self.timeout = 0.00000001
         self.stop_module = False
 
@@ -118,86 +118,70 @@ class Module(Module, multiprocessing.Process):
         """
         return 'Source' in evidence_in_IDEA or 'Target' in evidence_in_IDEA
 
-    def export_evidence(self, profileid, twid, wclient, alert_ID):
+    def export_evidence(self, wclient, evidence: dict):
         """
-        Exports all evidence causing the given alert to warden server
-        :param alert_ID: ID of alert to export to warden server
-            for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
+        Exports evidence to warden server
         """
-        # give evidenceProcess enough time to store all evidence IDs in the database
-        time.sleep(3)
-        # get all the evidence causing this alert
-        evidence_IDs: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
-        if not evidence_IDs:
-            # something went wrong while getting the list of evidence
+        threat_level = evidence.get('threat_level')
+        if threat_level == 'info':
+            # don't export alerts of type 'info'
             return False
 
-        profile, srcip, twid, ID = alert_ID.split('_')
 
-        # this will contain alerts in IDEA format ready to be exported
-        alerts_to_export = []
-        for ID in evidence_IDs:
-            evidence = __database__.get_evidence_by_ID(profileid, twid, ID)
-            if not evidence:
-                # we received an evidence ID before it's added to the database
-                # there's a time.sleep(3) above to solve this issue
-                continue
-            threat_level = evidence.get('threat_level')
-            if threat_level == 0:
-                # don't export alerts of type 'info'
-                continue
+        description = evidence['description']
+        profileid = evidence['profileid']
+        twid = evidence['twid']
+        srcip = profileid.split('_')[1]
+        type_evidence = evidence['type_evidence']
+        type_detection = evidence['type_detection']
+        detection_info = evidence['detection_info']
+        ID = evidence['ID']
+        confidence = evidence.get('confidence')
+        category = evidence.get('category')
+        conn_count = evidence.get('conn_count')
+        source_target_tag = evidence.get('source_target_tag')
+        port = evidence.get('port')
+        proto = evidence.get('proto')
 
-            type_evidence = evidence.get('type_evidence')
-            detection_info = evidence.get('detection_info')
-            type_detection = evidence.get('type_detection')
-            description = evidence.get('description')
-            confidence = evidence.get('confidence')
-            category = evidence.get('category')
-            conn_count = evidence.get('conn_count')
-            source_target_tag = evidence.get('source_target_tag')
-            port = evidence.get('port')
-            proto = evidence.get('proto')
+        evidence_in_IDEA = utils.IDEA_format(
+            srcip,
+            type_evidence,
+            type_detection,
+            detection_info,
+            description,
+            confidence,
+            category,
+            conn_count,
+            source_target_tag,
+            port,
+            proto,
+            ID
+        )
 
-            evidence_in_IDEA = utils.IDEA_format(
-                srcip,
-                type_evidence,
-                type_detection,
-                detection_info,
-                description,
-                confidence,
-                category,
-                conn_count,
-                source_target_tag,
-                port,
-                proto,
-                ID
-            )
+        # remove private ips from the alert
+        evidence_in_IDEA = self.remove_private_ips(evidence_in_IDEA)
 
-            # remove private ips from the alert
-            evidence_in_IDEA = self.remove_private_ips(evidence_in_IDEA)
+        # make sure we still have an IoC in th alert, a valid domain/mac/public ip
+        if not self.is_valid_alert(evidence_in_IDEA):
+            return False
 
-            # make sure we still have an IoC in th alert, a valid domain/mac/public ip
-            if not self.is_valid_alert(evidence_in_IDEA):
-                continue
+        # add Node info to the alert
+        evidence_in_IDEA.update({'Node': self.node_info})
 
-            # add Node info to the alert
-            evidence_in_IDEA.update({'Node': self.node_info})
+        # Add test to the categories because we're still in probation mode
+        evidence_in_IDEA['Category'].append('Test')
+        evidence_in_IDEA.update({'Category': evidence_in_IDEA['Category']})
 
-            # Add test to the categories because we're still in probation mode
-            evidence_in_IDEA['Category'].append('Test')
-            evidence_in_IDEA.update({'Category': evidence_in_IDEA['Category']})
-
-            alerts_to_export.append(evidence_in_IDEA)
 
         # [2] Upload to warden server
         self.print(
-            f'Uploading {len(alerts_to_export)} events to warden server.'
+            f'Uploading 1 event to warden server.', 2, 0
         )
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
         q = queue.Queue()
         self.sender_thread = threading.Thread(
-            target=wclient.sendEvents, args=[alerts_to_export, q]
+            target=wclient.sendEvents, args=[[evidence_in_IDEA], q]
         )
         self.sender_thread.start()
         self.sender_thread.join()
@@ -298,7 +282,10 @@ class Module(Module, multiprocessing.Process):
                 elif 'IP6' in srcip:
                     srcip = srcip['IP6'][0]
                 else:
-                    srcip = srcip['IP'][0]
+                    srcip = srcip.get('IP', [False])[0]
+
+                if not srcip:
+                    continue
 
                 src_ips.update({srcip: json.dumps(event_info)})
 
@@ -350,15 +337,11 @@ class Module(Module, multiprocessing.Process):
 
                 # in case of an interface or a file, push every time we get an alert
                 if (
-                    utils.is_msg_intended_for(message, 'new_alert')
+                    utils.is_msg_intended_for(message, 'export_evidence')
                     and self.send_to_warden
                 ):
-                    # alert_ID is profile_10.0.2.15_timewindow1_919fea8e-47ba-489f-a882-2c1d8fcf2b8f for example
-                    alert_ID = message['data']
-                    alert_list = alert_ID.split('_')
-                    profileid = f'{alert_list[0]}_{alert_list[1]}'
-                    twid, uuid = alert_list[-2], alert_list[-1]
-                    self.export_evidence(profileid, twid, wclient, alert_ID)
+                    evidence = json.loads(message['data'])
+                    self.export_evidence(wclient, evidence)
 
             except KeyboardInterrupt:
                 # Confirm that the module is done processing
