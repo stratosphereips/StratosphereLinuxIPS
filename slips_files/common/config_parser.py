@@ -399,13 +399,14 @@ class ConfigParser(object):
         )
 
     def push_delay(self):
+        # 3600 = 1h
         delay = self.read_configuration(
-            'exporting_alerts', 'push_delay', 60*60
+            'exporting_alerts', 'push_delay', 3600
         )
         try:
             delay = float(delay)
         except ValueError:
-            delay = 60*60
+            delay = 3600
         return delay
 
     def collection_name(self):
