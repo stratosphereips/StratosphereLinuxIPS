@@ -212,8 +212,10 @@ class Module(Module, multiprocessing.Process):
         """
         if not hasattr(self, 'country_db'):
             return False
-
-        if geoinfo := self.country_db.get(ip):
+        if ipaddress.ip_address(ip).is_private:
+            # Try to find if it is a local/private IP
+            data = {'geocountry': 'Private'}
+        elif geoinfo := self.country_db.get(ip):
             try:
                 countrydata = geoinfo['country']
                 countryname = countrydata['names']['en']
@@ -221,9 +223,6 @@ class Module(Module, multiprocessing.Process):
             except KeyError:
                 data = {'geocountry': 'Unknown'}
 
-        elif ipaddress.ip_address(ip).is_private:
-            # Try to find if it is a local/private IP
-            data = {'geocountry': 'Private'}
         else:
             data = {'geocountry': 'Unknown'}
         __database__.setInfoForIPs(ip, data)
