@@ -99,21 +99,25 @@ The format of ```warden.conf``` should be the following:
    "keyfile": "key.pem", 
    "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
    "timeout": 600, 
-   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
-   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "errlog": {"file": "output/warden_logs/warden.err", "level": "debug"}, 
+   "filelog": {"file": "output/warden_logs/warden.log", "level": "warning"}, 
    "name": "com.example.warden.test" }  
 ```
 To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
   
 The ```name``` key is your registered warden node name.   
   
-All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+All evidence causing an alert are exported to warden server once an alert is generated. 
+See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
   
 You can change how often you get alerts (import) from warden server  
   
 By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
 
 Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
+
+Make sure that the DigiCert_Assured_ID_Root_CA is somewhere accessible by slips. or run slips with 
+root if you want to leave it in ```/etc/ssl/certs/```
 
 Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) for detailed instructions on how CESNET importing.
 
