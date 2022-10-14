@@ -17,35 +17,6 @@ from pathlib import Path
 VERSION = '3.0-beta2'
 
 
-class HTTPSConnection(http.client.HTTPSConnection):
-    """
-    Overridden to allow peer certificate validation, configuration
-    of SSL/ TLS version and cipher selection.  See:
-    http://hg.python.org/cpython/file/c1c45755397b/Lib/httplib.py#l1144
-    and `ssl.wrap_socket()`
-    """
-
-    def __init__(self, host, **kwargs):
-        self.ciphers = kwargs.pop('ciphers', None)
-        self.ca_certs = kwargs.pop('ca_certs', None)
-
-        http.client.HTTPSConnection.__init__(self, host, **kwargs)
-
-    def connect(self):
-        sock = socket.create_connection((self.host, self.port), self.timeout)
-
-        if self._tunnel_host:
-            self.sock = sock
-            self._tunnel()
-
-        self.sock = ssl.wrap_socket(
-            sock,
-            keyfile=self.key_file,
-            certfile=self.cert_file,
-            ca_certs=self.ca_certs,
-            cert_reqs=ssl.CERT_REQUIRED if self.ca_certs else ssl.CERT_NONE,
-        )
-
 
 class Error(Exception):
     """Object for returning error messages to calling application.
@@ -342,13 +313,11 @@ class Client(object):
 
         try:
             if self.url.scheme == 'https':
-                conn = HTTPSConnection(
+                conn = http.client.HTTPSConnection(
                     self.url.netloc,
                     key_file=self.keyfile,
                     cert_file=self.certfile,
                     timeout=self.timeout,
-                    ciphers=self.ciphers,
-                    ca_certs=self.cafile,
                 )
             elif self.url.scheme == 'http':
                 conn = http.client.HTTPConnection(
