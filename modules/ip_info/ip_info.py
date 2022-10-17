@@ -19,6 +19,8 @@ import json
 from contextlib import redirect_stdout
 import subprocess
 import re
+import time
+import asyncio
 
 
 class Module(Module, multiprocessing.Process):
@@ -32,8 +34,7 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         __database__.start(redis_port)
-        # open mmdbs
-        self.open_dbs()
+
         self.asn = ASN()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
@@ -149,9 +150,8 @@ class Module(Module, multiprocessing.Process):
             '.za',
         ]
 
-    def open_dbs(self):
+    async def open_dbs(self):
         """Function to open the different offline databases used in this module. ASN, Country etc.."""
-
         # Open the maxminddb ASN offline db
         try:
             self.asn_db = maxminddb.open_database(
@@ -176,13 +176,16 @@ class Module(Module, multiprocessing.Process):
                 'Please note it must be the MaxMind DB version.'
             )
 
-        try:
-            self.mac_db = open('databases/macaddress-db.json', 'r')
-        except OSError:
-            self.print(
-                'Error opening the macaddress db in databases/macaddress-db.json. '
-                'Please download it from https://macaddress.io/database-download/json.'
-            )
+        asyncio.create_task(self.read_macdb())
+
+    async def read_macdb(self):
+        while True:
+            try:
+                self.mac_db = open('databases/macaddress-db.json', 'r')
+                return True
+            except OSError:
+                # update manager hasn't downloaded it yet
+                time.sleep(10)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -284,6 +287,13 @@ class Module(Module, multiprocessing.Process):
 
 
     def get_vendor_offline(self, mac_addr):
+        """
+        Gets vendor from Slips' offline database databases/macaddr-db.json
+        """
+        if not hasattr(self, 'mac_db'):
+            return False
+
+
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
         self.mac_db.seek(0)
@@ -446,6 +456,11 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        # this is the loop that controls te running on open_dbs
+        loop = asyncio.get_event_loop()
+        # run open_dbs in the background so we don't have
+        # to wait for update manager to finish updating the mac db to start this module
+        loop.run_until_complete(self.open_dbs())
         # Main loop function
         while True:
             try:
