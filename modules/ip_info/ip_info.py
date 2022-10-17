@@ -337,6 +337,9 @@ class Module(Module, multiprocessing.Process):
 
     # domain info
     def get_age(self, domain):
+        """
+        Get the age of a domain using whois library
+        """
 
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
