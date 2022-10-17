@@ -321,9 +321,7 @@ class Module(Module, multiprocessing.Process):
                 self.is_bundle_created = False
             else:
                 self.print(
-                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.',
-                    2,
-                    0,
+                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.', 2, 0
                 )
 
     def shutdown_gracefully(self):

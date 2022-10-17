@@ -184,7 +184,7 @@ class Module(Module, multiprocessing.Process):
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
-                time.sleep(10)
+                time.sleep(5)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -284,7 +284,6 @@ class Module(Module, multiprocessing.Process):
         ):
             return False
 
-
     def get_vendor_offline(self, mac_addr, host_name, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json
@@ -317,8 +316,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         if (
-            not hasattr(self, 'mac_db')
-            or 'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
+            'ff:ff:ff:ff:ff:ff' in mac_addr.lower()
             or '00:00:00:00:00:00' in mac_addr.lower()
         ):
             return False
@@ -426,7 +424,6 @@ class Module(Module, multiprocessing.Process):
             )
             gateway = route_default_result[2]
         return gateway
-
 
     def get_gateway_MAC(self, gw_ip):
         """
