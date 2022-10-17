@@ -74,6 +74,9 @@ It is used when slips is running non-stop (e.g with -i )
 ```jwt_auth_path```: auth path if JWT based authentication is used. It's usually /management/auth. this is what we 
 use to get a token.
 
+
+if your TAXII server is a remote server, you can set the ```port``` to 443 or 80.
+
 If running on a file, Slips will export to server after analysis is done. 
 If running on an interface, Slips will export to server every push_delay seconds. by default it's 1h. 
 

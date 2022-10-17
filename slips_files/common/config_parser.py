@@ -373,9 +373,11 @@ class ConfigParser(object):
 
 
     def taxii_server(self):
-        return self.read_configuration(
+        taxii_server =  self.read_configuration(
             'exporting_alerts', 'TAXII_server', False
         )
+        return taxii_server.replace('www.','')
+
 
     def taxii_port(self):
         return self.read_configuration(
