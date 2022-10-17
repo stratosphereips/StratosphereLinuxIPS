@@ -17,6 +17,7 @@ import time
 import threading
 import sys
 import validators
+import datetime
 
 class Module(Module, multiprocessing.Process):
     """
@@ -333,6 +334,11 @@ class Module(Module, multiprocessing.Process):
         if hasattr(self, 'json_file_handle'):
             self.json_file_handle.close()
 
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips finished on sensor: {self.sensor_name}.')
+
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return
@@ -347,6 +353,12 @@ class Module(Module, multiprocessing.Process):
             # each push to the stix server
             # it starts the timer when the first alert happens
             self.export_to_taxii_thread.start()
+
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
+
 
         while True:
             try:
