@@ -154,25 +154,28 @@ class OutputProcess(multiprocessing.Process):
             except ValueError as inst:
                 # We probably received some text instead of an int()
                 print(
-                    'Error receiving a text to output. Check that you are sending the format of the msg correctly: level|msg'
+                    'Error receiving a text to output. '
+                    'Check that you are sending the format of the msg correctly: level|msg'
                 )
                 print(inst)
                 sys.exit(-1)
+
             try:
                 sender = f"[{line.split('|')[1]}] "
             except KeyError:
                 sender = ''
                 print(
-                    'The sender passed to OutputProcess was wrongly formated.'
+                    'The sender passed to OutputProcess was wrongly formatted.'
                 )
                 sys.exit(-1)
+
             try:
                 # If there are more | inside the msg, we don't care, just print them
                 msg = ''.join(line.split('|')[2:])
             except KeyError:
                 msg = ''
                 print(
-                    'The message passed to OutputProcess was wrongly formated.'
+                    'The message passed to OutputProcess was wrongly formatted.'
                 )
                 sys.exit(-1)
             return (level, sender, msg)
@@ -208,16 +211,13 @@ class OutputProcess(multiprocessing.Process):
             msg = f'\033[0;35;40m{msg}\033[00m'
 
         # There should be a level 0 that we never print. So its >, and not >=
-
-
-        if (
+        if ((
             verbose_level > 0 and verbose_level <= 3
             and verbose_level <= self.verbose
-        ) or \
-        (
+        ) or (
             debug_level > 0 and debug_level <= 3
             and debug_level <= self.debug
-        ):
+        )):
             if 'Start' in msg:
                 print(f'{msg}')
                 return

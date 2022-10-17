@@ -14,10 +14,12 @@ import traceback
 import validators
 import dns
 import requests
+import threading
+import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'threatintelligence1'
+    name = 'threatintelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
@@ -34,6 +36,33 @@ class Module(Module, multiprocessing.Process):
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
         self.create_circl_lu_session()
+        self.circllu_queue = multiprocessing.Queue()
+        self.circllu_calls_thread = threading.Thread(
+            target=self.make_pending_query, daemon=True
+        )
+        self.should_shutdown = False
+
+    def make_pending_query(self):
+        """
+        This thread starts if there's a circllu calls queue,
+        it operates every 2 mins, and does 10 queries
+        from the queue then sleeps again.
+        """
+        max_queries = 10
+        while True:
+            time.sleep(120)
+            try:
+                flow_info = self.circllu_queue.get(timeout=0.5)
+            except:
+                # queue is empty wait extra 2 min
+                continue
+
+            queries_done = 0
+            while self.circllu_queue != [] and queries_done <= max_queries:
+                self.is_malicious_hash(flow_info)
+                queries_done += 1
+
+
 
     def create_urlhaus_session(self):
         self.urlhaus_session = requests.session()
@@ -57,7 +86,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv4_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv4_ranges[first_octet] = [range]
             else:
                 # ipv6 range
@@ -65,7 +94,7 @@ class Module(Module, multiprocessing.Process):
                 try:
                     self.cached_ipv6_ranges[first_octet].append(range)
                 except KeyError:
-                    # first time seeing this octect
+                    # first time seeing this octet
                     self.cached_ipv6_ranges[first_octet] = [range]
 
     def __read_configuration(self):
@@ -179,6 +208,12 @@ class Module(Module, multiprocessing.Process):
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
         confidence = 0.7 if is_subdomain else 1
+
+        if 'URLhaus' in domain_info["source"]:
+            # this is because URLhause detects google drive and github as malicious
+            # because we're only checking domains not URLS
+            confidence = 0.1
+
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
@@ -537,18 +572,21 @@ class Module(Module, multiprocessing.Process):
 
         # get the source and description of the ip
         source_dataset = ''
-        description =''
+        description = ''
         for list in lists_that_have_this_ip:
             name = lists_names.get(list, False)
             if not name:
                 continue
             source_dataset += f'{name}, '
             description = list_description.get(list, '')
+
         if not source_dataset:
             return False
 
+        source_dataset += 'spamhaus'
+
         ip_info = {
-            'source': source_dataset[:-2],
+            'source': source_dataset,
             'description': description,
             'therat_level': 'medium',
             'tags': 'spam'
@@ -689,7 +727,7 @@ class Module(Module, multiprocessing.Process):
 
 
 
-    def circl_lu(self, md5):
+    def circl_lu(self, flow_info):
         """
         Supports lookup of MD5 hashes on Circl.lu
         """
@@ -718,19 +756,22 @@ class Module(Module, multiprocessing.Process):
                 confidence = 1
             return confidence
 
-
+        md5 = flow_info['md5']
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
-        circl_api_response = self.circl_session.get(
-            f"{circl_base_url}/md5/{md5}",
-           headers=self.circl_session.headers
-        )
+        try:
+            circl_api_response = self.circl_session.get(
+                f"{circl_base_url}/md5/{md5}",
+               headers=self.circl_session.headers
+            )
+        except:
+            # add the hash to the cirllu queue and ask for it later
+            self.circllu_queue.put(flow_info)
+            return
 
         if circl_api_response.status_code != 200:
             return
-
         response = json.loads(circl_api_response.text)
         # KnownMalicious: List of source considering the hashed file as being malicious (CIRCL)
-        # TODO Circl.lu has very low trust levels of known malicious files
         if 'KnownMalicious' not in response:
             return
 
@@ -741,8 +782,8 @@ class Module(Module, multiprocessing.Process):
         }
         return file_info
 
-    def search_online_for_hash(self, md5):
-        return self.circl_lu(md5)
+    def search_online_for_hash(self, flow_info):
+        return self.circl_lu(flow_info)
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -757,9 +798,6 @@ class Module(Module, multiprocessing.Process):
         spamhaus_res = self.spamhaus(ip)
         if spamhaus_res:
             return spamhaus_res
-        urlhaus_res = self.urlhaus(ip)
-        if urlhaus_res:
-            return urlhaus_res
 
 
     def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
@@ -779,7 +817,6 @@ class Module(Module, multiprocessing.Process):
                 # ip was found in one of the blacklisted ranges
                 ip_info = __database__.get_malicious_ip_ranges()[range]
                 ip_info = json.loads(ip_info)
-                # Set the evidence on this detection
                 self.set_evidence_malicious_ip(
                     ip,
                     uid,
@@ -830,12 +867,12 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
-    def is_malicious_hash(self,flow_info):
+    def is_malicious_hash(self, flow_info):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
-        md5 = flow_info['md5']
-        file_info:dict = self.search_online_for_hash(md5)
+
+        file_info:dict = self.search_online_for_hash(flow_info)
         if file_info:
             # is malicious.
             # update the file_info dict with uid, twid, ts etc.
@@ -900,6 +937,7 @@ class Module(Module, multiprocessing.Process):
                 self.print(
                     f'Could not load the local TI files {self.path_to_local_ti_files}'
                 )
+            self.circllu_calls_thread.start()
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
@@ -912,13 +950,9 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = self.c1.get_message(timeout=self.timeout)
-                # if timewindows are not updated for a long time
-                # (see at logsProcess.py), we will stop slips automatically.
                 if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+                    self.should_shutdown = True
 
-                # Check that the message is for you.
                 # The channel now can receive an IP address or a domain name
                 if utils.is_msg_intended_for(
                     message, 'give_threat_intelligence'
@@ -966,11 +1000,15 @@ class Module(Module, multiprocessing.Process):
 
                 message = self.c2.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+                    self.should_shutdown = True
+
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
                     self.is_malicious_hash(file_info)
+                    continue
+
+                if self.should_shutdown:
+                     self.shutdown_gracefully()
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

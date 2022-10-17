@@ -557,7 +557,9 @@ This is equivalent to telling slips, Delete all logs that happened before the la
 
 We use two variables for logging, ```verbose``` and ```debug```, they both range from 0 to 3.
 
-Default value for both of them is 0
+Default value for debug is 0. so no errors are printed by default.
+
+Default value for verbose is 1. so basic operations and proof of work are printed by default.
 
 To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 

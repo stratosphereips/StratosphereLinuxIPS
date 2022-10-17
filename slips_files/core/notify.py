@@ -22,8 +22,9 @@ class Notify:
         if returncode == 256:
             # it is installed
             return True
-        elif returncode == 32512:
-            return False
+        # elif returncode == 32512:
+        print(f"notify-send is not installed. install it using:\nsudo apt-get install libnotify-bin")
+        return False
 
 
     def setup_notifications(self):

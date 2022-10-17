@@ -1,11 +1,8 @@
-var async = require('async')
-var SortedArray = require('sorted-array-async');
+const { redis, blessed, blessed_contrib, async, sortedArray } = require("./libraries.js");
 
 class combine_Listtable_Gauge{
-    constructor(grid, blessed, contrib, redis_database,screen, listtable1, listtable2, gauge1, gauge2){
-        this.contrib = contrib
+    constructor(grid,  redis_database,screen, listtable1, listtable2, gauge1, gauge2){
         this.screen = screen
-        this.blessed = blessed
         this.grid = grid
         this.redis_database = redis_database
         this.listtable1 = listtable1
@@ -25,12 +22,22 @@ class combine_Listtable_Gauge{
         this.gauge_number = 9
         this.listtable1_column_names = []
         this.listtable2_column_names = []
+        this.focus = this.gauge1
         }
 
     /*Round numbers by specific decimals*/
     round(value, decimals) {
         return Number(Math.round(value+'e'+decimals)+'e-'+decimals);
     };
+
+    changeFocus(){
+        if(this.focus == this.gauge1){
+            this.focus = this.gauge2
+            this.gauge2.focus()}
+        else{
+            this.focus = this.gauge1
+            this.gauge1.focus()}
+    }
 
     format_tcp_udp_data_with_IPs(redis_data, tcp_or_udp){
     /*
@@ -86,7 +93,7 @@ class combine_Listtable_Gauge{
         else{
             try{
                 let obj= JSON.parse(redis_data);
-                var instance  = new SortedArray(Object.keys(obj), function(a, b){
+                var instance  = new sortedArray(Object.keys(obj), function(a, b){
                 return obj[b]['totalbytes'] - obj[a]['totalbytes'];
                 });
                 instance.getArray().then(keys=>{async.each(keys, (key, callback)=>{
@@ -305,4 +312,4 @@ class combine_Listtable_Gauge{
 
 }
 
-module.exports = combine_Listtable_Gauge
+module.exports = {combineClass: combine_Listtable_Gauge}

@@ -413,7 +413,7 @@ class InputProcess(multiprocessing.Process):
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.profilerqueue.put(line_info)
             self.lines += 1
-            self.print('Done reading 1 flow.\n ')
+            self.print('Done reading 1 flow.\n ', 0, 3)
 
         self.stop_queues()
         return True

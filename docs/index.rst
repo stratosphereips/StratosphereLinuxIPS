@@ -55,6 +55,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    slips_in_action
    contributing
    create_new_module
+   FAQ
    code_documentation
 
 

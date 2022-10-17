@@ -205,8 +205,8 @@ ARPScan, ARP-outside-localnet, UnsolicitedARP, MITM-ARP-attack, SSHSuccessful,
 LongConnection, MultipleReconnectionAttempts,
 ConnectionToMultiplePorts, InvalidCertificate, UnknownPort, Port0Connection, 
 ConnectionWithoutDNS, DNSWithoutConnection,
-MaliciousJA3, DataExfiltration, SelfSignedCertificate, PortScanType1, 
-PortScanType2, Password_Guessing, MaliciousFlow,
+MaliciousJA3, DataExfiltration, SelfSignedCertificate, VerticalPortscan, 
+HorizontalPortscan, Password_Guessing, MaliciousFlow,
 SuspiciousUserAgent, multiple_google_connections, NETWORK_gps_location_leaked, 
  Command-and-Control-channels-detection,
 ThreatIntelligenceBlacklistDomain, ThreatIntelligenceBlacklistIP,
@@ -225,7 +225,7 @@ File hashes and URLs aren't supported in TI feeds.
 
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-URLhaus: for IPs and domains lookups
+URLhaus: for domains and hashes lookups (for each downloaded file)
 Spamhaus: for IP lookups
 Circl.lu: for hash lookups (for each downloaded file)
 
@@ -635,10 +635,11 @@ The list below contains all connections made by Slips
 
 useragentstring.com -> For getting user agent info if no info was found in Zeek
 macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
+maclookup.app -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
 virustotal.com -> For getting scores about domains, IPs and URLs 
-urlhaus-api.abuse.ch -> For getting info about contacted IPs and domains
+urlhaus-api.abuse.ch -> For getting info about contacted domains and downloaded files 
 
 ---
 

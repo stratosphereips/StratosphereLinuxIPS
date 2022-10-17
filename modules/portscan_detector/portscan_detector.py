@@ -143,7 +143,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # If we contacted more than 3 dst IPs on this port with not established
                     # connections, we have evidence.
 
-                    cache_key = f'{profileid}:{twid}:dstip:{dport}:PortScanType2'
+                    cache_key = f'{profileid}:{twid}:dstip:{dport}:HorizontalPortscan'
                     prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
 
                     # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
@@ -385,7 +385,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             dport,
             amount_of_dips
     ):
-        type_evidence = 'PortScanType2'
+        type_evidence = 'HorizontalPortscan'
         type_detection = 'srcip'
         source_target_tag = 'Recon'
         srcip = profileid.split('_')[-1]
@@ -443,7 +443,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             dstip
     ):
         type_detection = 'srcip'
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         source_target_tag = 'Recon'
         threat_level = 'medium'
         category = 'Recon.Scanning'
@@ -497,7 +497,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         for state in ('Not Established', 'Established'):
             for protocol in ('TCP', 'UDP'):
                 dstips = __database__.getDataFromProfileTW(

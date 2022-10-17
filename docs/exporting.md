@@ -64,17 +64,18 @@ inbox_path = /services/inbox-a
 
 ```collection_name```: the collection on the server you want to push your STIX data to.
 
-```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
+```push_delay```: the time to wait before pushing STIX data to server (in seconds). 
+It is used when slips is running non-stop (e.g with -i )
 
 ```taxii_username```: TAXII server user credentials
 
 ```taxii_password```: TAXII server user password
 
-```jwt_auth_url```: auth url if JWT based authentication is used.
+```jwt_auth_path```: auth path if JWT based authentication is used. It's usually /management/auth. this is what we 
+use to get a token.
 
-If running on a file not an interface, Slips will export to server after analysis is done. 
-
-More details on how to [export to slack or TAXII server here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)
+If running on a file, Slips will export to server after analysis is done. 
+If running on an interface, Slips will export to server every push_delay seconds. by default it's 1h. 
 
 ## JSON format
 
@@ -87,7 +88,7 @@ Slips supports exporting alerts to warden servers, as well as importing alerts.
   
 To enable the exporting, set ```receive_alerts``` to ```yes``` in slips.conf  
   
-The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
+The default configuration file path is specified in the ```configuration_file``` variable in ```slips.conf```  
   
 The default path is ```modules/CESNET/warden.conf```  
   
@@ -99,23 +100,29 @@ The format of ```warden.conf``` should be the following:
    "keyfile": "key.pem", 
    "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
    "timeout": 600, 
-   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
-   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "errlog": {"file": "output/warden_logs/warden.err", "level": "debug"}, 
+   "filelog": {"file": "output/warden_logs/warden.log", "level": "warning"}, 
    "name": "com.example.warden.test" }  
 ```
 To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
   
 The ```name``` key is your registered warden node name.   
   
-All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+All evidence causing an alert are exported to warden server once an alert is generated. 
+See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
   
 You can change how often you get alerts (import) from warden server  
   
 By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
 
-Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
+Slips logs all alerts to ```output/alerts.json``` in
+[CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
 
-Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) for detailed instructions on how CESNET importing.
+Make sure that the DigiCert_Assured_ID_Root_CA is somewhere accessible by slips. or run slips with 
+root if you want to leave it in ```/etc/ssl/certs/```
+
+Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) 
+for detailed instructions on how CESNET importing.
 
 
 ## Logstash

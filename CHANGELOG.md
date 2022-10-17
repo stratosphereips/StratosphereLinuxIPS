@@ -3,14 +3,17 @@
 - Fix problem detecting SSH logins by zeek
 - Make rotating zeek files configurable. how many days you want to keep the rotated files and how often to rotate 
 - Support running slips on a growing zeek dir. for example a zeek dir of an interface.
-- Support looking up IPs and domains in URLhaus
+- Support looking up hashes and domains in URLhaus
 - Support looking up IPs in Spamhaus
 - Support looking up hashes in Circl.lu
 - Remove support for VT hash lookups to save quota
 - Add support for suricata ssh flows
 - Fix saving the redis database
 - Fix false positive connection without DNS
-
+- Fix reading zeek tab files
+- Fix vertical portscan detections by zeek
+- Better detection of suspicious user agents
+- Fix importing and exporting to warden servers
 
 -0.9.5
 * Slips

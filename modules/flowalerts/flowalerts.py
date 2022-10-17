@@ -300,7 +300,8 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp, state
+            self, dport, proto, daddr,
+            profileid, twid, uid, timestamp, state
     ):
         """
         Checks dports that are not in our
@@ -316,7 +317,7 @@ class Module(Module, multiprocessing.Process):
             return False
         # we don't have port info in our database
         # is it a port that is known to be used by
-        # a specific organization
+        # a specific organization?
         if self.port_belongs_to_an_org(daddr, portproto, profileid):
             return False
 
@@ -501,7 +502,9 @@ class Module(Module, multiprocessing.Process):
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
     ):
-        """Checks if there's a flow to a dstip that has no cached DNS answer"""
+        """
+        Checks if there's a flow to a dstip that has no cached DNS answer
+        """
 
         # disable this alert when running on a zeek conn.log file
         # because there's no dns.log to know i the dns was made
@@ -522,7 +525,7 @@ class Module(Module, multiprocessing.Process):
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
             if diff >= self.conn_without_dns_interface_wait_time:
-                # less than 2=30 minutes have passed
+                # less than 30 minutes have passed
                 return False
 
         # search 24hs back for a dns resolution
@@ -676,7 +679,7 @@ class Module(Module, multiprocessing.Process):
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
             timer = TimerThread(
-                15, self.check_dns_without_connection, params
+                40, self.check_dns_without_connection, params
             )
             timer.start()
         else:
@@ -1141,7 +1144,8 @@ class Module(Module, multiprocessing.Process):
                 return
 
             uids = saddrs[saddr]['uid']
-            description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
+            description = f'Connection to multiple ports {dstports} ' \
+                          f'of Source IP: {saddr}'
 
             self.helper.set_evidence_for_connection_to_multiple_ports(
                 profileid,
@@ -1284,6 +1288,8 @@ class Module(Module, multiprocessing.Process):
                         self.helper.set_evidence_for_port_0_connection(
                             saddr,
                             daddr,
+                            sport,
+                            dport,
                             direction,
                             profileid,
                             twid,
@@ -1552,6 +1558,7 @@ class Module(Module, multiprocessing.Process):
                         self.detect_DGA(
                             rcode_name, domain, stime, profileid, twid, uid
                         )
+
                     if domain:
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
                         self.detect_young_domains(

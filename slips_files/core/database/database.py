@@ -269,6 +269,18 @@ class Database(ProfilingFlowsDatabase, object):
 
         return False
 
+    def set_loaded_ti_files(self, number_of_loaded_files: int):
+        """
+        Stores the number of successfully loaded TI files
+        """
+        self.r.set('loaded TI files', number_of_loaded_files)
+
+    def get_loaded_ti_files(self):
+        """
+        returns the number of successfully loaded TI files. or 0 if none is loaded
+        """
+        return self.r.get('loaded TI files') or 0
+
     def addProfile(self, profileid, starttime, duration):
         """
         Add a new profile to the DB. Both the list of profiles and the hashmap of profile data
@@ -1039,7 +1051,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # found an evidence that has a matching ID
                 return evidence_details
 
-    def is_detection_disabled(self, evidence: str):
+    def is_detection_disabled(self, evidence_type: str):
         """
         Function to check if detection is disabled in slips.conf
         """
@@ -1049,7 +1061,7 @@ class Database(ProfilingFlowsDatabase, object):
             # check if any disabled detection is a part of our evidence.
             # for example 'SSHSuccessful' is a part of 'SSHSuccessful-by-addr' so if  'SSHSuccessful'
             # is disabled,  'SSHSuccessful-by-addr' should also be disabled
-            if disabled_detection in evidence:
+            if disabled_detection in evidence_type:
                 return True
         return False
 

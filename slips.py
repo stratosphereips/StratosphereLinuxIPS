@@ -466,6 +466,7 @@ class Main:
             commit, branch = branch_info[0], branch_info[1]
 
         now = datetime.now()
+        now = utils.convert_format(now, utils.alerts_format)
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
         with open(self.info_path, 'w') as f:
@@ -481,8 +482,8 @@ class Main:
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
-        pid = int(self.PIDs[module_name])
         try:
+            pid = int(self.PIDs[module_name])
             os.kill(pid, sig)
         except (KeyError, ProcessLookupError):
             # process hasn't started yet
@@ -1189,7 +1190,6 @@ class Main:
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-
         if 'pcap' in cmd_result:
             input_type = 'pcap'
         elif 'dBase' in cmd_result:
@@ -1224,16 +1224,22 @@ class Main:
                 except json.decoder.JSONDecodeError:
                     # this is a tab separated file
                     # is it zeek log file or binetflow file?
-                    tabs_found = re.search(
+
+                    # zeek tab files are separated by several spaces or tabs
+                    sequential_spaces_found = re.search(
                         '\s{1,}-\s{1,}', first_line
                     )
+                    tabs_found = re.search(
+                        '\t{1,}', first_line
+                    )
+
                     if (
                             '->' in first_line
                             or 'StartTime' in first_line
                     ):
                         # tab separated files are usually binetflow tab files
                         input_type = 'binetflow-tabs'
-                    elif tabs_found:
+                    elif sequential_spaces_found or tabs_found:
                         input_type = 'zeek_log_file'
 
         return input_type
@@ -1700,8 +1706,8 @@ class Main:
                     )
                 # How many profiles we have?
                 profilesLen = str(__database__.getProfilesLen())
-                if self.mode != 'daemonized' and self.input_type != 'stdin':
-                    now = utils.convert_format(datetime.now(), utils.alerts_format)
+                if self.mode != 'daemonized':
+                    now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '

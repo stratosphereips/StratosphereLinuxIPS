@@ -62,30 +62,31 @@ class Module(Module, multiprocessing.Process):
             'jndi',
             'tesseract',
         )
-        if user_agent.lower() in suspicious_user_agents:
-            type_detection = 'srcip'
-            source_target_tag = 'UsingSuspiciousUserAgent'
-            detection_info = profileid.split('_')[1]
-            type_evidence = 'SuspiciousUserAgent'
-            threat_level = 'high'
-            category = 'Anomaly.Behaviour'
-            confidence = 1
-            description = f'Suspicious user agent: {user_agent} while connecting to {host}{uri}'
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                timestamp,
-                category,
-                source_target_tag=source_target_tag,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
-            return True
+        for suspicious_ua in suspicious_user_agents:
+            if suspicious_ua.lower() in user_agent.lower():
+                type_detection = 'srcip'
+                source_target_tag = 'SuspiciousUserAgent'
+                detection_info = profileid.split('_')[1]
+                type_evidence = 'SuspiciousUserAgent'
+                threat_level = 'high'
+                category = 'Anomaly.Behaviour'
+                confidence = 1
+                description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
+                __database__.setEvidence(
+                    type_evidence,
+                    type_detection,
+                    detection_info,
+                    threat_level,
+                    confidence,
+                    description,
+                    timestamp,
+                    category,
+                    source_target_tag=source_target_tag,
+                    profileid=profileid,
+                    twid=twid,
+                    uid=uid,
+                )
+                return True
         return False
 
     def check_multiple_empty_connections(
@@ -122,7 +123,7 @@ class Module(Module, multiprocessing.Process):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            type_evidence = 'MultipleConnections'
+            type_evidence = 'EmptyConnections'
             type_detection = 'srcip'
             detection_info = profileid.split('_')[0]
             threat_level = 'medium'
@@ -151,14 +152,18 @@ class Module(Module, multiprocessing.Process):
         self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid
     ):
         type_detection = 'srcip'
-        source_target_tag = 'UsingSuspiciousUserAgent'
+        source_target_tag = 'IncompatibleUserAgent'
         detection_info = profileid.split('_')[1]
         type_evidence = 'IncompatibleUserAgent'
         threat_level = 'high'
         category = 'Anomaly.Behaviour'
         confidence = 1
+        os_type = user_agent.get('os_type', '').lower()
+        os_name = user_agent.get('os_name', '').lower()
+        browser = user_agent.get('browser', '').lower()
+        user_agent = user_agent.get('user_agent', '')
         description = (
-            f'using incompatible user-agent: {user_agent} '
+            f'using incompatible user-agent that belongs to OS: {os_name} type: {os_type} browser: {browser}. '
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
@@ -198,7 +203,7 @@ class Module(Module, multiprocessing.Process):
         os_type = user_agent.get('os_type', '').lower()
         os_name = user_agent.get('os_name', '').lower()
         browser = user_agent.get('browser', '').lower()
-        user_agent = user_agent.get('user_agent', '')
+        # user_agent = user_agent.get('user_agent', '')
         if 'safari' in browser and 'apple' not in vendor:
             self.set_evidence_incompatible_user_agent(
                 host, uri, vendor, user_agent, timestamp, profileid, twid, uid
@@ -228,10 +233,11 @@ class Module(Module, multiprocessing.Process):
                 break
 
         if not found_vendor_tuple:
-            # mac vendor isn't apple, microsoft  or google
+            # MAC vendor isn't apple, microsoft  or google
             # we don't know how to check for incompatibility  #todo
             return False
 
+        # see if the os name and type has any keyword of the rest of the tuples
         for tuple_ in os_keywords:
             for keyword in tuple_:
                 if keyword in f'{os_name} {os_type}':
@@ -250,7 +256,6 @@ class Module(Module, multiprocessing.Process):
                     )
 
                     return True
-
 
     def get_ua_info_online(self, user_agent):
         """
@@ -384,14 +389,15 @@ class Module(Module, multiprocessing.Process):
                 return False
 
         type_detection = 'srcip'
-        source_target_tag = 'UsingSuspiciousUserAgent'
+        source_target_tag = 'MultipleUserAgent'
         detection_info = profileid.split('_')[1]
         type_evidence = 'IncompatibleUserAgent'
         threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
+        ua = cached_ua.get('user_agent', '')
         description = (
-            f'using multiple user-agents: {cached_ua} then {user_agent}'
+            f'using multiple user-agents: {ua} then {user_agent}'
         )
         __database__.setEvidence(
             type_evidence,

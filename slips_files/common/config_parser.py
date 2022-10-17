@@ -115,10 +115,10 @@ class ConfigParser(object):
         return timeout
 
     def popup_alerts(self):
-        popups =  self.read_configuration(
+        popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'true' in popups.lower() else False
+        return True if 'yes' in popups.lower() else False
 
     def rotation(self):
         rotation = self.read_configuration(
@@ -399,13 +399,14 @@ class ConfigParser(object):
         )
 
     def push_delay(self):
+        # 3600 = 1h
         delay = self.read_configuration(
-            'exporting_alerts', 'push_delay', 60*60
+            'exporting_alerts', 'push_delay', 3600
         )
         try:
             delay = float(delay)
         except ValueError:
-            delay = 60*60
+            delay = 3600
         return delay
 
     def collection_name(self):
@@ -423,9 +424,9 @@ class ConfigParser(object):
             'exporting_alerts', 'taxii_password', False
         )
 
-    def jwt_auth_url(self):
+    def jwt_auth_path(self):
         return self.read_configuration(
-            'exporting_alerts', 'jwt_auth_url', False
+            'exporting_alerts', 'jwt_auth_path', False
         )
 
 
