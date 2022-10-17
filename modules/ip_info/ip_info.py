@@ -3,7 +3,6 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
 from .asn_info import ASN
 import platform
 import sys
@@ -34,7 +33,7 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         __database__.start(redis_port)
-
+        self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
@@ -286,13 +285,15 @@ class Module(Module, multiprocessing.Process):
             return False
 
 
-    def get_vendor_offline(self, mac_addr):
+    def get_vendor_offline(self, mac_addr, host_name, profileid):
         """
         Gets vendor from Slips' offline database databases/macaddr-db.json
         """
         if not hasattr(self, 'mac_db'):
+            # when update manager is done updating the mac db, we should ask
+            # the db for all these pending queries
+            self.pending_mac_queries.put((mac_addr, host_name, profileid))
             return False
-
 
         oui = mac_addr[:8].upper()
         # parse the mac db and search for this oui
@@ -333,7 +334,7 @@ class Module(Module, multiprocessing.Process):
         if host_name:
             MAC_info['host_name'] = host_name
 
-        if vendor:= self.get_vendor_offline(mac_addr):
+        if vendor:= self.get_vendor_offline(mac_addr, host_name, profileid):
             MAC_info['Vendor'] = vendor
         elif vendor:= self.get_vendor_online(mac_addr):
             MAC_info['Vendor'] = vendor
@@ -452,7 +453,20 @@ class Module(Module, multiprocessing.Process):
                 __database__.set_default_gateway('MAC', MAC)
                 return MAC
 
+    def check_if_we_have_pending_mac_queries(self):
+        """
+        Checks if we have pending queries in pending_mac_queries queue, and asks the db for them IF
+        update manager is done updating the mac db
+        """
+        if hasattr(self, 'mac_db') and not self.pending_mac_queries.empty():
+            while True:
+                try:
+                    mac, host_name, profileid = self.pending_mac_queries.get(timeout=0.5)
+                    self.get_vendor(mac, host_name, profileid)
 
+                except:
+                    # queue is empty
+                    return
 
     def run(self):
         utils.drop_root_privs()
@@ -474,6 +488,7 @@ class Module(Module, multiprocessing.Process):
                     host_name = data.get('host_name', False)
                     profileid = data['profileid']
                     self.get_vendor(mac_addr, host_name, profileid)
+                    self.check_if_we_have_pending_mac_queries()
 
                 message = self.c3.get_message(timeout=self.timeout)
                 if message and message['data'] == 'stop_process':
