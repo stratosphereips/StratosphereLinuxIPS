@@ -640,6 +640,9 @@ ip-api.com -> For getting ASN info about IPs if no info was found in our Redis D
 ipinfo.io -> For getting your public IP
 virustotal.com -> For getting scores about domains, IPs and URLs 
 urlhaus-api.abuse.ch -> For getting info about contacted domains and downloaded files 
+check.torproject.org -> For getting info about tor exist nodes.
+cert.pl -> Used in our list of TI files.
+abuse.ch -> Used by urlhaus for getting info about contacted domains and downloaded files.
 
 ---
 
