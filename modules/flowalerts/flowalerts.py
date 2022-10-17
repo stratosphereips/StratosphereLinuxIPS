@@ -955,9 +955,14 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
+        """
+        Detect domains that are too young.
+        The threshold is 60 days
+        """
 
         age_threshold = 60
 
+        # Ignore arpa and local domains
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
 
