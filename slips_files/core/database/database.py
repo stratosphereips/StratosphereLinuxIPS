@@ -1139,10 +1139,8 @@ class Database(ProfilingFlowsDatabase, object):
             uid = uid[-1]
 
         srcip = profileid.split('_')[1]
-        # if the ip we want to block is the same as the profileid,
-        # make the evidence threat_level=info
-        if srcip in str(detection_info):
-            threat_level = 'info'
+
+
 
         if timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
