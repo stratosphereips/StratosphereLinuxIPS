@@ -114,11 +114,6 @@ class GoDirector:
         key_message = 'message'
 
         expected_keys = {key_reporter, key_report_time, key_message}
-        # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
-        # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
-        if len(expected_keys & set(report.keys())) != 3:
-            self.print('Some key is missing in report', 0, 1)
-            return
 
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
