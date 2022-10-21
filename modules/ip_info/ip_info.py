@@ -446,6 +446,16 @@ class Module(Module, multiprocessing.Process):
                 return MAC
 
 
+    def set_ip_score(self, ip):
+        """
+        Sets the score of ip to 0 (not malicious), when an evidence is generated for this IP, setEvidence sets it to 1
+        This function ensures all ips in ipinfo have a score.
+        """
+        ip_info = __database__.getIPData(ip)
+        if ip_info and 'score' in ip_info:
+            return
+        __database__.setInfoForIPs(ip, {'score': 0, 'confidence': 1})
+
 
     def run(self):
         utils.drop_root_privs()
@@ -493,7 +503,6 @@ class Module(Module, multiprocessing.Process):
                         # make sure its a valid ip
                         ip_addr = ipaddress.ip_address(ip)
                     except ValueError:
-                        # not a valid ip skip
                         continue
 
                     if not ip_addr.is_multicast:
@@ -504,7 +513,6 @@ class Module(Module, multiprocessing.Process):
                             cached_ip_info = {}
 
                         # ------ GeoCountry -------
-                        # Get the geocountry
                         if (
                                 cached_ip_info == {}
                                 or 'geocountry' not in cached_ip_info
@@ -512,7 +520,6 @@ class Module(Module, multiprocessing.Process):
                             self.get_geocountry(ip)
 
                         # ------ ASN -------
-                        # Get the ASN
                         # only update the ASN for this IP if more than 1 month
                         # passed since last ASN update on this IP
                         if update_asn := self.asn.update_asn(
@@ -521,6 +528,8 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
+
+                    self.set_ip_score(ip)
 
 
                 message = self.c4.get_message(timeout=self.timeout)
