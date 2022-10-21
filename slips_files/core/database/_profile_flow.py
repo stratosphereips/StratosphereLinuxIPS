@@ -81,7 +81,11 @@ class ProfilingFlowsDatabase(object):
 
         # ask other peers their opinion about this IP
         cache_age = 1000
-        data_to_send.update({'cache_age': cache_age})
+         # the p2p module is expecting these 2 keys
+        data_to_send.update({
+            'cache_age': cache_age,
+            'ip': str(ip)
+        })
         self.publish('p2p_data_request', json.dumps(data_to_send))
 
     def update_times_contacted(self, ip, direction, profileid, twid):
