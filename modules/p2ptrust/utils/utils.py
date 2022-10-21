@@ -135,8 +135,12 @@ def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
         'network_score': network_trust,
         'timestamp': timestamp,
     }
-    wrapped_data = {'p2p4slips': report_data}
 
+    # store it in p2p_reports key
+    __database__.store_p2p_report(ip, report_data)
+
+    # store it in IPsInfo key
+    wrapped_data = {'p2p4slips': report_data}
     __database__.setInfoForIPs(ip, wrapped_data)
 
 

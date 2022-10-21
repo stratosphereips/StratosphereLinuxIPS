@@ -1058,6 +1058,9 @@ class ProfilingFlowsDatabase(object):
         if new_key:
             self.r.publish('ip_info_change', ip)
 
+    def store_p2p_report(self, ip: str, report_data: dict):
+        self.r.hset('p2p_reports', ip, json.loads(report_data))
+
     def add_out_http(
         self,
         daddr,
