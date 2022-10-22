@@ -4,7 +4,7 @@ import traceback
 import ipaddress
 import sys
 import validators
-
+from slips_files.common.slips_utils import utils
 
 class ProfilingFlowsDatabase(object):
     def __init__(self):
@@ -14,6 +14,8 @@ class ProfilingFlowsDatabase(object):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.seen_MACs = {}
+        self.our_ips = utils.get_own_IPs()
+
 
     def publish(self, channel, data):
         """Publish something"""
@@ -78,6 +80,10 @@ class ProfilingFlowsDatabase(object):
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
+
+        if ip in self.our_ips:
+            # dont ask p2p about your own ip
+            return
 
         # ask other peers their opinion about this IP
         cache_age = 1000
