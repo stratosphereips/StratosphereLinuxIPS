@@ -912,7 +912,7 @@ class UpdateFileManager:
 
     def parse_line(self, line, file_path) -> tuple:
         """
-        :param file_path: path of the ti fil;e that contains the given line
+        :param file_path: path of the ti file that contains the given line
         Parse the given line and return the amount of columns it has,
         a list of the line fields, and the separator it's using
         """

@@ -31,6 +31,14 @@ def validate_ip_address(ip: str) -> bool:
     return True
 
 
+threat_levels = {
+            'info': 0,
+            'low': 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1,
+        }
+
 def validate_timestamp(timestamp: str) -> Union[int, None]:
     """
     Make sure the given string is a timestamp between 0 and now
@@ -118,7 +126,11 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
     """
     # the higher the score, the more malicious this ip
     try:
-        score = ip_info['score']
+        if 'threat_level' in ip_info:
+            score = threat_levels[ip_info['threat_level']]
+        else:
+            score = ip_info['score']
+
         confidence = ip_info['confidence']
         return float(score), float(confidence)
     except KeyError:

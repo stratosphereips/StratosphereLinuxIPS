@@ -502,12 +502,13 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
+
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message['data']
                     data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
+                    # profileid = data['profileid']
+                    # twid = data['twid']
+                    # uid = data['uid']
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}
