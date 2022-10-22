@@ -1,6 +1,5 @@
 import base64
 import binascii
-import configparser
 import json
 from typing import Dict
 
@@ -13,6 +12,8 @@ from modules.p2ptrust.utils.utils import (
 )
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
+from slips_files.core.database.database import __database__
+
 
 
 class GoDirector:
@@ -27,7 +28,6 @@ class GoDirector:
         self,
         printer: Printer,
         trustdb: TrustDB,
-        config: configparser.ConfigParser,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
@@ -44,7 +44,6 @@ class GoDirector:
 
         self.printer = printer
         self.trustdb = trustdb
-        self.config = config
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
@@ -214,9 +213,10 @@ class GoDirector:
         self, reporter: str, _: int, data: Dict
     ) -> None:
         """
-        Handle data request from a peer
+        Process and answer a msg from a peer that requests info about an IP
 
-        Details are read from the request, and response is read from slips database. Response data is formatted as json
+        Details are read from the request, and response is read from slips database.
+        Response data is formatted as json
         and sent to the peer that asked.
 
         :param reporter: The peer that sent the request
@@ -392,6 +392,14 @@ class GoDirector:
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
+
+        # save all report info in the db
+        report_info = {
+            'reporter':reporter,
+            'report_time':report_time,
+        }
+        report_info.update(evaluation)
+        __database__.store_p2p_report(key, report_info)
 
     def process_go_update(self, data: dict) -> None:
         """

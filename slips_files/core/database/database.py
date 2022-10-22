@@ -78,6 +78,8 @@ class Database(ProfilingFlowsDatabase, object):
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
         self.set_redis_options()
+        self.our_ips = utils.get_own_IPs()
+
 
     def set_redis_options(self):
         """
@@ -1206,12 +1208,15 @@ class Database(ProfilingFlowsDatabase, object):
             self.publish('evidence_added', evidence_to_send)
         # an alert is generated for this profile,
         # change the score to = 1, and confidence = 1
+        confidence = 1
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            self.set_score_confidence(srcip, 'critical', 1)
+            self.set_score_confidence(srcip, 'critical', confidence)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.set_score_confidence(detection_info, 'critical', 1)
+            self.set_score_confidence(detection_info, 'critical', confidence)
+
+
         return True
 
     def mark_evidence_as_processed(self, profileid, twid, evidence_ID):
@@ -2478,7 +2483,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def set_score_confidence(self, ip: str, threat_level: str, confidence):
         """
-        Function to set the score and confidence of the given ip in the db
+        Function to set the score and confidence of the given ip in the db when it causes an evidence
         These 2 values will be needed when sharing with peers
         :param threat_level: low, medium, high, etc.
         :apram confidence: from 0 to 1 how sure are we of the score?
@@ -2487,7 +2492,7 @@ class Database(ProfilingFlowsDatabase, object):
         score = utils.threat_levels[threat_level.lower()]
         score_confidence = {'score': score, 'confidence': confidence}
         cached_ip_data = self.getIPData(ip)
-        if cached_ip_data is False:
+        if not cached_ip_data:
             self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
         else:
             # append the score and conf. to the already existing data
