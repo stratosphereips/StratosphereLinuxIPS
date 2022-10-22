@@ -185,11 +185,11 @@ class EvidenceProcess(multiprocessing.Process):
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             evidence_string = f'Detected {description}'
-            if detection_type == 'srcip':
-                ip = srcip
+            # if detection_type == 'srcip':
+            #     ip = srcip
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            ip = srcip
+            # ip = srcip
             evidence_string = f'Detected {description}'
 
         elif detection_module == 'SSHSuccessful':

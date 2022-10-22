@@ -14,14 +14,13 @@ class ProfilingFlowsDatabase(object):
         # flag to know which flow is the start of the pcap/file
         self.first_flow = True
         self.seen_MACs = {}
-        self.our_ips = utils.get_own_IPs()
 
 
     def publish(self, channel, data):
         """Publish something"""
         self.r.publish(channel, data)
 
-    def getIPData(self, ip: str):
+    def getIPData(self, ip: str) -> dict:
         """
         Return information about this IP from IPsInfo
         Returns a dictionary or False if there is no IP in the database
@@ -1065,7 +1064,10 @@ class ProfilingFlowsDatabase(object):
             self.r.publish('ip_info_change', ip)
 
     def store_p2p_report(self, ip: str, report_data: dict):
-        self.r.hset('p2p_reports', ip, json.loads(report_data))
+        """
+        This is answers about IPs slips asked other peers for.
+        """
+        self.r.hset('p2p_reports', ip, json.dumps(report_data))
 
     def add_out_http(
         self,

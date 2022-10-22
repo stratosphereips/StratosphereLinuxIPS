@@ -10,7 +10,7 @@ from typing import Dict
 import json
 import sys
 import socket
-
+from slips_files.common.config_parser import ConfigParser
 import modules.p2ptrust.trust.base_model as reputation_model
 import modules.p2ptrust.trust.trustdb as trustdb
 import modules.p2ptrust.utils.utils as p2p_utils
@@ -95,8 +95,6 @@ class Trust(Module, multiprocessing.Process):
         Path(data_dir).mkdir(parents=True, exist_ok=True)
 
         self.output_queue = output_queue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
         self.port = self.get_available_port()
         self.host = self.get_local_IP()
         self.rename_with_port = rename_with_port
@@ -179,13 +177,12 @@ class Trust(Module, multiprocessing.Process):
             self.sql_db_name, self.printer, drop_tables_on_startup=True
         )
         self.reputation_model = reputation_model.BaseModel(
-            self.printer, self.trust_db, self.config
+            self.printer, self.trust_db
         )
         # print(f"[DEBUGGING] Starting godirector with pygo_channel: {self.pygo_channel}")
         self.go_director = GoDirector(
             self.printer,
             self.trust_db,
-            self.config,
             self.storage_name,
             override_p2p=self.override_p2p,
             report_func=self.process_message_report,
@@ -288,7 +285,8 @@ class Trust(Module, multiprocessing.Process):
                 network_score,
                 timestamp,
             ) = cached_opinion
-            if cached_score is None or abs(score - cached_score) < 0.1:
+            # if we don't have info about this ip from the p2p network, report it to the p2p netwrok
+            if not cached_score:
                 data_already_reported = False
         except KeyError:
             data_already_reported = False
