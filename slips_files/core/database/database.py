@@ -1242,9 +1242,13 @@ class Database(ProfilingFlowsDatabase, object):
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
             self.set_score_confidence(srcip, 'critical', confidence)
+            # update the threat level of this profile
+            self.update_threat_level(profileid, threat_level)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
             self.set_score_confidence(detection_info, 'critical', confidence)
+            # update the threat level of this profile
+            self.update_threat_level(f'profile_{detection_info}', threat_level)
 
 
         return True
