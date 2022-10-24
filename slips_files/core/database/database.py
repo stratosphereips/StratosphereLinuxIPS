@@ -306,7 +306,7 @@ class Database(ProfilingFlowsDatabase, object):
             # For now duration of the TW is fixed
             self.r.hset(profileid, 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.update_threat_level(profileid, 0)
+            self.update_threat_level(profileid, 'info')
             self.r.hset(profileid, 'confidence', 0.05)
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
@@ -837,7 +837,7 @@ class Database(ProfilingFlowsDatabase, object):
 
             # When a new TW is created for this profile,
             # change the threat level of the profile to 0 and confidence to 0.05
-            self.update_threat_level(profileid, 0)
+            self.update_threat_level(profileid, 'info')
             self.r.hset(profileid, 'confidence', 0.5)
 
             return twid
@@ -959,10 +959,12 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
-    def update_threat_level(self, profileid, threat_level):
+    def update_threat_level(self, profileid, threat_level: str):
         """
         Update the threat level of a certain profile
+        :param threat_level: available options are 'low', 'medium' 'critical' etc
         """
+
         self.r.hset(profileid, 'threat_level', threat_level)
         now = time.time()
         # keep track of old threat levels
@@ -982,8 +984,8 @@ class Database(ProfilingFlowsDatabase, object):
             past_threat_levels = [threat_level]
             threat_levels_update_time = [now]
 
-        threat_levels_update_time = json.loads(threat_levels_update_time)
-        past_threat_levels = json.loads(past_threat_levels)
+        threat_levels_update_time = json.dumps(threat_levels_update_time)
+        past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'threat_levels_update_time', threat_levels_update_time)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
