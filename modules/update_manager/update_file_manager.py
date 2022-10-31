@@ -252,6 +252,40 @@ class UpdateFileManager:
             # The 2 hashes are identical. File is up to date.
             return False
 
+    def __check_if_update_online_whitelist(self) -> bool:
+        """
+        Decides whether to update or not based on the update period
+        Used for online whitelist specified in slips.conf
+        """
+        # Get the last time this file was updated
+        data = __database__.get_TI_file_info('tranco_whitelist')
+        try:
+            last_update = data['time']
+            last_update = float(last_update)
+        except (TypeError, KeyError):
+            last_update = float('-inf')
+
+        now = time.time()
+
+        if last_update + self.online_whitelist_update_period  > now:
+            return False
+
+        # update period passed
+        # response will be used to get e-tag, and if the file was updated
+        # the same response will be used to update the content in our db
+        response = self.download_file(self.online_whitelist)
+        if not response:
+            return False
+
+        # update the timestamp in the db
+        ti_file_info = {'time': time.time()}
+        __database__.set_TI_file_info(
+            'tranco_whitelist', ti_file_info
+        )
+        return response
+
+
+
     def download_file(self, file_to_download):
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
@@ -301,6 +335,7 @@ class UpdateFileManager:
             if (
                 'risk' in file_to_download
             ):
+                # updating riskiq TI data does not depend on an e-tag
                 return True
 
             # Update only if the e-tag is different
@@ -1387,7 +1422,7 @@ class UpdateFileManager:
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
 
-    def update_online_whitelist(self):
+    def update_online_whitelist(self, response):
         """
         Updates online tranco whitelist defined in slips.conf online_whitelist key
         """
@@ -1417,7 +1452,7 @@ class UpdateFileManager:
                 self.update_mac_db(response)
 
             ############### Update online whitelist ################
-            if response := self.__check_if_update(self.online_whitelist, self.online_whitelist_update_period):
+            if response := self.__check_if_update_online_whitelist():
                 self.update_online_whitelist(response)
 
             ############### Update remote TI files ################
