@@ -1,7 +1,7 @@
 """Unit test for modules/ip_info/ip_info.py"""
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
-import configparser
+import asyncio
 
 
 def do_nothing(*args):
@@ -82,11 +82,24 @@ def test_get_geocountry(outputQueue, database):
     }
 
 
+def make_sure_mac_db_exists(ip_info):
+    # this is the loop that controls te running on open_dbs
+    loop = asyncio.get_event_loop()
+    # run open_dbs in the background so we don't have
+    # to wait for update manager to finish updating the mac db to start this module
+    loop.run_until_complete(ip_info.open_dbs())
+
+
 # MAC vendor unit tests
 def test_get_vendor_offline(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # make sure the mc db exists and udate manager is done updating it
+    # before using it
+    make_sure_mac_db_exists(ip_info)
     mac_addr = '08:00:27:7f:09:e1'
-    found_info = ip_info.get_vendor_offline(mac_addr)
+    profileid = 'profile_10.0.2.15'
+    found_info = ip_info.get_vendor_offline(mac_addr, 'google.com', profileid)
+    assert found_info != False
     assert found_info.lower() == 'PCS Systemtechnik GmbH'.lower()
 
 

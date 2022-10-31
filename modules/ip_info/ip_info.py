@@ -470,11 +470,13 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+
         # this is the loop that controls te running on open_dbs
         loop = asyncio.get_event_loop()
         # run open_dbs in the background so we don't have
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
+
         # Main loop function
         while True:
             try:
