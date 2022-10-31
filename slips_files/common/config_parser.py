@@ -485,7 +485,7 @@ class ConfigParser(object):
     def local_ti_data_path(self):
         return self.read_configuration(
             'threatintelligence',
-            'download_path_for_local_threat_intelligence',
+            'local_threat_intelligence_files',
             'modules/threat_intelligence/local_data_files/'
         )
 

@@ -483,7 +483,7 @@ class Module(Module, multiprocessing.Process):
                 self.print(f'File {localfile} is up to date.', 2, 0)
 
             else:
-                # Our malicious file was changed. Load the new one
+                # Our TI file was changed. Load the new one
                 self.print(f'Updating the local TI file {localfile}', 2, 0)
                 if old_hash:
                     # File is updated and was in database.
