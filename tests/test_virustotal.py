@@ -16,7 +16,7 @@ def do_nothing(*args):
 def get_vt_key():
     # get the user's api key
     try:
-        with open('modules/virustotal/api_key_secret', 'r') as f:
+        with open('config/vt_api_key', 'r') as f:
             api_key = f.read()
     except FileNotFoundError:
         api_key = ''

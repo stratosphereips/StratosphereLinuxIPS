@@ -536,7 +536,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         try:
-            if self.key is None:
+            if self.key in ('', None):
                 # We don't have a virustotal key
                 return
             self.api_calls_thread.start()
