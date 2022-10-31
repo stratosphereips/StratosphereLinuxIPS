@@ -1666,6 +1666,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Check if the flow is whitelisted and we should not process
             if self.whitelist.is_whitelisted_flow(self.column_values, self.flow_type):
+                print(f"@@@@@@@@@@@@@@@@@@  flow to {self.daddr} is whitelisted")
                 return True
 
             # 5th. Store the data according to the paremeters
