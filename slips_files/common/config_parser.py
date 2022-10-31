@@ -104,6 +104,12 @@ class ConfigParser(object):
             'parameters', 'pcapfilter',  'ip or not ip'
         )
 
+    def online_whitelist(self):
+        return self.read_configuration(
+            'threatintelligence', 'online_whitelist',  False
+        )
+
+
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
             'parameters', 'tcp_inactivity_timeout',  '5'
@@ -113,6 +119,17 @@ class ConfigParser(object):
         except ValueError:
             timeout = 5
         return timeout
+
+    def online_whitelist_update_period(self):
+        update_period = self.read_configuration(
+            'threatintelligence', 'online_whitelist_update_period', 604800
+        )
+        try:
+            update_period = int(update_period)
+        except ValueError:
+            update_period = 604800
+        return update_period
+
 
     def popup_alerts(self):
         popups = self.read_configuration(
@@ -542,7 +559,7 @@ class ConfigParser(object):
 
     def update_period(self):
         update_period =  self.read_configuration(
-             'threatintelligence', 'malicious_data_update_period', 86400
+             'threatintelligence', 'TI_files_update_period', 86400
         )
         try:
             update_period = float(update_period)

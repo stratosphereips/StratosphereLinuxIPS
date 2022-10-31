@@ -72,9 +72,9 @@ class UpdateFileManager:
 
         self.update_period = conf.update_period()
 
-        self.path_to_ti_files = conf.remote_ti_data_path()
-        if not os.path.exists(self.path_to_ti_files):
-            os.mkdir(self.path_to_ti_files)
+        self.path_to_remote_ti_files = conf.remote_ti_data_path()
+        if not os.path.exists(self.path_to_remote_ti_files):
+            os.mkdir(self.path_to_remote_ti_files)
 
         self.ti_feed_tuples = conf.ti_files()
         self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
@@ -87,12 +87,13 @@ class UpdateFileManager:
 
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
-
         self.riskiq_update_period = conf.riskiq_update_period()
 
         self.mac_db_update_period = conf.mac_db_update_period()
-
         self.mac_db_link = conf.mac_db_link()
+
+        self.online_whitelist_update_period = conf.online_whitelist_update_period()
+        self.online_whitelist = conf.online_whitelist()
 
 
     def get_feed_properties(self, feeds):
@@ -251,6 +252,40 @@ class UpdateFileManager:
             # The 2 hashes are identical. File is up to date.
             return False
 
+    def __check_if_update_online_whitelist(self) -> bool:
+        """
+        Decides whether to update or not based on the update period
+        Used for online whitelist specified in slips.conf
+        """
+        # Get the last time this file was updated
+        data = __database__.get_TI_file_info('tranco_whitelist')
+        try:
+            last_update = data['time']
+            last_update = float(last_update)
+        except (TypeError, KeyError):
+            last_update = float('-inf')
+
+        now = time.time()
+
+        if last_update + self.online_whitelist_update_period  > now:
+            return False
+
+        # update period passed
+        # response will be used to get e-tag, and if the file was updated
+        # the same response will be used to update the content in our db
+        response = self.download_file(self.online_whitelist)
+        if not response:
+            return False
+
+        # update the timestamp in the db
+        ti_file_info = {'time': time.time()}
+        __database__.set_TI_file_info(
+            'tranco_whitelist', ti_file_info
+        )
+        return response
+
+
+
     def download_file(self, file_to_download):
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
@@ -300,6 +335,7 @@ class UpdateFileManager:
             if (
                 'risk' in file_to_download
             ):
+                # updating riskiq TI data does not depend on an e-tag
                 return True
 
             # Update only if the e-tag is different
@@ -342,12 +378,12 @@ class UpdateFileManager:
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
-                    malicious_file_info = {
+                    ti_file_info = {
                         'e-tag': new_e_tag,
                         'time': self.new_update_time,
                     }
                     __database__.set_TI_file_info(
-                        file_name_to_download, malicious_file_info
+                        file_name_to_download, ti_file_info
                     )
                     self.loaded_ti_files += 1
                     return False
@@ -506,7 +542,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
-            full_path = f'{self.path_to_ti_files}/{file_name_to_download}'
+            full_path = os.path.join(self.path_to_remote_ti_files, file_name_to_download)
             self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
@@ -1385,6 +1421,21 @@ class UpdateFileManager:
 
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
+
+    def update_online_whitelist(self, response):
+        """
+        Updates online tranco whitelist defined in slips.conf online_whitelist key in the db
+        """
+        # write to the file so we don't store the 10k domains in memory
+        online_whitelist_download_path = os.path.join(self.path_to_remote_ti_files, 'tranco-top-10000-whitelist')
+        with open(online_whitelist_download_path, 'w') as f:
+            f.write(response.text)
+
+        with open(online_whitelist_download_path, 'r') as f:
+            while line := f.readline():
+                domain = line.split(',')[1]
+                __database__.store_tranco_whitelisted_domain(domain)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1407,6 +1458,10 @@ class UpdateFileManager:
             ############### Update slips local files ################
             if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db(response)
+
+            ############### Update online whitelist ################
+            if response := self.__check_if_update_online_whitelist():
+                self.update_online_whitelist(response)
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own

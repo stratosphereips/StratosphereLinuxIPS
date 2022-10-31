@@ -1220,10 +1220,22 @@ class Database(ProfilingFlowsDatabase, object):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
-        self.r.sadd('Processed_evidence', evidence_ID)
+        self.r.sadd('processed_evidence', evidence_ID)
 
     def is_evidence_processed(self, evidence_ID):
-        return self.r.sismember('whitelisted_evidence', evidence_ID)
+        return self.r.sismember('processed_evidence', evidence_ID)
+
+    def store_tranco_whitelisted_domain(self, domain):
+        """
+        store whitelisted domain from tranco whitelist in the db
+        """
+        # the reason we store tranco whitelisted domains in the cache db
+        # instead of the main db is, we don't want them cleared on every new instance of slips
+        self.rcache.sadd('tranco_whitelisted_domains', domain)
+
+    def is_whitelisted_tranco_domain(self, domain):
+        return self.rcache.sismember('tranco_whitelisted_domains', domain)
+
 
 
     def set_evidence_for_profileid(self, evidence):

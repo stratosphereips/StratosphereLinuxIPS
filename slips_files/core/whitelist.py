@@ -697,6 +697,14 @@ class Whitelist:
                         if ignore_alerts_from_domain or ignore_alerts_to_domain:
                             # self.print(f'Whitelisting evidence about {domain_in_whitelist}, due to a connection related to {data} in {description}')
                             return True
+
+                # remove the www. because no tranco whitelist entry has it
+                domain = domain.replace('www.','')
+                if __database__.is_whitelisted_tranco_domain(domain):
+                    # tranco list contains the top 10k known benign domains
+                    # https://tranco-list.eu/list/X5QNN/1000000
+                    return True
+
             # Check orgs
             if whitelisted_orgs:
                 is_src = type_detection in (
