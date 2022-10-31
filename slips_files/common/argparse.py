@@ -94,7 +94,7 @@ class ArgumentParser(argparse.ArgumentParser):
             print(output)
 
     def get_configfile(self):
-        slips_conf_path = os.path.join(os.getcwd(), 'slips.conf')
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
         self.add_argument(
             '-c',
             '--config',
@@ -108,7 +108,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def parse_arguments(self):
         # Parse the parameters
-        slips_conf_path = os.path.join(os.getcwd(), 'slips.conf')
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
         self.add_argument(
             '-c',
             '--config',
@@ -142,7 +142,11 @@ class ArgumentParser(argparse.ArgumentParser):
             metavar='<file>',
             action='store',
             required=False,
-            help='Read and automatically recognize a Zeek dir with all logs, a Zeek conn.log file (TAB separated or JSON), a Suricata JSON file with flows, an Argus binetflow file, a PCAP file or a nfdump file. Also use the word "zeek" to specify read from stdin of Zeek files, or "suricata" to specify stdin of suricata files.',
+            help='Read and automatically recognize a Zeek dir with all logs, '
+                 'a Zeek conn.log file (TAB separated or JSON), '
+                 'a Suricata JSON file with flows, an Argus binetflow file, a PCAP file or a nfdump file. '
+                 'Also use the word "zeek" to specify read from stdin of Zeek files, '
+                 'or "suricata" to specify stdin of suricata files.',
         )
         self.add_argument(
             '-i',

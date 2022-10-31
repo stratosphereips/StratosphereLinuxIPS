@@ -452,7 +452,7 @@ class Main:
             pass
 
         # Add a copy of slips.conf
-        config_file = self.args.config or 'slips.conf'
+        config_file = self.args.config or 'config/slips.conf'
         shutil.copy(config_file, metadata_dir)
 
         # Add a copy of whitelist.conf
