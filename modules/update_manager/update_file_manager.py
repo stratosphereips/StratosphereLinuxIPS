@@ -87,12 +87,13 @@ class UpdateFileManager:
 
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
-
         self.riskiq_update_period = conf.riskiq_update_period()
 
         self.mac_db_update_period = conf.mac_db_update_period()
-
         self.mac_db_link = conf.mac_db_link()
+
+        self.online_whitelist_update_period = conf.online_whitelist_update_period()
+        self.online_whitelist = conf.online_whitelist()
 
 
     def get_feed_properties(self, feeds):
@@ -342,12 +343,12 @@ class UpdateFileManager:
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
-                    malicious_file_info = {
+                    ti_file_info = {
                         'e-tag': new_e_tag,
                         'time': self.new_update_time,
                     }
                     __database__.set_TI_file_info(
-                        file_name_to_download, malicious_file_info
+                        file_name_to_download, ti_file_info
                     )
                     self.loaded_ti_files += 1
                     return False
@@ -1385,6 +1386,13 @@ class UpdateFileManager:
 
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
+
+    def update_online_whitelist(self):
+        """
+        Updates online tranco whitelist defined in slips.conf online_whitelist key
+        """
+        pass
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
@@ -1407,6 +1415,10 @@ class UpdateFileManager:
             ############### Update slips local files ################
             if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db(response)
+
+            ############### Update online whitelist ################
+            if response := self.__check_if_update(self.online_whitelist, self.online_whitelist_update_period):
+                self.update_online_whitelist(response)
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
