@@ -37,8 +37,13 @@ class UpdateManager(Module, multiprocessing.Process):
             self.update_period, self.update_ti_files
         )
         # Timer to update the MAC db
+        # when update_ti_files is called, it decides what exactly to update, the mac db,
+        # online whitelist OT online ti files.
         self.mac_db_update_manager = InfiniteTimer(
             self.mac_db_update_period, self.update_ti_files
+        )
+        self.online_whitelist_update_timer = InfiniteTimer(
+            self.online_whitelist_update_period, self.update_ti_files
         )
         self.timeout = 0.000001
 
@@ -46,6 +51,7 @@ class UpdateManager(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.update_period = conf.update_period()
         self.mac_db_update_period = conf.mac_db_update_period()
+        self.online_whitelist_update_period = conf.online_whitelist_update_period()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -73,6 +79,7 @@ class UpdateManager(Module, multiprocessing.Process):
         # terminating the timer for the process to be killed
         self.timer_manager.cancel()
         self.mac_db_update_manager.cancel()
+        self.online_whitelist_update_timer.cancel()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return True
@@ -94,6 +101,7 @@ class UpdateManager(Module, multiprocessing.Process):
             # Starting timer to update files
             self.timer_manager.start()
             self.mac_db_update_manager.start()
+            self.online_whitelist_update_timer.start()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
