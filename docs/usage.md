@@ -298,6 +298,8 @@ processing any communication to or from these pieces of data, not to avoid any p
 contains that piece of data. For example, if you whitelist the domain slack.com, then a DNS 
 request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
+
+
 ### Flows Whitelist
 If you whitelist an IP address, Slips will check all flows and see if you are whitelisting to them or from them.
 
@@ -334,6 +336,21 @@ If you whitelist some piece of data not to generate alerts, the process is the f
   
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
+  
+### Tranco whitelist
+
+In order to reduce the number of false positive alerts,
+Slips uses Tranco whitelist which contains a research-oriented top sites 
+ranking hardened against manipulation here https://tranco-list.eu/
+
+Slips download the top 10k domains from this list and by default and 
+whitelists all evidence from and to these domains.
+The tranco list is updated daily by default in Slips, but you can change how often to update it using the
+```online_whitelist_update_period``` key in slips.conf.
+
+
+
+
 
 ### Whitelisting Example
 You can modify the file ```whitelist.csv``` file with this content:
