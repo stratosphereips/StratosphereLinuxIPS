@@ -39,7 +39,6 @@ class Module(Module, multiprocessing.Process):
             NameError,
             FileNotFoundError,
         ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_email = None
             self.riskiq_key = None
 
