@@ -83,7 +83,9 @@ class Module(Module, multiprocessing.Process):
         try:
             with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
-        except FileNotFoundError:
+                if len(self.BOT_TOKEN) < 5:
+                    raise NameError
+        except (FileNotFoundError, NameError):
             self.print(
                 f'Please add slack bot token to '
                 f'{self.slack_token_filepath}. Stopping.'
@@ -338,7 +340,6 @@ class Module(Module, multiprocessing.Process):
             date_time = datetime.datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
             self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
-
 
         while True:
             try:
