@@ -327,11 +327,10 @@ class Whitelist:
         whitelisted_domains = __database__.get_whitelist('domains')
         whitelisted_orgs = __database__.get_whitelist('organizations')
         whitelisted_mac = __database__.get_whitelist('mac')
-
+        # Process lines after comments
+        line_number = 0
         try:
             with open(self.whitelist_path) as whitelist:
-                # Process lines after comments
-                line_number = 0
                 # line = whitelist.readline()
                 while line := whitelist.readline():
                     line_number += 1

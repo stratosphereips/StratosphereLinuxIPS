@@ -22,7 +22,7 @@ def create_threatintel_instance(outputQueue):
 def test_parse_ti_file(outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
     # get local data dir
-    dir_ = threatintel.path_to_local_ti_files
+    dir_ = threatintel.path_to_local_ti_ftest_get_geocountryiles
     # get the first local threat intel file in local_data_files
     filename = os.listdir(dir_)[0]
     assert threatintel.parse_local_ti_file(dir_ + filename) == True
