@@ -17,6 +17,7 @@ import time
 import threading
 import sys
 import validators
+import datetime
 
 class Module(Module, multiprocessing.Process):
     """
@@ -109,24 +110,6 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
-    def get_ioc_type(self, ioc):
-        """Check the type of ioc, returns url, ip or domain"""
-        try:
-            # Is IPv4
-            ip_address = ipaddress.IPv4Address(ioc)
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # Is it ipv6?
-            try:
-                ip_address = ipaddress.IPv6Address(ioc)
-                return 'ip'
-            except ipaddress.AddressValueError:
-                # It does not look as IP address.
-                if validators.domain(ioc):
-                    return 'domain'
-                elif validators.url(ioc):
-                    return 'url'
 
     def ip_exists_in_stix_file(self, ip):
         """Searches for ip in STIX_data.json to avoid exporting duplicates"""
@@ -320,9 +303,7 @@ class Module(Module, multiprocessing.Process):
                 self.is_bundle_created = False
             else:
                 self.print(
-                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.',
-                    2,
-                    0,
+                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.', 2, 0
                 )
 
     def shutdown_gracefully(self):
@@ -332,6 +313,11 @@ class Module(Module, multiprocessing.Process):
 
         if hasattr(self, 'json_file_handle'):
             self.json_file_handle.close()
+
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips finished on sensor: {self.sensor_name}.')
 
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
@@ -347,6 +333,12 @@ class Module(Module, multiprocessing.Process):
             # each push to the stix server
             # it starts the timer when the first alert happens
             self.export_to_taxii_thread.start()
+
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
+
 
         while True:
             try:
