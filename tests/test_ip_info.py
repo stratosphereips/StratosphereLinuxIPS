@@ -2,7 +2,7 @@
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
 import asyncio
-
+import pytest
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -74,6 +74,8 @@ def test_get_rdns(outputQueue, database):
 
 def test_get_geocountry(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     assert ip_info.get_geocountry('153.107.41.230') == {
         'geocountry': 'Australia'
     }
@@ -82,20 +84,11 @@ def test_get_geocountry(outputQueue, database):
     }
 
 
-def make_sure_mac_db_exists(ip_info):
-    # this is the loop that controls te running on open_dbs
-    loop = asyncio.get_event_loop()
-    # run open_dbs in the background so we don't have
-    # to wait for update manager to finish updating the mac db to start this module
-    loop.run_until_complete(ip_info.open_dbs())
-
-
 # MAC vendor unit tests
 def test_get_vendor_offline(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
-    # make sure the mc db exists and udate manager is done updating it
-    # before using it
-    make_sure_mac_db_exists(ip_info)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     mac_addr = '08:00:27:7f:09:e1'
     profileid = 'profile_10.0.2.15'
     found_info = ip_info.get_vendor_offline(mac_addr, 'google.com', profileid)
@@ -112,6 +105,8 @@ def test_get_vendor_online(outputQueue, database):
 
 def test_get_vendor(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'
