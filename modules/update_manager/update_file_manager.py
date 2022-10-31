@@ -72,9 +72,9 @@ class UpdateFileManager:
 
         self.update_period = conf.update_period()
 
-        self.path_to_ti_files = conf.remote_ti_data_path()
-        if not os.path.exists(self.path_to_ti_files):
-            os.mkdir(self.path_to_ti_files)
+        self.path_to_remote_ti_files = conf.remote_ti_data_path()
+        if not os.path.exists(self.path_to_remote_ti_files):
+            os.mkdir(self.path_to_remote_ti_files)
 
         self.ti_feed_tuples = conf.ti_files()
         self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
@@ -542,7 +542,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
-            full_path = f'{self.path_to_ti_files}/{file_name_to_download}'
+            full_path = os.path.join(self.path_to_remote_ti_files, file_name_to_download)
             self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
@@ -1424,9 +1424,17 @@ class UpdateFileManager:
 
     def update_online_whitelist(self, response):
         """
-        Updates online tranco whitelist defined in slips.conf online_whitelist key
+        Updates online tranco whitelist defined in slips.conf online_whitelist key in the db
         """
-        pass
+        # write to the file so we don't store the 10k domains in memory
+        online_whitelist_download_path = os.path.join(self.path_to_remote_ti_files, 'tranco-top-10000-whitelist')
+        with open(online_whitelist_download_path, 'w') as f:
+            f.write(response.text)
+
+        with open(online_whitelist_download_path, 'r') as f:
+            while line := f.readline():
+                domain = line.split(',')[1]
+                __database__.store_tranco_whitelisted_domain(domain)
 
     async def update(self) -> bool:
         """
