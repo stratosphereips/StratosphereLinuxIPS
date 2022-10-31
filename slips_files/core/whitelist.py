@@ -450,8 +450,8 @@ class Whitelist:
             self.print(
                 f"Can't find {self.whitelist_path}, using slips default whitelist.conf instead"
             )
-            if self.whitelist_path != utils.whitelist_path():
-                self.whitelist_path = utils.whitelist_path()
+            if self.whitelist_path != 'config/whitelist.conf':
+                self.whitelist_path = 'config/whitelist.conf'
                 self.read_whitelist()
 
         # store everything in the cache db because we'll be needing this info in the evidenceProcess
