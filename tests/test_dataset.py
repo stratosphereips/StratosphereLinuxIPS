@@ -134,7 +134,21 @@ def test_pcap(
             'test4/',
             6662,
         ),
-        ('dataset/test5-mixed.binetflow', 4, 'Long Connection', 'test5/', 6655),
+        (
+                'dataset/test5-mixed.binetflow',
+                 4,
+                 'Long Connection',
+                 'test5/',
+                 6655
+         ),
+        (
+            'dataset/test11-portscan.binetflow',
+            1,
+            'ICMP scanning 110.128.128.128',
+            'test11/',
+            6669
+
+        )
     ],
 )
 def test_binetflow(
