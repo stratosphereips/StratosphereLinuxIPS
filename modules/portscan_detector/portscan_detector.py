@@ -683,17 +683,67 @@ class PortScanProcess(Module, multiprocessing.Process):
                     ):
                         self.cache_det_thresholds[cache_key] = number_of_flows
                         pkts_sent = scan_info['spkts']
-                        self.set_evidence_pingscan()
+                        timestamp = scan_info['stime']
+                        self.set_evidence_icmpscan(
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            icmp_flows_uids,
+                            scanned_ip,
+                            attack
+                        )
             elif amount_of_scanned_ips > 1:
                 for scanned_ip in scanned_ips:
                     pass
 
 
-    def set_evidence_pingscan(self):
-        pass
+    def set_evidence_icmpscan(
+            self,
+            timestamp,
+            pkts_sent,
+            protocol,
+            profileid,
+            twid,
+            icmp_flows_uids,
+            scanned_ip,
+            attack
+    ):
 
-
-
+        type_detection = 'srcip'
+        type_evidence = attack
+        source_target_tag = 'Recon'
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        srcip = profileid.split('_')[-1]
+        detection_info = srcip
+        confidence = self.calculate_confidence(pkts_sent)
+        description = (
+                        f'new {attack} to IP {scanned_ip} from {srcip}. '
+                        f'Total packets sent: {pkts_sent}. '
+                        f'Confidence: {confidence}. by Slips'
+                    )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            conn_count=pkts_sent,
+            source_target_tag=source_target_tag,
+            proto=protocol,
+            profileid=profileid,
+            twid=twid,
+            uid=icmp_flows_uids,
+        )
+        # Set 'malicious' label in the detected profile
+        __database__.set_profile_module_label(
+            profileid, type_evidence, self.malicious_label
+        )
 
     def run(self):
         utils.drop_root_privs()
