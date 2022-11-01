@@ -45,10 +45,11 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.timeout = 0.0000001
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips_threshold = 6
+        self.port_scan_minimum_dips = 6
         # The minimum amount of ports to scan in vertical scan
-        self.port_scan_minimum_dports_threshold = 5
-        self.pingscan_minimum_flows_threshold = 5
+        self.port_scan_minimum_dports = 5
+        self.pingscan_minimum_flows = 5
+        self.pingscan_minimum_scanned_ips = 3
         # time in seconds to wait before alerting port scan
         self.time_to_wait = 10
         # list of tuples, each tuple is the args to setevidence
@@ -154,7 +155,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # The idea is that after X dips we detect a connection. And then
                     # we 'reset' the counter until we see again X more.
                     if (
-                        amount_of_dips % self.port_scan_minimum_dips_threshold == 0
+                        amount_of_dips % self.port_scan_minimum_dips == 0
                         and prev_amount_dips < amount_of_dips
                     ):
                         # Get the total amount of pkts sent to the same port from all IPs
@@ -521,7 +522,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # And then we 'reset' the counter
                     # until we see again X more.
                     if (
-                            amount_of_dports % self.port_scan_minimum_dports_threshold == 0
+                            amount_of_dports % self.port_scan_minimum_dports == 0
                             and prev_amount_dports < amount_of_dports
                     ):
                         # Get the total amount of pkts sent different ports on the same host
@@ -668,7 +669,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     number_of_flows = len(icmp_flows_uids)
 
                     cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
-                    # how many flows were last seen doing this attack to this dstip
+                    # how many flows were last seen responsible for this attack to this dstip
                     prev_flows = self.cache_det_thresholds.get(cache_key, 0)
 
                     # We detect a scan every Threshold. So we detect when there
@@ -677,7 +678,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # And then we 'reset' the counter
                     # until we see again X more.
                     if (
-                            number_of_flows % self.pingscan_minimum_flows_threshold == 0
+                            number_of_flows % self.pingscan_minimum_flows == 0
                             and prev_flows < number_of_flows
                     ):
                         self.cache_det_thresholds[cache_key] = number_of_flows
@@ -693,9 +694,31 @@ class PortScanProcess(Module, multiprocessing.Process):
                             scanned_ip,
                             attack
                         )
+
             elif amount_of_scanned_ips > 1:
-                for scanned_ip in scanned_ips:
-                    pass
+                # this srcip is scanning several IPs (a network maybe)
+
+                cache_key = f'{profileid}:{twid}:scanned_ips:{amount_of_scanned_ips}:{attack}'
+                # how many flows were last seen responsible for this attack to this dstip
+                prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
+
+                # detect every 2, 4, 8 scanned IPs
+                if (
+                        amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
+                        and prev_scanned_ips < amount_of_scanned_ips
+                ):
+
+                    pkts_sent = 0
+                    uids = []
+                    for scanned_ip, scan_info in scanned_ips.items():
+                        # get the total amount of pkts sent to all scanned IP
+                        pkts_sent += scan_info['spkts']
+                        # get all flows that were part of this scan
+                        uids.extend(scan_info['uid'])
+                        timestamp = scan_info['stime']
+
+                    # todo set evidence
+
 
 
     def set_evidence_icmpscan(
@@ -719,8 +742,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         detection_info = srcip
         confidence = self.calculate_confidence(pkts_sent)
         description = (
-                        f' ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
-                        f'Total packets sent: {pkts_sent}. '
+                        f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
+                        f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
                         f'Confidence: {confidence}. by Slips'
                     )
         __database__.setEvidence(
