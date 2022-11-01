@@ -48,6 +48,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.port_scan_minimum_dips_threshold = 6
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports_threshold = 5
+        self.pingscan_minimum_flows_threshold = 5
         # time in seconds to wait before alerting port scan
         self.time_to_wait = 10
         # list of tuples, each tuple is the args to setevidence
@@ -631,6 +632,69 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
+    def check_icmp_scan(self, profileid, twid):
+        #
+        # Map the ICMP port scanned to it's attack
+        port_map = {
+            '0x0008': 'AddressScan',
+            '0x0013' : 'TimestampScan',
+            '0x0014' : 'TimestampScan',
+            '0x0017' : 'AddressMaskScan',
+            '0x0018' : 'AddressMaskScan',
+        }
+
+        direction = 'Src'
+        role = 'Client'
+        type_data = 'Ports'
+        protocol = 'ICMP'
+        state = 'Established'
+        sports = __database__.getDataFromProfileTW(
+                    profileid, twid, direction, state, protocol, role, type_data
+                )
+        for sport in sports:
+            # get the name of this attack
+            attack = port_map.get(sport)
+            if not attack:
+                return
+
+            # get the IPs attacked
+            scanned_ips = sport['dstips']
+
+            # are we pinging a single IP or ping scanning several IPs?
+            amount_of_scanned_ips = len(scanned_ips)
+            if amount_of_scanned_ips == 1:
+                # how many icmp flows were found?
+                for scanned_ip, scan_info in scanned_ips.items():
+                    icmp_flows_uids = scan_info['uid']
+                    number_of_flows = len(icmp_flows_uids)
+
+                    cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
+                    # how many flows were last seen doing this attack to this dstip on this port?
+                    prev_flows = self.cache_det_thresholds.get(cache_key, 0)
+
+                    # We detect a scan every Threshold. So we detect when there
+                    # is 5,10,15 etc. scan to the same dstip on the same port
+                    # The idea is that after X dips we detect a connection.
+                    # And then we 'reset' the counter
+                    # until we see again X more.
+                    if (
+                            number_of_flows % self.pingscan_minimum_flows_threshold == 0
+                            and prev_flows < number_of_flows
+                    ):
+                        self.cache_det_thresholds[cache_key] = number_of_flows
+                        pkts_sent = scan_info['spkts']
+                        self.set_evidence_pingscan()
+            elif amount_of_scanned_ips > 1:
+                for scanned_ip in scanned_ips:
+                    pass
+
+
+    def set_evidence_pingscan(self):
+        pass
+
+
+
+
     def run(self):
         utils.drop_root_privs()
         self.timer_thread_vertical_ps.start()
@@ -671,6 +735,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     self.check_horizontal_portscan(profileid, twid)
                     self.check_vertical_portscan(profileid, twid)
+                    self.check_icmp_scan()
 
                 message = self.c2.get_message(timeout=self.timeout)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
