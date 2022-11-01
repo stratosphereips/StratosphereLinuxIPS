@@ -15,6 +15,8 @@
 - Better detection of suspicious user agents
 - Fix importing and exporting to warden servers
 - whitelist top tranco top 10k domains for fewer false positive alerts
+- Detect ICMP scans in netflow files
+- 
 
 -0.9.5
 * Slips

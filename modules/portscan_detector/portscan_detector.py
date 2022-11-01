@@ -49,7 +49,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         self.pingscan_minimum_flows = 5
-        self.pingscan_minimum_scanned_ips = 3
+        self.pingscan_minimum_scanned_ips = 5
         # time in seconds to wait before alerting port scan
         self.time_to_wait = 10
         # list of tuples, each tuple is the args to setevidence
@@ -701,7 +701,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # how many dstips scanned by this srcip on this port?
                 cache_key = f'{profileid}:{twid}:{attack}'
                 prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
-                # detect every 2, 4, 8 scanned IPs
+                # detect every 5, 10, 15 scanned IPs
                 if (
                         amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
                         and prev_scanned_ips < amount_of_scanned_ips
