@@ -868,8 +868,10 @@ We detect a scan every threshold. So we generate an evidence when there is
 
 
 We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
-and ICMP-AddressMaskScan using Slips' own zeek script located in 
-zeek-scripts/icmps-scans.zeek
+and ICMP-AddressMaskScan 
+
+Slips does this detection using Slips' own zeek script located in 
+zeek-scripts/icmps-scans.zeek for zeek and pcap files and using the portscan module for binetflow files.
 
 ## Connections Made By Slips
 

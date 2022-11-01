@@ -627,7 +627,12 @@ ICMP messages can be used to find out which hosts are alive in a network.
 Slips relies on Zeek detecions for this, but it is done with our own Zeek scripts located in 
 zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
-we detect an icmp scan every 5,10,15 etc. different icmp packets.
+We detect a scan every threshold. So we generate an evidence when there is 
+5,10,15, .. etc. ICMP established connections to different IPs.
+
+Slips does this detection using Slips' own zeek script located in 
+zeek-scripts/icmps-scans.zeek for zeek and pcap files and using the portscan module for binetflow files.
+
 
 # Connections Made By Slips
 
