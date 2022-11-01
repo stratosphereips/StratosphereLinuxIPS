@@ -667,9 +667,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                 for scanned_ip, scan_info in scanned_ips.items():
                     icmp_flows_uids = scan_info['uid']
                     number_of_flows = len(icmp_flows_uids)
-
+                    # how many flows are responsible for this attack
+                    # (from this srcip to this dstip on the same port)
                     cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
-                    # how many flows were last seen responsible for this attack to this dstip
                     prev_flows = self.cache_det_thresholds.get(cache_key, 0)
 
                     # We detect a scan every Threshold. So we detect when there
@@ -685,23 +685,22 @@ class PortScanProcess(Module, multiprocessing.Process):
                         pkts_sent = scan_info['spkts']
                         timestamp = scan_info['stime']
                         self.set_evidence_icmpscan(
+                            amount_of_scanned_ips,
                             timestamp,
                             pkts_sent,
                             protocol,
                             profileid,
                             twid,
                             icmp_flows_uids,
-                            scanned_ip,
-                            attack
+                            attack,
+                            scanned_ip=scanned_ip
                         )
 
             elif amount_of_scanned_ips > 1:
                 # this srcip is scanning several IPs (a network maybe)
-
-                cache_key = f'{profileid}:{twid}:scanned_ips:{amount_of_scanned_ips}:{attack}'
-                # how many flows were last seen responsible for this attack to this dstip
+                # how many dstips scanned by this srcip on this port?
+                cache_key = f'{profileid}:{twid}:{attack}'
                 prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
-
                 # detect every 2, 4, 8 scanned IPs
                 if (
                         amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
@@ -717,22 +716,33 @@ class PortScanProcess(Module, multiprocessing.Process):
                         uids.extend(scan_info['uid'])
                         timestamp = scan_info['stime']
 
-                    # todo set evidence
+                    self.set_evidence_icmpscan(
+                            amount_of_scanned_ips,
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            uids,
+                            attack
+                        )
+                    self.cache_det_thresholds[cache_key] = amount_of_scanned_ips
 
 
 
     def set_evidence_icmpscan(
             self,
+            number_of_scanned_ips,
             timestamp,
             pkts_sent,
             protocol,
             profileid,
             twid,
             icmp_flows_uids,
-            scanned_ip,
-            attack
+            attack,
+            scanned_ip=False
     ):
-
+        confidence = self.calculate_confidence(pkts_sent)
         type_detection = 'srcip'
         type_evidence = attack
         source_target_tag = 'Recon'
@@ -740,12 +750,20 @@ class PortScanProcess(Module, multiprocessing.Process):
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
         detection_info = srcip
-        confidence = self.calculate_confidence(pkts_sent)
-        description = (
-                        f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
-                        f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
-                        f'Confidence: {confidence}. by Slips'
-                    )
+
+        if number_of_scanned_ips == 1:
+            description = (
+                            f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
+                            f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                            f'Confidence: {confidence}. by Slips'
+                        )
+        else:
+            description = (
+                f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
+                f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                f'Confidence: {confidence}. by Slips'
+            )
+
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -766,6 +784,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
+
 
     def run(self):
         utils.drop_root_privs()
