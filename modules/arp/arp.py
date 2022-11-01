@@ -34,8 +34,6 @@ class Module(Module, multiprocessing.Process):
         self.cache_arp_requests = {}
         # Threshold to use to detect a port scan. How many arp minimum are required?
         self.arp_scan_threshold = 5
-        # get the default gateway
-        self.gateway = __database__.get_gateway_ip()
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
@@ -163,12 +161,11 @@ class Module(Module, multiprocessing.Process):
         # It shouldn't be marked as an arp scan
         saddr = profileid.split('_')[1]
 
-        # Dont detect arp scan from the GW router
-        # Don't use 'in' since 192.168.1.1 is in 192.168.1.117 and that is wrong
-        # if self.gateway == saddr:
-        #     return False
-        # if saddr == '0.0.0.0':
-        #     return False
+        # Don't detect arp scan from the GW router
+        if __database__.get_gateway_ip() == saddr:
+            return False
+        if saddr == '0.0.0.0':
+            return False
 
         daddr_info = {
             daddr: {
@@ -210,15 +207,12 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
-
-
                 conn_count = len(daddrs)
                 uids = get_uids()
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
                     self.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
-
                 else:
                     # after alerting once, wait 10s to see if more evidence are coming
                     self.pending_arp_scan_evidence.put((ts, profileid, twid, uids, conn_count))
