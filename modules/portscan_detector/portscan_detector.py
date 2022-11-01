@@ -633,14 +633,13 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
 
     def check_icmp_scan(self, profileid, twid):
-        #
         # Map the ICMP port scanned to it's attack
         port_map = {
             '0x0008': 'AddressScan',
-            '0x0013' : 'TimestampScan',
-            '0x0014' : 'TimestampScan',
-            '0x0017' : 'AddressMaskScan',
-            '0x0018' : 'AddressMaskScan',
+            '0x0013': 'TimestampScan',
+            '0x0014': 'TimestampScan',
+            '0x0017': 'AddressMaskScan',
+            '0x0018': 'AddressMaskScan',
         }
 
         direction = 'Src'
@@ -651,17 +650,17 @@ class PortScanProcess(Module, multiprocessing.Process):
         sports = __database__.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
-        for sport in sports:
+        for sport, sport_info in sports.items():
             # get the name of this attack
             attack = port_map.get(sport)
             if not attack:
                 return
 
             # get the IPs attacked
-            scanned_ips = sport['dstips']
-
+            scanned_ips = sport_info['dstips']
             # are we pinging a single IP or ping scanning several IPs?
             amount_of_scanned_ips = len(scanned_ips)
+
             if amount_of_scanned_ips == 1:
                 # how many icmp flows were found?
                 for scanned_ip, scan_info in scanned_ips.items():
@@ -669,7 +668,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     number_of_flows = len(icmp_flows_uids)
 
                     cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
-                    # how many flows were last seen doing this attack to this dstip on this port?
+                    # how many flows were last seen doing this attack to this dstip
                     prev_flows = self.cache_det_thresholds.get(cache_key, 0)
 
                     # We detect a scan every Threshold. So we detect when there
@@ -720,7 +719,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         detection_info = srcip
         confidence = self.calculate_confidence(pkts_sent)
         description = (
-                        f'new {attack} to IP {scanned_ip} from {srcip}. '
+                        f' ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
                         f'Total packets sent: {pkts_sent}. '
                         f'Confidence: {confidence}. by Slips'
                     )
@@ -785,7 +784,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     self.check_horizontal_portscan(profileid, twid)
                     self.check_vertical_portscan(profileid, twid)
-                    self.check_icmp_scan()
+                    self.check_icmp_scan(profileid, twid)
 
                 message = self.c2.get_message(timeout=self.timeout)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))

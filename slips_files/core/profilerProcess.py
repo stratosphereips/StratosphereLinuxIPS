@@ -2517,8 +2517,6 @@ class ProfilerProcess(multiprocessing.Process):
                                 }
                             )
                         _ = self.column_idx['starttime']
-                        # Yes
-                        # Quickly process all lines
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
