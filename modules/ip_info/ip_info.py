@@ -403,10 +403,14 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     # GW
-    def get_gateway_using_ip_route(self):
+    def get_gateway_ip(self):
         """
-        Tries to get the default gateway IP address using ip route
+        Slips tries different ways to get the ip of the default gateway
+        this method tries to get the default gateway IP address using ip route
         """
+        if '-i' not in sys.argv:
+            return False
+
         gateway = False
         if platform.system() == 'Darwin':
             route_default_result = subprocess.check_output(
@@ -478,10 +482,14 @@ class Module(Module, multiprocessing.Process):
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
 
+
     def run(self):
         utils.drop_root_privs()
 
         self.wait_for_dbs()
+
+        if ip := self.get_gateway_ip():
+            __database__.set_default_gateway('IP', ip)
 
         # Main loop function
         while True:
