@@ -143,7 +143,7 @@ def test_pcap(
          ),
         (
             'dataset/test11-portscan.binetflow',
-            1,
+            0,
             'ICMP scanning 110.128.128.128',
             'test11/',
             6669
