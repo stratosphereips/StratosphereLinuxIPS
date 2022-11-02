@@ -420,7 +420,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
-        Check if we are trying to assign the gateway mac to a public IP
+        Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
         """
 
         MAC = MAC_info.get('MAC','')
@@ -431,7 +431,7 @@ class Database(ProfilingFlowsDatabase, object):
             # gateway ip already set using this function
             return True if __database__.get_gateway_MAC() == MAC else False
 
-
+        # if we saw the same mac assigned to 3+ IPs, we know this is the gw mac
         if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
             # we are sure this is the gw mac,
             # set it if we don't already have it in the db
@@ -1877,7 +1877,8 @@ class Database(ProfilingFlowsDatabase, object):
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac
         """
-        self.r.hset('default_gateway', address_type, address)
+        if not self.get_gateway_ip():
+            self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
