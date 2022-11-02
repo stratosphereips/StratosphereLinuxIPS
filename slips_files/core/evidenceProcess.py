@@ -678,6 +678,7 @@ class EvidenceProcess(multiprocessing.Process):
                     self.addDataToJSONFile(IDEA_dict)
                     self.add_to_log_folder(IDEA_dict)
                     __database__.set_evidence_for_profileid(IDEA_dict)
+                    __database__.publish('report_to_peers', json.dumps(data))
 
                     #
                     # Analysis of evidence for blocking or not

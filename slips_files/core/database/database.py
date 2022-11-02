@@ -53,7 +53,10 @@ class Database(ProfilingFlowsDatabase, object):
         'new_software',
         'p2p_data_request',
         'remove_old_files',
-        'export_evidence'
+        'export_evidence',
+        'p2p_data_request',
+        'p2p_gopy',
+        'report_to_peers',
     }
 
     """ Database object management """
@@ -306,7 +309,7 @@ class Database(ProfilingFlowsDatabase, object):
             # For now duration of the TW is fixed
             self.r.hset(profileid, 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.update_threat_level(profileid, 'info')
+            self.r.hset(profileid, 'threat_level', 0)
             self.r.hset(profileid, 'confidence', 0.05)
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
@@ -837,7 +840,7 @@ class Database(ProfilingFlowsDatabase, object):
 
             # When a new TW is created for this profile,
             # change the threat level of the profile to 0 and confidence to 0.05
-            self.update_threat_level(profileid, 'info')
+            self.r.hset(profileid, 'threat_level', 0)
             self.r.hset(profileid, 'confidence', 0.5)
 
             return twid

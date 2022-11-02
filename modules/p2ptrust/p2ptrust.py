@@ -126,7 +126,7 @@ class Trust(Module, multiprocessing.Process):
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
 
-        self.timeout = None
+        self.timeout = 0.0000001
         # they have to be defined here because the variable name utils is already taken
         # TODO rename one of them
         self.threat_levels = {
@@ -229,7 +229,7 @@ class Trust(Module, multiprocessing.Process):
 
     def new_evidence_callback(self, msg: Dict):
         """
-        This function is called whenever a msg arrives to the evidence_added channel,
+        This function is called whenever a msg arrives to the report_to_peers channel,
         It compares the score and confidence of the given IP and decides whether or not to
         share it accordingly
         """
@@ -252,25 +252,21 @@ class Trust(Module, multiprocessing.Process):
         threat_level = data.get('threat_level', False)
         if not threat_level:
             self.print(
-                f"IP/domain {detection_info} doesn't have a threat_level. not sharing to the network.",
-                0,
-                2,
+                f"IP {detection_info} doesn't have a threat_level. not sharing to the network.", 0,2,
             )
             return
         if not confidence:
             self.print(
-                f"IP/domain {detection_info} doesn't have a confidence. not sharing to the network.",
-                0,
-                2,
+                f"IP {detection_info} doesn't have a confidence. not sharing to the network.", 0, 2,
             )
             return
 
         # get the int representing this threat_level
         score = self.threat_levels[threat_level]
-        # todo what we're currently sharing is the threat level(int) of the evidence cause by this ip
+        # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
 
         # todo when we genarate a new evidence,
-        #  we give it a score and a tl, but we don't update the IP_Info and give it(the ip) a score in th db!
+        #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
         # compare slips data with data in go
@@ -523,18 +519,18 @@ class Trust(Module, multiprocessing.Process):
         # no data in db - this happens when testing, if there is not enough data on peers
         if combined_score is None:
             self.print(
-                f'No data received from network about {ip_address}\n', 0, 2
+                f'No data received from the network about {ip_address}\n', 0, 2
             )
             # print(f"[DEBUGGING] No data received from the network about {ip_address}\n")
         else:
             self.print(
                 f'The Network shared some data about {ip_address}, '
-                f'Shared data: score={combined_score}, confidence={combined_confidence} saving it now!\n',
+                f'Shared data: score={combined_score}, confidence={combined_confidence} saving it to  now!\n',
                 0,
                 2,
             )
 
-            # save it to IPsInfo hash in p2p4slips key in the db
+            # save it to IPsInfo hash in p2p4slips key in the db AND p2p_reports key
             p2p_utils.save_ip_report_to_db(
                 ip_address,
                 combined_score,
@@ -573,6 +569,9 @@ class Trust(Module, multiprocessing.Process):
         __database__.publish('new_blame', data)
 
     def shutdown_gracefully(self):
+        if self.start_pigeon:
+            self.pigeon.send_signal(signal.SIGINT)
+        self.trust_db.__del__()
         __database__.publish('finished_modules', self.name)
 
     def run(self):
@@ -587,40 +586,47 @@ class Trust(Module, multiprocessing.Process):
                 )
                 return
 
-            pubsub = __database__.r.pubsub()
-
-            # callbacks for subscribed channels
-            callbacks = {
-                # channel to send msgs to whenever slips needs info from other peers about an ip
-                self.p2p_data_request_channel: self.data_request_callback,
-                # self.slips_update_channel: self.update_callback,
-                # this channel receives peers requests/updates
-                self.gopy_channel: self.gopy_callback,
-                'evidence_added': self.new_evidence_callback,
-            }
-
-            pubsub.subscribe(**callbacks, ignore_subscribe_messages=True)
-
+            self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
+            # channel to send msgs to whenever slips needs info from other peers about an ip
+            self.c2 = __database__.subscribe(self.p2p_data_request_channel, ignore_subscribe_messages=True)
+            # this channel receives peers requests/updates
+            self.c3 = __database__.subscribe(self.gopy_channel, ignore_subscribe_messages=True)
+            # should call self.update_callback
+            # self.c4 = __database__.subscribe(self.slips_update_channel)
             while True:
+
+                message = self.c1.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'report_to_peers'):
+                    self.new_evidence_callback(message)
+
+                message = self.c2.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, self.p2p_data_request_channel):
+                    self.data_request_callback(message)
+
+                message = self.c3.get_message(timeout=self.timeout)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, self.gopy_channel):
+                    self.gopy_callback(message)
+
+
+
                 ret_code = self.pigeon.poll()
                 if ret_code is not None:
                     self.print(
                         f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
                     )
                     return
-
-                # get_message() also let redis library to take execution time and call subscribed callbacks if needed
-                message = pubsub.get_message()
-
-                # listen to slips kill signal and quit
-                if message and message['data'] == 'stop_process':
-                    if self.start_pigeon:
-                        self.pigeon.send_signal(signal.SIGINT)
-
-                    self.trust_db.__del__()
-                    break
-
-                time.sleep(0.1)
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()

@@ -202,6 +202,9 @@ class TrustDB:
         return result
 
     def get_opinion_on_ip(self, ipaddress: str):
+        """
+        :param ipaddress: The ip we're asking other peers about
+        """
         reports_cur = self.conn.execute(
             'SELECT reports.reporter_peerid AS reporter_peerid,'
             '       MAX(reports.update_time) AS report_timestamp,'
@@ -245,6 +248,11 @@ class TrustDB:
                 'peerid': reporter_peerid,
                 'ipaddress': reporter_ipaddress,
             }
+
+            # probably what this query means is:
+            # get latest reports by this peer, whether using it's peer ID or IP
+            # within this time range: last update time until now
+
             slips_reputation_cur = self.conn.execute(
                 'SELECT * FROM (  '
                 '    SELECT b.update_time AS lower_bound,  '
