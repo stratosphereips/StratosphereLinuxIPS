@@ -87,7 +87,11 @@ class Trust(Module, multiprocessing.Process):
         used_interface = self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
-        data_dir = os.path.join(output_dir, 'p2ptrust_runtime/')
+        # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
+        # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
+        # generate new keys, and therefore new peerid!
+        # store the keys in slips main dir so they don't change every run
+        data_dir = os.path.join(os.getcwd(), 'p2ptrust_runtime/')
         # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
 
         # create data folder
