@@ -66,7 +66,6 @@ class Trust(Module, multiprocessing.Process):
     def __init__(
         self,
         output_queue: multiprocessing.Queue,
-        config: configparser.ConfigParser,
         redis_port: int,
         pigeon_port=6668,
         rename_with_port=False,
