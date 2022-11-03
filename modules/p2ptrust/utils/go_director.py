@@ -140,6 +140,7 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == 'blame':
+            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
             # which gives the report to evidenceProcess to decide whether to block or not
@@ -323,9 +324,8 @@ class GoDirector:
         )
         if evaluation != None:
             self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}',
-                2,
-                0,
+                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+
             )
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
@@ -394,7 +394,7 @@ class GoDirector:
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
-
+        # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
         # save all report info in the db
         report_info = {
             'reporter':reporter,

@@ -1065,9 +1065,10 @@ class ProfilingFlowsDatabase(object):
 
     def store_p2p_report(self, ip: str, report_data: dict):
         """
-        This is answers about IPs slips asked other peers for.
+        stores answers about IPs slips asked other peers for.
         """
         self.r.hset('p2p_reports', ip, json.dumps(report_data))
+
 
     def add_out_http(
         self,

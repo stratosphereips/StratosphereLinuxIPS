@@ -149,6 +149,7 @@ def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
     }
 
     # store it in p2p_reports key
+    # print(f"*** [debugging p2p] ***  stored a report about {ip} in p2p_Reports and IPsInfo keys")
     __database__.store_p2p_report(ip, report_data)
 
     # store it in IPsInfo key

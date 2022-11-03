@@ -66,7 +66,6 @@ class Trust(Module, multiprocessing.Process):
     def __init__(
         self,
         output_queue: multiprocessing.Queue,
-        config: configparser.ConfigParser,
         redis_port: int,
         pigeon_port=6668,
         rename_with_port=False,
@@ -84,11 +83,17 @@ class Trust(Module, multiprocessing.Process):
     ):
         # thi smodule is called automatically when slips starts
         multiprocessing.Process.__init__(self)
+        # flag to ensure slips prints multiaddress only once
+        self.mutliaddress_printed = False
         # get the used interface
         used_interface = self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
-        data_dir = os.path.join(output_dir, 'p2ptrust_runtime/')
+        # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
+        # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
+        # generate new keys, and therefore new peerid!
+        # store the keys in slips main dir so they don't change every run
+        data_dir = os.path.join(os.getcwd(), 'p2ptrust_runtime/')
         # data_dir = f'./output/{used_interface}/p2ptrust_runtime/'
 
         # create data folder
@@ -568,6 +573,15 @@ class Trust(Module, multiprocessing.Process):
         # give the report to evidenceProcess to decide whether to block or not
         __database__.publish('new_blame', data)
 
+    def get_multiaddress(self):
+        """
+        Function to read multiaddress from p2p.log, because it's generated and logged by the pigeon
+        """
+        with open(self.pigeon_logfile, 'r') as f:
+            while line := f.readline():
+                if 'Your Multiaddress Is: ' in line:
+                    return line
+
     def shutdown_gracefully(self):
         if self.start_pigeon:
             self.pigeon.send_signal(signal.SIGINT)
@@ -627,6 +641,13 @@ class Trust(Module, multiprocessing.Process):
                         f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
                     )
                     return
+                try:
+                    if not self.mutliaddress_printed:
+                        multiaddr = self.get_multiaddress()
+                        self.print(multiaddr[3:])
+                        self.mutliaddress_printed  = True
+                except:
+                    pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
