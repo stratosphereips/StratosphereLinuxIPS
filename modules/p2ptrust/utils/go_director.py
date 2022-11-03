@@ -340,6 +340,7 @@ class GoDirector:
     ):
         """
         Handle reported score and confidence
+        this is a blame report, which means another peer decided to block this ip
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -401,7 +402,7 @@ class GoDirector:
             'report_time':report_time,
         }
         report_info.update(evaluation)
-        __database__.store_p2p_report(key, report_info)
+        __database__.store_p2p_blame_report(key, report_info)
 
     def process_go_update(self, data: dict) -> None:
         """
