@@ -140,6 +140,7 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == 'blame':
+            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
             # which gives the report to evidenceProcess to decide whether to block or not
@@ -323,9 +324,8 @@ class GoDirector:
         )
         if evaluation != None:
             self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}',
-                2,
-                0,
+                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+
             )
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
@@ -340,7 +340,6 @@ class GoDirector:
     ):
         """
         Handle reported score and confidence
-        this is a blame report, which means another peer decided to block this ip
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -402,7 +401,7 @@ class GoDirector:
             'report_time':report_time,
         }
         report_info.update(evaluation)
-        __database__.store_p2p_blame_report(key, report_info)
+        __database__.store_p2p_report(key, report_info)
 
     def process_go_update(self, data: dict) -> None:
         """

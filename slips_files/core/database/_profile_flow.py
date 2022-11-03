@@ -1069,11 +1069,6 @@ class ProfilingFlowsDatabase(object):
         """
         self.r.hset('p2p_reports', ip, json.dumps(report_data))
 
-    def store_p2p_blame_report(self, ip: str, report_data: dict):
-        """
-        stores blame reports from other peers (when a peer decides to block an ip, it tells the network about it)
-        """
-        self.r.hset('p2p_blame_reports', ip, json.dumps(report_data))
 
     def add_out_http(
         self,
