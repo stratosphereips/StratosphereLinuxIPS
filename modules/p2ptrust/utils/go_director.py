@@ -395,7 +395,7 @@ class GoDirector:
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
-
+        print(f"@@@@@@@@@@@@@@@@@@  stored blame report about about  {key} from {reporter} in p2p_blame_reports key in the db ")
         # save all report info in the db
         report_info = {
             'reporter':reporter,
