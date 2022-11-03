@@ -83,6 +83,8 @@ class Trust(Module, multiprocessing.Process):
     ):
         # thi smodule is called automatically when slips starts
         multiprocessing.Process.__init__(self)
+        # flag to ensure slips prints multiaddress only once
+        self.mutliaddress_printed = False
         # get the used interface
         used_interface = self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
@@ -571,6 +573,15 @@ class Trust(Module, multiprocessing.Process):
         # give the report to evidenceProcess to decide whether to block or not
         __database__.publish('new_blame', data)
 
+    def get_multiaddress(self):
+        """
+        Function to read multiaddress from p2p.log, because it's generated and logged by the pigeon
+        """
+        with open(self.pigeon_logfile, 'r') as f:
+            while line := f.readline():
+                if 'Your Multiaddress Is: ' in line:
+                    return line
+
     def shutdown_gracefully(self):
         if self.start_pigeon:
             self.pigeon.send_signal(signal.SIGINT)
@@ -630,6 +641,13 @@ class Trust(Module, multiprocessing.Process):
                         f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
                     )
                     return
+                try:
+                    if not self.mutliaddress_printed:
+                        multiaddr = self.get_multiaddress()
+                        self.print(multiaddr[3:])
+                        self.mutliaddress_printed  = True
+                except:
+                    pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
