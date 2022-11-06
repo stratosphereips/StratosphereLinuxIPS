@@ -644,7 +644,6 @@ class Main:
         """
         # 15 mins from this time, all modules should be killed
         function_start_time = datetime.now()
-
         try:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)

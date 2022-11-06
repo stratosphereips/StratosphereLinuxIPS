@@ -42,7 +42,6 @@ class Module(Module, multiprocessing.Process):
         self.is_bundle_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.timeout = 0.00000001
         self.is_running_on_interface = True if '-i' in sys.argv else False
         self.export_to_taxii_thread = threading.Thread(
             target=self.send_to_server, daemon=True
@@ -343,7 +342,7 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                msg = self.c1.get_message(timeout=self.timeout)
+                msg = __database__.get_message(self.c1)
 
                 if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -368,8 +367,6 @@ class Module(Module, multiprocessing.Process):
                         if not exported_to_stix:
                             self.print('Problem in export_to_STIX()', 0, 3)
                             continue
-
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

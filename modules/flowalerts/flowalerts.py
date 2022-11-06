@@ -49,7 +49,6 @@ class Module(Module, multiprocessing.Process):
         self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
-        self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = __database__.get_gateway_ip()
@@ -1174,11 +1173,10 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        # Main loop function
         while True:
             try:
                 # ---------------------------- new_flow channel
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -1328,7 +1326,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_data_upload(sbytes, daddr, uid, profileid, twid)
 
                 # --- Detect successful SSH connections ---
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1336,7 +1334,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_successful_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1437,7 +1435,7 @@ class Module(Module, multiprocessing.Process):
                             )
 
                 # --- Detect maliciuos JA3 TLS servers ---
-                message = self.c4.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c4)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1518,7 +1516,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
 
-                message = self.c5.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c5)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1529,7 +1527,7 @@ class Module(Module, multiprocessing.Process):
                     self.detect_data_upload_in_twid(profileid, twid)
 
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
-                message = self.c6.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c6)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1569,7 +1567,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
                 # --- Detect malicious SSL certificates ---
-                message = self.c7.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c7)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1578,7 +1576,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_malicious_ssl(ssl_info)
 
                 # --- Detect Bad SMTP logins ---
-                message = self.c8.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c8)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1597,7 +1595,7 @@ class Module(Module, multiprocessing.Process):
 
 
                 # --- Detect multiple used SSH versions ---
-                message = self.c9.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c9)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

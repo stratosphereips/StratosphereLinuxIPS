@@ -22,7 +22,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0.00000001
         self.read_configuration()
 
     def read_configuration(self):
@@ -105,7 +104,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
 
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

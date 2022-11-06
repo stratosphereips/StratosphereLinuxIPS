@@ -28,7 +28,6 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
-        self.timeout = 0.0000001
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -431,7 +430,7 @@ class Module(Module, multiprocessing.Process):
                     # update ts of the new arp.log
                     self.arp_ts = time.time()
 
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -488,7 +487,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
                 # if the tw is closed, remove all its entries from the cache dict
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

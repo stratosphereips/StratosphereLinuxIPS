@@ -25,7 +25,6 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
-        # self.timeout = 0.0000001
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = sys.argv[sys.argv.index('-f') + 1]

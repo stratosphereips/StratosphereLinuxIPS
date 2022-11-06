@@ -76,7 +76,6 @@ class EvidenceProcess(multiprocessing.Process):
         # clear alerts.json
         self.jsonfile = self.clean_file(output_folder, 'alerts.json')
         self.print(f'Storing Slips logs in {output_folder}')
-        self.timeout = 0.00000001
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
 
@@ -568,7 +567,7 @@ class EvidenceProcess(multiprocessing.Process):
                 # Adapt this process to process evidence from only IPs and not profileid or twid
 
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
 
                 if utils.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
@@ -760,7 +759,8 @@ class EvidenceProcess(multiprocessing.Process):
                                         flow_datetime,
                                         accumulated_threat_level
                                     )
-                message = self.c2.get_message(timeout=self.timeout)
+
+                message = __database__.get_message(self.c2)
                 if utils.is_msg_intended_for(message, 'new_blame'):
                     data = message['data']
                     try:

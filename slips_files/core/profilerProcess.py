@@ -2543,7 +2543,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("Can't recognize input file type.")
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

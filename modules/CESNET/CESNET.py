@@ -30,7 +30,6 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.read_configuration()
         self.c1 = __database__.subscribe('export_evidence')
-        self.timeout = 0.00000001
         self.stop_module = False
 
     def print(self, text, verbose=1, debug=0):
@@ -321,7 +320,7 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -348,10 +347,10 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True
