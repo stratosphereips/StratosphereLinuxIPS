@@ -17,6 +17,8 @@
 - whitelist top tranco top 10k domains for fewer false positive alerts
 - Detect ICMP scans in netflow files
 - Fix P2P
+- Kill slips on  when redis ConnectionError occurs
+- Kill all modules after 15 mins to trying to stop them
 
 -0.9.5
 * Slips
