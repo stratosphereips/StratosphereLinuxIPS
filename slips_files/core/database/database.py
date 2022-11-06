@@ -258,21 +258,29 @@ class Database(ProfilingFlowsDatabase, object):
             print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
             return False
 
+    def is_connection_error_logged(self):
+        return True if self.r.get('logged_connection_error') else False
+
+    def mark_connection_error_as_logged(self):
+        """
+        When redis connection error occurs, to prevent every module from logging it to slips.log and the console,
+        set this variable in the db
+        """
+        self.r.set('logged_connection_error', 'True')
+
     def get_message(self, channel, timeout=0.0000001):
         """
-        Replace redis' get_message to be able to handle redis.exceptions.ConnectionError
+        Wrapper for redis' get_message() to be able to handle redis.exceptions.ConnectionError
+        notice: there has to be a timeout or the channel will wait forever and never receive a new msg
         """
-        # there has to be a timeout or the channel will wait forever and never receive a new msg
         try:
             return channel.get_message(timeout=timeout)
-        except redis.exceptions.ConnectionError:
-            self.publish('finished_modules', 'stop_slips')
-            # give slips 15 mins to stop all modules, after that slips.py will
-            # force kill them all
-            # without this line, modules will keep calling get_message and finished_modules
-            # channel will be flooded with 'stop_slips' msgs
-            time.sleep(900)
-
+        except redis.exceptions.ConnectionError as ex:
+            if not self.is_connection_error_logged():
+                self.publish('finished_modules', 'stop_slips')
+                self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}',0,1)
+                # make sure we publish the stop msg and log the error only once
+                self.mark_connection_error_as_logged()
 
 
     def set_slips_start_time(self):
