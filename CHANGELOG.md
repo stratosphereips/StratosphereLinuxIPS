@@ -19,6 +19,7 @@
 - Fix P2P
 - Kill slips on  when redis ConnectionError occurs
 - Kill all modules after 15 mins to trying to stop them
+- Keep track of profiles' past threat levels
 
 -0.9.5
 * Slips
