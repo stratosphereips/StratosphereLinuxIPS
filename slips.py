@@ -650,10 +650,10 @@ class Main:
             __database__.check_TW_to_close(close_all=True)
 
             # set analysis end date
-            ends_date = self.set_analysis_end_date()
+            end_date = self.set_analysis_end_date()
 
             start_time = __database__.get_slips_start_time()
-            analysis_time = utils.get_time_diff(start_time, ends_date, return_type='minutes')
+            analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
             # Stop the modules that are subscribed to channels

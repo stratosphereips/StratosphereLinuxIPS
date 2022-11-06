@@ -205,7 +205,7 @@ class Database(ProfilingFlowsDatabase, object):
         self.width = conf.get_tw_width_as_float()
 
 
-    def change_redis_limits(self):
+    def change_redis_limits(self, redis_client):
         """
         To fix redis closing/resetting the pub/sub connection, change redis soft and hard limits
         """
@@ -216,12 +216,9 @@ class Database(ProfilingFlowsDatabase, object):
         # soft limit for pub/sub clients: 2147483648 Bytes = 2GB over 10 mins,
         # means if the client has an output buffer bigger than 2GB
         # for, continuously, 10 mins, the connection gets closed.
-        self.r.config_set('client-output-buffer-limit', "normal 0 0 0 "
+        redis_client.config_set('client-output-buffer-limit', "normal 0 0 0 "
                                                         "slave 268435456 67108864 60 "
                                                         "pubsub 4294967296 2147483648 600")
-        self.rcache.config_set('client-output-buffer-limit', "normal 0 0 0 "
-                                                             "slave 268435456 67108864 60 "
-                                                             "pubsub 4294967296 2147483648 600")
 
     def start(self, redis_port):
         """Start the DB. Allow it to read the conf"""
@@ -244,7 +241,8 @@ class Database(ProfilingFlowsDatabase, object):
                     # to close slips files
                     self.r.flushdb()
 
-                self.change_redis_limits()
+                self.change_redis_limits(self.r)
+                self.change_redis_limits(self.rcache)
 
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
@@ -259,6 +257,23 @@ class Database(ProfilingFlowsDatabase, object):
         except redis.exceptions.ConnectionError as ex:
             print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
             return False
+
+    def get_message(self, channel, timeout=0.0000001):
+        """
+        Replace redis' get_message to be able to handle redis.exceptions.ConnectionError
+        """
+        # there has to be a timeout or the channel will wait forever and never receive a new msg
+        try:
+            return channel.get_message(timeout=timeout)
+        except redis.exceptions.ConnectionError:
+            self.publish('finished_modules', 'stop_slips')
+            # give slips 15 mins to stop all modules, after that slips.py will
+            # force kill them all
+            # without this line, modules will keep calling get_message and finished_modules
+            # channel will be flooded with 'stop_slips' msgs
+            time.sleep(900)
+
+
 
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
@@ -1682,7 +1697,10 @@ class Database(ProfilingFlowsDatabase, object):
         return self.pubsub
 
     def publish_stop(self):
-        """Publish stop command to terminate slips"""
+        """
+        Publish stop command to terminate slips
+        to shutdown slips gracefully, this function should only be used by slips.py
+        """
         all_channels_list = self.r.pubsub_channels()
         self.print('Sending the stop signal to all listeners', 0, 3)
         for channel in all_channels_list:
