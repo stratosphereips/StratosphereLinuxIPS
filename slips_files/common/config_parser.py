@@ -629,6 +629,22 @@ class ConfigParser(object):
 
         return period *24*60*60
 
+    def wait_for_modules_to_finish(self) -> int:
+        """ returns period in mins"""
+        wait_for_modules_to_finish = self.read_configuration(
+             'parameters', 'wait_for_modules_to_finish', '15 mins'
+        )
+        try:
+            period = utils.sanitize(wait_for_modules_to_finish)
+            period = period\
+                .replace('mins', '')\
+                .replace(' ','')\
+                .replace('s','')
+            period = float(period)
+        except ValueError:
+            period = 15
+
+        return period
 
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(

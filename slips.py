@@ -626,18 +626,21 @@ class Main:
                 pass
         return end_date
 
-    def should_kill_all_modules(self, function_start_time) -> bool:
+    def should_kill_all_modules(self, function_start_time, wait_for_modules_to_finish) -> bool:
         """
-        checks if 15 minutes has passed since the start of the function
+        checks if x minutes has passed since the start of the function
+        :param wait_for_modules_to_finish: time in mins to wait before force killing all modules
+                                            defined by wait_for_modules_to_finish in slips.conf
         """
         now = datetime.now()
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
-        return True if diff >= 15 else False
+        return True if diff >= wait_for_modules_to_finish else False
 
 
     def shutdown_gracefully(self):
         """
-        Wait for all modules to confirm that they're done processing or kill them after 15 mins of inactivity
+        Wait for all modules to confirm that they're done processing
+        or kill them after 15 mins
         """
         # 15 mins from this time, all modules should be killed
         function_start_time = datetime.now()
@@ -646,6 +649,8 @@ class Main:
             if not self.args.stopdaemon:
                 print('\n' + '-' * 27)
             print('Stopping Slips')
+
+            wait_for_modules_to_finish  = self.conf.wait_for_modules_to_finish()
             # close all tws
             __database__.check_TW_to_close(close_all=True)
 
@@ -744,7 +749,9 @@ class Main:
                                 # delay killing unstopped modules
                                 max_loops += 1
                                 # checks if 15 minutes has passed since the start of the function
-                                if self.should_kill_all_modules(function_start_time):
+                                if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
+                                    print(f"Killing modules that took more than "
+                                          f"{wait_for_modules_to_finish} mins to finish.")
                                     break
 
                 except KeyboardInterrupt:
