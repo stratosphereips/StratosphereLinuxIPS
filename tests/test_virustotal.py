@@ -67,7 +67,7 @@ error_msg = 'API key not found'
 if enough_quota != True:
     error_msg = f"server response {enough_quota}"
 
-pytestmark = pytest.mark.skipif(
+valid_api_key = pytest.mark.skipif(
     len(API_KEY) != 64 or enough_quota != True,
     reason=f'API KEY not found or you do not have quota. error: {error_msg}',
 )
@@ -103,6 +103,7 @@ def create_virustotal_instance(outputQueue):
 
 @pytest.mark.dependency(name='sufficient_quota')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
+@valid_api_key
 def test_interpret_rsponse(outputQueue, ip):
     virustotal = create_virustotal_instance(outputQueue)
     response = virustotal.api_query_(ip)
@@ -110,6 +111,7 @@ def test_interpret_rsponse(outputQueue, ip):
         assert type(ratio) == float
 
 @pytest.mark.dependency(depends=["sufficient_quota"])
+@valid_api_key
 def test_get_domain_vt_data(outputQueue):
     virustotal = create_virustotal_instance(outputQueue)
     assert virustotal.get_domain_vt_data('google.com') != False
