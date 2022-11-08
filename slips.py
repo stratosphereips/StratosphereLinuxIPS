@@ -62,11 +62,11 @@ class Main:
         # slips picks a redis port from the following range
         self.start_port = 32768
         self.end_port = 32850
+        self.conf = ConfigParser()
+        self.args = self.conf.get_args()
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
-            self.conf = ConfigParser()
-            self.args = self.conf.get_args()
             self.check_given_flags()
             if not self.args.stopdaemon:
                 # Check the type of input

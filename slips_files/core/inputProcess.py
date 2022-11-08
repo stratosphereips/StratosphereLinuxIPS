@@ -297,7 +297,7 @@ class InputProcess(multiprocessing.Process):
                     if not self.marked_as_growing and __database__.is_growing_zeek_dir():
                         # slips is given a dir that is growing i.e zeek dir running on an interface
                         # don't stop slips
-                        self.print("Detected running on an interface.")
+                        self.print("Detected running on a growing zeek dir")
                         self.bro_timeout = float('inf')
                         self.marked_as_growing = True
 
