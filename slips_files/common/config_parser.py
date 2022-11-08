@@ -135,13 +135,13 @@ class ConfigParser(object):
         popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'yes' in popups.lower() else False
+        return  'yes' in popups.lower() 
 
     def rotation(self):
         rotation = self.read_configuration(
             'parameters', 'rotation', 'yes'
         )
-        return True if 'yes' in rotation.lower() else False
+        return  'yes' in rotation.lower() 
 
     def store_a_copy_of_zeek_files(self):
         store_a_copy_of_zeek_files = self.read_configuration(
@@ -157,7 +157,7 @@ class ConfigParser(object):
         do_logs = self.read_configuration(
             'parameters', 'create_log_files', 'no'
         )
-        return True if 'yes' in do_logs else False
+        return  'yes' in do_logs 
 
     def whitelist_path(self):
         return self.read_configuration(
@@ -405,7 +405,7 @@ class ConfigParser(object):
         use_https = self.read_configuration(
             'exporting_alerts', 'use_https', 'false'
         )
-        return True if use_https.lower() == 'true' else False
+        return use_https.lower() == 'true'
 
     def discovery_path(self):
         return self.read_configuration(
@@ -634,6 +634,12 @@ class ConfigParser(object):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''
         ))
+
+    def store_zeek_files_in_the_output_dir(self):
+        store_in_output = self.read_configuration(
+         'parameters', 'store_zeek_files_in_the_output_dir', 'no'
+        )
+        return 'yes' in store_in_output
 
 
     def label(self):

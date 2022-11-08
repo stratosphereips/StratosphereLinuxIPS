@@ -82,7 +82,12 @@ class Main:
     def prepare_zeek_output_dir(self):
         from pathlib import Path
         without_ext = Path(self.input_information).stem
-        self.zeek_folder = f'./zeek_files_{without_ext}/'
+        # do we store the zeek dir inside the output dir?
+        store_zeek_files_in_the_output_dir = self.conf.store_zeek_files_in_the_output_dir()
+        if store_zeek_files_in_the_output_dir:
+            self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
+        else:
+            self.zeek_folder = f'zeek_files_{without_ext}/'
 
     def get_host_ip(self):
         """
@@ -1629,7 +1634,6 @@ class Main:
             )
 
             self.c1 = __database__.subscribe('finished_modules')
-
             inputProcess = InputProcess(
                 self.outputqueue,
                 self.profilerProcessQueue,
