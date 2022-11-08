@@ -396,7 +396,7 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 To enable blocking in slips, start slips with the ```-p``` flag. 
 
-This feature is only supported in linux using iptables.
+This feature is only supported in linux using iptables natively and using docker.
 
 ### Exporting Alerts Module
 
