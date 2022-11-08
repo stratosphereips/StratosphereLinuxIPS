@@ -42,7 +42,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.timeout = 0.0000001
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips = 6
@@ -794,7 +793,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             try:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -828,7 +827,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.check_vertical_portscan(profileid, twid)
                     self.check_icmp_scan(profileid, twid)
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

@@ -606,7 +606,7 @@ class InputProcess(multiprocessing.Process):
         """
         while True:
             # keep the rotated files for the period specified in slips.conf
-            msg = self.c1.get_message(timeout=self.timeout)
+            msg = __database__.get_message(self.c1)
             if msg and msg['data'] == 'stop_process':
                 return True
             if utils.is_msg_intended_for(msg, 'remove_old_files'):

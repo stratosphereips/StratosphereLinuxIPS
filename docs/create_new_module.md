@@ -78,7 +78,7 @@ self.c1 = __database__.subscribe('new_flow')
 So now everytime slips sees a new flow, you can access it from your module using the following line
 
 ```python
-message = self.c1.get_message(timeout=self.timeout)
+message = __database__.get_message(self.c1)
 ```
 
 The above line checks if a message was recieved on the channel you subscribed to.
@@ -109,7 +109,7 @@ def run(self):
         utils.drop_root_privs()
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -310,7 +310,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_flow')
-        self.timeout = 0.0000001
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -341,7 +341,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -439,14 +439,6 @@ This line starts the redis database, Slips mainly depends on redis Pub/Sub syste
 so if you need to listen on a specific channel after starting the db you can add the following line to __init__()
 
 
-```python
- self.timeout = 0.0000001
- ```
-
-Is used for listening on the redis channel, if your module will be using 1 channel, timeout=0 will work fine, but in order to 
-listen on more than 1 channel, you need to set a timeout so that the module won't be stck listening on the same channel forever.
-
-
 Now here's the run() function, this is the main function of each module, it's the one that gets executed when the module starts.
 
 All the code in this function should be run in a loop or else the module will finish execution and terminate.
@@ -460,7 +452,7 @@ utils.drop_root_privs()
 the above line is responsible for dropping root priveledges, so if slips starts with sudo and the module doesn't need the sudo permissions, we drop them.
 
 ```python
-message = self.c1.get_message(timeout=self.timeout)
+message = __database__.get_message(self.c1)
 ```
 
 The above line listen on the c1 channel ('new ip') that we subscribed to earlier.

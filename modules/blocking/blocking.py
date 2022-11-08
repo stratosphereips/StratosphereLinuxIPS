@@ -34,7 +34,6 @@ class Module(Module, multiprocessing.Process):
         if self.os == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
             sys.exit()
-        self.timeout = 0.00000001
         self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
@@ -363,7 +362,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

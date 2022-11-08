@@ -31,7 +31,6 @@ class Module(Module, multiprocessing.Process):
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.c2 = __database__.subscribe('new_downloaded_file')
-        self.timeout = 0.0000001
         self.__read_configuration()
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
@@ -949,7 +948,7 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 
@@ -998,7 +997,7 @@ class Module(Module, multiprocessing.Process):
                             twid
                         )
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 

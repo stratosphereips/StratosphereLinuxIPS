@@ -56,8 +56,6 @@ class Module(Module, multiprocessing.Process):
         self.http = urllib3.PoolManager(
             cert_reqs='CERT_REQUIRED', ca_certs=certifi.where()
         )
-        self.timeout = 0.0000001
-        self.counter = 0
         # create the queue thread
         self.api_calls_thread = threading.Thread(
             target=self.API_calls_thread, daemon=True
@@ -554,8 +552,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
-
+                message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 # exit module if there's a problem with the API key
                 if (
@@ -601,7 +598,7 @@ class Module(Module, multiprocessing.Process):
                         ) > self.update_period:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -635,7 +632,7 @@ class Module(Module, multiprocessing.Process):
                                 domain, cached_data
                             )
 
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -659,8 +656,6 @@ class Module(Module, multiprocessing.Process):
                             - cached_data['VirusTotal']['timestamp']
                         ) > self.update_period:
                             self.set_url_data_in_URLInfo(url, cached_data)
-
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

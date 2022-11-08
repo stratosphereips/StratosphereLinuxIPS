@@ -130,8 +130,6 @@ class Trust(Module, multiprocessing.Process):
         self.storage_name = 'IPsInfo'
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
-
-        self.timeout = 0.0000001
         # they have to be defined here because the variable name utils is already taken
         # TODO rename one of them
         self.threat_levels = {
@@ -609,7 +607,7 @@ class Trust(Module, multiprocessing.Process):
             # self.c4 = __database__.subscribe(self.slips_update_channel)
             while True:
 
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -617,7 +615,7 @@ class Trust(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'report_to_peers'):
                     self.new_evidence_callback(message)
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -625,15 +623,13 @@ class Trust(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, self.p2p_data_request_channel):
                     self.data_request_callback(message)
 
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, self.gopy_channel):
                     self.gopy_callback(message)
-
-
 
                 ret_code = self.pigeon.poll()
                 if ret_code is not None:

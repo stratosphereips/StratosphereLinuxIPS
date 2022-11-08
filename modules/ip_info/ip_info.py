@@ -42,7 +42,6 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
         self.c4 = __database__.subscribe('new_dhcp')
-        self.timeout = 0.0000001
         # update asn every 1 month
         self.update_period = 2592000
         # we can only getthe age of these tlds
@@ -494,7 +493,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -506,7 +505,7 @@ class Module(Module, multiprocessing.Process):
                     self.get_vendor(mac_addr, host_name, profileid)
                     self.check_if_we_have_pending_mac_queries()
 
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -523,7 +522,7 @@ class Module(Module, multiprocessing.Process):
                     if domain := flow_data.get('query', False):
                         self.get_age(domain)
 
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
@@ -567,7 +566,7 @@ class Module(Module, multiprocessing.Process):
                         self.get_rdns(ip)
 
 
-                message = self.c4.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c4)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                 if message and message['data'] == 'stop_process':
