@@ -535,7 +535,8 @@ You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf`
 Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info 
 
 But you can also enable storing a copy of zeek log files in the output 
-directory by setting ```store_a_copy_of_zeek_files``` to yes.
+directory after the analysis is done by setting ```store_a_copy_of_zeek_files``` to yes, 
+or while zeek is stil generating log files by setting ```store_zeek_files_in_the_output_dir``` to yes.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
 so this doesn't include deleted zeek logs.
 

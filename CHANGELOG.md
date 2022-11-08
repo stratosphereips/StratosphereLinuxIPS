@@ -17,6 +17,7 @@
 - whitelist top tranco top 10k domains for fewer false positive alerts
 - Detect ICMP scans in netflow files
 - Fix P2P
+- Add an option to store the zeek log files inside the output dir  
 
 -0.9.5
 * Slips
