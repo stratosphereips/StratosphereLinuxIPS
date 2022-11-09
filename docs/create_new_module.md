@@ -62,7 +62,7 @@ modules/
 
 The __init__.py is to make sure the module is treated as a python package, don't delete it.
 
-Remember to deleet the __pycache__ dir if it's copied to the new module using:
+Remember to delete the __pycache__ dir if it's copied to the new module using:
 
 ```rm -r modules/local_connection_detector/__pycache__```
 
