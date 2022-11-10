@@ -17,6 +17,7 @@
 - whitelist top tranco top 10k domains for fewer false positive alerts
 - Detect ICMP scans in netflow files
 - Fix P2P
+- Fix zeek rotating files on ctrl+c
 - Kill slips on  when redis ConnectionError occurs
 - Kill all modules after 15 mins to trying to stop them
 - Keep track of profiles' past threat levels
