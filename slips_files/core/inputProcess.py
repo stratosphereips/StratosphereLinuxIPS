@@ -41,7 +41,7 @@ class InputProcess(multiprocessing.Process):
             profilerqueue,
             input_type,
             input_information,
-            packet_filter,
+            cli_packet_filter,
             zeek_or_bro,
             zeek_folder,
             line_type,
@@ -62,11 +62,10 @@ class InputProcess(multiprocessing.Process):
         self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
+        self.packet_filter = False
+        if cli_packet_filter:
+            self.packet_filter = "'" + cli_packet_filter + "'"
         self.read_configuration()
-        # If we were given something from command line, has preference
-        # over the configuration file
-        if packet_filter:
-            self.packet_filter = "'" + packet_filter + "'"
         self.event_observer = None
         # set to true in unit tests
         self.testing = False
@@ -96,7 +95,9 @@ class InputProcess(multiprocessing.Process):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.packet_filter = conf.packet_filter()
+        # If we were given something from command line, has preference
+        # over the configuration file
+        self.packet_filter = self.packet_filter or conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
         self.rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
