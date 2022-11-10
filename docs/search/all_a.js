@@ -1,5 +1,8 @@
 var searchData=
 [
-  ['kill_5fredis_5fserver_307',['kill_redis_server',['../dd/dc7/classslips_1_1slips_1_1Main.html#ae74d845051426b59e7a3f2f6d7b0284e',1,'slips::slips::Main']]],
-  ['killdaemon_308',['killdaemon',['../d4/da4/classslips_1_1daemon_1_1Daemon.html#a57bfa70e3b059f7e4f998481ac8d3d42',1,'slips::daemon::Daemon']]]
+  ['ja3_5ffeed_5ftuples_576',['ja3_feed_tuples',['../d3/d73/classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a349422c3e898d9899626fdbce0a11b49',1,'slips::modules::update_manager::update_file_manager::UpdateFileManager']]],
+  ['ja3_5ffeeds_577',['ja3_feeds',['../d3/d73/classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aada405abae10485d717c5568bf6f72f2',1,'slips::modules::update_manager::update_file_manager::UpdateFileManager']]],
+  ['json_5fdata_2epy_578',['json_data.py',['../dc/d0d/json__data_8py.html',1,'']]],
+  ['jsonfile_579',['jsonfile',['../df/d8b/classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ad930368c6bbae176c3dfffa5e455a54b',1,'slips::slips_files::core::evidenceProcess::EvidenceProcess']]],
+  ['jwt_5fauth_5fpath_580',['jwt_auth_path',['../db/d75/classslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module.html#a1d2c8b166f5d0ef28d67785f41a471ae',1,'slips::modules::exporting_alerts::exporting_alerts::Module']]]
 ];
