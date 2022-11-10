@@ -30,7 +30,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_letters')
-        self.timeout = 0.00000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -66,9 +65,6 @@ class Module(Module, multiprocessing.Process):
         Set an evidence for malicious Tuple
         """
 
-        # to reduce false positives
-        if score < 0.99:
-            return
         type_detection = 'outTuple'
         detection_info = tupleid
         source_target_tag = 'Botnet'
@@ -172,7 +168,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -189,8 +185,8 @@ class Module(Module, multiprocessing.Process):
                     stime = data['stime']
 
                     if 'tcp' in tupleid.lower():
-                        # Define why this threshold
-                        threshold = 0.7
+                        # to reduce false positives
+                        threshold = 0.99
                         # function to convert each letter of behavioral model to ascii
                         behavioral_model = self.convert_input_for_module(
                             pre_behavioral_model

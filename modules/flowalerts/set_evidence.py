@@ -247,7 +247,7 @@ class Helper:
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
-        description = f'password guessing by Zeek enegine. {msg}'
+        description = f'password guessing by Zeek engine. {msg}'
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'
@@ -276,7 +276,7 @@ class Helper:
         confidence = 1
         threat_level = 'medium'
         description = f'horizontal port scan by Zeek engine. {msg}'
-        type_evidence = 'PortScanType2'
+        type_evidence = 'HorizontalPortscan'
         type_detection = 'dport'
         source_target_tag = 'Recon'
         detection_info = scanned_port
@@ -307,11 +307,11 @@ class Helper:
         threat_level = 'medium'
         # msg example: 192.168.1.200 has scanned 60 ports of 192.168.1.102
         description = f'vertical port scan by Zeek engine. {msg}'
-        type_evidence = 'PortScanType1'
+        type_evidence = 'VerticalPortscan'
         category = 'Recon.Scanning'
         type_detection = 'dstip'
         source_target_tag = 'Recon'
-        conn_count = int(msg.split('scanned')[1].split('ports')[0])
+        conn_count = int(msg.split('least ')[1].split(' unique')[0])
         detection_info = scanning_ip
         __database__.setEvidence(
             type_evidence,
@@ -520,7 +520,7 @@ class Helper:
         )
 
     def set_evidence_for_port_0_connection(
-        self, saddr, daddr, direction, profileid, twid, uid, timestamp
+        self, saddr, daddr, sport, dport, direction, profileid, twid, uid, timestamp
     ):
         """:param direction: 'source' or 'destination'"""
         confidence = 0.8
@@ -531,12 +531,8 @@ class Helper:
         type_evidence = 'Port0Connection'
         detection_info = saddr if direction == 'source' else daddr
 
-        if direction == 'source':
-            ip_identification = __database__.getIPIdentification(daddr)
-            description = f'Connection on port 0 from {saddr} to {daddr}. {ip_identification}.'
-        else:
-            ip_identification = __database__.getIPIdentification(saddr)
-            description = f'Connection on port 0 from {daddr} to {saddr}. {ip_identification}'
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Connection on port 0 from {saddr}:{sport} to {daddr}:{dport}. {ip_identification}.'
 
         conn_count = 1
 
@@ -568,7 +564,7 @@ class Helper:
         ioc='',
     ):
         malicious_ja3_dict = json.loads(malicious_ja3_dict[ioc])
-        tags = malicious_ja3_dict['tags']
+        tags = malicious_ja3_dict.get('tags','')
         ja3_description = malicious_ja3_dict['description']
         threat_level = malicious_ja3_dict['threat_level']
 

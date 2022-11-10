@@ -4,9 +4,7 @@
 #####       if more than 4 calls to _api_query in a row winn cause unit tests to fail
 
 from ..modules.virustotal.virustotal import Module
-import configparser
 import pytest
-import time
 import requests
 import json
 
@@ -18,7 +16,7 @@ def do_nothing(*args):
 def get_vt_key():
     # get the user's api key
     try:
-        with open('modules/virustotal/api_key_secret', 'r') as f:
+        with open('config/vt_api_key', 'r') as f:
             api_key = f.read()
     except FileNotFoundError:
         api_key = ''
@@ -69,7 +67,7 @@ error_msg = 'API key not found'
 if enough_quota != True:
     error_msg = f"server response {enough_quota}"
 
-pytestmark = pytest.mark.skipif(
+valid_api_key = pytest.mark.skipif(
     len(API_KEY) != 64 or enough_quota != True,
     reason=f'API KEY not found or you do not have quota. error: {error_msg}',
 )
@@ -105,6 +103,7 @@ def create_virustotal_instance(outputQueue):
 
 @pytest.mark.dependency(name='sufficient_quota')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
+@valid_api_key
 def test_interpret_rsponse(outputQueue, ip):
     virustotal = create_virustotal_instance(outputQueue)
     response = virustotal.api_query_(ip)
@@ -112,28 +111,10 @@ def test_interpret_rsponse(outputQueue, ip):
         assert type(ratio) == float
 
 @pytest.mark.dependency(depends=["sufficient_quota"])
+@valid_api_key
 def test_get_domain_vt_data(outputQueue):
     virustotal = create_virustotal_instance(outputQueue)
     assert virustotal.get_domain_vt_data('google.com') != False
 
 
-@pytest.mark.dependency(depends=["test_get_domain_vt_data"])
-def test_scan_file(outputQueue, database):
-    """
-    This one depends on the available quota
-    """
-    # this one always fails due to the 4 reqs/minute free quota
-    virustotal = create_virustotal_instance(outputQueue)
-    # test this function with a hash we know is malicious
-    file_info = {
-        'uid': 123,
-        'daddr': '8.8.8.8',
-        'saddr': '8.8.8.8',
-        'size': 123,
-        'profileid': 'profile_192.168.1.1',
-        'twid': 'timewindow0',
-        'md5': '7c401bde8cafc5b745b9f65effbd588f',
-        'ts': time.time(),
-    }
-    virustotal.file_info = file_info
-    assert virustotal.scan_file(file_info) == 'malicious', 'Server Error: Response code is not 200'
+

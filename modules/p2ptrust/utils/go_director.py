@@ -1,6 +1,5 @@
 import base64
 import binascii
-import configparser
 import json
 from typing import Dict
 
@@ -13,6 +12,8 @@ from modules.p2ptrust.utils.utils import (
 )
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
+from slips_files.core.database.database import __database__
+
 
 
 class GoDirector:
@@ -27,7 +28,6 @@ class GoDirector:
         self,
         printer: Printer,
         trustdb: TrustDB,
-        config: configparser.ConfigParser,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
@@ -44,7 +44,6 @@ class GoDirector:
 
         self.printer = printer
         self.trustdb = trustdb
-        self.config = config
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
@@ -116,9 +115,7 @@ class GoDirector:
         expected_keys = {key_reporter, key_report_time, key_message}
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
-        if len(expected_keys & set(report.keys())) != 3:
-            self.print('Some key is missing in report', 0, 1)
-            return
+
 
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
@@ -143,6 +140,7 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == 'blame':
+            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
             # which gives the report to evidenceProcess to decide whether to block or not
@@ -219,9 +217,10 @@ class GoDirector:
         self, reporter: str, _: int, data: Dict
     ) -> None:
         """
-        Handle data request from a peer
+        Process and answer a msg from a peer that requests info about an IP
 
-        Details are read from the request, and response is read from slips database. Response data is formatted as json
+        Details are read from the request, and response is read from slips database.
+        Response data is formatted as json
         and sent to the peer that asked.
 
         :param reporter: The peer that sent the request
@@ -236,10 +235,9 @@ class GoDirector:
         key = data['key']
         self.print(
             f'[The Network -> Slips] request about {key} from: {reporter}',
-            2,
-            0,
         )
 
+        #  override_p2p is false by default
         if self.override_p2p:
             # print("Overriding p2p")
             # calls respond_to_message_request in p2ptrust.py
@@ -326,9 +324,8 @@ class GoDirector:
         )
         if evaluation != None:
             self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}',
-                2,
-                0,
+                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+
             )
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
@@ -397,6 +394,14 @@ class GoDirector:
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
+        # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
+        # save all report info in the db
+        report_info = {
+            'reporter':reporter,
+            'report_time':report_time,
+        }
+        report_info.update(evaluation)
+        __database__.store_p2p_report(key, report_info)
 
     def process_go_update(self, data: dict) -> None:
         """

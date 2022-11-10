@@ -10,18 +10,18 @@ from slack import WebClient
 from slack.errors import SlackApiError
 import os
 import json
-from stix2 import Indicator
-from stix2 import Bundle
+from stix2 import Indicator, Bundle
 import ipaddress
 from cabby import create_client
 import time
-import _thread
+import threading
 import sys
 import validators
+import datetime
 
 class Module(Module, multiprocessing.Process):
     """
-    Module to export alerts to slack and/or STX
+    Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module
     """
 
@@ -40,10 +40,12 @@ class Module(Module, multiprocessing.Process):
             self.get_slack_token()
         # This bundle should be created once and we should append all indicators to it
         self.is_bundle_created = False
-        self.is_thread_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.timeout = 0.00000001
+        self.is_running_on_interface = True if '-i' in sys.argv else False
+        self.export_to_taxii_thread = threading.Thread(
+            target=self.send_to_server, daemon=True
+        )
 
     def read_configuration(self):
         """Read the configuration file for what we need"""
@@ -62,13 +64,15 @@ class Module(Module, multiprocessing.Process):
             self.use_https = conf.use_https()
             self.discovery_path = conf.discovery_path()
             self.inbox_path = conf.inbox_path()
+            # push_delay is only used when slips is running using -i
             self.push_delay = conf.push_delay()
             self.collection_name = conf.collection_name()
             self.taxii_username = conf.taxii_username()
             self.taxii_password = conf.taxii_password()
-            self.jwt_auth_url = conf.jwt_auth_url()
+            self.jwt_auth_path = conf.jwt_auth_path()
             # push delay exists -> create thread that waits
-            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before stopping
+            # push delay doesnt exist -> running using file not interface -> only push to taxii server once before
+            # stopping
 
     def get_slack_token(self):
         if not hasattr(self, 'slack_token_filepath'):
@@ -78,7 +82,9 @@ class Module(Module, multiprocessing.Process):
         try:
             with open(self.slack_token_filepath, 'r') as f:
                 self.BOT_TOKEN = f.read()
-        except FileNotFoundError:
+                if len(self.BOT_TOKEN) < 5:
+                    raise NameError
+        except (FileNotFoundError, NameError):
             self.print(
                 f'Please add slack bot token to '
                 f'{self.slack_token_filepath}. Stopping.'
@@ -105,24 +111,6 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
-    def get_ioc_type(self, ioc):
-        """Check the type of ioc, returns url, ip or domain"""
-        try:
-            # Is IPv4
-            ip_address = ipaddress.IPv4Address(ioc)
-            return 'ip'
-        except ipaddress.AddressValueError:
-            # Is it ipv6?
-            try:
-                ip_address = ipaddress.IPv6Address(ioc)
-                return 'ip'
-            except ipaddress.AddressValueError:
-                # It does not look as IP address.
-                if validators.domain(ioc):
-                    return 'domain'
-                elif validators.url(ioc):
-                    return 'url'
 
     def ip_exists_in_stix_file(self, ip):
         """Searches for ip in STIX_data.json to avoid exporting duplicates"""
@@ -168,19 +156,20 @@ class Module(Module, multiprocessing.Process):
             discovery_path=self.discovery_path,
         )
         # jwt_auth_url is optional
-        if self.jwt_auth_url is not '':
+        if self.jwt_auth_path is not '':
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
                 # URL used to obtain JWT token
-                jwt_auth_url=self.jwt_auth_url,
+                jwt_auth_url=self.jwt_auth_path,
             )
         else:
-            # User didn't provide jwt_auth_url in slips.conf
+            # User didn't provide jwt_auth_path in slips.conf
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
             )
+
         # Check the available services to make sure inbox service is there
         services = client.discover_services()
         # Check if inbox is there
@@ -191,9 +180,10 @@ class Module(Module, multiprocessing.Process):
             # Comes here if it cant find inbox in services
             self.print(
                 "Server doesn't have inbox available. "
-                "Exporting STIX_data.json is cancelled.", 0,2,
+                "Exporting STIX_data.json is cancelled.", 0, 2
             )
             return False
+
         # Get the data that we want to send
         with open('STIX_data.json') as stix_file:
             stix_data = stix_file.read()
@@ -207,12 +197,14 @@ class Module(Module, multiprocessing.Process):
                 collection_names=[self.collection_name],
                 uri=self.inbox_path,
             )
-            self.print(f'Successfully exported to {self.TAXII_server}.', 1, 0)
+            self.print(f'Successfully exported to TAXII server: {self.TAXII_server}.', 1, 0)
             return True
 
     def export_to_STIX(self, msg_to_send: tuple) -> bool:
         """
         Function to export evidence to a STIX_data.json file in the cwd.
+        It keeps appending the given indicator to STIX_data.json until they're sent to the
+        taxii server
         msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
             type_evidence: e.g PortScan, ThreatIntelligence etc
             type_detection: e.g dip sip dport sport
@@ -232,28 +224,10 @@ class Module(Module, multiprocessing.Process):
         if 'SSHSuccessful' in type_evidence:
             type_evidence = 'SSHSuccessful'
         # This dict contains each type and the way we should describe it in STIX name attribute
-        type_evidence_descriptions = {
-            'PortScanType1': 'Vertical port scan',
-            'PortScanType2': 'Horizontal port scan',
-            'ThreatIntelligenceBlacklistIP': 'Blacklisted IP',
-            'SelfSignedCertificate': 'Self-signed certificate',
-            'LongConnection': 'Long Connection',
-            'SSHSuccessful': 'SSH connection from ip',  # SSHSuccessful-by-ip
-            'C&C channels detection': 'C&C channels detection',
-            'ThreatIntelligenceBlacklistDomain': 'Threat Intelligence Blacklist Domain',
-        }
+
         # Get the right description to use in stix
-        try:
-            name = type_evidence_descriptions[type_evidence]
-        except KeyError:
-            self.print(
-                "Can't find the description for type_evidence: {}".format(
-                    type_evidence
-                ),
-                0,
-                3,
-            )
-            return False
+        name = type_evidence
+
         # ---------------- set pattern attribute ----------------
         if 'port' in type_detection:
             # detection_info is a port probably coming from a portscan we need the ip instead
@@ -279,6 +253,7 @@ class Module(Module, multiprocessing.Process):
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
         # ID will be generated randomly
+        # ref https://docs.oasis-open.org/cti/stix/v2.1/os/stix-v2.1-os.html#_6khi84u7y58g
         indicator = Indicator(
             name=name, pattern=pattern, pattern_type='stix'
         )  # the pattern language that the indicator pattern is expressed in.
@@ -300,18 +275,25 @@ class Module(Module, multiprocessing.Process):
                 stix_file.seek(0, os.SEEK_END)
                 stix_file.seek(stix_file.tell() - 4, 0)
                 stix_file.truncate()
+
             # Append mode to add the new indicator to the objects array
             with open('STIX_data.json', 'a') as stix_file:
                 # Append the indicator in the objects array
                 stix_file.write(',' + str(indicator) + ']\n}\n')
+
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(detection_info)
         self.print('Indicator added to STIX_data.json', 2, 0)
         return True
 
     def send_to_server(self):
-        """Responsible for publishing STIX_data.json to the taxii server every n seconds"""
+        """
+        Responsible for publishing STIX_data.json to the taxii server every
+        self.push_delay seconds when running on an interface only
+        """
         while True:
+            # on an interface, we use the push delay from slips.conf
+            # on files, we push once when slips is stopping
             time.sleep(self.push_delay)
             # Sometimes the time's up and we need to send to server again but there's no
             # new alerts in stix_data.json yet
@@ -322,9 +304,7 @@ class Module(Module, multiprocessing.Process):
                 self.is_bundle_created = False
             else:
                 self.print(
-                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.',
-                    2,
-                    0,
+                    f'{self.push_delay} seconds passed, no new alerts in STIX_data.json.', 2, 0
                 )
 
     def shutdown_gracefully(self):
@@ -335,14 +315,34 @@ class Module(Module, multiprocessing.Process):
         if hasattr(self, 'json_file_handle'):
             self.json_file_handle.close()
 
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips finished on sensor: {self.sensor_name}.')
+
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+        return
 
     def run(self):
         utils.drop_root_privs()
+        if (
+            self.is_running_on_interface
+            and 'stix' in self.export_to
+        ):
+            # This thread is responsible for waiting n seconds before
+            # each push to the stix server
+            # it starts the timer when the first alert happens
+            self.export_to_taxii_thread.start()
+
+        if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+            date_time = datetime.datetime.now()
+            date_time = utils.convert_format(date_time, utils.alerts_format)
+            self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
+
         while True:
             try:
-                msg = self.c1.get_message(timeout=self.timeout)
+                msg = __database__.get_message(self.c1)
 
                 if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -363,21 +363,11 @@ class Module(Module, multiprocessing.Process):
                             evidence['detection_info'],
                             description,
                         )
-                        # This thread is responsible for waiting n seconds before each push to the stix server
-                        # it starts the timer when the first alert happens
-                        # push_delay should be an int when slips is running using -i
-                        if (
-                            self.is_thread_created is False
-                            and '-i' in sys.argv
-                        ):
-                            # this thread is started only once
-                            _thread.start_new_thread(
-                                self.send_to_server, ()
-                            )
-                            self.is_thread_created = True
                         exported_to_stix = self.export_to_STIX(msg_to_send)
                         if not exported_to_stix:
                             self.print('Problem in export_to_STIX()', 0, 3)
+                            continue
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True

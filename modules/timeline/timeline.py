@@ -34,7 +34,6 @@ class Module(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
         self.analysis_direction = conf.analysis_direction()
-        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -144,7 +143,7 @@ class Module(Module, multiprocessing.Process):
 
                     # Check if the connection sent anything!
                     if not allbytes:
-                        warning_empty = ', Empty!'
+                        warning_empty = 'No data exchange!'
 
                     # Check if slips and zeek know dport_name!
                     if not dport_name:
@@ -163,11 +162,11 @@ class Module(Module, multiprocessing.Process):
                         'dport/proto': f'{str(dport)}/{proto}',
                         'state': state,
                         'warning': warning_empty,
-                        'Sent': sbytes,
-                        'Recv': allbytes - sbytes,
-                        'Tot': allbytes,
-                        'Duration': dur,
                         'info' : '',
+                        'sent': sbytes,
+                        'recv': allbytes - sbytes,
+                        'tot': allbytes,
+                        'duration': dur,
                         'critical warning': critical_warning_dport_name
                     }
 
@@ -175,7 +174,7 @@ class Module(Module, multiprocessing.Process):
                 else:
                     # Check if the connection sent anything!
                     if not allbytes:
-                        warning_empty = 'Empty!'
+                        warning_empty = 'No data exchange!'
 
                     # Check if slips and zeek know dport_name!
                     if not dport_name:
@@ -201,11 +200,11 @@ class Module(Module, multiprocessing.Process):
                         'dport/proto': f'{str(dport)}/{proto}',
                         'state': state,
                         'warning': warning_empty,
-                        'Sent': sbytes,
-                        'Recv': allbytes - sbytes,
-                        'Tot': allbytes,
-                        'Duration': dur,
                         'info': '',
+                        'sent': sbytes,
+                        'recv': allbytes - sbytes,
+                        'tot': allbytes,
+                        'duration': dur,
                         'critical warning': critical_warning_dport_name
                     }
 
@@ -226,7 +225,7 @@ class Module(Module, multiprocessing.Process):
                     else:
                         dport_name = 'ICMP Unknown type'
                         extra_info =  {
-                            'Type': f'0x{str(sport)}',
+                            'type': f'0x{str(sport)}',
                         }
 
                 elif type(sport) == str:
@@ -250,8 +249,8 @@ class Module(Module, multiprocessing.Process):
                             'dport_name': dport_name,
                             'preposition': 'from',
                             'saddr': saddr,
-                            'Size': allbytes,
-                            'Duration': dur,
+                            'size': allbytes,
+                            'duration': dur,
                         }
 
                 extra_info.update({
@@ -260,9 +259,9 @@ class Module(Module, multiprocessing.Process):
                      'dport/proto': f'{sport}/ICMP',
                      'state': '',
                      'warning' : warning,
-                     'Sent' :'',
-                     'Recv' :'',
-                     'Tot' :'',
+                     'sent' :'',
+                     'recv' :'',
+                     'tot' :'',
                      'critical warning' : '',
                 })
 
@@ -275,8 +274,8 @@ class Module(Module, multiprocessing.Process):
                     'dport_name': dport_name,
                     'preposition': 'from',
                     'saddr': saddr,
-                    'Size': allbytes,
-                    'Duration': dur,
+                    'size': allbytes,
+                    'duration': dur,
                 }
             #################################
             # Now process the alternative flows
@@ -299,10 +298,12 @@ class Module(Module, multiprocessing.Process):
                     answer = alt_flow['answers']
                     if 'NXDOMAIN' in alt_flow['rcode_name']:
                         answer = 'NXDOMAIN'
+                    dns_activity = {
+                        'query': alt_flow['query'],
+                        'answers': answer
+                    }
                     alt_activity = {
-                        'Query': alt_flow['query'],
-                        'Answers': answer,
-                        'info': '',
+                        'info': dns_activity,
                         'critical warning':'',
                     }
                 elif alt_flow['type'] == 'http':
@@ -323,7 +324,7 @@ class Module(Module, multiprocessing.Process):
                         for k, v in http_data_all.items()
                         if v is not '' and v is not '/'
                     }
-                    alt_activity = {'http_data': http_data}
+                    alt_activity = {'info': http_data}
                 elif alt_flow['type'] == 'ssl':
                     if alt_flow['validation_status'] == 'ok':
                         validation = 'Yes'
@@ -345,25 +346,27 @@ class Module(Module, multiprocessing.Process):
                     subject = alt_flow['subject'].split(',')[0] if alt_flow[
                         'subject'] else '????'
                     # We put server_name instead of dns resolution
-                    alt_activity = {
-                        'SN': subject,
-                        'Trusted': validation,
-                        'Resumed': resumed,
-                        'Version': alt_flow['version'],
-                        'dns_resolution': alt_flow['server_name'],
+                    ssl_activity = {
+                        'server_name': subject,
+                        'trusted': validation,
+                        'resumed': resumed,
+                        'version': alt_flow['version'],
+                        'dns_resolution': alt_flow['server_name']
                     }
+                    alt_activity = {'info': ssl_activity}
                 elif alt_flow['type'] == 'ssh':
                     success = 'Successful' if alt_flow[
                         'auth_success'] else 'Not Successful'
-                    alt_activity = {
-                        'Login': success,
-                        'Auth attempts': alt_flow['auth_attempts'],
-                        'Client': alt_flow['client'],
-                        'Server': alt_flow['client'],
+                    ssh_activity = {
+                        'login': success,
+                        'auth_attempts': alt_flow['auth_attempts'],
+                        'client': alt_flow['client'],
+                        'server': alt_flow['client'],
                     }
+                    alt_activity = {'info': ssh_activity}
 
             elif activity:
-                alt_activity = {'info': 'No extra data.'}
+                alt_activity = {'info': ''}
 
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
@@ -397,7 +400,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.

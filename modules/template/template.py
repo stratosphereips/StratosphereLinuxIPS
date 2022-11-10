@@ -43,7 +43,6 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -74,7 +73,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

@@ -23,7 +23,7 @@ class Module(Module, multiprocessing.Process):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, redis_port=6379):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
@@ -34,7 +34,6 @@ class Module(Module, multiprocessing.Process):
         if self.os == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
             sys.exit()
-        self.timeout = 0.00000001
         self.firewall = self.determine_linux_firewall()
         self.set_sudo_according_to_env()
         self.initialize_chains_in_firewall()
@@ -363,7 +362,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -435,7 +434,7 @@ class Module(Module, multiprocessing.Process):
                             blocking_details['sport'],
                             blocking_details['protocol'],
                         )
-                        # since ip is unblocked, remove it from dict
+                        # make a list of unblocked IPs to remove from dict
                         unblocked_ips.add(ip)
 
                 for ip in unblocked_ips:

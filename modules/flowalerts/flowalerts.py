@@ -49,7 +49,6 @@ class Module(Module, multiprocessing.Process):
         self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
-        self.timeout = 0.0000001
         self.p2p_daddrs = {}
         # get the default gateway
         self.gateway = __database__.get_gateway_ip()
@@ -82,31 +81,6 @@ class Module(Module, multiprocessing.Process):
         # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
         self.flow_upload_threshold = 100
 
-    def is_ignored_ip(self, ip) -> bool:
-        """
-        This function checks if an IP is a special list of IPs that
-        should not be alerted for different reasons
-        """
-        try:
-            ip_obj = ipaddress.ip_address(ip)
-            # Is the IP multicast, private? (including localhost)
-            # local_link or reserved?
-            # The broadcast address 255.255.255.255 is reserved.
-            if (
-                ip_obj.is_multicast
-                or ip_obj.is_private
-                or ip_obj.is_link_local
-                or ip_obj.is_reserved
-                or '.255' in ip_obj.exploded
-            ):
-                return True
-            return False
-        except Exception as inst:
-            self.print('Problem on function is_ignored_ip()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return False
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -325,7 +299,8 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_unknown_port(
-            self, dport, proto, daddr, profileid, twid, uid, timestamp, state
+            self, dport, proto, daddr,
+            profileid, twid, uid, timestamp, state
     ):
         """
         Checks dports that are not in our
@@ -341,7 +316,7 @@ class Module(Module, multiprocessing.Process):
             return False
         # we don't have port info in our database
         # is it a port that is known to be used by
-        # a specific organization
+        # a specific organization?
         if self.port_belongs_to_an_org(daddr, portproto, profileid):
             return False
 
@@ -376,7 +351,7 @@ class Module(Module, multiprocessing.Process):
             # It can be that the dns_resolution sometimes gives back a list and gets this error
             return False
 
-    def check_if_connection_was_made_by_different_version(
+    def is_connection_made_by_different_version(
         self, profileid, twid, daddr
     ):
         """
@@ -526,7 +501,15 @@ class Module(Module, multiprocessing.Process):
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
     ):
-        """Checks if there's a flow to a dstip that has no cached DNS answer"""
+        """
+        Checks if there's a flow to a dstip that has no cached DNS answer
+        """
+
+        # disable this alert when running on a zeek conn.log file
+        # because there's no dns.log to know i the dns was made
+        if __database__.get_input_type() == 'zeek_log_file':
+            return False
+
         # Ignore some IP
         ## - All dhcp servers. Since is ok to connect to them without a DNS request.
         # We dont have yet the dhcp in the redis, when is there check it
@@ -541,7 +524,7 @@ class Module(Module, multiprocessing.Process):
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
             if diff >= self.conn_without_dns_interface_wait_time:
-                # less than 2=30 minutes have passed
+                # less than 30 minutes have passed
                 return False
 
         # search 24hs back for a dns resolution
@@ -609,7 +592,7 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_dns_without_connection(
-            self, domain, answers, timestamp, profileid, twid, uid
+            self, domain, answers: list, timestamp, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -632,8 +615,7 @@ class Module(Module, multiprocessing.Process):
             or domain == 'WPAD'
         ):
             return False
-
-        # One DNS query may not be answered exactly by UID, but the computer can re-ask the donmain,
+        # One DNS query may not be answered exactly by UID, but the computer can re-ask the domain,
         # and the next DNS resolution can be
         # answered. So dont check the UID, check if the domain has an IP
 
@@ -644,17 +626,18 @@ class Module(Module, multiprocessing.Process):
         # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
         # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
+        prev_domain_resolutions = __database__.getDomainData(domain)
+        if prev_domain_resolutions:
+            prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
+            # if there's a domain in the cache (prev_domain_resolutions) that is not in the
+            # current answers given to this function, append it to the answers list
+            answers.extend([ans for ans in prev_domain_resolutions if ans not in answers])
 
-        previous_data_for_domain = __database__.getDomainData(domain)
-        if previous_data_for_domain:
-            try:
-                previous_ips_for_domain = previous_data_for_domain['IPs']
-                if type(answers) == set:
-                    answers = list(answers)
-                answers.extend(previous_ips_for_domain)
-            except KeyError:
-                pass
 
+        if answers == ['-']:
+            # If no IPs are in the answer, we can not expect the computer to connect to anything
+            # self.print(f'No ips in the answer, so ignoring')
+            return False
         # self.print(f'The extended DNS query to {domain} had as answers {answers} ')
 
         contacted_ips = __database__.get_all_contacted_ips_in_profileid_twid(
@@ -663,18 +646,17 @@ class Module(Module, multiprocessing.Process):
         # If contacted_ips is empty it can be because we didnt read yet all the flows.
         # This is automatically captured later in the for loop and we start a Timer
 
-        # every dns answer is a list of ips that correspond to a spicific query,
+        # every dns answer is a list of ips that correspond to 1 query,
         # one of these ips should be present in the contacted ips
         # check each one of the resolutions of this domain
-        if answers == ['']:
-            # If no IPs are in the answer, we can not expect the computer to connect to anything
-            # self.print(f'No ips in the answer, so ignoring')
-            return False
-        # to avoid checking the same answer twice
-        answers = set(answers)
         for ip in answers:
             # self.print(f'Checking if we have a connection to ip {ip}')
-            if ip in contacted_ips:
+            if (
+                ip in contacted_ips
+                or
+                self.is_connection_made_by_different_version(
+                    profileid, twid, ip)
+            ):
                 # this dns resolution has a connection. We can exit
                 return False
 
@@ -683,11 +665,6 @@ class Module(Module, multiprocessing.Process):
             # this is not a DNS without resolution
             return False
 
-        for ip in answers:
-            if self.check_if_connection_was_made_by_different_version(
-                    profileid, twid, ip
-            ):
-                return False
 
         # self.print(f'It seems that none of the IPs were contacted')
         # Found a DNS query which none of its IPs was contacted
@@ -701,7 +678,7 @@ class Module(Module, multiprocessing.Process):
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
             timer = TimerThread(
-                15, self.check_dns_without_connection, params
+                40, self.check_dns_without_connection, params
             )
             timer.start()
         else:
@@ -936,6 +913,7 @@ class Module(Module, multiprocessing.Process):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
+        Ignore queries done to *.in-addr.arpa domains and to *.local domains
         """
 
 
@@ -943,9 +921,9 @@ class Module(Module, multiprocessing.Process):
         # by slips to get the range of an ip
         if (
             not 'NXDOMAIN' in rcode_name
-            or 'in-addr.arpa' in query
-            or 'cymru.com' in query
+            or query.endswith('.in-addr.arpa')
             or query.endswith('.local')
+            or not query
         ):
             return False
 
@@ -979,9 +957,14 @@ class Module(Module, multiprocessing.Process):
             return True
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
+        """
+        Detect domains that are too young.
+        The threshold is 60 days
+        """
 
         age_threshold = 60
 
+        # Ignore arpa and local domains
         if domain.endswith('.arpa') or domain.endswith('.local'):
             return False
 
@@ -1160,7 +1143,8 @@ class Module(Module, multiprocessing.Process):
                 return
 
             uids = saddrs[saddr]['uid']
-            description = f'Connection to multiple ports {dstports} of Source IP: {saddr}'
+            description = f'Connection to multiple ports {dstports} ' \
+                          f'of Source IP: {saddr}'
 
             self.helper.set_evidence_for_connection_to_multiple_ports(
                 profileid,
@@ -1171,15 +1155,28 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
             )
 
+    def check_malicious_ssl(self, ssl_info):
+        source = ssl_info.get('source', '')
+        analyzers = ssl_info.get('analyzers', '')
+        sha1 = ssl_info.get('sha1', '')
+        if 'SSL' not in source or 'SHA1' not in analyzers:
+            # not an ssl cert
+            return False
 
+        # check if we have this sha1 marked as malicious from one of our feeds
+        ssl_info_from_db = __database__.get_ssl_info(sha1)
+        if not ssl_info_from_db:
+            return False
+        self.helper.set_evidence_malicious_ssl(
+            ssl_info, ssl_info_from_db
+        )
 
     def run(self):
         utils.drop_root_privs()
-        # Main loop function
         while True:
             try:
                 # ---------------------------- new_flow channel
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -1218,7 +1215,6 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
                     # --- Detect long Connections ---
                     # Do not check the duration of the flow if the daddr or
                     # saddr is multicast.
@@ -1290,6 +1286,8 @@ class Module(Module, multiprocessing.Process):
                         self.helper.set_evidence_for_port_0_connection(
                             saddr,
                             daddr,
+                            sport,
+                            dport,
                             direction,
                             profileid,
                             twid,
@@ -1304,7 +1302,7 @@ class Module(Module, multiprocessing.Process):
                     if (
                         flow_type == 'conn'
                         and appproto != 'dns'
-                        and not self.is_ignored_ip(daddr)
+                        and not utils.is_ignored_ip(daddr)
                     ):
 
                         self.check_connection_without_dns_resolution(
@@ -1328,7 +1326,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_data_upload(sbytes, daddr, uid, profileid, twid)
 
                 # --- Detect successful SSH connections ---
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1336,7 +1334,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_successful_ssh(message)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1394,29 +1392,29 @@ class Module(Module, multiprocessing.Process):
                             )
 
                         # --- Detect SSL cert validation failed ---
-                        if (
-                            'SSL certificate validation failed' in msg
-                            and 'unable to get local issuer certificate'
-                            not in msg
-                        ):
-                            ip = flow['daddr']
-                            # get the description inside parenthesis
-                            ip_identification = (
-                                __database__.getIPIdentification(ip)
-                            )
-                            description = (
-                                msg
-                                + f' Destination IP: {ip}. {ip_identification}'
-                            )
-                            self.helper.set_evidence_for_invalid_certificates(
-                                profileid,
-                                twid,
-                                ip,
-                                description,
-                                uid,
-                                timestamp,
-                            )
-                            # self.print(description, 3, 0)
+                        # if (
+                        #     'SSL certificate validation failed' in msg
+                        #     and 'unable to get local issuer certificate'
+                        #     not in msg
+                        # ):
+                        #     ip = flow['daddr']
+                        #     # get the description inside parenthesis
+                        #     ip_identification = (
+                        #         __database__.getIPIdentification(ip)
+                        #     )
+                        #     description = (
+                        #         msg
+                        #         + f' Destination IP: {ip}. {ip_identification}'
+                        #     )
+                        #     self.helper.set_evidence_for_invalid_certificates(
+                        #         profileid,
+                        #         twid,
+                        #         ip,
+                        #         description,
+                        #         uid,
+                        #         timestamp,
+                        #     )
+                        #     # self.print(description, 3, 0)
 
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
@@ -1437,7 +1435,7 @@ class Module(Module, multiprocessing.Process):
                             )
 
                 # --- Detect maliciuos JA3 TLS servers ---
-                message = self.c4.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c4)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1481,7 +1479,6 @@ class Module(Module, multiprocessing.Process):
                             self.print(description, 3, 0)
 
                         if ja3 or ja3s:
-
                             # get the dict of malicious ja3 stored in our db
                             malicious_ja3_dict = __database__.get_ja3_in_IoC()
 
@@ -1519,7 +1516,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
 
-                message = self.c5.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c5)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1527,13 +1524,10 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data'].split('_')
                     profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
-
                     self.detect_data_upload_in_twid(profileid, twid)
 
-
-
                 # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
-                message = self.c6.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c6)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1562,6 +1556,7 @@ class Module(Module, multiprocessing.Process):
                         self.detect_DGA(
                             rcode_name, domain, stime, profileid, twid, uid
                         )
+
                     if domain:
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
                         self.detect_young_domains(
@@ -1572,29 +1567,16 @@ class Module(Module, multiprocessing.Process):
                         )
 
                 # --- Detect malicious SSL certificates ---
-                message = self.c7.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c7)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    data = json.loads(message['data'])
-                    source = data.get('source', '')
-                    analyzers = data.get('analyzers', '')
-                    sha1 = data.get('sha1', '')
-                    if 'SSL' not in source or 'SHA1' not in analyzers:
-                        # not an ssl cert
-                        continue
-
-                    # check if we have this sha1 marked as malicious from one of our feeds
-                    ssl_info_from_db = __database__.get_ssl_info(sha1)
-                    if not ssl_info_from_db:
-                        continue
-                    self.helper.set_evidence_malicious_ssl(
-                        data, ssl_info_from_db
-                    )
+                    ssl_info = json.loads(message['data'])
+                    self.check_malicious_ssl(ssl_info)
 
                 # --- Detect Bad SMTP logins ---
-                message = self.c8.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c8)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -1613,7 +1595,7 @@ class Module(Module, multiprocessing.Process):
 
 
                 # --- Detect multiple used SSH versions ---
-                message = self.c9.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c9)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

@@ -8,9 +8,10 @@ import textwrap
 
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
+        self.options = []
         super(ArgumentParser, self).__init__(*args, **kwargs)
         self.program = {key: kwargs[key] for key in kwargs}
-        self.options = []
+
         self.alerts_default_path = 'output/'
 
 
@@ -72,11 +73,11 @@ class ArgumentParser(argparse.ArgumentParser):
             wrapper.subsequent_indent = len(wrapper.initial_indent) * ' '
             if 'help' in option and 'default' in option:
                 output = option['help']
-                output += (
-                    " (default: '%s')" % option['default']
-                    if isinstance(option['default'], str)
-                    else ' (default: %s)' % str(option['default'])
-                )
+                # do not print th default value of help arg
+                if '-h' not in option['flags']:
+                    output += (
+                        f" (default: '{option['default']})"
+                    )
                 output = wrapper.fill(output)
             elif 'help' in option:
                 output = option['help']
@@ -93,7 +94,7 @@ class ArgumentParser(argparse.ArgumentParser):
             print(output)
 
     def get_configfile(self):
-        slips_conf_path = os.path.join(os.getcwd(), 'slips.conf')
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
         self.add_argument(
             '-c',
             '--config',
@@ -107,7 +108,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def parse_arguments(self):
         # Parse the parameters
-        slips_conf_path = os.path.join(os.getcwd() ,'slips.conf')
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
         self.add_argument(
             '-c',
             '--config',
@@ -141,7 +142,11 @@ class ArgumentParser(argparse.ArgumentParser):
             metavar='<file>',
             action='store',
             required=False,
-            help='Read a Zeek dir, Argus binetflow, pcapfile or nfdump.',
+            help='Read and automatically recognize a Zeek dir with all logs, '
+                 'a Zeek conn.log file (TAB separated or JSON), '
+                 'a Suricata JSON file with flows, an Argus binetflow file, a PCAP file or a nfdump file. '
+                 'Also use the word "zeek" to specify read from stdin of Zeek files, '
+                 'or "suricata" to specify stdin of suricata files.',
         )
         self.add_argument(
             '-i',
@@ -255,7 +260,10 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help='Print Slips Version',
         )
-        self.add_argument(
-            '-h', '--help', action='help', help='command line help'
-        )
+        try:
+            self.add_argument(
+                '-h', '--help', action='store_true', help='command line help',
+            )
+        except argparse.ArgumentError:
+            pass
         return self.parse_args()

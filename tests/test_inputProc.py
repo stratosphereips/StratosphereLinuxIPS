@@ -1,14 +1,27 @@
 import pytest
 from slips_files.core.inputProcess import InputProcess
-import configparser
 import shutil
 import os
 
 def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
+    """Used to override the print function because using the print causes broken pipes"""
     pass
 
 zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+
+def check_zeek_or_bro():
+    """
+    Check if we have zeek or bro
+    """
+    zeek_bro = None
+    if shutil.which('zeek'):
+        zeek_bro = 'zeek'
+    elif shutil.which('bro'):
+        zeek_bro = 'bro'
+    else:
+        return False
+
+    return zeek_bro
 
 def create_inputProcess_instance(
     outputQueue, profilerQueue, input_information, input_type
@@ -21,22 +34,23 @@ def create_inputProcess_instance(
         input_type,
         input_information,
         None,
-        'zeek',
+        check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
         65531
     )
     inputProcess.bro_timeout = 1
-    # override the self.print function to avoid broken pipes
+    # override the print function to avoid broken pipes
     inputProcess.print = do_nothing
     inputProcess.stop_queues = do_nothing
     inputProcess.testing = True
+
     return inputProcess
 
 
 @pytest.mark.parametrize(
     'input_type,input_information',
-    [('pcap', 'dataset/hide-and-seek-short.pcap')],
+    [('pcap', 'dataset/test7-malicious.pcap')],
 )
 def test_handle_pcap_and_interface(
     outputQueue, profilerQueue, input_type, input_information
@@ -45,14 +59,15 @@ def test_handle_pcap_and_interface(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
+    inputProcess.zeek_pid = 'False'
     assert inputProcess.handle_pcap_and_interface() == True
 
 
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_folder', 'dataset/sample_zeek_files-2/'),
-        ('zeek_folder', 'dataset/sample_zeek_files/'),
+        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'),
+        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'),
     ],
 )
 def test_read_zeek_folder(
@@ -67,8 +82,8 @@ def test_read_zeek_folder(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_log_file', 'dataset/sample_zeek_files-2/conn.log'),
-        ('zeek_log_file', 'dataset/sample_zeek_files/conn.log'),
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir-2/conn.log'),
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log'),
     ],
 )
 def test_handle_zeek_log_file(
@@ -81,7 +96,7 @@ def test_handle_zeek_log_file(
 
 
 @pytest.mark.parametrize(
-    'input_type,input_information', [('nfdump', 'dataset/test.nfdump')]
+    'input_type,input_information', [('nfdump', 'dataset/test1-normal.nfdump')]
 )
 def test_handle_nfdump(
     outputQueue, profilerQueue, input_type, input_information
@@ -98,12 +113,12 @@ def test_handle_nfdump(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('binetflow', 'dataset/test2.binetflow'),
-        ('binetflow', 'dataset/test5.binetflow'),
+        ('binetflow', 'dataset/test2-malicious.binetflow'),
+        ('binetflow', 'dataset/test5-mixed.binetflow'),
     ],
 )
-#                                                           ('binetflow','dataset/test3.binetflow'),
-#                                                           ('binetflow','dataset/test4.binetflow'),
+#                                                           ('binetflow','dataset/test3-mixed.binetflow'),
+#                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(
     outputQueue, profilerQueue, input_type, input_information
 ):
@@ -115,7 +130,7 @@ def test_handle_binetflow(
 
 @pytest.mark.parametrize(
     'input_type,input_information',
-    [('suricata', 'dataset/suricata-flows.json')],
+    [('suricata', 'dataset/test6-malicious.suricata.json')],
 )
 def test_handle_suricata(
     outputQueue, profilerQueue, input_type, input_information

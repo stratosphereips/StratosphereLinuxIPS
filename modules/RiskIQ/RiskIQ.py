@@ -14,7 +14,7 @@ import sys
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'RiskIQ'
-    description = 'Module to get different information from RiskIQ'
+    description = 'Module to get passive DNS info about IPs from RiskIQ'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
@@ -22,7 +22,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0.00000001
         self.read_configuration()
 
     def read_configuration(self):
@@ -39,7 +38,6 @@ class Module(Module, multiprocessing.Process):
             NameError,
             FileNotFoundError,
         ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
             self.riskiq_email = None
             self.riskiq_key = None
 
@@ -106,16 +104,18 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
-                # Check that the message is for you. Probably unnecessary...
+                message = __database__.get_message(self.c1)
+
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_ip'):
                     ip = message['data']
+                    if utils.is_ignored_ip(ip):
+                        continue
                     # Only get passive total dns data if we don't have it in the db
-                    if __database__.get_passive_dns(ip) == '':
+                    if passive_dns_info := __database__.get_passive_dns(ip) == '':
                         # we don't have it in the db , get it from passive total
                         passive_dns = self.get_passive_dns(ip)
                         if passive_dns:

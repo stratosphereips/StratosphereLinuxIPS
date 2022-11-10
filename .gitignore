@@ -147,7 +147,7 @@ modules/leak_detector/yara_rules/compiled
 .idea
 
 # ignore warden configuration file
-modules/CESNET/warden.conf
+config/warden.conf
 
 # For RisqIQ credentinals
 credentials
@@ -164,3 +164,7 @@ running_slips_info.txt
 
 # ignore changes to redis.conf
 redis.conf
+modules/flowmldetection/scaler.bin
+modules/flowmldetection/model.bin
+databases/macaddress-db.json
+modules/flowmldetection/model.bin

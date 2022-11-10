@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+        slips:
+                image: stratosphereips/slips:latest
+                container_name: Slips
+                cap_add:
+                  - NET_ADMIN
+                volumes:
+                  - ./slips/config:/StratosphereLinuxIPS/config/
+                  - ./logs/:/var/log/slips
+                network_mode: "host"
+                entrypoint: ["/bin/bash"]
+               

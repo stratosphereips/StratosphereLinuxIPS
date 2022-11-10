@@ -7,6 +7,7 @@ from slips_files.common.slips_utils import utils
 
 # Your imports
 import json
+import sys
 import ipaddress
 import time
 import threading
@@ -27,14 +28,11 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
-        self.timeout = 0.0000001
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
         # Threshold to use to detect a port scan. How many arp minimum are required?
         self.arp_scan_threshold = 5
-        # get the default gateway
-        self.gateway = __database__.get_gateway_ip()
         self.delete_arp_periodically = False
         self.arp_ts = 0
         self.period_before_deleting = 0
@@ -162,12 +160,11 @@ class Module(Module, multiprocessing.Process):
         # It shouldn't be marked as an arp scan
         saddr = profileid.split('_')[1]
 
-        # Dont detect arp scan from the GW router
-        # Don't use 'in' since 192.168.1.1 is in 192.168.1.117 and that is wrong
-        # if self.gateway == saddr:
-        #     return False
-        # if saddr == '0.0.0.0':
-        #     return False
+        # Don't detect arp scan from the GW router
+        if __database__.get_gateway_ip() == saddr:
+            return False
+        if saddr == '0.0.0.0':
+            return False
 
         daddr_info = {
             daddr: {
@@ -209,15 +206,12 @@ class Module(Module, multiprocessing.Process):
 
             # in seconds
             if self.diff <= 30.00:
-
-
                 conn_count = len(daddrs)
                 uids = get_uids()
                 # we are sure this is an arp scan
                 if not self.alerted_once_arp_scan:
                     self.alerted_once_arp_scan = True
                     self.set_evidence_arp_scan(ts, profileid, twid, uids, conn_count)
-
                 else:
                     # after alerting once, wait 10s to see if more evidence are coming
                     self.pending_arp_scan_evidence.put((ts, profileid, twid, uids, conn_count))
@@ -287,7 +281,7 @@ class Module(Module, multiprocessing.Process):
             confidence = 0.6
             threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
-            description = f'{saddr} sending arp packet to a destination address outside of local network: {daddr}. {ip_identification}'
+            description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             type_evidence = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
             type_detection = 'srcip'
@@ -320,7 +314,7 @@ class Module(Module, multiprocessing.Process):
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
-            description = 'detected sending unsolicited arp'
+            description = 'sending unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
             # This may be arp spoofing
             category = 'Information'
@@ -345,10 +339,13 @@ class Module(Module, multiprocessing.Process):
 
     def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
         """Detects when a MAC with IP A, is trying to tell others that now that MAC is also for IP B (arp cache attack)"""
+        # Todo in rare cases, the vendor and IP of this mac is known AFTER returning from this function so detection is missed
 
         # to test this add these 2 flows to arp.log
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
-        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.40","resp_h":"172.20.7.40","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
+        # {"ts":1636305825.755132,"operation":"reply","src_mac":"2e:a4:18:f8:3d:02","dst_mac":"ff:ff:ff:ff:ff:ff",
+        # "orig_h":"172.20.7.41","resp_h":"172.20.7.41","orig_hw":"2e:a4:18:f8:3d:02","resp_hw":"00:00:00:00:00:00"}
 
         # todo will we get FPs when an ip changes?
         # todo what if the ip of the attacker came to us first and we stored it in the db?
@@ -433,7 +430,7 @@ class Module(Module, multiprocessing.Process):
                     # update ts of the new arp.log
                     self.arp_ts = time.time()
 
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -490,7 +487,7 @@ class Module(Module, multiprocessing.Process):
                         )
 
                 # if the tw is closed, remove all its entries from the cache dict
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -509,10 +506,10 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

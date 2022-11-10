@@ -1,0 +1,13 @@
+version: '3.7'
+services:
+        slips:
+                image: stratosphereips/slips:latest
+                container_name: Slips
+                cap_add:
+                  - NET_ADMIN
+                volumes:
+                  - $PWD/config:/StratosphereLinuxIPS/config/
+                  - $PWD/dataset:/StratosphereLinuxIPS/dataset/
+                network_mode: "host"
+                entrypoint: ["/bin/bash"]
+               

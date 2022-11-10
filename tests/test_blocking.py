@@ -5,11 +5,22 @@ from ..modules.blocking.blocking import Module
 import configparser
 import platform
 import pytest
+from subprocess import check_output
 import os
 
+
+
+def has_netadmin_cap():
+    """ Check the capabilities given to this docker container"""
+    cmd = 'capsh --print | grep "Current:" | cut -d' ' -f3 | grep cap_net_admin'
+    output = os.popen(cmd).read()
+    return True if 'cap_net_admin' in output else False
+
+
 IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
+IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 # ignore all tests if not using linux
-pytestmark = pytest.mark.skipif(
+linuxOS = pytest.mark.skipif(
     platform.system() != 'Linux',
     reason='Blocking is supported only in Linux with root priveledges',
 )
@@ -17,10 +28,17 @@ pytestmark = pytest.mark.skipif(
 # so all blocking module unit tests will fail because we don't have admin privs
 # we use this environment variable to check if slips is
 # running in github actions
-pytestmark = pytest.mark.skipif(
+isroot = pytest.mark.skipif(
     os.geteuid() != 0 or IS_DEPENDENCY_IMAGE != False,
     reason='Blocking is supported only with root priveledges',
 )
+
+# blocking requires net admin capabilities in docker, otherwise skips blocking tests
+has_net_admin_cap = pytest.mark.skipif(
+    IS_IN_A_DOCKER_CONTAINER and not has_netadmin_cap() ,
+    reason='Blocking is supported only with --cap-add=NET_ADMIN',
+)
+
 
 
 def do_nothing(*args):
@@ -36,7 +54,9 @@ def create_blocking_instance(outputQueue):
     blocking.print = do_nothing
     return blocking
 
-
+@linuxOS
+@isroot
+@has_net_admin_cap
 def is_slipschain_initialized(outputQueue) -> bool:
     blocking = create_blocking_instance(outputQueue)
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
@@ -50,7 +70,9 @@ def is_slipschain_initialized(outputQueue) -> bool:
             return False
     return True
 
-
+@linuxOS
+@isroot
+@has_net_admin_cap
 def test_initialize_chains_in_firewall(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     # manually set the firewall
@@ -68,7 +90,9 @@ def test_initialize_chains_in_firewall(outputQueue, database):
 #     os.system('./slips.py -cb')
 #     assert is_slipschain_initialized(outputQueue) == False
 
-
+@linuxOS
+@isroot
+@has_net_admin_cap
 def test_block_ip(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     blocking.initialize_chains_in_firewall()
@@ -78,7 +102,9 @@ def test_block_ip(outputQueue, database):
         to = True
         assert blocking.block_ip(ip, from_, to) == True
 
-
+@linuxOS
+@isroot
+@has_net_admin_cap
 def test_unblock_ip(outputQueue, database):
     blocking = create_blocking_instance(outputQueue)
     ip = '2.2.0.0'

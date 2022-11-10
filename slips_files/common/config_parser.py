@@ -28,7 +28,7 @@ class ConfigParser(object):
         """
         reads slips configuration file, slips.conf is the default file
         """
-        config = configparser.ConfigParser(interpolation=None)
+        config = configparser.ConfigParser(interpolation=None, comment_prefixes='#')
         try:
             with open(self.configfile) as source:
                 config.read_file(source)
@@ -37,19 +37,21 @@ class ConfigParser(object):
         return config
 
     def get_config_file(self):
-        parser = ArgumentParser(
-            usage='./slips.py -c <configfile> [options] [file]', add_help=False
-        )
+        parser = self.get_parser()
         return parser.get_configfile()
+
+    def get_parser(self, help=False):
+        parser = ArgumentParser(
+            usage='./slips.py -c <configfile> [options] [file]', add_help=help
+        )
+        return parser
 
 
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
         """
-        parser = ArgumentParser(
-            usage='./slips.py -c <configfile> [options] [file]', add_help=False
-        )
+        parser = self.get_parser()
         return parser.parse_arguments()
 
     def read_configuration(self, section, name, default_value):
@@ -91,16 +93,25 @@ class ConfigParser(object):
             'detection', 'evidence_detection_threshold', 2
         )
         try:
-            threshold = int(threshold)
+            threshold = float(threshold)
         except ValueError:
             threshold = 2
         return threshold
 
 
     def packet_filter(self):
-        return self.read_configuration(
-            'parameters', 'pcapfilter',  'ip or not ip'
+        pcapfilter = self.read_configuration(
+            'parameters', 'pcapfilter', 'no'
         )
+        if pcapfilter in ('no'):
+            return False
+        return pcapfilter
+
+    def online_whitelist(self):
+        return self.read_configuration(
+            'threatintelligence', 'online_whitelist',  False
+        )
+
 
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
@@ -112,17 +123,28 @@ class ConfigParser(object):
             timeout = 5
         return timeout
 
+    def online_whitelist_update_period(self):
+        update_period = self.read_configuration(
+            'threatintelligence', 'online_whitelist_update_period', 604800
+        )
+        try:
+            update_period = int(update_period)
+        except ValueError:
+            update_period = 604800
+        return update_period
+
+
     def popup_alerts(self):
-        popups =  self.read_configuration(
+        popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'true' in popups.lower() else False
+        return  'yes' in popups.lower() 
 
     def rotation(self):
         rotation = self.read_configuration(
             'parameters', 'rotation', 'yes'
         )
-        return True if 'yes' in rotation.lower() else False
+        return  'yes' in rotation.lower() 
 
     def store_a_copy_of_zeek_files(self):
         store_a_copy_of_zeek_files = self.read_configuration(
@@ -138,7 +160,7 @@ class ConfigParser(object):
         do_logs = self.read_configuration(
             'parameters', 'create_log_files', 'no'
         )
-        return True if 'yes' in do_logs else False
+        return  'yes' in do_logs 
 
     def whitelist_path(self):
         return self.read_configuration(
@@ -371,9 +393,11 @@ class ConfigParser(object):
 
 
     def taxii_server(self):
-        return self.read_configuration(
+        taxii_server =  self.read_configuration(
             'exporting_alerts', 'TAXII_server', False
         )
+        return taxii_server.replace('www.','')
+
 
     def taxii_port(self):
         return self.read_configuration(
@@ -384,7 +408,7 @@ class ConfigParser(object):
         use_https = self.read_configuration(
             'exporting_alerts', 'use_https', 'false'
         )
-        return True if use_https.lower() == 'true' else False
+        return use_https.lower() == 'true'
 
     def discovery_path(self):
         return self.read_configuration(
@@ -397,13 +421,14 @@ class ConfigParser(object):
         )
 
     def push_delay(self):
+        # 3600 = 1h
         delay = self.read_configuration(
-            'exporting_alerts', 'push_delay', 60*60
+            'exporting_alerts', 'push_delay', 3600
         )
         try:
             delay = float(delay)
         except ValueError:
-            delay = 60*60
+            delay = 3600
         return delay
 
     def collection_name(self):
@@ -421,9 +446,9 @@ class ConfigParser(object):
             'exporting_alerts', 'taxii_password', False
         )
 
-    def jwt_auth_url(self):
+    def jwt_auth_path(self):
         return self.read_configuration(
-            'exporting_alerts', 'jwt_auth_url', False
+            'exporting_alerts', 'jwt_auth_path', False
         )
 
 
@@ -482,7 +507,7 @@ class ConfigParser(object):
     def local_ti_data_path(self):
         return self.read_configuration(
             'threatintelligence',
-            'download_path_for_local_threat_intelligence',
+            'local_threat_intelligence_files',
             'modules/threat_intelligence/local_data_files/'
         )
 
@@ -537,7 +562,7 @@ class ConfigParser(object):
 
     def update_period(self):
         update_period =  self.read_configuration(
-             'threatintelligence', 'malicious_data_update_period', 86400
+             'threatintelligence', 'TI_files_update_period', 86400
         )
         try:
             update_period = float(update_period)
@@ -587,10 +612,53 @@ class ConfigParser(object):
         )
         return False if delete == 'False' else True
 
+    def rotation_period(self):
+        rotation_period = self.read_configuration(
+             'parameters', 'rotation_period', '1 day'
+        )
+        return utils.sanitize(rotation_period)
+
+    def keep_rotated_files_for(self) -> int:
+        """ returns period in seconds"""
+        keep_rotated_files_for = self.read_configuration(
+             'parameters', 'keep_rotated_files_for', '1 day'
+        )
+        try:
+            period = utils.sanitize(keep_rotated_files_for)
+            period = period.replace('day', '').replace(' ','').replace('s','')
+            period = int(period)
+        except ValueError:
+            period = 1
+
+        return period *24*60*60
+
+    def wait_for_modules_to_finish(self) -> int:
+        """ returns period in mins"""
+        wait_for_modules_to_finish = self.read_configuration(
+             'parameters', 'wait_for_modules_to_finish', '15 mins'
+        )
+        try:
+            period = utils.sanitize(wait_for_modules_to_finish)
+            period = period\
+                .replace('mins', '')\
+                .replace(' ','')\
+                .replace('s','')
+            period = float(period)
+        except ValueError:
+            period = 15
+
+        return period
+
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''
         ))
+
+    def store_zeek_files_in_the_output_dir(self):
+        store_in_output = self.read_configuration(
+         'parameters', 'store_zeek_files_in_the_output_dir', 'no'
+        )
+        return 'yes' in store_in_output
 
 
     def label(self):
@@ -599,6 +667,9 @@ class ConfigParser(object):
         )
 
     def get_disabled_modules(self, input_type) -> list:
+        """
+        Uses input type to enable leak detector only on pcaps
+        """
         to_ignore = self.read_configuration(
             'modules', 'disable', '[template , ensembling]'
         )

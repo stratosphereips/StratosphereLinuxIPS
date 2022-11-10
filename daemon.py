@@ -58,9 +58,7 @@ class Daemon():
         self.stdout = os.path.join(output_dir, self.stdout)
         self.logsfile = os.path.join(output_dir, self.logsfile)
 
-
     def read_configuration(self):
-        self.config = self.slips.read_conf_file()
         conf = ConfigParser()
         self.logsfile = conf.logsfile()
         self.stdout = conf.stdout()
@@ -119,7 +117,6 @@ class Daemon():
             self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
             # if an error happened it will be written in logsfile
             self.print('Either Daemon stopped normally or an error occurred.')
-
 
     def daemonize(self):
         """
@@ -226,7 +223,8 @@ class Daemon():
     def killdaemon(self):
         """ Kill the damon process only (aka slips.py) """
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
-        # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
+        # sending SIGKILL to self.pid will only kill slips.py and the rest of
+        # it's children will stay open in memory (not even zombies)
         try:
             os.kill(int(self.pid), SIGTERM)
         except ProcessLookupError:

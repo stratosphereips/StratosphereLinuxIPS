@@ -46,6 +46,7 @@ class Utils(object):
             '%Y-%m-%d %H:%M:%S.%f',
             '%Y-%m-%d %H:%M:%S',
             '%Y-%m-%d %H:%M:%S.%f%z',
+            '%Y/%m/%d %H:%M:%S.%f%z',
             '%Y/%m/%d %H:%M:%S.%f',
             '%Y/%m/%d %H:%M:%S',
             '%Y-%m-%d %H:%M:%S%z',
@@ -56,7 +57,14 @@ class Utils(object):
 
          )
         # this format will be used accross all modules and logfiles of slips
-        self.alerts_format = '%Y/%m/%d %H:%M:%S'
+        self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+
+    def threat_level_to_string(self, threat_level: float):
+        for str_lvl, int_value in self.threat_levels.items():
+            if float(threat_level) <= int_value:
+                return str_lvl
+
+
 
     def sanitize(self, string):
         """
@@ -248,6 +256,25 @@ class Utils(object):
 
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
+
+    def is_ignored_ip(self, ip) -> bool:
+        """
+        This function checks if an IP is a special list of IPs that
+        should not be alerted for different reasons
+        """
+        ip_obj = ipaddress.ip_address(ip)
+        # Is the IP multicast, private? (including localhost)
+        # local_link or reserved?
+        # The broadcast address 255.255.255.255 is reserved.
+        if (
+            ip_obj.is_multicast
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or '.255' in ip_obj.exploded
+        ):
+            return True
+        return False
 
     def get_hash_from_file(self, filename):
         """
