@@ -1303,6 +1303,11 @@ class Main:
             arg_parser.print_help()
             self.terminate_slips()
 
+        if self.args.interface and self.args.filepath:
+            print('Only -i or -f is allowed. Stopping slips.')
+            self.terminate_slips()
+
+
         if (self.args.save or self.args.db) and os.getuid() != 0:
             print('Saving and loading the database requires root privileges.')
             self.terminate_slips()
