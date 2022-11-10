@@ -508,10 +508,6 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
-    def get_zeek_PID(self, bro_parameter) -> int:
-        command = f"ps aux | grep '{self.zeek_or_bro} -C {bro_parameter}'"
-        pid = subprocess.getoutput(command).splitlines()[0].split()[1]
-        return int(pid)
 
     def start_observer(self):
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
@@ -554,14 +550,13 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
+            # run zeek
+            self.zeek_thread.start()
 
             # Give Zeek some time to generate at least 1 file.
-            self.zeek_thread.start()
             time.sleep(3)
-            # go back to slips main dir
 
-            # PID = self.get_zeek_PID(self.bro_parameter) todo
-            __database__.store_process_PID('Zeek', PID)
+            __database__.store_process_PID('Zeek', self.zeek_pid)
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
@@ -685,10 +680,7 @@ class InputProcess(multiprocessing.Process):
         ]
         command += packet_filter
         self.print(f'Zeek command: {command}', 3, 0)
-        print(f"@@@@@@@@@@@@@@@@@@  {command}")
-
-        # todo get pid returned from run
-        subprocess.run(
+        zeek = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -696,6 +688,7 @@ class InputProcess(multiprocessing.Process):
             cwd=self.zeek_folder,
             preexec_fn=detach_child
         )
+        self.zeek_pid = zeek.pid
         # todo handle closing zeek in slips.py
 
 
