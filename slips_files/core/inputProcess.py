@@ -106,7 +106,7 @@ class InputProcess(multiprocessing.Process):
         # over the configuration file
         self.packet_filter = self.packet_filter or conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
-        self.rotation = conf.rotation()
+        self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
@@ -552,7 +552,6 @@ class InputProcess(multiprocessing.Process):
 
             # run zeek
             self.zeek_thread.start()
-
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
 
@@ -647,12 +646,11 @@ class InputProcess(multiprocessing.Process):
             os.setpgrp()
 
         # rotation is disabled unless it's an interface
-        rotation_interval = '0sec'
+        rotation = []
         if self.input_type == 'interface':
-            if self.rotation:
-                # how often to rotate zeek files, taken from slips.conf
-                rotation_interval = self.rotation_period
-
+            if self.enable_rotation:
+                # how often to rotate zeek files? taken from slips.conf
+                rotation = ['-e', f"redef Log::default_rotation_interval = {self.rotation_period} ;"]
             bro_parameter = f'-i {self.given_path}'
 
         elif self.input_type == 'pcap':
@@ -661,7 +659,6 @@ class InputProcess(multiprocessing.Process):
             if not os.path.isabs(self.given_path):
                 # move 1 dir back since we will move into zeek_Files dir
                 given_path = os.path.join('..', self.given_path)
-
             bro_parameter = f'-r {given_path}'
 
 
@@ -676,14 +673,15 @@ class InputProcess(multiprocessing.Process):
         # we have our own copy pf local.zeek in __load__.zeek
         command = [self.zeek_or_bro, '-C']
         command += bro_parameter.split()
-        command +=[
+        command += [
             f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
             'tcp_attempt_delay=1min',
-            zeek_scripts_dir,
-            '-e', f"redef Log::default_rotation_interval = {rotation_interval} ;"
+            zeek_scripts_dir
         ]
+        command += rotation
         command += packet_filter
         self.print(f'Zeek command: {command}', 3, 0)
+
         zeek = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
@@ -692,12 +690,15 @@ class InputProcess(multiprocessing.Process):
             cwd=self.zeek_folder,
             preexec_fn=detach_child
         )
-        error = zeek.communicate()[1]
+
+        # you have to get the pid before communicate()
+        self.zeek_pid = zeek.pid
+
+        out, error = zeek.communicate()
+        if out:
+            print(f"Zeek: {out}")
         if error:
             self.print (f"Zeek error {zeek.returncode}: {error.strip()}")
-
-        self.zeek_pid = zeek.pid
-        # todo handle closing zeek in slips.py
 
 
     def run(self):

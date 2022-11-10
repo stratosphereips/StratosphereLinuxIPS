@@ -614,7 +614,7 @@ class ConfigParser(object):
 
     def rotation_period(self):
         rotation_period = self.read_configuration(
-             'parameters', 'rotation_period', '1d'
+             'parameters', 'rotation_period', '1 day'
         )
         return utils.sanitize(rotation_period)
 
