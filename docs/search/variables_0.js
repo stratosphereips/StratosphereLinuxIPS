@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['errors_5flogfile_961',['errors_logfile',['../classslips_1_1slips__files_1_1core_1_1outputProcess_1_1OutputProcess.html#a8face5ef230af6e1e5eb6e2b4b1cc21c',1,'slips::slips_files::core::outputProcess::OutputProcess']]]
+  ['bro_5ftimeout_1020',['bro_timeout',['../d8/df4/classslips_1_1slips__files_1_1core_1_1inputProcess_1_1InputProcess.html#a46d430bebede0d174ebaa3b6af553b2c',1,'slips::slips_files::core::inputProcess::InputProcess']]]
 ];

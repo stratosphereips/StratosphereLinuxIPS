@@ -1,0 +1,17 @@
+digraph "Graphical Class Hierarchy"
+{
+ // LATEX_PDF_SIZE
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node34 [label="object",height=0.2,width=0.4,color="grey75", fillcolor="white", style="filled",tooltip=" "];
+  Node34 -> Node0 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node0 [label="slips.modules.CESNET.warden\l_client.Client",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$d4/dba/classslips_1_1modules_1_1CESNET_1_1warden__client_1_1Client.html",tooltip=" "];
+  Node34 -> Node36 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node36 [label="slips.slips_files.common.slips\l_utils.Utils",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$d7/d2e/classslips_1_1slips__files_1_1common_1_1slips__utils_1_1Utils.html",tooltip=" "];
+  Node34 -> Node37 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node37 [label="slips.slips_files.core.database.\l_profile_flow.ProfilingFlowsDatabase",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$d6/d35/classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1ProfilingFlowsDatabase.html",tooltip=" "];
+  Node37 -> Node38 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+  Node38 [label="slips.slips_files.core.database.database.\lDatabase",height=0.2,width=0.4,color="black", fillcolor="white", style="filled",URL="$d2/df5/classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1Database.html",tooltip=" "];
+  Node34 -> Node38 [dir="back",color="midnightblue",fontsize="10",style="solid",fontname="Helvetica"];
+}
