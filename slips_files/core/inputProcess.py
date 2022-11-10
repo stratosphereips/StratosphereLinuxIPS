@@ -566,6 +566,12 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
+            def detach_child():
+                """
+                Detach zeek from the parent process group(inputprocess), the child(zeek)
+                 will no longer receive signals
+                """
+                os.setpgrp()
 
             # Run zeek on the pcap or interface. The redef is to have json files
             # zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
@@ -588,7 +594,7 @@ class InputProcess(multiprocessing.Process):
             self.print(f'Zeek command: {command}', 3, 0)
             subprocess.run(command,
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
-                         )
+                         preexec_fn=detach_child)
 
 
             # Give Zeek some time to generate at least 1 file.
