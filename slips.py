@@ -44,7 +44,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.5'
+version = '0.9.6'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -676,6 +676,10 @@ class Main:
             # we don't want to kill this process
             self.PIDs.pop('slips.py', None)
 
+            if self.mode == 'daemonized':
+                profilesLen = __database__.getProfilesLen()
+                self.daemon.print(f'Total analyzed IPs: {profilesLen}.')
+
 
             modules_to_be_killed_last = {
                 'EvidenceProcess',
@@ -782,8 +786,6 @@ class Main:
             self.delete_zeek_files()
 
             if self.mode == 'daemonized':
-                profilesLen = __database__.getProfilesLen()
-                self.daemon.print(f'Total analyzed IPs: {profilesLen}.')
                 # if slips finished normally without stopping the daemon with -S
                 # then we need to delete the pidfile
                 self.daemon.delete_pidfile()

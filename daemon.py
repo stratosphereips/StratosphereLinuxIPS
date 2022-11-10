@@ -223,7 +223,8 @@ class Daemon():
     def killdaemon(self):
         """ Kill the damon process only (aka slips.py) """
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
-        # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
+        # sending SIGKILL to self.pid will only kill slips.py and the rest of
+        # it's children will stay open in memory (not even zombies)
         try:
             os.kill(int(self.pid), SIGTERM)
         except ProcessLookupError:
