@@ -27,6 +27,9 @@ docker pull stratosphereips/slips_p2p
 docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips_p2p
 ```
 
+For the p2p to be able to listen on the network interfaces 
+and receive packets you should use ```--cap-add=NET_ADMIN```
+
 ## Installation:
 
 1. download and install go: 
