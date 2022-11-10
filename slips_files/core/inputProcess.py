@@ -634,11 +634,16 @@ class InputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def run_zeek(self):
+        """
+        This thread sets the correct zeek parameters and starts zeek
+        """
         def detach_child():
             """
             Detach zeek from the parent process group(inputprocess), the child(zeek)
              will no longer receive signals
             """
+            # we're doing this to fix zeek rotating on sigint, not when zeek has it's own
+            # process group, it won't get the signals sent to slips.py
             os.setpgrp()
 
         # rotation is disabled unless it's an interface
@@ -652,20 +657,16 @@ class InputProcess(multiprocessing.Process):
 
         elif self.input_type == 'pcap':
             # Find if the pcap file name was absolute or relative
-            if os.path.isabs(self.given_path):
-                # If absolute, do nothing
-                given_path = f'"{self.given_path}"'
-            else:
+            given_path = self.given_path
+            if not os.path.isabs(self.given_path):
                 # move 1 dir back since we will move into zeek_Files dir
-                given_path = f'"os.path.join(\'..\', self.given_path)"'
+                given_path = os.path.join('..', self.given_path)
 
             bro_parameter = f'-r {given_path}'
 
 
         # Run zeek on the pcap or interface. The redef is to have json files
-        # zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
-        zeek_scripts_dir = f'../zeek-scripts'
-
+        zeek_scripts_dir = os.path.join(os.getcwd(), 'zeek-scripts')
         packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
 
         # 'local' is removed from the command because it
@@ -691,6 +692,10 @@ class InputProcess(multiprocessing.Process):
             cwd=self.zeek_folder,
             preexec_fn=detach_child
         )
+        error = zeek.communicate()[1]
+        if error:
+            self.print (f"Zeek error {zeek.returncode}: {error.strip()}")
+
         self.zeek_pid = zeek.pid
         # todo handle closing zeek in slips.py
 
