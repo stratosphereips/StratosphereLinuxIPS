@@ -95,6 +95,10 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
+        self.zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            daemon=True
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -535,27 +539,11 @@ class InputProcess(multiprocessing.Process):
             self.print(f'Storing zeek log files in {self.zeek_folder}')
             self.start_observer()
 
-            # rotation is disabled unless it's an interface
-            self.rotation_interval = (
-                "redef Log::default_rotation_interval = 0sec;"
-            )
             if self.input_type == 'interface':
-                if self.rotation:
-                    self.rotation_interval = (
-                        f"redef Log::default_rotation_interval = {self.rotation_period} ;"
-                    )
-                bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.marked_as_growing = True
                 self.bro_timeout = float('inf')
             elif self.input_type == 'pcap':
-                # Find if the pcap file name was absolute or relative
-                if self.given_path[0] == '/':
-                    # If absolute, do nothing
-                    bro_parameter = '-r "' + self.given_path + '"'
-                else:
-                    # If relative, add ../ since we will move into a special folder
-                    bro_parameter = '-r "../' + self.given_path + '"'
                 # This is for stopping the inputprocess
                 # if bro does not receive any new line while reading a pcap
                 self.bro_timeout = 30
@@ -566,43 +554,13 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
-            def detach_child():
-                """
-                Detach zeek from the parent process group(inputprocess), the child(zeek)
-                 will no longer receive signals
-                """
-                os.setpgrp()
-
-            # Run zeek on the pcap or interface. The redef is to have json files
-            # zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
-            zeek_scripts_dir = f'../zeek-scripts'
-            # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
-            # and policy/protocols/ssl/validate-certs and they have conflicts with our own
-            # zeek-scripts/expiring-certs and validate-certs
-            # we have our own copy pf local.zeek in __load__.zeek
-
-            # we want to cd into the zeek_files drt, run zeek there, then cd .. into slips main dir
-            old_dir = os.getcwd()
-            os.chdir(self.zeek_folder)
-
-            packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
-            # todo use bro parameter
-            command = [self.zeek_or_bro, '-C', '-i', 'wlp3s0', f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
-                      'tcp_attempt_delay=1min' , zeek_scripts_dir
-                      , '-e', self.rotation_interval ] + packet_filter
-
-            self.print(f'Zeek command: {command}', 3, 0)
-            subprocess.run(command,
-                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
-                         preexec_fn=detach_child)
-
 
             # Give Zeek some time to generate at least 1 file.
+            self.zeek_thread.start()
             time.sleep(3)
             # go back to slips main dir
-            os.chdir(old_dir)
 
-            PID = self.get_zeek_PID(bro_parameter)
+            # PID = self.get_zeek_PID(self.bro_parameter) todo
             __database__.store_process_PID('Zeek', PID)
             lines = self.read_zeek_files()
             self.print(
@@ -676,6 +634,70 @@ class InputProcess(multiprocessing.Process):
         # Stop the observer
         self.stop_observer()
         __database__.publish('finished_modules', self.name)
+
+    def run_zeek(self):
+        def detach_child():
+            """
+            Detach zeek from the parent process group(inputprocess), the child(zeek)
+             will no longer receive signals
+            """
+            os.setpgrp()
+
+        # rotation is disabled unless it's an interface
+        rotation_interval = '0sec'
+        if self.input_type == 'interface':
+            if self.rotation:
+                # how often to rotate zeek files, taken from slips.conf
+                rotation_interval = self.rotation_period
+
+            bro_parameter = f'-i {self.given_path}'
+
+        elif self.input_type == 'pcap':
+            # Find if the pcap file name was absolute or relative
+            if os.path.isabs(self.given_path):
+                # If absolute, do nothing
+                given_path = f'"{self.given_path}"'
+            else:
+                # move 1 dir back since we will move into zeek_Files dir
+                given_path = f'"os.path.join(\'..\', self.given_path)"'
+
+            bro_parameter = f'-r {given_path}'
+
+
+        # Run zeek on the pcap or interface. The redef is to have json files
+        # zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
+        zeek_scripts_dir = f'../zeek-scripts'
+
+        packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
+
+        # 'local' is removed from the command because it
+        # loads policy/protocols/ssl/expiring-certs and
+        # and policy/protocols/ssl/validate-certs and they have conflicts with our own
+        # zeek-scripts/expiring-certs and validate-certs
+        # we have our own copy pf local.zeek in __load__.zeek
+        command = [self.zeek_or_bro, '-C']
+        command += bro_parameter.split()
+        command +=[
+            f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
+            'tcp_attempt_delay=1min',
+            zeek_scripts_dir,
+            '-e', f"redef Log::default_rotation_interval = {rotation_interval} ;"
+        ]
+        command += packet_filter
+        self.print(f'Zeek command: {command}', 3, 0)
+        print(f"@@@@@@@@@@@@@@@@@@  {command}")
+
+        # todo get pid returned from run
+        subprocess.run(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            cwd=self.zeek_folder,
+            preexec_fn=detach_child
+        )
+        # todo handle closing zeek in slips.py
+
 
     def run(self):
         utils.drop_root_privs()
