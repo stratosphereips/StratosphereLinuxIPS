@@ -29,6 +29,7 @@ import json
 import traceback
 import threading
 import subprocess
+import signal
 
 
 # Input Process
@@ -62,9 +63,11 @@ class InputProcess(multiprocessing.Process):
         self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
+
         self.packet_filter = False
         if cli_packet_filter:
             self.packet_filter = "'" + cli_packet_filter + "'"
+
         self.read_configuration()
         self.event_observer = None
         # set to true in unit tests
@@ -533,13 +536,13 @@ class InputProcess(multiprocessing.Process):
             self.start_observer()
 
             # rotation is disabled unless it's an interface
-            rotation_interval = (
-                "-e 'redef Log::default_rotation_interval = 0sec;'"
+            self.rotation_interval = (
+                "redef Log::default_rotation_interval = 0sec;"
             )
             if self.input_type == 'interface':
                 if self.rotation:
-                    rotation_interval = (
-                        f"-e 'redef Log::default_rotation_interval = {self.rotation_period} ;'"
+                    self.rotation_interval = (
+                        f"redef Log::default_rotation_interval = {self.rotation_period} ;"
                     )
                 bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
@@ -563,22 +566,36 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
+
             # Run zeek on the pcap or interface. The redef is to have json files
-            zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
+            # zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
+            zeek_scripts_dir = f'../zeek-scripts'
             # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
-            # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
+            # and policy/protocols/ssl/validate-certs and they have conflicts with our own
+            # zeek-scripts/expiring-certs and validate-certs
             # we have our own copy pf local.zeek in __load__.zeek
-            command = (
-                f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} '
-                f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins '
-                f'tcp_attempt_delay=1min -f {self.packet_filter} '
-                f'{zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
-            )
+
+            # we want to cd into the zeek_files drt, run zeek there, then cd .. into slips main dir
+            old_dir = os.getcwd()
+            os.chdir(self.zeek_folder)
+
+            packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
+            # todo use bro parameter
+            command = [self.zeek_or_bro, '-C', '-i', 'wlp3s0', f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
+                      'tcp_attempt_delay=1min' , zeek_scripts_dir
+                      , '-e', self.rotation_interval ] + packet_filter
+
             self.print(f'Zeek command: {command}', 3, 0)
-            # Run zeek.
-            os.system(command)
+            subprocess.run(command,
+                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE,
+                         )
+
+
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
+            # go back to slips main dir
+            os.chdir(old_dir)
+
             PID = self.get_zeek_PID(bro_parameter)
             __database__.store_process_PID('Zeek', PID)
             lines = self.read_zeek_files()
@@ -661,6 +678,7 @@ class InputProcess(multiprocessing.Process):
         # any changes made to the shared variables in inputprocess will not appear in the thread
         if '-i' in sys.argv:
             self.remover_thread.start()
+
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
