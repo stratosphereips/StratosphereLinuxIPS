@@ -100,9 +100,12 @@ class ConfigParser(object):
 
 
     def packet_filter(self):
-        return self.read_configuration(
-            'parameters', 'pcapfilter',  'ip or not ip'
+        pcapfilter = self.read_configuration(
+            'parameters', 'pcapfilter', 'no'
         )
+        if pcapfilter in ('no'):
+            return False
+        return pcapfilter
 
     def online_whitelist(self):
         return self.read_configuration(
@@ -611,7 +614,7 @@ class ConfigParser(object):
 
     def rotation_period(self):
         rotation_period = self.read_configuration(
-             'parameters', 'rotation_period', '1d'
+             'parameters', 'rotation_period', '1 day'
         )
         return utils.sanitize(rotation_period)
 

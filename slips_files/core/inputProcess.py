@@ -29,6 +29,7 @@ import json
 import traceback
 import threading
 import subprocess
+import signal
 
 
 # Input Process
@@ -41,7 +42,7 @@ class InputProcess(multiprocessing.Process):
             profilerqueue,
             input_type,
             input_information,
-            packet_filter,
+            cli_packet_filter,
             zeek_or_bro,
             zeek_folder,
             line_type,
@@ -62,11 +63,12 @@ class InputProcess(multiprocessing.Process):
         self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
+
+        self.packet_filter = False
+        if cli_packet_filter:
+            self.packet_filter = "'" + cli_packet_filter + "'"
+
         self.read_configuration()
-        # If we were given something from command line, has preference
-        # over the configuration file
-        if packet_filter:
-            self.packet_filter = "'" + packet_filter + "'"
         self.event_observer = None
         # set to true in unit tests
         self.testing = False
@@ -93,12 +95,18 @@ class InputProcess(multiprocessing.Process):
         self.timeout = None
         # zeek rotated files to be deleted after a period of time
         self.to_be_deleted = []
+        self.zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            daemon=True
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.packet_filter = conf.packet_filter()
+        # If we were given something from command line, has preference
+        # over the configuration file
+        self.packet_filter = self.packet_filter or conf.packet_filter()
         self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
-        self.rotation = conf.rotation()
+        self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
@@ -500,10 +508,6 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
-    def get_zeek_PID(self, bro_parameter) -> int:
-        command = f"ps aux | grep '{self.zeek_or_bro} -C {bro_parameter}'"
-        pid = subprocess.getoutput(command).splitlines()[0].split()[1]
-        return int(pid)
 
     def start_observer(self):
         # Now start the observer of new files. We need the observer because Zeek does not create all the files
@@ -531,27 +535,11 @@ class InputProcess(multiprocessing.Process):
             self.print(f'Storing zeek log files in {self.zeek_folder}')
             self.start_observer()
 
-            # rotation is disabled unless it's an interface
-            rotation_interval = (
-                "-e 'redef Log::default_rotation_interval = 0sec;'"
-            )
             if self.input_type == 'interface':
-                if self.rotation:
-                    rotation_interval = (
-                        f"-e 'redef Log::default_rotation_interval = {self.rotation_period} ;'"
-                    )
-                bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
                 self.marked_as_growing = True
                 self.bro_timeout = float('inf')
             elif self.input_type == 'pcap':
-                # Find if the pcap file name was absolute or relative
-                if self.given_path[0] == '/':
-                    # If absolute, do nothing
-                    bro_parameter = '-r "' + self.given_path + '"'
-                else:
-                    # If relative, add ../ since we will move into a special folder
-                    bro_parameter = '-r "../' + self.given_path + '"'
                 # This is for stopping the inputprocess
                 # if bro does not receive any new line while reading a pcap
                 self.bro_timeout = 30
@@ -562,24 +550,12 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
-            # Run zeek on the pcap or interface. The redef is to have json files
-            zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
-            # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
-            # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
-            # we have our own copy pf local.zeek in __load__.zeek
-            command = (
-                f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} '
-                f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins '
-                f'tcp_attempt_delay=1min -f {self.packet_filter} '
-                f'{zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
-            )
-            self.print(f'Zeek command: {command}', 3, 0)
-            # Run zeek.
-            os.system(command)
+            # run zeek
+            self.zeek_thread.start()
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
-            PID = self.get_zeek_PID(bro_parameter)
-            __database__.store_process_PID('Zeek', PID)
+
+            __database__.store_process_PID('Zeek', self.zeek_pid)
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
@@ -649,9 +625,81 @@ class InputProcess(multiprocessing.Process):
                 lock.release()
 
     def shutdown_gracefully(self):
-        # Stop the observer
         self.stop_observer()
+
+        if hasattr(self, 'zeek_pid'):
+            __database__.publish('finished_modules', 'Zeek')
+
         __database__.publish('finished_modules', self.name)
+
+    def run_zeek(self):
+        """
+        This thread sets the correct zeek parameters and starts zeek
+        """
+        def detach_child():
+            """
+            Detach zeek from the parent process group(inputprocess), the child(zeek)
+             will no longer receive signals
+            """
+            # we're doing this to fix zeek rotating on sigint, not when zeek has it's own
+            # process group, it won't get the signals sent to slips.py
+            os.setpgrp()
+
+        # rotation is disabled unless it's an interface
+        rotation = []
+        if self.input_type == 'interface':
+            if self.enable_rotation:
+                # how often to rotate zeek files? taken from slips.conf
+                rotation = ['-e', f"redef Log::default_rotation_interval = {self.rotation_period} ;"]
+            bro_parameter = f'-i {self.given_path}'
+
+        elif self.input_type == 'pcap':
+            # Find if the pcap file name was absolute or relative
+            given_path = self.given_path
+            if not os.path.isabs(self.given_path):
+                # move 1 dir back since we will move into zeek_Files dir
+                given_path = os.path.join('..', self.given_path)
+            bro_parameter = f'-r {given_path}'
+
+
+        # Run zeek on the pcap or interface. The redef is to have json files
+        zeek_scripts_dir = os.path.join(os.getcwd(), 'zeek-scripts')
+        packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
+
+        # 'local' is removed from the command because it
+        # loads policy/protocols/ssl/expiring-certs and
+        # and policy/protocols/ssl/validate-certs and they have conflicts with our own
+        # zeek-scripts/expiring-certs and validate-certs
+        # we have our own copy pf local.zeek in __load__.zeek
+        command = [self.zeek_or_bro, '-C']
+        command += bro_parameter.split()
+        command += [
+            f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
+            'tcp_attempt_delay=1min',
+            zeek_scripts_dir
+        ]
+        command += rotation
+        command += packet_filter
+        self.print(f'Zeek command: {command}', 3, 0)
+
+        zeek = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            cwd=self.zeek_folder,
+            preexec_fn=detach_child
+        )
+
+        # you have to get the pid before communicate()
+        self.zeek_pid = zeek.pid
+
+        out, error = zeek.communicate()
+        if out:
+            print(f"Zeek: {out}")
+        if error:
+            self.print (f"Zeek error {zeek.returncode}: {error.strip()}")
+
 
     def run(self):
         utils.drop_root_privs()
@@ -660,6 +708,7 @@ class InputProcess(multiprocessing.Process):
         # any changes made to the shared variables in inputprocess will not appear in the thread
         if '-i' in sys.argv:
             self.remover_thread.start()
+
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin
