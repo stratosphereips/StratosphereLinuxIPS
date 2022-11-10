@@ -626,8 +626,11 @@ class InputProcess(multiprocessing.Process):
                 lock.release()
 
     def shutdown_gracefully(self):
-        # Stop the observer
         self.stop_observer()
+
+        if hasattr(self, 'zeek_pid'):
+            __database__.publish('finished_modules', 'Zeek')
+
         __database__.publish('finished_modules', self.name)
 
     def run_zeek(self):
