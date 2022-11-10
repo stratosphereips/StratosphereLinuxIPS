@@ -1,0 +1,219 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.8.17"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: /home/alya/Desktop/slips/modules/rnn-cc-detection/training_code/rnn_model_training.py File Reference</title>
+<link href="../../tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="../../jquery.js"></script>
+<script type="text/javascript" src="../../dynsections.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="../../toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="../../navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../resize.js"></script>
+<script type="text/javascript" src="../../navtreedata.js"></script>
+<script type="text/javascript" src="../../navtree.js"></script>
+<link href="../../search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../search/searchdata.js"></script>
+<script type="text/javascript" src="../../search/search.js"></script>
+<link href="../../doxygen.css" rel="stylesheet" type="text/css" />
+<link href="../../doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.8.17 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "../../search",false,'Search');
+/* @license-end */
+</script>
+<script type="text/javascript" src="../../menudata.js"></script>
+<script type="text/javascript" src="../../menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('../../',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('dc/d65/rnn__model__training_8py.html','../../'); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#namespaces">Namespaces</a> &#124;
+<a href="#var-members">Variables</a>  </div>
+  <div class="headertitle">
+<div class="title">rnn_model_training.py File Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="namespaces"></a>
+Namespaces</h2></td></tr>
+<tr class="memitem:d0/d27/namespacernn__model__training"><td class="memItemLeft" align="right" valign="top"> &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html">rnn_model_training</a></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="var-members"></a>
+Variables</h2></td></tr>
+<tr class="memitem:aab3ad8b6de6e2b2b414cc5dc4f0fb926"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#aab3ad8b6de6e2b2b414cc5dc4f0fb926">rnn_model_training.parser</a> = argparse.ArgumentParser()</td></tr>
+<tr class="separator:aab3ad8b6de6e2b2b414cc5dc4f0fb926"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0d4e425d490ae582b4d02775c77d83c0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a0d4e425d490ae582b4d02775c77d83c0">rnn_model_training.help</a></td></tr>
+<tr class="separator:a0d4e425d490ae582b4d02775c77d83c0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa844e31a1e26e4dd3704bc2e9d2e28d0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#aa844e31a1e26e4dd3704bc2e9d2e28d0">rnn_model_training.type</a></td></tr>
+<tr class="separator:aa844e31a1e26e4dd3704bc2e9d2e28d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9b75a5f97cc932a098ac26eb3274bb46"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a9b75a5f97cc932a098ac26eb3274bb46">rnn_model_training.required</a></td></tr>
+<tr class="separator:a9b75a5f97cc932a098ac26eb3274bb46"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a798e0c7c76e686f6aab8d5572647766b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a798e0c7c76e686f6aab8d5572647766b">rnn_model_training.default</a></td></tr>
+<tr class="separator:a798e0c7c76e686f6aab8d5572647766b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab7a709f89b237834db6a80c68ee07126"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#ab7a709f89b237834db6a80c68ee07126">rnn_model_training.args</a> = parser.parse_args()</td></tr>
+<tr class="separator:ab7a709f89b237834db6a80c68ee07126"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6987755683f093bdce1e8d9ede7d1d4a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a6987755683f093bdce1e8d9ede7d1d4a">rnn_model_training.f</a> = lambda x: x[: args.max_letters]</td></tr>
+<tr class="separator:a6987755683f093bdce1e8d9ede7d1d4a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ace3af25fed9e8b41dd93135ee38f0f61"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#ace3af25fed9e8b41dd93135ee38f0f61">rnn_model_training.df</a></td></tr>
+<tr class="separator:ace3af25fed9e8b41dd93135ee38f0f61"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3233b1442cf7bf4a642faabbf09a5654"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a3233b1442cf7bf4a642faabbf09a5654">rnn_model_training.axis</a></td></tr>
+<tr class="separator:a3233b1442cf7bf4a642faabbf09a5654"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a39a7e7ba6c45abdd3bc2a227231dd45c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a39a7e7ba6c45abdd3bc2a227231dd45c">rnn_model_training.how</a></td></tr>
+<tr class="separator:a39a7e7ba6c45abdd3bc2a227231dd45c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a211af9bf75a6262e625c2c7bf8abbf50"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a211af9bf75a6262e625c2c7bf8abbf50">rnn_model_training.inplace</a></td></tr>
+<tr class="separator:a211af9bf75a6262e625c2c7bf8abbf50"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8f1fbe762302c50e245d006c1645c9c5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a8f1fbe762302c50e245d006c1645c9c5">rnn_model_training.columns</a></td></tr>
+<tr class="separator:a8f1fbe762302c50e245d006c1645c9c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3e218727530e6512efe7d3b376823a82"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a3e218727530e6512efe7d3b376823a82">rnn_model_training.indexNames</a> = df[df['state'].str.len() &lt; args.min_letters].index</td></tr>
+<tr class="separator:a3e218727530e6512efe7d3b376823a82"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1e0ac5424fae1756d1e66d4ea2365e22"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a1e0ac5424fae1756d1e66d4ea2365e22">rnn_model_training.vocabulary</a> = list('abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*')</td></tr>
+<tr class="separator:a1e0ac5424fae1756d1e66d4ea2365e22"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58a9e2de92f6ac6101799e9b579dae66"><td class="memItemLeft" align="right" valign="top">dictionary&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a58a9e2de92f6ac6101799e9b579dae66">rnn_model_training.int_of_letters</a> = {}</td></tr>
+<tr class="separator:a58a9e2de92f6ac6101799e9b579dae66"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4c4fae1f5cfca5538a4b5cc368bb0fec"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a4c4fae1f5cfca5538a4b5cc368bb0fec">rnn_model_training.vocabulary_size</a> = len(int_of_letters)</td></tr>
+<tr class="separator:a4c4fae1f5cfca5538a4b5cc368bb0fec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a08b507d75e0f9eb3e1e70c0cb349322e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a08b507d75e0f9eb3e1e70c0cb349322e">rnn_model_training.features_per_sample</a> = 1</td></tr>
+<tr class="separator:a08b507d75e0f9eb3e1e70c0cb349322e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3349298572630a3a50c6389322005219"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a3349298572630a3a50c6389322005219">rnn_model_training.x_data</a> = df['state'].to_numpy()</td></tr>
+<tr class="separator:a3349298572630a3a50c6389322005219"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7db43a2a990a526f07a19355b34c5f2a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a7db43a2a990a526f07a19355b34c5f2a">rnn_model_training.y_data</a> = df['label'].to_numpy()</td></tr>
+<tr class="separator:a7db43a2a990a526f07a19355b34c5f2a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a808cc52d226f0de604aab9138137c1e7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a808cc52d226f0de604aab9138137c1e7">rnn_model_training.max_length_of_outtupple</a> = max([len(sublist) for sublist in df.state.to_list()])</td></tr>
+<tr class="separator:a808cc52d226f0de604aab9138137c1e7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a561989516181884f3c1fe6121cb40706"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a561989516181884f3c1fe6121cb40706">rnn_model_training.padded_x_data</a></td></tr>
+<tr class="separator:a561989516181884f3c1fe6121cb40706"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af500181d140bb20220036223a87644ed"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#af500181d140bb20220036223a87644ed">rnn_model_training.train_x_data</a> = padded_x_data</td></tr>
+<tr class="separator:af500181d140bb20220036223a87644ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2fb63bc69ef645005695b96c2d0120ec"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a2fb63bc69ef645005695b96c2d0120ec">rnn_model_training.train_y_data</a> = y_data</td></tr>
+<tr class="separator:a2fb63bc69ef645005695b96c2d0120ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a55a6997e79d7fac588800b31cbdd42c7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a55a6997e79d7fac588800b31cbdd42c7">rnn_model_training.num_outtuples</a> = train_x_data.shape[0]</td></tr>
+<tr class="separator:a55a6997e79d7fac588800b31cbdd42c7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d4a0387f11f2462dda213b227e304d9"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a7d4a0387f11f2462dda213b227e304d9">rnn_model_training.timesteps</a> = max_length_of_outtupple</td></tr>
+<tr class="separator:a7d4a0387f11f2462dda213b227e304d9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a137a571db1ac215251548c5fc8aafcff"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a137a571db1ac215251548c5fc8aafcff">rnn_model_training.input_shape</a> = (timesteps, features_per_sample)</td></tr>
+<tr class="separator:a137a571db1ac215251548c5fc8aafcff"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a624a4364a477e92a4725d8ceed38cab7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a624a4364a477e92a4725d8ceed38cab7">rnn_model_training.model</a> = tf.keras.models.Sequential()</td></tr>
+<tr class="separator:a624a4364a477e92a4725d8ceed38cab7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad821310841f4e4a00fe82f80358f6b11"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#ad821310841f4e4a00fe82f80358f6b11">rnn_model_training.loss</a> = history.history['loss']</td></tr>
+<tr class="separator:ad821310841f4e4a00fe82f80358f6b11"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a45788fd42eb2b3e01c6f5f87b236cc6a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a45788fd42eb2b3e01c6f5f87b236cc6a">rnn_model_training.optimizer</a></td></tr>
+<tr class="separator:a45788fd42eb2b3e01c6f5f87b236cc6a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a03ede4a3bef84a646730b743fc5f501e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a03ede4a3bef84a646730b743fc5f501e">rnn_model_training.metrics</a></td></tr>
+<tr class="separator:a03ede4a3bef84a646730b743fc5f501e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad6f76405f1610a50f219507ed6fae7d0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#ad6f76405f1610a50f219507ed6fae7d0">rnn_model_training.history</a></td></tr>
+<tr class="separator:ad6f76405f1610a50f219507ed6fae7d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad064ebe800bf14ae6b6533344741ced6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#ad064ebe800bf14ae6b6533344741ced6">rnn_model_training.model_file</a></td></tr>
+<tr class="separator:ad064ebe800bf14ae6b6533344741ced6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a336ee722f7cf54289845c2b1118a9af5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a336ee722f7cf54289845c2b1118a9af5">rnn_model_training.overwrite</a></td></tr>
+<tr class="separator:a336ee722f7cf54289845c2b1118a9af5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af7178c0e6d654077592db8d75a56b356"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#af7178c0e6d654077592db8d75a56b356">rnn_model_training.acc</a> = history.history['accuracy']</td></tr>
+<tr class="separator:af7178c0e6d654077592db8d75a56b356"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaf659e69ab6dcd691aec0ba37a8a4483"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#aaf659e69ab6dcd691aec0ba37a8a4483">rnn_model_training.val_acc</a> = history.history['val_accuracy']</td></tr>
+<tr class="separator:aaf659e69ab6dcd691aec0ba37a8a4483"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a45e0d3fa18e5b8cb128d7742c3080709"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a45e0d3fa18e5b8cb128d7742c3080709">rnn_model_training.val_loss</a> = history.history['val_loss']</td></tr>
+<tr class="separator:a45e0d3fa18e5b8cb128d7742c3080709"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a26f349a14a02544d87cd1a8336f44ba8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a26f349a14a02544d87cd1a8336f44ba8">rnn_model_training.epochs</a> = range(1, len(acc) + 1)</td></tr>
+<tr class="separator:a26f349a14a02544d87cd1a8336f44ba8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a0382508924adaffb439961200baf57"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d0/d27/namespacernn__model__training.html#a9a0382508924adaffb439961200baf57">rnn_model_training.label</a></td></tr>
+<tr class="separator:a9a0382508924adaffb439961200baf57"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><a class="el" href="../../dir_e05d7e2b1ecd646af5bb94391405f3b5.html">modules</a></li><li class="navelem"><a class="el" href="../../dir_5c2abc78b8bb9b3dea9483d0f5adfd61.html">rnn-cc-detection</a></li><li class="navelem"><a class="el" href="../../dir_7986a038c799de6317c1d272330bd54b.html">training_code</a></li><li class="navelem"><a class="el" href="../../dc/d65/rnn__model__training_8py.html">rnn_model_training.py</a></li>
+    <li class="footer">Generated by
+    <a href="http://www.doxygen.org/index.html">
+    <img class="footer" src="../../doxygen.png" alt="doxygen"/></a> 1.8.17 </li>
+  </ul>
+</div>
+</body>
+</html>

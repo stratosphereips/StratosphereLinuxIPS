@@ -1,0 +1,1136 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.8.17"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: slips.slips_files.core.inputProcess.InputProcess Class Reference</title>
+<link href="../../tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="../../jquery.js"></script>
+<script type="text/javascript" src="../../dynsections.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="../../toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="../../navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../resize.js"></script>
+<script type="text/javascript" src="../../navtreedata.js"></script>
+<script type="text/javascript" src="../../navtree.js"></script>
+<link href="../../search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../search/searchdata.js"></script>
+<script type="text/javascript" src="../../search/search.js"></script>
+<link href="../../doxygen.css" rel="stylesheet" type="text/css" />
+<link href="../../doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.8.17 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "../../search",false,'Search');
+/* @license-end */
+</script>
+<script type="text/javascript" src="../../menudata.js"></script>
+<script type="text/javascript" src="../../menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('../../',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html','../../'); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="../../df/d46/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">slips.slips_files.core.inputProcess.InputProcess Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<div class="dynheader">
+Inheritance diagram for slips.slips_files.core.inputProcess.InputProcess:</div>
+<div class="dyncontent">
+<div class="center"><!-- SVG 0 -->
+</div>
+<center><span class="legend">[<a target="top" href="../../graph_legend.html">legend</a>]</span></center></div>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a70355f204cbac8b1822c3754211fd341"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a70355f204cbac8b1822c3754211fd341">__init__</a> (self, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a29577dc086b8f480aaea1a63fb895fce">outputqueue</a>, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aa92c056aa46b7edb861dc1e8567e6c38">profilerqueue</a>, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a2a9ecb082cc936e65991b4f1e384287e">input_type</a>, input_information, cli_packet_filter, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aa44552d7f1244c84658a8e1e18f795bd">zeek_or_bro</a>, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1b62885aed8cc23cbce7a6332cca3afa">zeek_folder</a>, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a0907c5db395f8d3701152312079549a6">line_type</a>, <a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae6e522844edee1699f4f08490b82d7d7">redis_port</a>)</td></tr>
+<tr class="separator:a70355f204cbac8b1822c3754211fd341"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac6e31589c198378cbc83dcd162c7c3fa"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ac6e31589c198378cbc83dcd162c7c3fa">read_configuration</a> (self)</td></tr>
+<tr class="separator:ac6e31589c198378cbc83dcd162c7c3fa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6e24bf216c07bdb4119588aa9948fc48"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a6e24bf216c07bdb4119588aa9948fc48">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:a6e24bf216c07bdb4119588aa9948fc48"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a37e4a5e1a88f098fa67b94e15b0d1a44"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a37e4a5e1a88f098fa67b94e15b0d1a44">stop_queues</a> (self)</td></tr>
+<tr class="separator:a37e4a5e1a88f098fa67b94e15b0d1a44"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6ca5e4d601622de371330d278a6cf729"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a6ca5e4d601622de371330d278a6cf729">read_nfdump_output</a> (self)</td></tr>
+<tr class="separator:a6ca5e4d601622de371330d278a6cf729"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3885300e803d21b477ae63e4e6fd4528"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a3885300e803d21b477ae63e4e6fd4528">check_if_time_to_del_rotated_files</a> (self)</td></tr>
+<tr class="separator:a3885300e803d21b477ae63e4e6fd4528"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2e7eeba96ea4acc3ec6859a7f478a5f5"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a2e7eeba96ea4acc3ec6859a7f478a5f5">read_zeek_files</a> (self)</td></tr>
+<tr class="separator:a2e7eeba96ea4acc3ec6859a7f478a5f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae6d55811ed58ce564ae723b058754804"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae6d55811ed58ce564ae723b058754804">read_zeek_folder</a> (self)</td></tr>
+<tr class="separator:ae6d55811ed58ce564ae723b058754804"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac92abbd5fae13273dd625fd5c9d9c9fa"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ac92abbd5fae13273dd625fd5c9d9c9fa">read_from_stdin</a> (self)</td></tr>
+<tr class="separator:ac92abbd5fae13273dd625fd5c9d9c9fa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a819d329cc10e9daaf55244ba5e227e91"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a819d329cc10e9daaf55244ba5e227e91">handle_binetflow</a> (self)</td></tr>
+<tr class="separator:a819d329cc10e9daaf55244ba5e227e91"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4307a0561cc3f7ac7990ab3fe00f2149"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a4307a0561cc3f7ac7990ab3fe00f2149">handle_suricata</a> (self)</td></tr>
+<tr class="separator:a4307a0561cc3f7ac7990ab3fe00f2149"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1b5a24981dac9616d50ae65327e79433"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1b5a24981dac9616d50ae65327e79433">handle_zeek_log_file</a> (self)</td></tr>
+<tr class="separator:a1b5a24981dac9616d50ae65327e79433"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae711c8d45970c1d70143c010cdad1c59"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae711c8d45970c1d70143c010cdad1c59">handle_nfdump</a> (self)</td></tr>
+<tr class="separator:ae711c8d45970c1d70143c010cdad1c59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb842de0cd6c52135b1f1fb43caa5f07"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#abb842de0cd6c52135b1f1fb43caa5f07">start_observer</a> (self)</td></tr>
+<tr class="separator:abb842de0cd6c52135b1f1fb43caa5f07"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a10961c9ebb422d0c6f0ad9523e048f75"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a10961c9ebb422d0c6f0ad9523e048f75">handle_pcap_and_interface</a> (self)</td></tr>
+<tr class="separator:a10961c9ebb422d0c6f0ad9523e048f75"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abf4a794b2557fca4f557360b84e89aa7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#abf4a794b2557fca4f557360b84e89aa7">stop_observer</a> (self)</td></tr>
+<tr class="separator:abf4a794b2557fca4f557360b84e89aa7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6ad3dde985b9bae8c17fda4c805c3d4c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a6ad3dde985b9bae8c17fda4c805c3d4c">remove_old_zeek_files</a> (self)</td></tr>
+<tr class="separator:a6ad3dde985b9bae8c17fda4c805c3d4c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a866fd6168ca97dea26a035c8bb5dfb90"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a866fd6168ca97dea26a035c8bb5dfb90">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a866fd6168ca97dea26a035c8bb5dfb90"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3bdd5402098fdf84da71f4e1109eaf93"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a3bdd5402098fdf84da71f4e1109eaf93">run_zeek</a> (self)</td></tr>
+<tr class="separator:a3bdd5402098fdf84da71f4e1109eaf93"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4590e588d7483bf2f3dbeab222b37fd6"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a4590e588d7483bf2f3dbeab222b37fd6">run</a> (self)</td></tr>
+<tr class="separator:a4590e588d7483bf2f3dbeab222b37fd6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a054582c1bbf2985ee573c54cb3bd1a04"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a054582c1bbf2985ee573c54cb3bd1a04">name</a></td></tr>
+<tr class="separator:a054582c1bbf2985ee573c54cb3bd1a04"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a29577dc086b8f480aaea1a63fb895fce"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a29577dc086b8f480aaea1a63fb895fce">outputqueue</a></td></tr>
+<tr class="separator:a29577dc086b8f480aaea1a63fb895fce"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa92c056aa46b7edb861dc1e8567e6c38"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aa92c056aa46b7edb861dc1e8567e6c38">profilerqueue</a></td></tr>
+<tr class="separator:aa92c056aa46b7edb861dc1e8567e6c38"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae6e522844edee1699f4f08490b82d7d7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae6e522844edee1699f4f08490b82d7d7">redis_port</a></td></tr>
+<tr class="separator:ae6e522844edee1699f4f08490b82d7d7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2a9ecb082cc936e65991b4f1e384287e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a2a9ecb082cc936e65991b4f1e384287e">input_type</a></td></tr>
+<tr class="separator:a2a9ecb082cc936e65991b4f1e384287e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0907c5db395f8d3701152312079549a6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a0907c5db395f8d3701152312079549a6">line_type</a></td></tr>
+<tr class="separator:a0907c5db395f8d3701152312079549a6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1f429e0fad9a17580bb7de40d6d7186f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1f429e0fad9a17580bb7de40d6d7186f">given_path</a></td></tr>
+<tr class="separator:a1f429e0fad9a17580bb7de40d6d7186f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1b62885aed8cc23cbce7a6332cca3afa"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1b62885aed8cc23cbce7a6332cca3afa">zeek_folder</a></td></tr>
+<tr class="separator:a1b62885aed8cc23cbce7a6332cca3afa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa44552d7f1244c84658a8e1e18f795bd"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aa44552d7f1244c84658a8e1e18f795bd">zeek_or_bro</a></td></tr>
+<tr class="separator:aa44552d7f1244c84658a8e1e18f795bd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c66dc33a1f0bab07b672b92ec4fa8e3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a8c66dc33a1f0bab07b672b92ec4fa8e3">read_lines_delay</a></td></tr>
+<tr class="separator:a8c66dc33a1f0bab07b672b92ec4fa8e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1694f1333c183a1c90b0ef8036ad7af6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1694f1333c183a1c90b0ef8036ad7af6">packet_filter</a></td></tr>
+<tr class="separator:a1694f1333c183a1c90b0ef8036ad7af6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a678366774d69fe1822ef6f1701484ab6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a678366774d69fe1822ef6f1701484ab6">event_observer</a></td></tr>
+<tr class="separator:a678366774d69fe1822ef6f1701484ab6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7b106c901a1ca031decf35cd94007a43"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a7b106c901a1ca031decf35cd94007a43">testing</a></td></tr>
+<tr class="separator:a7b106c901a1ca031decf35cd94007a43"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acd619e87ac89c3b130a7911dd4ae82e2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#acd619e87ac89c3b130a7911dd4ae82e2">lines</a></td></tr>
+<tr class="separator:acd619e87ac89c3b130a7911dd4ae82e2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae308b488eff0d6b21750f1410c1adbb4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae308b488eff0d6b21750f1410c1adbb4">marked_as_growing</a></td></tr>
+<tr class="separator:ae308b488eff0d6b21750f1410c1adbb4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0bf27a131ce5f5b2376e1d24126323af"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a0bf27a131ce5f5b2376e1d24126323af">ignored_files</a></td></tr>
+<tr class="separator:a0bf27a131ce5f5b2376e1d24126323af"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5c8b7df09653b7a91565de5f331a90e8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a5c8b7df09653b7a91565de5f331a90e8">remover_thread</a></td></tr>
+<tr class="separator:a5c8b7df09653b7a91565de5f331a90e8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af9bc9fa9bae6e789340ace279dcbb7db"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#af9bc9fa9bae6e789340ace279dcbb7db">open_file_handlers</a></td></tr>
+<tr class="separator:af9bc9fa9bae6e789340ace279dcbb7db"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af0c08ea87b78cb37875b373ab388349a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#af0c08ea87b78cb37875b373ab388349a">c1</a></td></tr>
+<tr class="separator:af0c08ea87b78cb37875b373ab388349a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac168dae8fb40ee4d69f391c604e83550"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ac168dae8fb40ee4d69f391c604e83550">timeout</a></td></tr>
+<tr class="separator:ac168dae8fb40ee4d69f391c604e83550"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae9970cf9335cd8d44a56ea446496cb39"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#ae9970cf9335cd8d44a56ea446496cb39">to_be_deleted</a></td></tr>
+<tr class="separator:ae9970cf9335cd8d44a56ea446496cb39"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a406f6fd5f6705211d9caf5d5484e20d3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a406f6fd5f6705211d9caf5d5484e20d3">zeek_thread</a></td></tr>
+<tr class="separator:a406f6fd5f6705211d9caf5d5484e20d3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aec5da81d6b765b9a73d13780b68022a8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aec5da81d6b765b9a73d13780b68022a8">tcp_inactivity_timeout</a></td></tr>
+<tr class="separator:aec5da81d6b765b9a73d13780b68022a8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aff3ebd0852ae87c2a6ef27a76ee883b8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aff3ebd0852ae87c2a6ef27a76ee883b8">enable_rotation</a></td></tr>
+<tr class="separator:aff3ebd0852ae87c2a6ef27a76ee883b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98bdff2071fb581732c03a3f76858614"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a98bdff2071fb581732c03a3f76858614">rotation_period</a></td></tr>
+<tr class="separator:a98bdff2071fb581732c03a3f76858614"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1b60f198d6e081cf62ee66ef67ca8329"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a1b60f198d6e081cf62ee66ef67ca8329">keep_rotated_files_for</a></td></tr>
+<tr class="separator:a1b60f198d6e081cf62ee66ef67ca8329"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a46d430bebede0d174ebaa3b6af553b2c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a46d430bebede0d174ebaa3b6af553b2c">bro_timeout</a></td></tr>
+<tr class="memdesc:a46d430bebede0d174ebaa3b6af553b2c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Out of the for that check each Zeek file one by one self.print('Cached lines: {}'.format(str(cache_lines)))  <a href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a46d430bebede0d174ebaa3b6af553b2c">More...</a><br /></td></tr>
+<tr class="separator:a46d430bebede0d174ebaa3b6af553b2c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aac80a24a9e7e048e5b42629bef33211d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#aac80a24a9e7e048e5b42629bef33211d">nfdump_output</a></td></tr>
+<tr class="separator:aac80a24a9e7e048e5b42629bef33211d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af1086e5b61d7275af104f0beee24849a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#af1086e5b61d7275af104f0beee24849a">time_rotated</a></td></tr>
+<tr class="separator:af1086e5b61d7275af104f0beee24849a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a94f16b77d515fa30e72bd271478bed3c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html#a94f16b77d515fa30e72bd271478bed3c">zeek_pid</a></td></tr>
+<tr class="separator:a94f16b77d515fa30e72bd271478bed3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">A class process to run the process of the flows</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a70355f204cbac8b1822c3754211fd341"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70355f204cbac8b1822c3754211fd341">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profilerqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>input_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>input_information</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>cli_packet_filter</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>zeek_or_bro</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>zeek_folder</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a3885300e803d21b477ae63e4e6fd4528"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3885300e803d21b477ae63e4e6fd4528">&#9670;&nbsp;</a></span>check_if_time_to_del_rotated_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.check_if_time_to_del_rotated_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">After a specific period (keep_rotated_files_for), slips deletes all rotated files
+Check if it's time to do so
+</pre> 
+</div>
+</div>
+<a id="a819d329cc10e9daaf55244ba5e227e91"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a819d329cc10e9daaf55244ba5e227e91">&#9670;&nbsp;</a></span>handle_binetflow()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.handle_binetflow </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae711c8d45970c1d70143c010cdad1c59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae711c8d45970c1d70143c010cdad1c59">&#9670;&nbsp;</a></span>handle_nfdump()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.handle_nfdump </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a10961c9ebb422d0c6f0ad9523e048f75"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a10961c9ebb422d0c6f0ad9523e048f75">&#9670;&nbsp;</a></span>handle_pcap_and_interface()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> int slips.slips_files.core.inputProcess.InputProcess.handle_pcap_and_interface </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns the number of zeek lines read</pre> 
+</div>
+</div>
+<a id="a4307a0561cc3f7ac7990ab3fe00f2149"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4307a0561cc3f7ac7990ab3fe00f2149">&#9670;&nbsp;</a></span>handle_suricata()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.handle_suricata </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1b5a24981dac9616d50ae65327e79433"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b5a24981dac9616d50ae65327e79433">&#9670;&nbsp;</a></span>handle_zeek_log_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.handle_zeek_log_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6e24bf216c07bdb4119588aa9948fc48"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6e24bf216c07bdb4119588aa9948fc48">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="ac6e31589c198378cbc83dcd162c7c3fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6e31589c198378cbc83dcd162c7c3fa">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac92abbd5fae13273dd625fd5c9d9c9fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac92abbd5fae13273dd625fd5c9d9c9fa">&#9670;&nbsp;</a></span>read_from_stdin()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.read_from_stdin </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6ca5e4d601622de371330d278a6cf729"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ca5e4d601622de371330d278a6cf729">&#9670;&nbsp;</a></span>read_nfdump_output()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> int slips.slips_files.core.inputProcess.InputProcess.read_nfdump_output </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2e7eeba96ea4acc3ec6859a7f478a5f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e7eeba96ea4acc3ec6859a7f478a5f5">&#9670;&nbsp;</a></span>read_zeek_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> int slips.slips_files.core.inputProcess.InputProcess.read_zeek_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae6d55811ed58ce564ae723b058754804"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae6d55811ed58ce564ae723b058754804">&#9670;&nbsp;</a></span>read_zeek_folder()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.read_zeek_folder </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6ad3dde985b9bae8c17fda4c805c3d4c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ad3dde985b9bae8c17fda4c805c3d4c">&#9670;&nbsp;</a></span>remove_old_zeek_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.remove_old_zeek_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This thread waits for filemonitor.py to tell it that zeek changed the files,
+it deletes old zeek-date.log files and clears slips' open handles and sleeps again
+</pre> 
+</div>
+</div>
+<a id="a4590e588d7483bf2f3dbeab222b37fd6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4590e588d7483bf2f3dbeab222b37fd6">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3bdd5402098fdf84da71f4e1109eaf93"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3bdd5402098fdf84da71f4e1109eaf93">&#9670;&nbsp;</a></span>run_zeek()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.run_zeek </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This thread sets the correct zeek parameters and starts zeek
+</pre> 
+</div>
+</div>
+<a id="a866fd6168ca97dea26a035c8bb5dfb90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a866fd6168ca97dea26a035c8bb5dfb90">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abb842de0cd6c52135b1f1fb43caa5f07"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abb842de0cd6c52135b1f1fb43caa5f07">&#9670;&nbsp;</a></span>start_observer()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.start_observer </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abf4a794b2557fca4f557360b84e89aa7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abf4a794b2557fca4f557360b84e89aa7">&#9670;&nbsp;</a></span>stop_observer()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.stop_observer </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a37e4a5e1a88f098fa67b94e15b0d1a44"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a37e4a5e1a88f098fa67b94e15b0d1a44">&#9670;&nbsp;</a></span>stop_queues()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.inputProcess.InputProcess.stop_queues </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Stops the profiler and output queues</pre> 
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a46d430bebede0d174ebaa3b6af553b2c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46d430bebede0d174ebaa3b6af553b2c">&#9670;&nbsp;</a></span>bro_timeout</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.bro_timeout</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Out of the for that check each Zeek file one by one self.print('Cached lines: {}'.format(str(cache_lines))) </p>
+
+</div>
+</div>
+<a id="af0c08ea87b78cb37875b373ab388349a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af0c08ea87b78cb37875b373ab388349a">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aff3ebd0852ae87c2a6ef27a76ee883b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff3ebd0852ae87c2a6ef27a76ee883b8">&#9670;&nbsp;</a></span>enable_rotation</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.enable_rotation</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a678366774d69fe1822ef6f1701484ab6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a678366774d69fe1822ef6f1701484ab6">&#9670;&nbsp;</a></span>event_observer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.event_observer</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f429e0fad9a17580bb7de40d6d7186f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f429e0fad9a17580bb7de40d6d7186f">&#9670;&nbsp;</a></span>given_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.given_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0bf27a131ce5f5b2376e1d24126323af"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0bf27a131ce5f5b2376e1d24126323af">&#9670;&nbsp;</a></span>ignored_files</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.ignored_files</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2a9ecb082cc936e65991b4f1e384287e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a9ecb082cc936e65991b4f1e384287e">&#9670;&nbsp;</a></span>input_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.input_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1b60f198d6e081cf62ee66ef67ca8329"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b60f198d6e081cf62ee66ef67ca8329">&#9670;&nbsp;</a></span>keep_rotated_files_for</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.keep_rotated_files_for</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0907c5db395f8d3701152312079549a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0907c5db395f8d3701152312079549a6">&#9670;&nbsp;</a></span>line_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.line_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acd619e87ac89c3b130a7911dd4ae82e2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd619e87ac89c3b130a7911dd4ae82e2">&#9670;&nbsp;</a></span>lines</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.lines</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae308b488eff0d6b21750f1410c1adbb4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae308b488eff0d6b21750f1410c1adbb4">&#9670;&nbsp;</a></span>marked_as_growing</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.marked_as_growing</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a054582c1bbf2985ee573c54cb3bd1a04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a054582c1bbf2985ee573c54cb3bd1a04">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac80a24a9e7e048e5b42629bef33211d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac80a24a9e7e048e5b42629bef33211d">&#9670;&nbsp;</a></span>nfdump_output</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.nfdump_output</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af9bc9fa9bae6e789340ace279dcbb7db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af9bc9fa9bae6e789340ace279dcbb7db">&#9670;&nbsp;</a></span>open_file_handlers</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.open_file_handlers</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a29577dc086b8f480aaea1a63fb895fce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a29577dc086b8f480aaea1a63fb895fce">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1694f1333c183a1c90b0ef8036ad7af6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1694f1333c183a1c90b0ef8036ad7af6">&#9670;&nbsp;</a></span>packet_filter</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.packet_filter</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa92c056aa46b7edb861dc1e8567e6c38"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa92c056aa46b7edb861dc1e8567e6c38">&#9670;&nbsp;</a></span>profilerqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.profilerqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8c66dc33a1f0bab07b672b92ec4fa8e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8c66dc33a1f0bab07b672b92ec4fa8e3">&#9670;&nbsp;</a></span>read_lines_delay</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.read_lines_delay</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae6e522844edee1699f4f08490b82d7d7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae6e522844edee1699f4f08490b82d7d7">&#9670;&nbsp;</a></span>redis_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.redis_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c8b7df09653b7a91565de5f331a90e8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c8b7df09653b7a91565de5f331a90e8">&#9670;&nbsp;</a></span>remover_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.remover_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a98bdff2071fb581732c03a3f76858614"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98bdff2071fb581732c03a3f76858614">&#9670;&nbsp;</a></span>rotation_period</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.rotation_period</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aec5da81d6b765b9a73d13780b68022a8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aec5da81d6b765b9a73d13780b68022a8">&#9670;&nbsp;</a></span>tcp_inactivity_timeout</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.tcp_inactivity_timeout</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7b106c901a1ca031decf35cd94007a43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7b106c901a1ca031decf35cd94007a43">&#9670;&nbsp;</a></span>testing</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.testing</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af1086e5b61d7275af104f0beee24849a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af1086e5b61d7275af104f0beee24849a">&#9670;&nbsp;</a></span>time_rotated</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.time_rotated</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac168dae8fb40ee4d69f391c604e83550"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac168dae8fb40ee4d69f391c604e83550">&#9670;&nbsp;</a></span>timeout</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.timeout</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae9970cf9335cd8d44a56ea446496cb39"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9970cf9335cd8d44a56ea446496cb39">&#9670;&nbsp;</a></span>to_be_deleted</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.to_be_deleted</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1b62885aed8cc23cbce7a6332cca3afa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b62885aed8cc23cbce7a6332cca3afa">&#9670;&nbsp;</a></span>zeek_folder</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.zeek_folder</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa44552d7f1244c84658a8e1e18f795bd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa44552d7f1244c84658a8e1e18f795bd">&#9670;&nbsp;</a></span>zeek_or_bro</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.zeek_or_bro</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a94f16b77d515fa30e72bd271478bed3c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a94f16b77d515fa30e72bd271478bed3c">&#9670;&nbsp;</a></span>zeek_pid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.zeek_pid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a406f6fd5f6705211d9caf5d5484e20d3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a406f6fd5f6705211d9caf5d5484e20d3">&#9670;&nbsp;</a></span>zeek_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips_files.core.inputProcess.InputProcess.zeek_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/alya/Desktop/slips/slips_files/core/<a class="el" href="../../de/d2a/input_process_8py.html">inputProcess.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><a class="el" href="../../df/d73/namespaceslips.html">slips</a></li><li class="navelem"><a class="el" href="../../d2/db6/namespaceslips_1_1slips__files.html">slips_files</a></li><li class="navelem"><a class="el" href="../../d4/dc3/namespaceslips_1_1slips__files_1_1core.html">core</a></li><li class="navelem"><a class="el" href="../../d6/d89/namespaceslips_1_1slips__files_1_1core_1_1input_process.html">inputProcess</a></li><li class="navelem"><a class="el" href="../../dc/d5d/classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html">InputProcess</a></li>
+    <li class="footer">Generated by
+    <a href="http://www.doxygen.org/index.html">
+    <img class="footer" src="../../doxygen.png" alt="doxygen"/></a> 1.8.17 </li>
+  </ul>
+</div>
+</body>
+</html>

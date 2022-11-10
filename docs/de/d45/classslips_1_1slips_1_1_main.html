@@ -1,0 +1,1986 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.8.17"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: slips.slips.Main Class Reference</title>
+<link href="../../tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="../../jquery.js"></script>
+<script type="text/javascript" src="../../dynsections.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="../../toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="../../navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../resize.js"></script>
+<script type="text/javascript" src="../../navtreedata.js"></script>
+<script type="text/javascript" src="../../navtree.js"></script>
+<link href="../../search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../search/searchdata.js"></script>
+<script type="text/javascript" src="../../search/search.js"></script>
+<link href="../../doxygen.css" rel="stylesheet" type="text/css" />
+<link href="../../doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.8.17 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "../../search",false,'Search');
+/* @license-end */
+</script>
+<script type="text/javascript" src="../../menudata.js"></script>
+<script type="text/javascript" src="../../menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('../../',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('de/d45/classslips_1_1slips_1_1_main.html','../../'); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="../../da/d10/classslips_1_1slips_1_1_main-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">slips.slips.Main Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a9cf741273a68d22c9b01c86be60a018a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a9cf741273a68d22c9b01c86be60a018a">__init__</a> (self, testing=False)</td></tr>
+<tr class="separator:a9cf741273a68d22c9b01c86be60a018a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:accb6c9b5810a980826a5f0bba547c609"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#accb6c9b5810a980826a5f0bba547c609">prepare_zeek_output_dir</a> (self)</td></tr>
+<tr class="separator:accb6c9b5810a980826a5f0bba547c609"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad3506849fdb011c614312521f2e9b0e3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3506849fdb011c614312521f2e9b0e3">get_host_ip</a> (self)</td></tr>
+<tr class="separator:ad3506849fdb011c614312521f2e9b0e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae571110572450de13a60b650f50bb4fb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae571110572450de13a60b650f50bb4fb">store_host_ip</a> (self)</td></tr>
+<tr class="separator:ae571110572450de13a60b650f50bb4fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af5500b0d1a67efecff1eccc5c68d3df3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#af5500b0d1a67efecff1eccc5c68d3df3">create_folder_for_logs</a> (self)</td></tr>
+<tr class="separator:af5500b0d1a67efecff1eccc5c68d3df3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abfbe5800b301fdf3c745469125ad4bed"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#abfbe5800b301fdf3c745469125ad4bed">check_redis_database</a> (self, redis_host='localhost', <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a>=6379)</td></tr>
+<tr class="separator:abfbe5800b301fdf3c745469125ad4bed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af914fa6083102255cfa1e86109eb3e51"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#af914fa6083102255cfa1e86109eb3e51">get_random_redis_port</a> (self)</td></tr>
+<tr class="separator:af914fa6083102255cfa1e86109eb3e51"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaac499788b94d2f4b85d5e7d14662157"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aaac499788b94d2f4b85d5e7d14662157">clear_redis_cache_database</a> (self, redis_host='localhost', <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a>=6379)</td></tr>
+<tr class="separator:aaac499788b94d2f4b85d5e7d14662157"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:accbfdbb1fbc5618aa9875d7e13b8c02b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#accbfdbb1fbc5618aa9875d7e13b8c02b">check_zeek_or_bro</a> (self)</td></tr>
+<tr class="separator:accbfdbb1fbc5618aa9875d7e13b8c02b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22bc7f63f9c5e89c5cb895706af0f32a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a22bc7f63f9c5e89c5cb895706af0f32a">terminate_slips</a> (self)</td></tr>
+<tr class="separator:a22bc7f63f9c5e89c5cb895706af0f32a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a72d6b66aa7af1088f4a11f465cf479b7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a72d6b66aa7af1088f4a11f465cf479b7">get_modules</a> (self, to_ignore)</td></tr>
+<tr class="separator:a72d6b66aa7af1088f4a11f465cf479b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a306d8c6f4378ee2e0d9d034c7b732076"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a306d8c6f4378ee2e0d9d034c7b732076">load_modules</a> (self)</td></tr>
+<tr class="separator:a306d8c6f4378ee2e0d9d034c7b732076"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac1bd6f4b5c84c57984d046050270bcfd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ac1bd6f4b5c84c57984d046050270bcfd">setup_detailed_logs</a> (self, LogsProcess)</td></tr>
+<tr class="separator:ac1bd6f4b5c84c57984d046050270bcfd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8494e6a465f1903920f53dcf20365bb1"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a8494e6a465f1903920f53dcf20365bb1">start_gui_process</a> (self)</td></tr>
+<tr class="separator:a8494e6a465f1903920f53dcf20365bb1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ade3351a276b452a1e51bbbdc6eb3f1ea"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ade3351a276b452a1e51bbbdc6eb3f1ea">close_all_ports</a> (self)</td></tr>
+<tr class="separator:ade3351a276b452a1e51bbbdc6eb3f1ea"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4619ee897d35d2b0c24596ea214539bf"><td class="memItemLeft" align="right" valign="top">str&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a4619ee897d35d2b0c24596ea214539bf">get_pid_of_redis_server</a> (self, int port)</td></tr>
+<tr class="separator:a4619ee897d35d2b0c24596ea214539bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa2e02d33c4d596c5ed3379a438d76fd8"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aa2e02d33c4d596c5ed3379a438d76fd8">update_local_TI_files</a> (self)</td></tr>
+<tr class="separator:aa2e02d33c4d596c5ed3379a438d76fd8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad8c1a571d02f225e6749a9e4166f6547"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad8c1a571d02f225e6749a9e4166f6547">add_metadata</a> (self)</td></tr>
+<tr class="separator:ad8c1a571d02f225e6749a9e4166f6547"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af8441f6689c654a8281f40dbc6491c3d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#af8441f6689c654a8281f40dbc6491c3d">kill</a> (self, module_name, INT=False)</td></tr>
+<tr class="separator:af8441f6689c654a8281f40dbc6491c3d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9de16f5403d02a50964094149e180c27"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a9de16f5403d02a50964094149e180c27">kill_all</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a3ba7ae886dd7c3c374c74b178d4aa539">PIDs</a>)</td></tr>
+<tr class="separator:a9de16f5403d02a50964094149e180c27"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9e17888eab5fe5f2954fc5f771454a99"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a9e17888eab5fe5f2954fc5f771454a99">stop_core_processes</a> (self)</td></tr>
+<tr class="separator:a9e17888eab5fe5f2954fc5f771454a99"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1b166c03f19dbc81932eb2572a0e0005"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a1b166c03f19dbc81932eb2572a0e0005">save_the_db</a> (self)</td></tr>
+<tr class="separator:a1b166c03f19dbc81932eb2572a0e0005"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a875ed26eed7d16837246692a8dc3ac59"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a875ed26eed7d16837246692a8dc3ac59">store_zeek_dir_copy</a> (self)</td></tr>
+<tr class="separator:a875ed26eed7d16837246692a8dc3ac59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6889fa4c30d64a79e8d43576a054b68e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a6889fa4c30d64a79e8d43576a054b68e">delete_zeek_files</a> (self)</td></tr>
+<tr class="separator:a6889fa4c30d64a79e8d43576a054b68e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac0da77fdd4ca3bc4d0340754c93087c2"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ac0da77fdd4ca3bc4d0340754c93087c2">print_stopped_module</a> (self, module)</td></tr>
+<tr class="separator:ac0da77fdd4ca3bc4d0340754c93087c2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a778c05a96b8e33686865ec5d45426ed0"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a778c05a96b8e33686865ec5d45426ed0">get_already_stopped_modules</a> (self)</td></tr>
+<tr class="separator:a778c05a96b8e33686865ec5d45426ed0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a47e1d37b73dbfff658b4193f58f43e57"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a47e1d37b73dbfff658b4193f58f43e57">warn_about_pending_modules</a> (self, finished_modules)</td></tr>
+<tr class="separator:a47e1d37b73dbfff658b4193f58f43e57"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a09d12e2119f8c4d952974e274bb79917"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a09d12e2119f8c4d952974e274bb79917">set_analysis_end_date</a> (self)</td></tr>
+<tr class="separator:a09d12e2119f8c4d952974e274bb79917"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aea6832d2ce30a7c77de2ca23d0501a42"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aea6832d2ce30a7c77de2ca23d0501a42">should_kill_all_modules</a> (self, function_start_time, wait_for_modules_to_finish)</td></tr>
+<tr class="separator:aea6832d2ce30a7c77de2ca23d0501a42"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a46880905353ff0db686c7da6bd7deb62"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a46880905353ff0db686c7da6bd7deb62">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a46880905353ff0db686c7da6bd7deb62"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8f6748478876fb6626a9180879f60335"><td class="memItemLeft" align="right" valign="top">dict&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a8f6748478876fb6626a9180879f60335">get_open_redis_servers</a> (self)</td></tr>
+<tr class="separator:a8f6748478876fb6626a9180879f60335"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abe70a658b4fb38c4ecb321bad1d58c4e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#abe70a658b4fb38c4ecb321bad1d58c4e">print_open_redis_servers</a> (self)</td></tr>
+<tr class="separator:abe70a658b4fb38c4ecb321bad1d58c4e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4037aad1551d0103584d7e0ae647ae8e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a4037aad1551d0103584d7e0ae647ae8e">get_port_of_redis_server</a> (self, str <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ab7448e31e7897dbbb8f377428c1cba99">pid</a>)</td></tr>
+<tr class="separator:a4037aad1551d0103584d7e0ae647ae8e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae4d8494b80e0f523d8a077d4c87af47f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae4d8494b80e0f523d8a077d4c87af47f">flush_redis_server</a> (self, str <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ab7448e31e7897dbbb8f377428c1cba99">pid</a>='', str port='')</td></tr>
+<tr class="separator:ae4d8494b80e0f523d8a077d4c87af47f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae74d845051426b59e7a3f2f6d7b0284e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae74d845051426b59e7a3f2f6d7b0284e">kill_redis_server</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ab7448e31e7897dbbb8f377428c1cba99">pid</a>)</td></tr>
+<tr class="separator:ae74d845051426b59e7a3f2f6d7b0284e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a82eb3c43158eef755f7bc3136eab8a6d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a82eb3c43158eef755f7bc3136eab8a6d">remove_old_logline</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a>)</td></tr>
+<tr class="separator:a82eb3c43158eef755f7bc3136eab8a6d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a729c0d5270453c4e0a5510570f938bec"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a729c0d5270453c4e0a5510570f938bec">remove_server_from_log</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a>)</td></tr>
+<tr class="separator:a729c0d5270453c4e0a5510570f938bec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae38f6516e5e944195d67ef8b306f0c54"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae38f6516e5e944195d67ef8b306f0c54">close_open_redis_servers</a> (self)</td></tr>
+<tr class="separator:ae38f6516e5e944195d67ef8b306f0c54"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a19ec3df70d28ec463e81e46e85887c0d"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a19ec3df70d28ec463e81e46e85887c0d">is_debugger_active</a> (self)</td></tr>
+<tr class="separator:a19ec3df70d28ec463e81e46e85887c0d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c4ba7b5f4e44b1562c981ba4da5ee60"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a0c4ba7b5f4e44b1562c981ba4da5ee60">prepare_output_dir</a> (self)</td></tr>
+<tr class="separator:a0c4ba7b5f4e44b1562c981ba4da5ee60"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af6a6084ec3fe9ec0b2564c159ce197e9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#af6a6084ec3fe9ec0b2564c159ce197e9">log_redis_server_PID</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a>, redis_pid)</td></tr>
+<tr class="separator:af6a6084ec3fe9ec0b2564c159ce197e9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ada9b5c627a17f583008d729b4658c3dd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ada9b5c627a17f583008d729b4658c3dd">set_mode</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ac455217d399d75c6b86ab3f7a1dfceca">mode</a>, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae2a14ef3dc9fc22fc8a0fb96b521f401">daemon</a>='')</td></tr>
+<tr class="separator:ada9b5c627a17f583008d729b4658c3dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8d2ccd0d2c2fed1a61c281452cd9cd0"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aa8d2ccd0d2c2fed1a61c281452cd9cd0">log</a> (self, txt)</td></tr>
+<tr class="separator:aa8d2ccd0d2c2fed1a61c281452cd9cd0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0b4bcb3e02be9f6729661504f655648c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a0b4bcb3e02be9f6729661504f655648c">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:a0b4bcb3e02be9f6729661504f655648c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9be43450d469252f5996a1552f69b507"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a9be43450d469252f5996a1552f69b507">handle_flows_from_stdin</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a3fae7a84438e5b345a4381ed8e9a9568">input_information</a>)</td></tr>
+<tr class="separator:a9be43450d469252f5996a1552f69b507"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a13e6671592a4e7bbbb8a6dabcdbdea3c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a13e6671592a4e7bbbb8a6dabcdbdea3c">load_db</a> (self)</td></tr>
+<tr class="separator:a13e6671592a4e7bbbb8a6dabcdbdea3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afcd0d5d8e2e7c7d3a58c57483e58fa59"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#afcd0d5d8e2e7c7d3a58c57483e58fa59">get_input_file_type</a> (self, <a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a3fae7a84438e5b345a4381ed8e9a9568">input_information</a>)</td></tr>
+<tr class="separator:afcd0d5d8e2e7c7d3a58c57483e58fa59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a503c711a909c6bfbbc35231127b8e3e1"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a503c711a909c6bfbbc35231127b8e3e1">check_input_type</a> (self)</td></tr>
+<tr class="separator:a503c711a909c6bfbbc35231127b8e3e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:add5992988743687b77e539838afae6bf"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#add5992988743687b77e539838afae6bf">check_given_flags</a> (self)</td></tr>
+<tr class="separator:add5992988743687b77e539838afae6bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7545e4f20f277f3481a6ac0c9b4323cd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a7545e4f20f277f3481a6ac0c9b4323cd">set_input_metadata</a> (self)</td></tr>
+<tr class="separator:a7545e4f20f277f3481a6ac0c9b4323cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab5e649773867a8b298bb0ae8044770ed"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ab5e649773867a8b298bb0ae8044770ed">setup_print_levels</a> (self)</td></tr>
+<tr class="separator:ab5e649773867a8b298bb0ae8044770ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1e6e4038d01ddddfee9042ece54bfee8"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a1e6e4038d01ddddfee9042ece54bfee8">check_output_redirection</a> (self)</td></tr>
+<tr class="separator:a1e6e4038d01ddddfee9042ece54bfee8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acc625c8619cbeeca3977b5322839541c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#acc625c8619cbeeca3977b5322839541c">print_version</a> (self)</td></tr>
+<tr class="separator:acc625c8619cbeeca3977b5322839541c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af09a4289803334c68d2df28475b0b173"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#af09a4289803334c68d2df28475b0b173">start</a> (self)</td></tr>
+<tr class="separator:af09a4289803334c68d2df28475b0b173"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a16ef30a4caaf8448099ccd2dd6e57cea"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a16ef30a4caaf8448099ccd2dd6e57cea">name</a></td></tr>
+<tr class="separator:a16ef30a4caaf8448099ccd2dd6e57cea"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad255f92fab311d524d6a45d6e77d0372"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad255f92fab311d524d6a45d6e77d0372">alerts_default_path</a></td></tr>
+<tr class="separator:ad255f92fab311d524d6a45d6e77d0372"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac455217d399d75c6b86ab3f7a1dfceca"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ac455217d399d75c6b86ab3f7a1dfceca">mode</a></td></tr>
+<tr class="separator:ac455217d399d75c6b86ab3f7a1dfceca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad1aa523ed2d76782ee92bfc7943f31d5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad1aa523ed2d76782ee92bfc7943f31d5">running_logfile</a></td></tr>
+<tr class="separator:ad1aa523ed2d76782ee92bfc7943f31d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a55a24bf73fac8fd1e35b4189d8bf7670"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a55a24bf73fac8fd1e35b4189d8bf7670">start_port</a></td></tr>
+<tr class="separator:a55a24bf73fac8fd1e35b4189d8bf7670"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7f5518391921fedc43baba7d73b499e5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a7f5518391921fedc43baba7d73b499e5">end_port</a></td></tr>
+<tr class="separator:a7f5518391921fedc43baba7d73b499e5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7922170f726880e0da55c44453e188d4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a7922170f726880e0da55c44453e188d4">conf</a></td></tr>
+<tr class="separator:a7922170f726880e0da55c44453e188d4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad10d8329df0cb51e22155ed62136c583"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad10d8329df0cb51e22155ed62136c583">args</a></td></tr>
+<tr class="separator:ad10d8329df0cb51e22155ed62136c583"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab7448e31e7897dbbb8f377428c1cba99"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ab7448e31e7897dbbb8f377428c1cba99">pid</a></td></tr>
+<tr class="separator:ab7448e31e7897dbbb8f377428c1cba99"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8441f03f4505a521922490e76c80136b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a8441f03f4505a521922490e76c80136b">line_type</a></td></tr>
+<tr class="separator:a8441f03f4505a521922490e76c80136b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58211e16cc670993f268edde7f5edf50"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a58211e16cc670993f268edde7f5edf50">twid_width</a></td></tr>
+<tr class="separator:a58211e16cc670993f268edde7f5edf50"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a49e2bbdb64b1fbfe772294b87aec3e41"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a49e2bbdb64b1fbfe772294b87aec3e41">zeek_folder</a></td></tr>
+<tr class="separator:a49e2bbdb64b1fbfe772294b87aec3e41"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8279a5d28837904019743b8a8421fdcf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a8279a5d28837904019743b8a8421fdcf">zeek_bro</a></td></tr>
+<tr class="separator:a8279a5d28837904019743b8a8421fdcf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae1641a361c9d3d65f43b87e6fbe59523"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae1641a361c9d3d65f43b87e6fbe59523">logsProcessQueue</a></td></tr>
+<tr class="separator:ae1641a361c9d3d65f43b87e6fbe59523"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aefae517ce43bd19e2b748accab405497"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aefae517ce43bd19e2b748accab405497">info_path</a></td></tr>
+<tr class="separator:aefae517ce43bd19e2b748accab405497"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3fae7a84438e5b345a4381ed8e9a9568"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a3fae7a84438e5b345a4381ed8e9a9568">input_information</a></td></tr>
+<tr class="separator:a3fae7a84438e5b345a4381ed8e9a9568"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaa1a94aeb1fa28f1990a997eaa5b72e3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#aaa1a94aeb1fa28f1990a997eaa5b72e3">enable_metadata</a></td></tr>
+<tr class="separator:aaa1a94aeb1fa28f1990a997eaa5b72e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3ba7ae886dd7c3c374c74b178d4aa539"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a3ba7ae886dd7c3c374c74b178d4aa539">PIDs</a></td></tr>
+<tr class="separator:a3ba7ae886dd7c3c374c74b178d4aa539"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6f69cec55e9f0530a03ece90291bb2e3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a6f69cec55e9f0530a03ece90291bb2e3">open_servers_PIDs</a></td></tr>
+<tr class="separator:a6f69cec55e9f0530a03ece90291bb2e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae2a14ef3dc9fc22fc8a0fb96b521f401"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ae2a14ef3dc9fc22fc8a0fb96b521f401">daemon</a></td></tr>
+<tr class="separator:ae2a14ef3dc9fc22fc8a0fb96b521f401"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98567c46a2594bcb12a049bfae3e1e0a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a98567c46a2594bcb12a049bfae3e1e0a">input_type</a></td></tr>
+<tr class="separator:a98567c46a2594bcb12a049bfae3e1e0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad3262df0808b1674312b737b91400302"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">redis_port</a></td></tr>
+<tr class="memdesc:ad3262df0808b1674312b737b91400302"><td class="mdescLeft">&#160;</td><td class="mdescRight">Creation of the threads.  <a href="../../de/d45/classslips_1_1slips_1_1_main.html#ad3262df0808b1674312b737b91400302">More...</a><br /></td></tr>
+<tr class="separator:ad3262df0808b1674312b737b91400302"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7ea6e97b77eb9e5f52d5ce55dbd30540"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a7ea6e97b77eb9e5f52d5ce55dbd30540">outputqueue</a></td></tr>
+<tr class="separator:a7ea6e97b77eb9e5f52d5ce55dbd30540"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acbce8b5c7d97cc0c033d59d2cb03b804"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#acbce8b5c7d97cc0c033d59d2cb03b804">evidenceProcessQueue</a></td></tr>
+<tr class="separator:acbce8b5c7d97cc0c033d59d2cb03b804"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7f6974188a23f761780933bb592f9657"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#a7f6974188a23f761780933bb592f9657">profilerProcessQueue</a></td></tr>
+<tr class="separator:a7f6974188a23f761780933bb592f9657"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac444f536110657ddedd59e4f997c38b7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html#ac444f536110657ddedd59e4f997c38b7">c1</a></td></tr>
+<tr class="separator:ac444f536110657ddedd59e4f997c38b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a9cf741273a68d22c9b01c86be60a018a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cf741273a68d22c9b01c86be60a018a">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>testing</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="ad8c1a571d02f225e6749a9e4166f6547"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad8c1a571d02f225e6749a9e4166f6547">&#9670;&nbsp;</a></span>add_metadata()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.add_metadata </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
+</pre> 
+</div>
+</div>
+<a id="add5992988743687b77e539838afae6bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#add5992988743687b77e539838afae6bf">&#9670;&nbsp;</a></span>check_given_flags()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.check_given_flags </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">check the flags that don't require starting slips
+for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
+</pre> 
+</div>
+</div>
+<a id="a503c711a909c6bfbbc35231127b8e3e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a503c711a909c6bfbbc35231127b8e3e1">&#9670;&nbsp;</a></span>check_input_type()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> tuple slips.slips.Main.check_input_type </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">returns line_type, input_type, input_information
+supported input types are:
+    interface, argus, suricata, zeek, nfdump, db
+supported self.input_information:
+    given filepath, interface or type of line given in stdin
+</pre> 
+</div>
+</div>
+<a id="a1e6e4038d01ddddfee9042ece54bfee8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e6e4038d01ddddfee9042ece54bfee8">&#9670;&nbsp;</a></span>check_output_redirection()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> tuple slips.slips.Main.check_output_redirection </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Determine where slips will place stdout, stderr and logfile based on slips mode
+</pre> 
+</div>
+</div>
+<a id="abfbe5800b301fdf3c745469125ad4bed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abfbe5800b301fdf3c745469125ad4bed">&#9670;&nbsp;</a></span>check_redis_database()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool slips.slips.Main.check_redis_database </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_host</em> = <code>'localhost'</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em> = <code>6379</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check if we have redis-server running (this is the cache db it should always be running)
+</pre> 
+</div>
+</div>
+<a id="accbfdbb1fbc5618aa9875d7e13b8c02b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#accbfdbb1fbc5618aa9875d7e13b8c02b">&#9670;&nbsp;</a></span>check_zeek_or_bro()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.check_zeek_or_bro </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check if we have zeek or bro
+</pre> 
+</div>
+</div>
+<a id="aaac499788b94d2f4b85d5e7d14662157"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaac499788b94d2f4b85d5e7d14662157">&#9670;&nbsp;</a></span>clear_redis_cache_database()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool slips.slips.Main.clear_redis_cache_database </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_host</em> = <code>'localhost'</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em> = <code>6379</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Clear cache database
+</pre> 
+</div>
+</div>
+<a id="ade3351a276b452a1e51bbbdc6eb3f1ea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade3351a276b452a1e51bbbdc6eb3f1ea">&#9670;&nbsp;</a></span>close_all_ports()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.close_all_ports </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Closes all the redis ports  in logfile and in slips supported range of ports
+</pre> 
+</div>
+</div>
+<a id="ae38f6516e5e944195d67ef8b306f0c54"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae38f6516e5e944195d67ef8b306f0c54">&#9670;&nbsp;</a></span>close_open_redis_servers()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.close_open_redis_servers </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to close unused open redis-servers based on what the user chooses
+</pre> 
+</div>
+</div>
+<a id="af5500b0d1a67efecff1eccc5c68d3df3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5500b0d1a67efecff1eccc5c68d3df3">&#9670;&nbsp;</a></span>create_folder_for_logs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.create_folder_for_logs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Create a dir for logs if logs are enabled
+</pre> 
+</div>
+</div>
+<a id="a6889fa4c30d64a79e8d43576a054b68e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6889fa4c30d64a79e8d43576a054b68e">&#9670;&nbsp;</a></span>delete_zeek_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.delete_zeek_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae4d8494b80e0f523d8a077d4c87af47f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4d8494b80e0f523d8a077d4c87af47f">&#9670;&nbsp;</a></span>flush_redis_server()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.flush_redis_server </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>pid</em> = <code>''</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>port</em> = <code>''</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Flush the redis server on this pid, only 1 param should be given, pid or port
+:param pid: can be False if port is given
+Gets the pid of the port is not given
+</pre> 
+</div>
+</div>
+<a id="a778c05a96b8e33686865ec5d45426ed0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a778c05a96b8e33686865ec5d45426ed0">&#9670;&nbsp;</a></span>get_already_stopped_modules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_already_stopped_modules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad3506849fdb011c614312521f2e9b0e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad3506849fdb011c614312521f2e9b0e3">&#9670;&nbsp;</a></span>get_host_ip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_host_ip </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Recognize the IP address of the machine
+</pre> 
+</div>
+</div>
+<a id="afcd0d5d8e2e7c7d3a58c57483e58fa59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afcd0d5d8e2e7c7d3a58c57483e58fa59">&#9670;&nbsp;</a></span>get_input_file_type()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_input_file_type </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>input_information</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">input_information: given file
+returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
+</pre> 
+</div>
+</div>
+<a id="a72d6b66aa7af1088f4a11f465cf479b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a72d6b66aa7af1088f4a11f465cf479b7">&#9670;&nbsp;</a></span>get_modules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_modules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>to_ignore</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Get modules from the 'modules' folder.
+</pre> 
+</div>
+</div>
+<a id="a8f6748478876fb6626a9180879f60335"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f6748478876fb6626a9180879f60335">&#9670;&nbsp;</a></span>get_open_redis_servers()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> dict slips.slips.Main.get_open_redis_servers </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns the dict of PIDs and ports of the redis servers started by slips
+</pre> 
+</div>
+</div>
+<a id="a4619ee897d35d2b0c24596ea214539bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4619ee897d35d2b0c24596ea214539bf">&#9670;&nbsp;</a></span>get_pid_of_redis_server()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> str slips.slips.Main.get_pid_of_redis_server </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Gets the pid of the redis server running on this port
+Returns str(port) or false if there's no redis-server running on this port
+</pre> 
+</div>
+</div>
+<a id="a4037aad1551d0103584d7e0ae647ae8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4037aad1551d0103584d7e0ae647ae8e">&#9670;&nbsp;</a></span>get_port_of_redis_server()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_port_of_redis_server </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>pid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">returns the port of the redis running on this pid
+</pre> 
+</div>
+</div>
+<a id="af914fa6083102255cfa1e86109eb3e51"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af914fa6083102255cfa1e86109eb3e51">&#9670;&nbsp;</a></span>get_random_redis_port()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.get_random_redis_port </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Keeps trying to connect to random generated ports until we're connected.
+returns the used port
+</pre> 
+</div>
+</div>
+<a id="a9be43450d469252f5996a1552f69b507"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9be43450d469252f5996a1552f69b507">&#9670;&nbsp;</a></span>handle_flows_from_stdin()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.handle_flows_from_stdin </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>input_information</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Make sure the stdin line type is valid (argus, suricata, or zeek)
+</pre> 
+</div>
+</div>
+<a id="a19ec3df70d28ec463e81e46e85887c0d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19ec3df70d28ec463e81e46e85887c0d">&#9670;&nbsp;</a></span>is_debugger_active()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool slips.slips.Main.is_debugger_active </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Return if the debugger is currently active</pre> 
+</div>
+</div>
+<a id="af8441f6689c654a8281f40dbc6491c3d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af8441f6689c654a8281f40dbc6491c3d">&#9670;&nbsp;</a></span>kill()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.kill </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>module_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>INT</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9de16f5403d02a50964094149e180c27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9de16f5403d02a50964094149e180c27">&#9670;&nbsp;</a></span>kill_all()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.kill_all </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>PIDs</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae74d845051426b59e7a3f2f6d7b0284e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae74d845051426b59e7a3f2f6d7b0284e">&#9670;&nbsp;</a></span>kill_redis_server()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.kill_redis_server </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>pid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Kill the redis server on this pid
+</pre> 
+</div>
+</div>
+<a id="a13e6671592a4e7bbbb8a6dabcdbdea3c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a13e6671592a4e7bbbb8a6dabcdbdea3c">&#9670;&nbsp;</a></span>load_db()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.load_db </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a306d8c6f4378ee2e0d9d034c7b732076"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a306d8c6f4378ee2e0d9d034c7b732076">&#9670;&nbsp;</a></span>load_modules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.load_modules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa8d2ccd0d2c2fed1a61c281452cd9cd0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8d2ccd0d2c2fed1a61c281452cd9cd0">&#9670;&nbsp;</a></span>log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.log </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>txt</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Is used instead of print for daemon debugging
+</pre> 
+</div>
+</div>
+<a id="af6a6084ec3fe9ec0b2564c159ce197e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af6a6084ec3fe9ec0b2564c159ce197e9">&#9670;&nbsp;</a></span>log_redis_server_PID()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.log_redis_server_PID </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_pid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0c4ba7b5f4e44b1562c981ba4da5ee60"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c4ba7b5f4e44b1562c981ba4da5ee60">&#9670;&nbsp;</a></span>prepare_output_dir()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.prepare_output_dir </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param self.input_information: either an interface or a filename (wlp3s0, sample.pcap, zeek_dir/ etc.)
+</pre> 
+</div>
+</div>
+<a id="accb6c9b5810a980826a5f0bba547c609"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#accb6c9b5810a980826a5f0bba547c609">&#9670;&nbsp;</a></span>prepare_zeek_output_dir()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.prepare_zeek_output_dir </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0b4bcb3e02be9f6729661504f655648c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0b4bcb3e02be9f6729661504f655648c">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like f'Test {here}'
+</pre> 
+</div>
+</div>
+<a id="abe70a658b4fb38c4ecb321bad1d58c4e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe70a658b4fb38c4ecb321bad1d58c4e">&#9670;&nbsp;</a></span>print_open_redis_servers()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.print_open_redis_servers </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns a dict {counter: (used_port,pid) }
+</pre> 
+</div>
+</div>
+<a id="ac0da77fdd4ca3bc4d0340754c93087c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac0da77fdd4ca3bc4d0340754c93087c2">&#9670;&nbsp;</a></span>print_stopped_module()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.print_stopped_module </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>module</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acc625c8619cbeeca3977b5322839541c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc625c8619cbeeca3977b5322839541c">&#9670;&nbsp;</a></span>print_version()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.print_version </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a82eb3c43158eef755f7bc3136eab8a6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a82eb3c43158eef755f7bc3136eab8a6d">&#9670;&nbsp;</a></span>remove_old_logline()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.remove_old_logline </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This function should be called after adding a new duplicate line with redis_port
+The only line with redis_port will be the last line, remove all the ones above
+</pre> 
+</div>
+</div>
+<a id="a729c0d5270453c4e0a5510570f938bec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a729c0d5270453c4e0a5510570f938bec">&#9670;&nbsp;</a></span>remove_server_from_log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.remove_server_from_log </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">deletes the server running on the given pid from running_slips_logs </pre> 
+</div>
+</div>
+<a id="a1b166c03f19dbc81932eb2572a0e0005"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1b166c03f19dbc81932eb2572a0e0005">&#9670;&nbsp;</a></span>save_the_db()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.save_the_db </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a09d12e2119f8c4d952974e274bb79917"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a09d12e2119f8c4d952974e274bb79917">&#9670;&nbsp;</a></span>set_analysis_end_date()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.set_analysis_end_date </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Add the analysis end date to the metadata file and
+the db for the web inerface to display
+</pre> 
+</div>
+</div>
+<a id="a7545e4f20f277f3481a6ac0c9b4323cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7545e4f20f277f3481a6ac0c9b4323cd">&#9670;&nbsp;</a></span>set_input_metadata()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.set_input_metadata </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">save info about name, size, analysis start date in the db
+</pre> 
+</div>
+</div>
+<a id="ada9b5c627a17f583008d729b4658c3dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ada9b5c627a17f583008d729b4658c3dd">&#9670;&nbsp;</a></span>set_mode()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.set_mode </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>mode</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daemon</em> = <code>''</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Slips has 2 modes, daemonized and interactive, this function
+sets up the mode so that slips knows in which mode it's operating
+:param mode: daemonized of interavtive
+:param daemon: Daemon() instance
+</pre> 
+</div>
+</div>
+<a id="ac1bd6f4b5c84c57984d046050270bcfd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac1bd6f4b5c84c57984d046050270bcfd">&#9670;&nbsp;</a></span>setup_detailed_logs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.setup_detailed_logs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>LogsProcess</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detailed logs are the ones created by logsProcess
+</pre> 
+</div>
+</div>
+<a id="ab5e649773867a8b298bb0ae8044770ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab5e649773867a8b298bb0ae8044770ed">&#9670;&nbsp;</a></span>setup_print_levels()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.setup_print_levels </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">setup debug and verose levels
+</pre> 
+</div>
+</div>
+<a id="aea6832d2ce30a7c77de2ca23d0501a42"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea6832d2ce30a7c77de2ca23d0501a42">&#9670;&nbsp;</a></span>should_kill_all_modules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool slips.slips.Main.should_kill_all_modules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>function_start_time</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>wait_for_modules_to_finish</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">checks if x minutes has passed since the start of the function
+:param wait_for_modules_to_finish: time in mins to wait before force killing all modules
+                            defined by wait_for_modules_to_finish in slips.conf
+</pre> 
+</div>
+</div>
+<a id="a46880905353ff0db686c7da6bd7deb62"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46880905353ff0db686c7da6bd7deb62">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Wait for all modules to confirm that they're done processing
+or kill them after 15 mins
+</pre> 
+</div>
+</div>
+<a id="af09a4289803334c68d2df28475b0b173"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af09a4289803334c68d2df28475b0b173">&#9670;&nbsp;</a></span>start()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.start </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Main Slips Function</pre> 
+</div>
+</div>
+<a id="a8494e6a465f1903920f53dcf20365bb1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8494e6a465f1903920f53dcf20365bb1">&#9670;&nbsp;</a></span>start_gui_process()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.start_gui_process </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9e17888eab5fe5f2954fc5f771454a99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e17888eab5fe5f2954fc5f771454a99">&#9670;&nbsp;</a></span>stop_core_processes()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.stop_core_processes </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae571110572450de13a60b650f50bb4fb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae571110572450de13a60b650f50bb4fb">&#9670;&nbsp;</a></span>store_host_ip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.store_host_ip </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Store the host IP address if input type is interface
+</pre> 
+</div>
+</div>
+<a id="a875ed26eed7d16837246692a8dc3ac59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a875ed26eed7d16837246692a8dc3ac59">&#9670;&nbsp;</a></span>store_zeek_dir_copy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.store_zeek_dir_copy </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a22bc7f63f9c5e89c5cb895706af0f32a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22bc7f63f9c5e89c5cb895706af0f32a">&#9670;&nbsp;</a></span>terminate_slips()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.terminate_slips </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Shutdown slips, is called when stopping slips before
+starting all modules. for example using -cb
+</pre> 
+</div>
+</div>
+<a id="aa2e02d33c4d596c5ed3379a438d76fd8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa2e02d33c4d596c5ed3379a438d76fd8">&#9670;&nbsp;</a></span>update_local_TI_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.update_local_TI_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a47e1d37b73dbfff658b4193f58f43e57"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47e1d37b73dbfff658b4193f58f43e57">&#9670;&nbsp;</a></span>warn_about_pending_modules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.warn_about_pending_modules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>finished_modules</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="ad255f92fab311d524d6a45d6e77d0372"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad255f92fab311d524d6a45d6e77d0372">&#9670;&nbsp;</a></span>alerts_default_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.alerts_default_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad10d8329df0cb51e22155ed62136c583"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad10d8329df0cb51e22155ed62136c583">&#9670;&nbsp;</a></span>args</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.args</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac444f536110657ddedd59e4f997c38b7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac444f536110657ddedd59e4f997c38b7">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7922170f726880e0da55c44453e188d4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7922170f726880e0da55c44453e188d4">&#9670;&nbsp;</a></span>conf</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.conf</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae2a14ef3dc9fc22fc8a0fb96b521f401"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae2a14ef3dc9fc22fc8a0fb96b521f401">&#9670;&nbsp;</a></span>daemon</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.daemon</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aaa1a94aeb1fa28f1990a997eaa5b72e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaa1a94aeb1fa28f1990a997eaa5b72e3">&#9670;&nbsp;</a></span>enable_metadata</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.enable_metadata</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7f5518391921fedc43baba7d73b499e5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f5518391921fedc43baba7d73b499e5">&#9670;&nbsp;</a></span>end_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.end_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acbce8b5c7d97cc0c033d59d2cb03b804"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acbce8b5c7d97cc0c033d59d2cb03b804">&#9670;&nbsp;</a></span>evidenceProcessQueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.evidenceProcessQueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aefae517ce43bd19e2b748accab405497"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefae517ce43bd19e2b748accab405497">&#9670;&nbsp;</a></span>info_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.info_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3fae7a84438e5b345a4381ed8e9a9568"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3fae7a84438e5b345a4381ed8e9a9568">&#9670;&nbsp;</a></span>input_information</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.input_information</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a98567c46a2594bcb12a049bfae3e1e0a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98567c46a2594bcb12a049bfae3e1e0a">&#9670;&nbsp;</a></span>input_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.input_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8441f03f4505a521922490e76c80136b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8441f03f4505a521922490e76c80136b">&#9670;&nbsp;</a></span>line_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.line_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae1641a361c9d3d65f43b87e6fbe59523"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1641a361c9d3d65f43b87e6fbe59523">&#9670;&nbsp;</a></span>logsProcessQueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.logsProcessQueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac455217d399d75c6b86ab3f7a1dfceca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac455217d399d75c6b86ab3f7a1dfceca">&#9670;&nbsp;</a></span>mode</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.mode</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a16ef30a4caaf8448099ccd2dd6e57cea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a16ef30a4caaf8448099ccd2dd6e57cea">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6f69cec55e9f0530a03ece90291bb2e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f69cec55e9f0530a03ece90291bb2e3">&#9670;&nbsp;</a></span>open_servers_PIDs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.open_servers_PIDs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7ea6e97b77eb9e5f52d5ce55dbd30540"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ea6e97b77eb9e5f52d5ce55dbd30540">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab7448e31e7897dbbb8f377428c1cba99"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7448e31e7897dbbb8f377428c1cba99">&#9670;&nbsp;</a></span>pid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.pid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3ba7ae886dd7c3c374c74b178d4aa539"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3ba7ae886dd7c3c374c74b178d4aa539">&#9670;&nbsp;</a></span>PIDs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.PIDs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7f6974188a23f761780933bb592f9657"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f6974188a23f761780933bb592f9657">&#9670;&nbsp;</a></span>profilerProcessQueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.profilerProcessQueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad3262df0808b1674312b737b91400302"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad3262df0808b1674312b737b91400302">&#9670;&nbsp;</a></span>redis_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.redis_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Creation of the threads. </p>
+
+</div>
+</div>
+<a id="ad1aa523ed2d76782ee92bfc7943f31d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad1aa523ed2d76782ee92bfc7943f31d5">&#9670;&nbsp;</a></span>running_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.running_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a55a24bf73fac8fd1e35b4189d8bf7670"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a55a24bf73fac8fd1e35b4189d8bf7670">&#9670;&nbsp;</a></span>start_port</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.start_port</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a58211e16cc670993f268edde7f5edf50"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a58211e16cc670993f268edde7f5edf50">&#9670;&nbsp;</a></span>twid_width</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.twid_width</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8279a5d28837904019743b8a8421fdcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8279a5d28837904019743b8a8421fdcf">&#9670;&nbsp;</a></span>zeek_bro</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.zeek_bro</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a49e2bbdb64b1fbfe772294b87aec3e41"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a49e2bbdb64b1fbfe772294b87aec3e41">&#9670;&nbsp;</a></span>zeek_folder</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.slips.Main.zeek_folder</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/alya/Desktop/slips/<a class="el" href="../../df/d14/slips_8py.html">slips.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><a class="el" href="../../df/d73/namespaceslips.html">slips</a></li><li class="navelem"><a class="el" href="../../db/d43/namespaceslips_1_1slips.html">slips</a></li><li class="navelem"><a class="el" href="../../de/d45/classslips_1_1slips_1_1_main.html">Main</a></li>
+    <li class="footer">Generated by
+    <a href="http://www.doxygen.org/index.html">
+    <img class="footer" src="../../doxygen.png" alt="doxygen"/></a> 1.8.17 </li>
+  </ul>
+</div>
+</body>
+</html>
