@@ -54,7 +54,7 @@ class GoDirector:
         # clear the logfile
         open(p2p_reports_logfile, 'w').close()
         self.reports_logfile = open(p2p_reports_logfile, 'a')
-        self.print(f"Storing peer reports in {self.reports_logfile}")
+        self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
             'score_confidence': self.process_evaluation_score_confidence
