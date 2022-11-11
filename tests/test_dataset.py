@@ -289,7 +289,13 @@ def test_zeek_conn_log(
 )
 def test_suricata(database, suricata_path, output_dir, redis_port):
     output_dir = create_output_dir(output_dir)
-    expected_evidence = 'Connection to unknown destination port 2509/TCP'
+    # we have an established flow in suricata file to this port 8760/udp
+    # {"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":1630350322382106,"event_type":"flow",
+    # "src_ip":"192.168.1.129","src_port":36101,"dest_ip":"122.248.252.67","dest_port":8760,"proto":
+    # "UDP","app_proto":"failed","flow":{"pkts_toserver":2,"pkts_toclient":2,"bytes_toserver":256,
+    # "bytes_toclient":468,"start":"2021-06-07T04:26:27.668954+0200","end":"2021-06-07T04:26:27.838624+0200"
+    # ,"age":0,"state":"established","reason":"shutdown","alerted":false},"host":"stratosphere.org"}
+    expected_evidence = 'Connection to unknown destination port 8760/UDP'
     expected_evidence2 = 'vertical port scan'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
