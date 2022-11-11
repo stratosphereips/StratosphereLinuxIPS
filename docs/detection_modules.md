@@ -34,17 +34,17 @@ tr:nth-child(even) {
     <th>Status</th>
   </tr>
   <tr>
-    <td>ARP Detection</td>
+    <td>ARP</td>
     <td>Finds ARP scans and MITM with ARP in the local networrk.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>Exporting</td>
+    <td>Exporting Alerts</td>
     <td>Exports Slips alerts to Slack servers and STIX servers.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>IP_Info</td>
+    <td>IP Info</td>
     <td>Finds Geolocation country, and ASN for an IP address.</td>
     <td>✅</td>
   </tr>
@@ -54,12 +54,12 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>RiskIQ</td>
+    <td>Risk IQ</td>
     <td>Finds information from RiskIQ, such as passive DNS for domains and downloads the Threat Intelligence feed.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>Update</td>
+    <td>Update Manager</td>
     <td>Takes care of downloading each of the files used by Slips, but only if there is a need to update them. It stores and checks the ETags of remote files to know if they changed. It can be configured to update each file with a different frequency. Most importantly it updates all the Threat Intelligence feeds.</td>
     <td>✅</td>
   </tr>
@@ -69,22 +69,22 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>https</td>
+    <td>HTTPS</td>
     <td>training&test of RandomForest to detect malicious https flows</td>
     <td>⏳</td>
   </tr>
   <tr>
-    <td>port scan detector</td>
+    <td>Port Scan Detector</td>
     <td>detects Horizontal and Vertical port scans</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>timeline</td>
+    <td>Timeline</td>
     <td>creates a timeline of what happened in the network based on all the flows and type of data available</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>rnn-cc-detection</td>
+    <td>RNN C&C Detection</td>
     <td>detects command and control channels using recurrent neural network and the stratosphere behavioral letters</td>
     <td>✅</td>
   </tr>
@@ -94,12 +94,12 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>flowalerts</td>
+    <td>Flow Alerts</td>
     <td>Finds malicious behaviours by analyzing only one flow. Now detects: self-signed certificates, TLS certificates which validation failed, vertical port scans detected by Zeek (contrary to detected by Slips), horizontal port scans detected by Zeek (contrary to detected by Slips), password guessing in SSH as detected by Zeek, long connection, successful ssh</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>leak_detector</td>
+    <td>Leak Detector</td>
     <td>module to  detect leaks of data in the traffic using YARA rules</td>
     <td>✅</td>
   </tr>
@@ -109,17 +109,17 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>http_analyzer</td>
+    <td>HTTP Analyzer</td>
     <td>module to analyze HTTP traffic.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>blocking</td>
+    <td>Blocking</td>
     <td>Blocks the alerted IPs in the Linux iptables Firewall.</td>
     <td>✅</td>
   </tr>
   <tr>
-    <td>flowmldetection</td>
+    <td>Flow ML Detection</td>
     <td>module to detect malicious flows using machine learning</td>
     <td>✅</td>
   </tr>

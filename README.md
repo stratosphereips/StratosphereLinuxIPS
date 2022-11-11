@@ -52,16 +52,16 @@ The following table summarizes all active modules in Slips, their status, and th
 |   Module            | Status | Description | 
 | --------------------|   :-:  |------------ |  
 | HTTPS               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
-| Port scan detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
-| RNN C&C etection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
-| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
+| Port Scan Detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
+| RNN C&C Detection   |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
+| Flow Alerts         |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
 | Flow ML detection   |   ✅   | detects malicious flows using ML pretrained models |
-| Leak detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
+| Leak Detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
 | Threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
 | ARP                 |   ✅   | checks for ARP attacks in ARP traffic  |
 | Timeline            |   ✅   | creates a timeline of what happened in the network based on all the flows and type of data available  |
 | VirusTotal          |   ✅   | lookups IP addresses on VirusTotal |
-| RiskIQ              |   ✅   | lookups IP addresses on RiskIQ  |
+| Risk IQ             |   ✅   | lookups IP addresses on RiskIQ  |
 | IP Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
 | CESNET              |   ✅   | sends and receives alerts from CESNET Warden servers |
 | Exporting Alerts    |   ✅   | exports alerts to Slack or STIX format |
