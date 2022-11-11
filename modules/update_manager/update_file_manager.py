@@ -18,7 +18,7 @@ class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):
         self.outputqueue = outputqueue
         # For now, read the malicious IPs from here
-        self.name = 'update_manager'
+        self.name = 'Update File Manager'
         __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()

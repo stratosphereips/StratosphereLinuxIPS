@@ -14,9 +14,9 @@ from modules.update_manager.update_file_manager import UpdateFileManager
 
 class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'UpdateManager'
+    name = 'Update Manager'
     description = 'Update Threat Intelligence files'
-    authors = ['Kamila Babayeva']
+    authors = ['Kamila Babayeva', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)

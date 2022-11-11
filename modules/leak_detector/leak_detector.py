@@ -17,7 +17,7 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'leak_detector'
+    name = 'Leak Detector'
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 

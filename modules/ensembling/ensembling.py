@@ -12,7 +12,7 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ensembling'
+    name = 'Ensembling'
     description = 'The module to assign '
     authors = ['Kamila Babayeva, Sebastian Garcia']
 

@@ -408,7 +408,7 @@ def test_conf_file(
     assert int(database.get_label_count('malicious')) > 700
 
     # test disable
-    for module in ['template' , 'ensembling', 'flowmldetection']:
+    for module in ['template' , 'ensembling', 'Flow ML Detection']:
         assert module in database.get_disabled_modules()
 
     shutil.rmtree(output_dir)

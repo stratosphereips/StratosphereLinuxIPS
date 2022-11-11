@@ -19,7 +19,7 @@ from slips_files.core.whitelist import Whitelist
 
 
 class Module(Module, multiprocessing.Process):
-    name = 'flowalerts'
+    name = 'Flow Alerts'
     description = (
         'Alerts about flows: long connection, successful ssh, '
         'password guessing, self-signed certificate, data exfiltration, etc.'

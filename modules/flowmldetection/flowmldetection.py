@@ -27,7 +27,7 @@ warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'flowmldetection'
+    name = 'Flow ML Detection'
     description = (
         'Train or test a Machine Learning model to detect malicious flows'
     )

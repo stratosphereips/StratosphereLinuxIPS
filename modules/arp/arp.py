@@ -15,7 +15,7 @@ from multiprocessing import Queue
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'arp'
+    name = 'ARP'
     description = 'Detect arp attacks'
     authors = ['Alya Gomaa']
 
