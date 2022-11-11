@@ -17,24 +17,24 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import os
-import signal
 import json
 import time
 from watchdog.events import RegexMatchingEventHandler
-from .database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, config, redis_port, monitored_zeek_files):
+    def __init__(self, redis_port, monitored_zeek_files, input_type):
         super().__init__(self.REGEX)
-        self.config = config
         self.monitored_zeek_files = monitored_zeek_files
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         utils.drop_root_privs()
+        # is the dir we're observing marked as growing?
+        self.marked = False
+        self.input_type = input_type
 
     def on_created(self, event):
         filename, ext = os.path.splitext(event.src_path)
@@ -57,6 +57,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         # so if zeek recieves a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
+
         if 'reporter' in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
@@ -70,3 +71,10 @@ class FileEventHandler(RegexMatchingEventHandler):
                             break
         elif 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')
+        else:
+            # a zeek dir is modified, mark it as growing zeek dir so slips can treat it
+            # is an interface
+            # execlude pcaps because their zeek dir is always growing and shouldn't be treated as an interface
+            if self.input_type != 'pcap' and not self.marked:
+                __database__.set_growing_zeek_dir()
+                self.marked = True

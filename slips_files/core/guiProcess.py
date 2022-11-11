@@ -28,15 +28,12 @@ class GuiProcess(multiprocessing.Process):
     """
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+        self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
         self.myname = 'Gui'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.config = config
-        # Read the configuration
-        self.read_configuration()
         self.redis_port = redis_port
 
     def print(self, text, verbose=1, debug=0):

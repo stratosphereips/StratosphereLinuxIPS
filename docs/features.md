@@ -366,7 +366,7 @@ tr:nth-child(even) {
 
 ### Virustotal Module
 
-This module is used to lookup IPs/domains/downloaded files on virustotal
+This module is used to lookup IPs, domains, and URLs on virustotal
 
 To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
 
@@ -396,7 +396,7 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 To enable blocking in slips, start slips with the ```-p``` flag. 
 
-This feature is only supported in linux using iptables.
+This feature is only supported in linux using iptables natively and using docker.
 
 ### Exporting Alerts Module
 
@@ -507,7 +507,7 @@ You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```slip
 #### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
-it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_ips.csv``` by default,
+it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```slips.conf```.
 
 The format of the file is "IP address","Threat level", "Description"
@@ -868,8 +868,10 @@ We detect a scan every threshold. So we generate an evidence when there is
 
 
 We detect 3 types of ICMP scans: ICMP-Timestamp-Scan, ICMP-AddressScan,
-and ICMP-AddressMaskScan using Slips' own zeek script located in 
-zeek-scripts/icmps-scans.zeek
+and ICMP-AddressMaskScan 
+
+Slips does this detection using Slips' own zeek script located in 
+zeek-scripts/icmps-scans.zeek for zeek and pcap files and using the portscan module for binetflow files.
 
 ## Connections Made By Slips
 

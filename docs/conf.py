@@ -24,7 +24,7 @@ copyright = '2021, Stratosphere Laboratory'
 author = 'Stratosphere Laboratory'
 
 # The full version, including alpha/beta/rc tags
-release = '0.9.5'
+release = '0.9.6'
 
 
 # -- General configuration ---------------------------------------------------
@@ -61,6 +61,7 @@ source_suffix = {
     '.rst': 'restructuredtext',
     '.txt': 'markdown',
     '.md': 'markdown',
+    '.html': 'html',
 }
 
 master_doc = 'index'

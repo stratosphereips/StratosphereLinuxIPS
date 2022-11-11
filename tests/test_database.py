@@ -1,9 +1,11 @@
+from slips_files.common.slips_utils import utils
 import ipaddress
 import redis
 import os
 import json
-import configparser
+import sys
 import time
+
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -19,19 +21,19 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
-    from slips_files.core.database import __database__
-
-    config = configparser.ConfigParser()
-    __database__.start(config, 6381)
+    from slips_files.core.database.database import __database__
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
+    __database__.deletePrevdb = True
+    __database__.disabled_detections = []
+    __database__.home_network = utils.home_network_ranges
+    __database__.width = 3600
+    __database__.connect_to_redis_server(6381)
+    __database__.r.flushdb()
+    __database__.setSlipsInternalTime(0)
     return __database__
 
-
-# this should always be the first unit test in this file
-# because we don't want another unit test adding the same flow before this one
-def test_add_flow(outputQueue):
-    database = create_db_instace(outputQueue)
+def add_flow(db):
     starttime = '5'
     dur = '5'
     sport = 80
@@ -47,8 +49,8 @@ def test_add_flow(outputQueue):
     appproto = 'dhcp'
     uid = '1234'
     flow_type = ''
-    assert (
-        database.add_flow(
+
+    return db.add_flow(
             profileid=profileid,
             twid=twid,
             stime=starttime,
@@ -67,8 +69,15 @@ def test_add_flow(outputQueue):
             uid=uid,
             flow_type=flow_type,
         )
-        == True
-    )
+
+
+
+# this should always be the first unit test in this file
+# because we don't want another unit test adding the same flow before this one
+def test_add_flow(outputQueue):
+    database = create_db_instace(outputQueue)
+    uid = '1234'
+    assert add_flow(database) ==  True
     assert (
         database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
         == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,'
@@ -87,7 +96,7 @@ def test_getProfileIdFromIP(outputQueue):
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    database.addProfile('profile_192.168.1.1', '00:00', '1')
+    ret = database.addProfile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) != False
 
@@ -223,12 +232,14 @@ def test_module_labels(outputQueue):
     """ tests set and get_module_labels_from_flow """
     # clear the database before running this test
     os.system('./slips.py -cc')
+    add_flow(database)
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
-    database.set_module_label_to_flow(
+    assert database.set_module_label_to_flow(
         profileid, twid, uid, module_name, module_label
-    )
+    ) == True
+
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'test' in labels
     assert labels['test'] == 'malicious'
@@ -265,7 +276,8 @@ def test_profile_moddule_labels(outputQueue):
     assert labels['test'] == 'malicious'
 
 
-def test_add_mac_addr_to_profile(database):
+def test_add_mac_addr_to_profile(outputQueue):
+    database = create_db_instace(outputQueue)
     ipv4 = '192.168.1.5'
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
@@ -296,7 +308,8 @@ def test_add_mac_addr_to_profile(database):
     assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
 
 
-def test_get_the_other_ip_version(database):
+def test_get_the_other_ip_version(outputQueue):
+    database = create_db_instace(outputQueue)
     # profileid is ipv4
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)

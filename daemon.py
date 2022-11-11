@@ -1,10 +1,9 @@
 from slips_files.common.slips_utils import utils
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 import configparser
-import signal
+from slips_files.common.config_parser import ConfigParser
 import sys
 import os
-import errno
 from signal import SIGTERM
 
 class Daemon():
@@ -59,42 +58,11 @@ class Daemon():
         self.stdout = os.path.join(output_dir, self.stdout)
         self.logsfile = os.path.join(output_dir, self.logsfile)
 
-
     def read_configuration(self):
-        """ Read the configuration file to get stdout, stderr, logsfile path. """
-        # get self.config
-        self.config = self.slips.read_conf_file()
-
-        try:
-            # this file has info about the daemon, started, ended, pid , etc.. by default it's the same as stdout
-            self.logsfile = self.config.get('modes', 'logsfile')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.logsfile = 'slips.log'
-
-        try:
-            self.stdout = self.config.get('modes', 'stdout')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stdout = 'slips.log'
-
-        try:
-            self.stderr = self.config.get('modes', 'stderr')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.stderr = 'errors.log'
+        conf = ConfigParser()
+        self.logsfile = conf.logsfile()
+        self.stdout = conf.stdout()
+        self.stderr = conf.stderr()
         # we don't use it anyway
         self.stdin = '/dev/null'
 
@@ -149,7 +117,6 @@ class Daemon():
             self.print(f"Can't delete pidfile, {self.pidfile} doesn't exist.")
             # if an error happened it will be written in logsfile
             self.print('Either Daemon stopped normally or an error occurred.')
-
 
     def daemonize(self):
         """
@@ -256,7 +223,8 @@ class Daemon():
     def killdaemon(self):
         """ Kill the damon process only (aka slips.py) """
         # sending SIGINT to self.pid will only kill slips.py and the rest of it's children will be zombies
-        # sending SIGKILL to self.pid will only kill slips.py and the rest of it's children will stay open in memory (not even zombies)
+        # sending SIGKILL to self.pid will only kill slips.py and the rest of
+        # it's children will stay open in memory (not even zombies)
         try:
             os.kill(int(self.pid), SIGTERM)
         except ProcessLookupError:
@@ -276,6 +244,6 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        __database__.start(self.config, port)
+        __database__.start(port)
         self.slips.c1 = __database__.subscribe('finished_modules')
         self.slips.shutdown_gracefully()

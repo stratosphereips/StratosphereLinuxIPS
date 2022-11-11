@@ -8,9 +8,12 @@ import textwrap
 
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
+        self.options = []
         super(ArgumentParser, self).__init__(*args, **kwargs)
         self.program = {key: kwargs[key] for key in kwargs}
-        self.options = []
+
+        self.alerts_default_path = 'output/'
+
 
     def add_argument(self, *args, **kwargs):
         super(ArgumentParser, self).add_argument(*args, **kwargs)
@@ -70,11 +73,11 @@ class ArgumentParser(argparse.ArgumentParser):
             wrapper.subsequent_indent = len(wrapper.initial_indent) * ' '
             if 'help' in option and 'default' in option:
                 output = option['help']
-                output += (
-                    " (default: '%s')" % option['default']
-                    if isinstance(option['default'], str)
-                    else ' (default: %s)' % str(option['default'])
-                )
+                # do not print th default value of help arg
+                if '-h' not in option['flags']:
+                    output += (
+                        f" (default: '{option['default']})"
+                    )
                 output = wrapper.fill(output)
             elif 'help' in option:
                 output = option['help']
@@ -89,3 +92,178 @@ class ArgumentParser(argparse.ArgumentParser):
             else:
                 output = wrapper.initial_indent
             print(output)
+
+    def get_configfile(self):
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
+        self.add_argument(
+            '-c',
+            '--config',
+            metavar='<configfile>',
+            action='store',
+            required=False,
+            default=slips_conf_path,
+            help='Path to the Slips config file.',
+        )
+        return self.parse_known_args()[0].config
+
+    def parse_arguments(self):
+        # Parse the parameters
+        slips_conf_path = os.path.join(os.getcwd(), 'config/slips.conf')
+        self.add_argument(
+            '-c',
+            '--config',
+            metavar='<configfile>',
+            action='store',
+            required=False,
+            default=slips_conf_path,
+            help='Path to the Slips config file.',
+        )
+        self.add_argument(
+            '-v',
+            '--verbose',
+            metavar='<verbositylevel>',
+            action='store',
+            required=False,
+            type=int,
+            help='Verbosity level. This logs more info about Slips.',
+        )
+        self.add_argument(
+            '-e',
+            '--debug',
+            metavar='<debuglevel>',
+            action='store',
+            required=False,
+            type=int,
+            help='Debugging level. This shows more detailed errors.',
+        )
+        self.add_argument(
+            '-f',
+            '--filepath',
+            metavar='<file>',
+            action='store',
+            required=False,
+            help='Read and automatically recognize a Zeek dir with all logs, '
+                 'a Zeek conn.log file (TAB separated or JSON), '
+                 'a Suricata JSON file with flows, an Argus binetflow file, a PCAP file or a nfdump file. '
+                 'Also use the word "zeek" to specify read from stdin of Zeek files, '
+                 'or "suricata" to specify stdin of suricata files.',
+        )
+        self.add_argument(
+            '-i',
+            '--interface',
+            metavar='<interface>',
+            action='store',
+            required=False,
+            help='Read packets from an interface.',
+        )
+        self.add_argument(
+            '-l',
+            '--createlogfiles',
+            action='store_true',
+            required=False,
+            help='Create log files with all the traffic info and detections.',
+        )
+        self.add_argument(
+            '-F',
+            '--pcapfilter',
+            action='store',
+            required=False,
+            type=str,
+            help="Packet filter for Zeek. BPF style.",
+        )
+        self.add_argument(
+            '-cc',
+            '--clearcache',
+            action='store_true',
+            required=False,
+            help='Clear the cache database.',
+        )
+        self.add_argument(
+            '-p',
+            '--blocking',
+            help='Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.',
+            required=False,
+            default=False,
+            action='store_true',
+        )
+        self.add_argument(
+            '-cb',
+            '--clearblocking',
+            help='Flush and delete slipsBlocking iptables chain',
+            required=False,
+            default=False,
+            action='store_true',
+        )
+        self.add_argument(
+            '-o',
+            '--output',
+            action='store',
+            required=False,
+            default=self.alerts_default_path,
+            help='Store alerts.json and alerts.txt in the given folder.',
+        )
+        self.add_argument(
+            '-s',
+            '--save',
+            action='store_true',
+            required=False,
+            help='Save the analysed file db to disk.',
+        )
+        self.add_argument(
+            '-d',
+            '--db',
+            action='store',
+            required=False,
+            help='Read an analysed file (rdb) from disk.',
+        )
+        self.add_argument(
+            '-D',
+            '--daemon',
+            required=False,
+            default=False,
+            action='store_true',
+            help='Run slips in daemon mode',
+        )
+        self.add_argument(
+            '-S',
+            '--stopdaemon',
+            required=False,
+            default=False,
+            action='store_true',
+            help='Stop slips daemon',
+        )
+        self.add_argument(
+            '-k',
+            '--killall',
+            action='store_true',
+            required=False,
+            help='Kill all unused redis servers',
+        )
+        self.add_argument(
+            '-m',
+            '--multiinstance',
+            action='store_true',
+            required=False,
+            help='Run multiple instances of slips, don\'t overwrite the old one',
+        )
+        self.add_argument(
+            '-P',
+            '--port',
+            action='store',
+            required=False,
+            help='The redis-server port to use',
+        )
+        self.add_argument(
+            '-V',
+            '--version',
+            action='store_true',
+            required=False,
+            help='Print Slips Version',
+        )
+        try:
+            self.add_argument(
+                '-h', '--help', action='store_true', help='command line help',
+            )
+        except argparse.ArgumentError:
+            pass
+        return self.parse_args()

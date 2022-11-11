@@ -1,5 +1,7 @@
 # Must imports
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
+
 
 # Your imports
 import time
@@ -85,7 +87,7 @@ class ASN:
     def cache_ip_range(self, ip) -> bool:
         """
         Get the range of the given ip and
-        caches the asn of the whole ip range
+        cache the asn of the whole ip range
         """
         try:
             # Cache the range of this ip
@@ -101,21 +103,10 @@ class ASN:
         ):
             # private ip or RDAP lookup failed. don't cache
             return False
-        # except NoResolverConfiguration:
-        #     # Resolver configuration could not be read or specified no nameservers
-        #     # self.print('Error: Resolver configuration could not be read or specified no nameservers.')
-        #     return False
         except ipwhois.exceptions.ASNRegistryError:
             # ASN lookup failed with no more methods to try
             pass
-        # except dns.resolver.NoResolverConfiguration:
-        #     # ipwhois can't read /etc/resolv.conf
-        #     # manually specify the dns server
-        #     # ignore resolv.conf
-        #     dns.resolver.default_resolver=dns.resolver.Resolver(configure=False)
-        #     # use google's DNS
-        #     dns.resolver.default_resolver.nameservers=['8.8.8.8']
-        #     return False
+
 
     def get_asn_online(self, ip):
         """
@@ -137,6 +128,7 @@ class ASN:
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
+            json.decoder.JSONDecodeError
         ):
             pass
 

@@ -37,23 +37,23 @@ def test_load_modules():
 # def test_save():
 #     """ tests saving the database"""
 #     # this test needs sudo
-#     command = f'sudo ./slips.py -l -f dataset/sample_zeek_files -s > /dev/null 2>&1'
+#     command = f'sudo ./slips.py -l -f dataset/test9-mixed-zeek-dir -s > /dev/null 2>&1'
 #     # this function returns when slips is done
 #     os.system(command)
-#     assert os.path.exists('redis_backups/sample_zeek_files.rdb')
-#     os.remove('redis_backups/sample_zeek_files.rdb')
+#     assert os.path.exists('redis_backups/test9-mixed-zeek-dir.rdb')
+#     os.remove('redis_backups/test9-mixed-zeek-dir.rdb')
 #
 # @pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
 # def test_load(database):
 #     """ tests loading the database"""
 #     # make sure the db exists
-#     if not os.path.exists('redis_backups/sample_zeek_files.rdb'):
+#     if not os.path.exists('redis_backups/test9-mixed-zeek-dir.rdb'):
 #         # save it if it doesn't exist
-#         command = f'sudo ./slips.py -l -f dataset/sample_zeek_files -s > /dev/null 2>&1'
+#         command = f'sudo ./slips.py -l -f dataset/test9-mixed-zeek-dir -s > /dev/null 2>&1'
 #         os.system(command)
 #
 #     # this test needs sudo
-#     command = f'sudo ./slips.py -d redis_backups/sample_zeek_files.rdb  > /dev/null 2>&1'
+#     command = f'sudo ./slips.py -d redis_backups/test9-mixed-zeek-dir.rdb  > /dev/null 2>&1'
 #     # this function returns when slips is done
 #     os.system(command)
 #     # wait for the command to finish

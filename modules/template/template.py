@@ -14,9 +14,9 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import platform
 import sys
 
 # Your imports
@@ -28,16 +28,12 @@ class Module(Module, multiprocessing.Process):
     description = 'Template module'
     authors = ['Template Author']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
-        # your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
@@ -47,7 +43,6 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -78,7 +73,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

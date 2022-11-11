@@ -12,7 +12,7 @@ def do_nothing(*args):
 
 # this file will be used for storing the module output
 # and deleted when the tests are done
-test_pcap = 'dataset/hide-and-seek-short.pcap'
+test_pcap = 'dataset/test7-malicious.pcap'
 yara_rules_path = 'tests/yara_rules_for_testing/rules/'
 compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
 compiled_test_rule = compiled_yara_rules_path + 'test_rule.yara_compiled'
@@ -21,8 +21,7 @@ compiled_test_rule = compiled_yara_rules_path + 'test_rule.yara_compiled'
 def create_leak_detector_instance(outputQueue):
     """Create an instance of leak_detector.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    leak_detector = Module(outputQueue, config, 6380)
+    leak_detector = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     leak_detector.print = do_nothing
     # this is the path containing 1 yara rule for testing, it matches every pcap

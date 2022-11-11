@@ -1,8 +1,8 @@
 """Unit test for modules/ip_info/ip_info.py"""
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
-import configparser
-
+import asyncio
+import pytest
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -12,8 +12,7 @@ def do_nothing(*args):
 def create_ip_info_instance(outputQueue):
     """Create an instance of ip_info.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser()
-    ip_info = Module(outputQueue, config, 6380)
+    ip_info = Module(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     ip_info.print = do_nothing
     return ip_info
@@ -75,6 +74,8 @@ def test_get_rdns(outputQueue, database):
 
 def test_get_geocountry(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     assert ip_info.get_geocountry('153.107.41.230') == {
         'geocountry': 'Australia'
     }
@@ -86,20 +87,26 @@ def test_get_geocountry(outputQueue, database):
 # MAC vendor unit tests
 def test_get_vendor_offline(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     mac_addr = '08:00:27:7f:09:e1'
-    found_info = ip_info.get_vendor_offline(mac_addr)
-    assert found_info == 'Pcs Systemtechnik GmbH'
+    profileid = 'profile_10.0.2.15'
+    found_info = ip_info.get_vendor_offline(mac_addr, 'google.com', profileid)
+    assert found_info != False
+    assert found_info.lower() == 'PCS Systemtechnik GmbH'.lower()
 
 
 def test_get_vendor_online(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
     mac_addr = '08:00:27:7f:09:e1'
-    found_info = ip_info.get_vendor_online(mac_addr).lower()
+    found_info = str(ip_info.get_vendor_online(mac_addr)).lower()
     assert found_info == 'Pcs Systemtechnik GmbH'.lower(), 'Error connecting to server'
 
 
 def test_get_vendor(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
+    # open the db we'll be using for this test
+    ip_info.wait_for_dbs()
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'

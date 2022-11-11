@@ -1,11 +1,10 @@
 import configparser
-import os
 import time
 import modules.p2ptrust.testing.json_data as json_data
 from modules.p2ptrust.utils.utils import save_ip_report_to_db
 from modules.p2ptrust.p2ptrust import Trust
 from modules.p2ptrust.trust.trustdb import TrustDB
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from multiprocessing import Queue
 from outputProcess import OutputProcess
 import json
@@ -23,7 +22,7 @@ def init_tests(pigeon_port=6669):
     output_process_thread.start()
 
     # Start the DB
-    __database__.start(config)
+    __database__.start()
     __database__.setOutputQueue(output_process_queue)
     module_process = Trust(
         output_process_queue,

@@ -1,9 +1,9 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import configparser
 from sklearn.linear_model import SGDClassifier
 from sklearn.preprocessing import StandardScaler
 import pickle
@@ -33,13 +33,10 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
         self.fieldseparator = __database__.getFieldSeparator()
@@ -47,8 +44,6 @@ class Module(Module, multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # Read the configuration
         self.read_configuration()
-        # Channel timeout
-        self.timeout = 0.00000001
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
         # To plot the scores of training
@@ -57,17 +52,8 @@ class Module(Module, multiprocessing.Process):
         self.scaler = StandardScaler()
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        try:
-            self.mode = self.config.get('flowmldetection', 'mode')
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            # Default to test
-            self.mode = 'test'
+        conf = ConfigParser()
+        self.mode = conf.get_ml_mode()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -451,7 +437,7 @@ class Module(Module, multiprocessing.Process):
         self.read_model()
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
 
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

@@ -5,7 +5,7 @@ import time
 import json
 from typing import Union, Dict
 
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 
 
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)
@@ -30,6 +30,14 @@ def validate_ip_address(ip: str) -> bool:
 
     return True
 
+
+threat_levels = {
+            'info': 0,
+            'low': 0.2,
+            'medium': 0.5,
+            'high': 0.8,
+            'critical': 1,
+        }
 
 def validate_timestamp(timestamp: str) -> Union[int, None]:
     """
@@ -118,7 +126,11 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
     """
     # the higher the score, the more malicious this ip
     try:
-        score = ip_info['score']
+        if 'threat_level' in ip_info:
+            score = threat_levels[ip_info['threat_level']]
+        else:
+            score = ip_info['score']
+
         confidence = ip_info['confidence']
         return float(score), float(confidence)
     except KeyError:
@@ -135,8 +147,13 @@ def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
         'network_score': network_trust,
         'timestamp': timestamp,
     }
-    wrapped_data = {'p2p4slips': report_data}
 
+    # store it in p2p_reports key
+    # print(f"*** [debugging p2p] ***  stored a report about {ip} in p2p_Reports and IPsInfo keys")
+    __database__.store_p2p_report(ip, report_data)
+
+    # store it in IPsInfo key
+    wrapped_data = {'p2p4slips': report_data}
     __database__.setInfoForIPs(ip, wrapped_data)
 
 

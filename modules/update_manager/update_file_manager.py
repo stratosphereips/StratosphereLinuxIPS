@@ -1,37 +1,34 @@
 import configparser
 import time
 import os
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import json
 import ipaddress
 import validators
 import traceback
 import requests
-import datetime
 import sys
 import asyncio
-from datetime import datetime
+import datetime
 from slips_files.core.whitelist import Whitelist
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         self.outputqueue = outputqueue
-        self.config = config
         # For now, read the malicious IPs from here
         self.name = 'update_manager'
-        # Start the database
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
         self.new_update_time = float('-inf')
-        # Read the conf
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
         # don't store iocs older than 1 week
         self.interval = 7
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         self.slips_logfile = __database__.get_stdfile("stdout")
         self.org_info_path = 'slips_files/organizations_info/'
         # if any keyword of the following is present in a line
@@ -55,23 +52,6 @@ class UpdateFileManager:
         self.first_time_reading_files = False
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError, TypeError, ValueError
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
         def read_riskiq_creds(RiskIQ_credentials_path):
             self.riskiq_email = None
             self.riskiq_key = None
@@ -79,7 +59,8 @@ class UpdateFileManager:
             if not RiskIQ_credentials_path:
                 return
 
-            RiskIQ_credentials_path  = os.path.join(os.getcwd(), RiskIQ_credentials_path)
+            RiskIQ_credentials_path  = os.path.join(os.getcwd(),
+                                                    RiskIQ_credentials_path)
             if not os.path.exists(RiskIQ_credentials_path):
                 return
 
@@ -87,63 +68,32 @@ class UpdateFileManager:
                 self.riskiq_email = f.readline().replace('\n', '')
                 self.riskiq_key = f.readline().replace('\n', '')
 
-        self.update_period = get('threatintelligence', 'malicious_data_update_period', 86400)
-        try:
-            self.update_period = float(self.update_period)
-        except(NameError, TypeError, ValueError):
-            self.update_period = 86400   # 1 day
+        conf = ConfigParser()
 
-        self.path_to_threat_intelligence_data = get(
-            'threatintelligence',
-            'download_path_for_remote_threat_intelligence',
-            'modules/threat_intelligence/remote_data_files/'
-        )
-        self.path_to_threat_intelligence_data = self.sanitize(
-                self.path_to_threat_intelligence_data
-        )
-        if not os.path.exists(self.path_to_threat_intelligence_data):
-            os.mkdir(self.path_to_threat_intelligence_data)
+        self.update_period = conf.update_period()
 
-        self.ti_feed_tuples = get('threatintelligence', 'ti_files', '')
-        if self.ti_feed_tuples:
-            self.ti_feed_tuples = self.ti_feed_tuples.split('\n')
-            self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
-        else:
-            self.url_feeds = {}
+        self.path_to_remote_ti_files = conf.remote_ti_data_path()
+        if not os.path.exists(self.path_to_remote_ti_files):
+            os.mkdir(self.path_to_remote_ti_files)
 
-        self.ja3_feed_tuples = get('threatintelligence', 'ja3_feeds', '')
-        if self.ja3_feed_tuples:
-            self.ja3_feed_tuples = self.ja3_feed_tuples.split('\n')
-            self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-        else:
-            self.ja3_feeds = {}
+        self.ti_feed_tuples = conf.ti_files()
+        self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
 
-        self.ssl_feed_tuples = get('threatintelligence', 'ssl_feeds', '')
-        if self.ssl_feed_tuples:
-            self.ssl_feed_tuples = self.ssl_feed_tuples.split('\n')
-            self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
-        else:
-            self.ssl_feeds = {}
+        self.ja3_feed_tuples = conf.ja3_feeds()
+        self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
 
-        RiskIQ_credentials_path = get('threatintelligence', 'RiskIQ_credentials_path', '')
+        self.ssl_feed_tuples = conf.ssl_feeds()
+        self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+
+        RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
+        self.riskiq_update_period = conf.riskiq_update_period()
 
+        self.mac_db_update_period = conf.mac_db_update_period()
+        self.mac_db_link = conf.mac_db_link()
 
-        self.riskiq_update_period = get('threatintelligence', 'update_period', 604800)  # 1 week
-        self.riskiq_update_period = float(self.riskiq_update_period)
-        try:
-            self.riskiq_update_period = float(self.riskiq_update_period)
-        except(NameError, TypeError, ValueError):
-            self.riskiq_update_period = 604800
-
-        self.mac_db_update_period = get('threatintelligence', 'mac_db_update', 1209600)  # 2 weeks
-        try:
-            self.mac_db_update_period = float(self.mac_db_update_period)
-        except(NameError, TypeError, ValueError):
-            self.mac_db_update_period = 1209600
-
-        self.mac_db_link = get('threatintelligence', 'mac_db', '')
-        self.mac_db_link = self.sanitize(self.mac_db_link)
+        self.online_whitelist_update_period = conf.online_whitelist_update_period()
+        self.online_whitelist = conf.online_whitelist()
 
 
     def get_feed_properties(self, feeds):
@@ -302,6 +252,40 @@ class UpdateFileManager:
             # The 2 hashes are identical. File is up to date.
             return False
 
+    def __check_if_update_online_whitelist(self) -> bool:
+        """
+        Decides whether to update or not based on the update period
+        Used for online whitelist specified in slips.conf
+        """
+        # Get the last time this file was updated
+        data = __database__.get_TI_file_info('tranco_whitelist')
+        try:
+            last_update = data['time']
+            last_update = float(last_update)
+        except (TypeError, KeyError):
+            last_update = float('-inf')
+
+        now = time.time()
+
+        if last_update + self.online_whitelist_update_period  > now:
+            return False
+
+        # update period passed
+        # response will be used to get e-tag, and if the file was updated
+        # the same response will be used to update the content in our db
+        response = self.download_file(self.online_whitelist)
+        if not response:
+            return False
+
+        # update the timestamp in the db
+        ti_file_info = {'time': time.time()}
+        __database__.set_TI_file_info(
+            'tranco_whitelist', ti_file_info
+        )
+        return response
+
+
+
     def download_file(self, file_to_download):
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
@@ -351,6 +335,7 @@ class UpdateFileManager:
             if (
                 'risk' in file_to_download
             ):
+                # updating riskiq TI data does not depend on an e-tag
                 return True
 
             # Update only if the e-tag is different
@@ -393,12 +378,12 @@ class UpdateFileManager:
                     # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
                     # Store the new etag and time of file in the database
-                    malicious_file_info = {
+                    ti_file_info = {
                         'e-tag': new_e_tag,
                         'time': self.new_update_time,
                     }
                     __database__.set_TI_file_info(
-                        file_name_to_download, malicious_file_info
+                        file_name_to_download, ti_file_info
                     )
                     self.loaded_ti_files += 1
                     return False
@@ -423,17 +408,6 @@ class UpdateFileManager:
         """
         return response.headers.get('ETag', False)
 
-    def sanitize(self, string):
-        """
-        Sanitize strings taken from the user
-        """
-        string = string.replace(';', '')
-        string = string.replace('\`', '')
-        string = string.replace('&', '')
-        string = string.replace('|', '')
-        string = string.replace('$(', '')
-        string = string.replace('\n', '')
-        return string
 
     def write_file_to_disk(self, response, full_path):
 
@@ -568,7 +542,7 @@ class UpdateFileManager:
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
-            full_path = f'{self.path_to_threat_intelligence_data}/{file_name_to_download}'
+            full_path = os.path.join(self.path_to_remote_ti_files, file_name_to_download)
             self.write_file_to_disk(response, full_path)
 
             # File is updated in the server and was in our database.
@@ -938,7 +912,7 @@ class UpdateFileManager:
 
     def parse_line(self, line, file_path) -> tuple:
         """
-        :param file_path: path of the ti fil;e that contains the given line
+        :param file_path: path of the ti file that contains the given line
         Parse the given line and return the amount of columns it has,
         a list of the line fields, and the separator it's using
         """
@@ -1419,11 +1393,6 @@ class UpdateFileManager:
             # when the ti files are already updated, from a previous run, we don't
             return
 
-        ips = {
-            'in 1 blacklist': 0,
-            'in 2 blacklist': 0,
-            'in 3 blacklist': 0,
-        }
         ips_in_1_bl = 0
         ips_in_2_bl = 0
         ips_in_3_bl = 0
@@ -1435,24 +1404,37 @@ class UpdateFileManager:
                 ips_in_2_bl += 1
             elif blacklists_ip_appeard_in == 3:
                 ips_in_3_bl += 1
-
-        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}')
-        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}')
-        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}')
+        self.print(f'Number of repeated IPs in 1 blacklist: {ips_in_1_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 2, 0)
+        self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 2, 0)
 
     def update_mac_db(self, response):
         if response.status_code != 200:
             return
+        self.log(f'Updating the MAC database.')
+        path_to_mac_db = 'databases/macaddress-db.json'
 
-        path_to_mac_db = 'databases/macaddr-db.json'
-
-        # write to filee the info as 1 json per line
+        # write to file the info as 1 json per line
         mac_info = response.text.replace(']','').replace('[','').replace(',{','\n{')
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
-        # todo the basename doesn't make sense
+
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
 
+
+    def update_online_whitelist(self, response):
+        """
+        Updates online tranco whitelist defined in slips.conf online_whitelist key in the db
+        """
+        # write to the file so we don't store the 10k domains in memory
+        online_whitelist_download_path = os.path.join(self.path_to_remote_ti_files, 'tranco-top-10000-whitelist')
+        with open(online_whitelist_download_path, 'w') as f:
+            f.write(response.text)
+
+        with open(online_whitelist_download_path, 'r') as f:
+            while line := f.readline():
+                domain = line.split(',')[1]
+                __database__.store_tranco_whitelisted_domain(domain)
 
     async def update(self) -> bool:
         """
@@ -1477,6 +1459,10 @@ class UpdateFileManager:
             if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db(response)
 
+            ############### Update online whitelist ################
+            if response := self.__check_if_update_online_whitelist():
+                self.update_online_whitelist(response)
+
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
             # For each file that we should update`
@@ -1487,7 +1473,7 @@ class UpdateFileManager:
 
             for file_to_download in files_to_download.keys():
                 file_to_download = file_to_download.strip()
-                file_to_download = self.sanitize(file_to_download)
+                file_to_download = utils.sanitize(file_to_download)
 
                 response = self.__check_if_update(file_to_download, self.update_period)
                 if response:
@@ -1521,7 +1507,6 @@ class UpdateFileManager:
                     self.log('Successfully updated RiskIQ domains.')
                 else:
                     self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
-
             # wait for all TI files to update
             try:
                 await task
@@ -1529,8 +1514,7 @@ class UpdateFileManager:
                 # in case all our files are updated, we don't have task defined, skip
                 pass
 
-            self.print(f'{self.loaded_ti_files} TI files successfully loaded.')
-
+            __database__.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:

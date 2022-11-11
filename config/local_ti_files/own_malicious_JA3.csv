@@ -1,0 +1,7 @@
+# This file is for you to add your own JA3 to detect
+# Format of this file:
+# "JA3 hash", "Threat level", "Description"
+# Threat level available options: info, low, medium, high, critical
+
+"e7d705a3286e19ea42f587b344ee6865","medium","Standard tor client"
+"6734f37431670b3ab4292b8f60f29984", "high", "Trickbot Malware"

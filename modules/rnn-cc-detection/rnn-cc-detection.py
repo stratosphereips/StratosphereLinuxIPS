@@ -1,16 +1,15 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-import platform
 import warnings
 import json
 
 # Your imports
 import numpy as np
 import sys
-from tensorflow.python.keras.preprocessing.sequence import pad_sequences
 from tensorflow.python.keras.models import load_model
 
 
@@ -24,18 +23,13 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The
         # outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for your
-        # own configurations
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_letters')
-        self.timeout = 0.00000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -71,9 +65,6 @@ class Module(Module, multiprocessing.Process):
         Set an evidence for malicious Tuple
         """
 
-        # to reduce false positives
-        if score < 0.99:
-            return
         type_detection = 'outTuple'
         detection_info = tupleid
         source_target_tag = 'Botnet'
@@ -177,7 +168,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -194,8 +185,8 @@ class Module(Module, multiprocessing.Process):
                     stime = data['stime']
 
                     if 'tcp' in tupleid.lower():
-                        # Define why this threshold
-                        threshold = 0.7
+                        # to reduce false positives
+                        threshold = 0.99
                         # function to convert each letter of behavioral model to ascii
                         behavioral_model = self.convert_input_for_module(
                             pre_behavioral_model

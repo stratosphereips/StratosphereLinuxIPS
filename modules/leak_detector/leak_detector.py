@@ -1,13 +1,14 @@
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database import __database__
+from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
 
 # Your imports
-import yara
+from subprocess import check_output
 import base64
+import time
 import binascii
 import os
 import subprocess
@@ -20,13 +21,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect leaks of data in the traffic'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
-        # self.timeout = 0.0000001
+        __database__.start(redis_port)
         # this module is only loaded when a pcap is given get the pcap path
         try:
             self.pcap = sys.argv[sys.argv.index('-f') + 1]
@@ -38,6 +36,23 @@ class Module(Module, multiprocessing.Process):
         self.compiled_yara_rules_path = (
             'modules/leak_detector/yara_rules/compiled/'
         )
+        self.bin_found = False
+        if self.is_yara_installed():
+            self.bin_found = True
+
+
+    def is_yara_installed(self) -> bool:
+        """
+        Checks if notify-send bin is installed
+        """
+        cmd = 'yara -h > /dev/null 2>&1'
+        returncode = os.system(cmd)
+        if returncode == 256 or returncode == 0:
+            # it is installed
+            return True
+        # elif returncode == 32512:
+        self.print(f"yara is not installed. install it using:\nsudo apt-get install yara")
+        return False
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -89,7 +104,8 @@ class Module(Module, multiprocessing.Process):
 
             packet_data_length = True
             while packet_data_length:
-                # the number of the packet we're currently working with, since packets start from 1 in tshark , the first packet should be 1
+                # the number of the packet we're currently working with,
+                # since packets start from 1 in tshark , the first packet should be 1
                 packet_number += 1
                 # this offset is exactly when the packet starts
                 start_offset = f.tell() + 1
@@ -137,7 +153,7 @@ class Module(Module, multiprocessing.Process):
                             proto = 'udp'
                         else:
                             # probably ipv6.hopopt
-                            continue
+                            return
 
                         try:
                             ts = json_packet['frame']['frame.time_epoch']
@@ -146,7 +162,7 @@ class Module(Module, multiprocessing.Process):
                             sport = json_packet[proto][f'{proto}.srcport']
                             dport = json_packet[proto][f'{proto}.dstport']
                         except KeyError:
-                            continue
+                            return
 
                         return (srcip, dstip, proto, sport, dport, ts)
 
@@ -155,73 +171,88 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_yara_match(self, info: dict):
         """
         This function is called when yara finds a match
-        :param info: a dict with info about the matched rule, example keys 'tags', 'matches', 'rule', 'strings' etc.
+        :param info: a dict with info about the matched rule, example keys 'vars_matched', 'index',
+        'rule', 'srings_matched'
         """
-        rule = info.get('rule')
-        meta = info.get('meta', False)
-        # strings is a list of tuples containing information about the matching strings.
-        # Each tuple has the form: (<offset>, <string identifier>, <string data>).
-        strings = info.get('strings')
-        description = meta.get('description')
-        # author = meta.get('author')
-        # reference = meta.get('reference')
-        # organization = meta.get('organization')
-        for match in strings:
-            offset, string_found = match[0], match[1]
-            # we now know there's a match at offset x, we need to know offset x belongs to which packet
-            if packet_info := self.get_packet_info(offset):
-                srcip, dstip, proto, sport, dport, ts = (
-                    packet_info[0],
-                    packet_info[1],
-                    packet_info[2],
-                    packet_info[3],
-                    packet_info[4],
-                    packet_info[5],
-                )
+        rule = info.get('rule').replace('_', ' ')
+        offset = info.get('offset')
+        vars_matched = info.get('vars_matched')
+        strings_matched = info.get('strings_matched')
+        # we now know there's a match at offset x, we need to know offset x belongs to which packet
+        if packet_info := self.get_packet_info(offset):
+            srcip, dstip, proto, sport, dport, ts = (
+                packet_info[0],
+                packet_info[1],
+                packet_info[2],
+                packet_info[3],
+                packet_info[4],
+                packet_info[5],
+            )
+
+            portproto = f'{dport}/{proto}'
+            port_info = __database__.get_port_info(portproto)
+
+            # generate a random uid
+            uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
+                'utf-8'
+            )
+            src_profileid = f'profile_{srcip}'
+            dst_profileid = f'profile_{dstip}'
+            # sometimes this module tries to find the profile before it's created. so
+            # wait a while before alerting.
+            time.sleep(4)
+            # make sure we have a profile for any of the above IPs
+            if __database__.hasProfile(src_profileid):
+                type_detection = 'dstip'
+                profileid = src_profileid
                 detection_info = dstip
-                portproto = f'{dport}/{proto}'
-                port_info = __database__.get_port_info(portproto)
                 ip_identification = __database__.getIPIdentification(dstip)
                 description = (
-                    f'IP: {srcip} detected {rule} to destination address: {dstip} {ip_identification} '
-                    f"port: {port_info if port_info else ''} {portproto}"
+                    f'{rule} to destination address: {dstip} {ip_identification} '
+                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
                 )
-                # generate a random uid
-                uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode(
-                    'utf-8'
+            elif __database__.hasProfile(dst_profileid):
+                type_detection = 'srcip'
+                profileid = dst_profileid
+                detection_info = srcip
+                ip_identification = __database__.getIPIdentification(srcip)
+                description = (
+                    f'{rule} to destination address: {srcip} {ip_identification} '
+                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
                 )
-                profileid = f'profile_{srcip}'
-                # make sure we have this profileid
-                if __database__.hasProfile(profileid):
-                    # in which tw is this ts?
-                    twid = __database__.getTWofTime(profileid, ts)
-                    # convert ts to a readable format
-                    ts = utils.convert_format(ts, utils.alerts_format)
-                    if twid:
-                        twid = twid[0]
-                        type_detection = 'dstip'
-                        source_target_tag = 'CC'
-                        # TODO: this needs to be changed if add more rules to the rules/dir
-                        type_evidence = 'NETWORK_gps_location_leaked'
-                        category = 'Malware'
-                        confidence = 0.9
-                        threat_level = 'high'
-                        __database__.setEvidence(
-                            type_evidence,
-                            type_detection,
-                            detection_info,
-                            threat_level,
-                            confidence,
-                            description,
-                            ts,
-                            category,
-                            source_target_tag=source_target_tag,
-                            port=dport,
-                            proto=proto,
-                            profileid=profileid,
-                            twid=twid,
-                            uid=uid,
-                        )
+
+            else:
+                # no profiles in slips for either IPs
+                return
+
+            # in which tw is this ts?
+            twid = __database__.getTWofTime(profileid, ts)
+            # convert ts to a readable format
+            ts = utils.convert_format(ts, utils.alerts_format)
+            if twid:
+                twid = twid[0]
+                source_target_tag = 'CC'
+                # TODO: this needs to be changed if add more rules to the rules/dir
+                type_evidence = 'NETWORK_gps_location_leaked'
+                category = 'Malware'
+                confidence = 0.9
+                threat_level = 'high'
+                __database__.setEvidence(
+                    type_evidence,
+                    type_detection,
+                    detection_info,
+                    threat_level,
+                    confidence,
+                    description,
+                    ts,
+                    category,
+                    source_target_tag=source_target_tag,
+                    port=dport,
+                    proto=proto,
+                    profileid=profileid,
+                    twid=twid,
+                    uid=uid,
+                )
 
     def compile_and_save_rules(self):
         """
@@ -237,42 +268,65 @@ class Module(Module, multiprocessing.Process):
             compiled_rule_path = os.path.join(
                 self.compiled_yara_rules_path, f'{yara_rule}_compiled'
             )
-            # if we already have the rule compiled, don't compiler again
+            # if we already have the rule compiled, don't compile again
             if os.path.exists(compiled_rule_path):
                 # we already have the rule compiled
                 continue
+
             # get the complete path of the .yara rule
             rule_path = os.path.join(self.yara_rules_path, yara_rule)
-            # ignore yara_rules/compiled/
-            if not os.path.isfile(rule_path):
-                continue
-            # compile the rule
-            compiled_rule = yara.compile(filepath=rule_path)
-            # save the compiled rule
-            compiled_rule.save(compiled_rule_path)
+            # compile
+            cmd = f'yarac {rule_path} {compiled_rule_path} >/dev/null 2>&1'
+            return_code = os.system(cmd)
+            if return_code != 0:
+                self.print(f"Error compiling {yara_rule}.")
+                return False
+        return True
+
 
     def find_matches(self):
         """Run yara rules on the given pcap and find matches"""
         for compiled_rule in os.listdir(self.compiled_yara_rules_path):
-            compiled_rule_path = os.path.join(
-                self.compiled_yara_rules_path, compiled_rule
-            )
-            # load the compiled rules
-            rule = yara.load(compiled_rule_path)
-            # call set_evidence_yara_match when a match is found
-            matches = rule.match(
-                self.pcap,
-                callback=self.set_evidence_yara_match,
-                which_callbacks=yara.CALLBACK_MATCHES,
-            )
+            compiled_rule_path = os.path.join(self.compiled_yara_rules_path, compiled_rule)
+            # -p 7 means use 7 threads for faster analysis
+            # -f to stop searching for strings when they were already found
+            # -s prints the found string
+            cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
+            lines = check_output(cmd.split()).decode().splitlines()
+
+            if not lines:
+                # no match
+                return
+
+            matching_rule = lines[0].split()[0]
+            # each match (line) should be a separate detection
+            for line in lines[1:]:
+                # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
+                line = line.split(':')
+                # offset: pcap index where the rule was matched
+                offset = int(line[0], 16)
+                # var is either $rgx_gps_loc, $rgx_gps_lon or $rgx_gps_lat
+                var = line[1].replace('$', '')
+                # strings_matched is exactly the string that was found that triggered this detection
+                # starts from the var until the end of the line
+                strings_matched = ' '.join([s for s in line[2:]])
+                self.set_evidence_yara_match({
+                    'rule': matching_rule,
+                    'vars_matched': var,
+                    'strings_matched': strings_matched,
+                    'offset': offset,
+                })
 
     def run(self):
         utils.drop_root_privs()
         try:
+            if not self.bin_found:
+                return True
+
             # if we we don't have compiled rules, compile them
-            self.compile_and_save_rules()
-            # run the yara rules on the given pcap
-            self.find_matches()
+            if self.compile_and_save_rules():
+                # run the yara rules on the given pcap
+                self.find_matches()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True

@@ -6,7 +6,6 @@
 @load ./detect_DoH.zeek
 @load protocols/conn/mac-logging.zeek
 
-@unload protocols/ssl/validate-certs
 
 ########################################
 ##! Local site policy. Customize as appropriate.
@@ -73,7 +72,6 @@ redef digest_salt = "Please change this value.";
 @load protocols/ssl/known-certs
 
 # This script enables SSL/TLS certificate validation.
-@load ./validate-certs
 
 # This script prevents the logging of SSL CA certificates in x509.log
 @load protocols/ssl/log-hostcerts-only

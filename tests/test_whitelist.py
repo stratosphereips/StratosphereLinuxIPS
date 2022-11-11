@@ -12,8 +12,7 @@ def do_nothing(*args):
 def create_whitelist_instance(outputQueue):
     """Create an instance of whitelist.py
     needed by every other test in this file"""
-    config = configparser.ConfigParser(interpolation=None)
-    whitelist = Whitelist(outputQueue, config, 6380)
+    whitelist = Whitelist(outputQueue, 6380)
     # override the self.print function to avoid broken pipes
     whitelist.print = do_nothing
     whitelist.whitelist_path = 'tests/test_whitelist.conf'

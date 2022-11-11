@@ -26,11 +26,11 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 5.2 In the navigation menu, choose the OAuth & Permissions feature.
 5.3 Scroll down to the Scopes section, and pick channels:read and chat:write from the drop down menu.
 5.4 Scroll back to the top of this page and look for the button that says Install App to Workspace (or Reinstall App if you've done this before). Click it.
-6. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the message when you add an integration in the channel), and click 'Add this app to a channel'.
-7. Add your slack bot token to the path specified by ```slack_api_path``` in slips.conf, 
-by default the path is  ```modules/exporting_alerts/slack_bot_token_secret```. the file should contain 
-your API key in a single line .
-8. Edit the slips.conf file, put `slack` in the export_to variable, and add the channel's name to which you want to send.
+6. In this same 'OAuth & Permissions' page, copy the 'Bot User OAuth Token'. It should look something like 'xoxb-nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn' with a lot of letters.
+7. Put the bot OAuth token to the file: ```modules/exporting_alerts/slack_bot_token_secret```
+8. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the messae when you add an integration in the channel), and click 'Add this app to a channel'.
+9. Alternatively you can add the bot to the channel by going to the channel and doing ```/invite @bots_name```.
+9. Edit the slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
 
     [exporting_alerts]
     export_to = [slack]
@@ -64,17 +64,21 @@ inbox_path = /services/inbox-a
 
 ```collection_name```: the collection on the server you want to push your STIX data to.
 
-```push_delay```: the time to wait before pushing STIX data to server (in seconds). It is used when slips is running non-stop (e.g with -i )
+```push_delay```: the time to wait before pushing STIX data to server (in seconds). 
+It is used when slips is running non-stop (e.g with -i )
 
 ```taxii_username```: TAXII server user credentials
 
 ```taxii_password```: TAXII server user password
 
-```jwt_auth_url```: auth url if JWT based authentication is used.
+```jwt_auth_path```: auth path if JWT based authentication is used. It's usually /management/auth. this is what we 
+use to get a token.
 
-If running on a file not an interface, Slips will export to server after analysis is done. 
 
-More details on how to [export to slack or TAXII server here](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)
+if your TAXII server is a remote server, you can set the ```port``` to 443 or 80.
+
+If running on a file, Slips will export to server after analysis is done. 
+If running on an interface, Slips will export to server every push_delay seconds. by default it's 1h. 
 
 ## JSON format
 
@@ -87,7 +91,7 @@ Slips supports exporting alerts to warden servers, as well as importing alerts.
   
 To enable the exporting, set ```receive_alerts``` to ```yes``` in slips.conf  
   
-The default configuration file path in specified in the ```configuration_file``` variable in ```slips.conf```  
+The default configuration file path is specified in the ```configuration_file``` variable in ```slips.conf```  
   
 The default path is ```modules/CESNET/warden.conf```  
   
@@ -99,23 +103,29 @@ The format of ```warden.conf``` should be the following:
    "keyfile": "key.pem", 
    "cafile": "/etc/ssl/certs/DigiCert_Assured_ID_Root_CA.pem", 
    "timeout": 600, 
-   "errlog": {"file": "/var/log/warden.err", "level": "debug"}, 
-   "filelog": {"file": "/var/log/warden.log", "level": "warning"}, 
+   "errlog": {"file": "output/warden_logs/warden.err", "level": "debug"}, 
+   "filelog": {"file": "output/warden_logs/warden.log", "level": "warning"}, 
    "name": "com.example.warden.test" }  
 ```
 To get your key and the certificate, you need to run ```warden_apply.sh``` with you registered client_name and password. [Full instructions here](https://warden.cesnet.cz/en/index)
   
 The ```name``` key is your registered warden node name.   
   
-All evidence causing an alert are exported to warden server once an alert is generated. See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
+All evidence causing an alert are exported to warden server once an alert is generated. 
+See the [difference between alerts and evidence](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html)) in Slips architecture section.
   
 You can change how often you get alerts (import) from warden server  
   
 By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
 
-Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
+Slips logs all alerts to ```output/alerts.json``` in
+[CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.
 
-Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) for detailed instructions on how CESNET importing.
+Make sure that the DigiCert_Assured_ID_Root_CA is somewhere accessible by slips. or run slips with 
+root if you want to leave it in ```/etc/ssl/certs/```
+
+Refer to the [Detection modules section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#cesnet-sharing-module) 
+for detailed instructions on how CESNET importing.
 
 
 ## Logstash

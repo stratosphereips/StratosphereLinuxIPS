@@ -1,7 +1,7 @@
 .. image:: /images/slips_logo.png
     :align: center
 
-Slips v0.9.5
+Slips v0.9.6
 ============================
 
 The tool is available on GitHub `here <https://github.com/stratosphereips/StratosphereLinuxIPS/tree/master>`_.
@@ -21,15 +21,18 @@ This documentation gives an overview how Slips works, how to use it and how to h
   
 - **Training with your own data**. Explanation on how to re-train the machine learning system of Slips with your own traffic (normal or malicious).See :doc:`Training <training>`. 
 
-- **Thread Intelligence**. Explanation on how Slips works with the threat intelligence feeds.See :doc:`Threat Intelligence <threatintelligence>`. 
-
-- **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`. 
-
-- **IP Info**. Explanation on how Slips gets information about each IP address for the module IP_Info. See :doc:`IP Info <ipinfo>`.
+- **Detections per Flow**. Explanation on how Slips works to make detections on each flow with different techniques. See :doc:`Flow Alerts <flowalerts>`.
 
 - **Exporting**. The exporting module allows Slips to export to Slack and STIX servers. See :doc:`Exporting <exporting>`.
 
-- **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`. 
+- **Slips in Action**. Example of using slips to analyze different PCAPs See :doc:`Slips in action <slips_in_action>`.
+
+- **Contributing**. Explanation how to contribute to Slips, and instructions how to implement new detection module in Slips. See :doc:`Contributing <contributing>`.
+
+- **Create a new module**. Step by step guide on how to create a new Slips module See :doc:`Create a new module <create_new_module>`.
+
+- **Code documentation**. Auto generated slips code documentation See :doc:`Code docs <code_documentation>`.
+
 
 
 
@@ -52,5 +55,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    slips_in_action
    contributing
    create_new_module
+   FAQ
+   code_documentation
 
 

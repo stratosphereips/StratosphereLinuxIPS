@@ -16,21 +16,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import os
-import signal
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
-from .database import __database__
-import configparser
+from slips_files.core.database.database import __database__
 import time
 import json
 import traceback
 import threading
 import subprocess
-import shutil
+import signal
 
 
 # Input Process
@@ -43,8 +42,7 @@ class InputProcess(multiprocessing.Process):
             profilerqueue,
             input_type,
             input_information,
-            config,
-            packet_filter,
+            cli_packet_filter,
             zeek_or_bro,
             zeek_folder,
             line_type,
@@ -54,9 +52,7 @@ class InputProcess(multiprocessing.Process):
         self.name = 'InputProcess'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        self.config = config
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         self.redis_port = redis_port
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
@@ -67,18 +63,18 @@ class InputProcess(multiprocessing.Process):
         self.zeek_folder = zeek_folder
         self.zeek_or_bro = zeek_or_bro
         self.read_lines_delay = 0
-        # Read the configuration
+
+        self.packet_filter = False
+        if cli_packet_filter:
+            self.packet_filter = "'" + cli_packet_filter + "'"
+
         self.read_configuration()
-        # If we were given something from command line, has preference
-        # over the configuration file
-        if packet_filter:
-            self.packet_filter = "'" + packet_filter + "'"
-        self.event_handler = None
         self.event_observer = None
         # set to true in unit tests
         self.testing = False
         # number of lines read
         self.lines = 0
+        self.marked_as_growing = False
         # these are the files that slips doesn't read
         self.ignored_files = {
             'capture_loss',
@@ -97,46 +93,22 @@ class InputProcess(multiprocessing.Process):
         self.open_file_handlers = {}
         self.c1 = __database__.subscribe('remove_old_files')
         self.timeout = None
+        # zeek rotated files to be deleted after a period of time
+        self.to_be_deleted = []
+        self.zeek_thread = threading.Thread(
+            target=self.run_zeek,
+            daemon=True
+        )
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        try:
-            self.packet_filter = self.config.get('parameters', 'pcapfilter')
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.packet_filter = 'ip or not ip'
-
-        try:
-            self.tcp_inactivity_timeout = self.config.get(
-                'parameters', 'tcp_inactivity_timeout'
-            )
-            # make sure the value is a valid int
-            self.tcp_inactivity_timeout = int(self.tcp_inactivity_timeout)
-
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-                ValueError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.tcp_inactivity_timeout = '5'
-
-        try:
-            self.rotation = self.config.get('parameters', 'rotation')
-            self.rotation = 'yes' in self.rotation
-        except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            self.rotation = True
+        conf = ConfigParser()
+        # If we were given something from command line, has preference
+        # over the configuration file
+        self.packet_filter = self.packet_filter or conf.packet_filter()
+        self.tcp_inactivity_timeout = conf.tcp_inactivity_timeout()
+        self.enable_rotation = conf.rotation()
+        self.rotation_period = conf.rotation_period()
+        self.keep_rotated_files_for = conf.keep_rotated_files_for()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -199,6 +171,25 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
+    def check_if_time_to_del_rotated_files(self):
+        """
+        After a specific period (keep_rotated_files_for), slips deletes all rotated files
+        Check if it's time to do so
+        """
+        if not hasattr(self, 'time_rotated'):
+            return False
+
+        now = float(utils.convert_format(datetime.now(), 'unixtimestamp'))
+        time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
+
+        if time_to_delete:
+            for file in self.to_be_deleted:
+                try:
+                    os.remove(file)
+                except FileNotFoundError:
+                    pass
+            self.to_be_deleted = []
+
     def read_zeek_files(self) -> int:
         try:
             # Get the zeek files in the folder now
@@ -210,6 +201,7 @@ class InputProcess(multiprocessing.Process):
             last_updated_file_time = datetime.now()
             lines = 0
             while True:
+                self.check_if_time_to_del_rotated_files()
                 # Go to all the files generated by Zeek and read them
                 for filename in zeek_files:
 
@@ -237,10 +229,10 @@ class InputProcess(multiprocessing.Process):
                             self.open_file_handlers[filename] = file_handler
                             lock.release()
                             # now that we replaced the old handle with the newly created file handle
-                            # delete the old .log file, they have a timestamp in their name.
+                            # delete the old .log file, that has a timestamp in its name.
                         except FileNotFoundError:
                             # for example dns.log
-                            # zeek changes the dns.log file name every 1h, it adds a timestamp to it
+                            # zeek changes the dns.log file name every 1d, it adds a timestamp to it
                             # it doesn't create the new dns.log until a new dns request occurs
                             # if slips tries to read from the old dns.log now it won't find it
                             # because it's been renamed and the new one isn't created yet
@@ -310,6 +302,13 @@ class InputProcess(multiprocessing.Process):
                 if not cache_lines:
                     # Verify that we didn't have any new lines in the
                     # last 10 seconds. Seems enough for any network to have ANY traffic
+                    if not self.marked_as_growing and __database__.is_growing_zeek_dir():
+                        # slips is given a dir that is growing i.e zeek dir running on an interface
+                        # don't stop slips
+                        self.print("Detected running on a growing zeek dir")
+                        self.bro_timeout = float('inf')
+                        self.marked_as_growing = True
+
                     diff = utils.get_time_diff(last_updated_file_time, datetime.now())
                     if diff >= self.bro_timeout:
                         # It has been 10 seconds without any file
@@ -367,8 +366,11 @@ class InputProcess(multiprocessing.Process):
             return False
 
     def read_zeek_folder(self):
+        # This is the case that a folder full of zeek files is passed with -f
         try:
-            # This is the case that a folder full of zeek files is passed with -f. Read them all
+            self.zeek_folder = self.given_path
+            self.start_observer()
+
             for file in os.listdir(self.given_path):
                 # Remove .log extension and add file name to database.
                 extension = file[-4:]
@@ -379,9 +381,10 @@ class InputProcess(multiprocessing.Process):
                         f'{self.given_path}/{file_name_without_extension}'
                     )
                 if self.testing: break
-            # We want to stop bro if no new line is coming.
-            self.bro_timeout = 1
+
+            self.bro_timeout = 3
             lines = self.read_zeek_files()
+
             self.print(
                 f'\nWe read everything from the folder.'
                 f' No more input. Stopping input process. Sent {lines} lines', 2, 0,
@@ -408,12 +411,17 @@ class InputProcess(multiprocessing.Process):
 
             # slips supports zeek json only, tabs arent supported
             if self.line_type == 'zeek':
-                line = json.loads(line)
+                try:
+                    line = json.loads(line)
+                except json.decoder.JSONDecodeError:
+                    self.print(f'Invalid json line')
+                    continue
 
             line_info['data'] = line
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.profilerqueue.put(line_info)
             self.lines += 1
+            self.print('Done reading 1 flow.\n ', 0, 3)
 
         self.stop_queues()
         return True
@@ -478,7 +486,7 @@ class InputProcess(multiprocessing.Process):
                 return False
             # Add log file to database
             __database__.add_zeek_file(file_name_without_extension)
-            self.bro_timeout = 1
+            self.bro_timeout = 3
             self.lines = self.read_zeek_files()
             self.stop_queues()
             return True
@@ -500,10 +508,22 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return True
 
-    def get_zeek_PID(self, bro_parameter) -> int:
-        command = f"ps aux | grep '{self.zeek_or_bro} -C {bro_parameter}'"
-        pid = subprocess.getoutput(command).splitlines()[0].split()[1]
-        return int(pid)
+
+    def start_observer(self):
+        # Now start the observer of new files. We need the observer because Zeek does not create all the files
+        # at once, but when the traffic appears. That means that we need
+        # some process to tell us which files to read in real time when they appear
+        # Get the file eventhandler
+        # We have to set event_handler and event_observer before running zeek.
+        event_handler = FileEventHandler(self.redis_port, self.zeek_folder, self.input_type)
+        # Create an observer
+        self.event_observer = Observer()
+        # Schedule the observer with the callback on the file handler
+        self.event_observer.schedule(
+            event_handler, self.zeek_folder, recursive=True
+        )
+        # Start the observer
+        self.event_observer.start()
 
     def handle_pcap_and_interface(self) -> int:
         """Returns the number of zeek lines read"""
@@ -513,42 +533,13 @@ class InputProcess(multiprocessing.Process):
             if not os.path.exists(self.zeek_folder):
                 os.makedirs(self.zeek_folder)
             self.print(f'Storing zeek log files in {self.zeek_folder}')
-            # Now start the observer of new files. We need the observer because Zeek does not create all the files
-            # at once, but when the traffic appears. That means that we need
-            # some process to tell us which files to read in real time when they appear
-            # Get the file eventhandler
-            # We have to set event_handler and event_observer before running zeek.
-            self.event_handler = FileEventHandler(self.config, self.redis_port, self.zeek_folder)
-            # Create an observer
-            self.event_observer = Observer()
-            # Schedule the observer with the callback on the file handler
-            self.event_observer.schedule(
-                self.event_handler, self.zeek_folder, recursive=True
-            )
-            # Start the observer
-            self.event_observer.start()
+            self.start_observer()
 
-            # rotation is disabled unless it's an interface
-            rotation_interval = (
-                "-e 'redef Log::default_rotation_interval = 0sec;'"
-            )
             if self.input_type == 'interface':
-                if self.rotation:
-                    rotation_interval = (
-                        "-e 'redef Log::default_rotation_interval =  1day;'"
-                    )
-                # Change the bro command
-                bro_parameter = f'-i {self.given_path}'
                 # We don't want to stop bro if we read from an interface
-                self.bro_timeout = 9999999999999999
+                self.marked_as_growing = True
+                self.bro_timeout = float('inf')
             elif self.input_type == 'pcap':
-                # Find if the pcap file name was absolute or relative
-                if self.given_path[0] == '/':
-                    # If absolute, do nothing
-                    bro_parameter = '-r "' + self.given_path + '"'
-                else:
-                    # If relative, add ../ since we will move into a special folder
-                    bro_parameter = '-r "../' + self.given_path + '"'
                 # This is for stopping the inputprocess
                 # if bro does not receive any new line while reading a pcap
                 self.bro_timeout = 30
@@ -559,24 +550,12 @@ class InputProcess(multiprocessing.Process):
                 for f in zeek_files:
                     os.remove(os.path.join(self.zeek_folder, f))
 
-            # Run zeek on the pcap or interface. The redef is to have json files
-            zeek_scripts_dir = f'{os.getcwd()}/zeek-scripts'
-            # 'local' is removed from the command because it loads policy/protocols/ssl/expiring-certs and
-            # and policy/protocols/ssl/validate-certs and they have conflicts with our own zeek-scripts/expiring-certs and validate-certs
-            # we have our own copy pf local.zeek in __load__.zeek
-            command = (
-                f'cd {self.zeek_folder}; {self.zeek_or_bro} -C {bro_parameter} '
-                f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins '
-                f'tcp_attempt_delay=1min -f {self.packet_filter} '
-                f'{zeek_scripts_dir} {rotation_interval} 2>&1 > /dev/null &'
-            )
-            self.print(f'Zeek command: {command}', 3, 0)
-            # Run zeek.
-            os.system(command)
+            # run zeek
+            self.zeek_thread.start()
             # Give Zeek some time to generate at least 1 file.
             time.sleep(3)
-            PID = self.get_zeek_PID(bro_parameter)
-            __database__.store_process_PID('Zeek', PID)
+
+            __database__.store_process_PID('Zeek', self.zeek_pid)
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
@@ -602,10 +581,13 @@ class InputProcess(multiprocessing.Process):
         it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while True:
-            msg = self.c1.get_message(timeout=self.timeout)
+            # keep the rotated files for the period specified in slips.conf
+            msg = __database__.get_message(self.c1)
             if msg and msg['data'] == 'stop_process':
                 return True
             if utils.is_msg_intended_for(msg, 'remove_old_files'):
+
+
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
                 changed_files = json.loads(msg['data'])
 
@@ -616,10 +598,12 @@ class InputProcess(multiprocessing.Process):
                 new_logfile_without_path = new_log_file.split('/')[-1].split(
                     '.'
                 )[0]
+                # ignored files have no open handle, so we should only delete them from disk
                 if new_logfile_without_path in self.ignored_files:
                     # just delete the old file
                     os.remove(old_log_file)
                     continue
+
                 # don't allow inputprocess to access the
                 # open_file_handlers dict until this thread sleeps again
                 lock = threading.Lock()
@@ -635,13 +619,87 @@ class InputProcess(multiprocessing.Process):
                     # ex: loaded_scripts.log, stats.log etc..
                     pass
                 # delete the old log file (the one with the ts)
-                os.remove(old_log_file)
+                self.to_be_deleted.append(old_log_file)
+                self.time_rotated = float(utils.convert_format(datetime.now(), 'unixtimestamp'))
+                # os.remove(old_log_file)
                 lock.release()
 
     def shutdown_gracefully(self):
-        # Stop the observer
         self.stop_observer()
+
+        if hasattr(self, 'zeek_pid'):
+            __database__.publish('finished_modules', 'Zeek')
+
         __database__.publish('finished_modules', self.name)
+
+    def run_zeek(self):
+        """
+        This thread sets the correct zeek parameters and starts zeek
+        """
+        def detach_child():
+            """
+            Detach zeek from the parent process group(inputprocess), the child(zeek)
+             will no longer receive signals
+            """
+            # we're doing this to fix zeek rotating on sigint, not when zeek has it's own
+            # process group, it won't get the signals sent to slips.py
+            os.setpgrp()
+
+        # rotation is disabled unless it's an interface
+        rotation = []
+        if self.input_type == 'interface':
+            if self.enable_rotation:
+                # how often to rotate zeek files? taken from slips.conf
+                rotation = ['-e', f"redef Log::default_rotation_interval = {self.rotation_period} ;"]
+            bro_parameter = f'-i {self.given_path}'
+
+        elif self.input_type == 'pcap':
+            # Find if the pcap file name was absolute or relative
+            given_path = self.given_path
+            if not os.path.isabs(self.given_path):
+                # move 1 dir back since we will move into zeek_Files dir
+                given_path = os.path.join('..', self.given_path)
+            bro_parameter = f'-r {given_path}'
+
+
+        # Run zeek on the pcap or interface. The redef is to have json files
+        zeek_scripts_dir = os.path.join(os.getcwd(), 'zeek-scripts')
+        packet_filter = ['-f ', self.packet_filter] if self.packet_filter else []
+
+        # 'local' is removed from the command because it
+        # loads policy/protocols/ssl/expiring-certs and
+        # and policy/protocols/ssl/validate-certs and they have conflicts with our own
+        # zeek-scripts/expiring-certs and validate-certs
+        # we have our own copy pf local.zeek in __load__.zeek
+        command = [self.zeek_or_bro, '-C']
+        command += bro_parameter.split()
+        command += [
+            f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
+            'tcp_attempt_delay=1min',
+            zeek_scripts_dir
+        ]
+        command += rotation
+        command += packet_filter
+        self.print(f'Zeek command: {command}', 3, 0)
+
+        zeek = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.PIPE,
+            cwd=self.zeek_folder,
+            preexec_fn=detach_child
+        )
+
+        # you have to get the pid before communicate()
+        self.zeek_pid = zeek.pid
+
+        out, error = zeek.communicate()
+        if out:
+            print(f"Zeek: {out}")
+        if error:
+            self.print (f"Zeek error {zeek.returncode}: {error.strip()}")
+
 
     def run(self):
         utils.drop_root_privs()
@@ -650,6 +708,7 @@ class InputProcess(multiprocessing.Process):
         # any changes made to the shared variables in inputprocess will not appear in the thread
         if '-i' in sys.argv:
             self.remover_thread.start()
+
         try:
             # Process the file that was given
             # If the type of file is 'file (-f) and the name of the file is '-' then read from stdin

@@ -1,0 +1,2 @@
+{"ts":1665150785.996414,"operation":"request","src_mac":"50:5b:c2:db:c3:17","dst_mac":"30:30:30:30:30:30","orig_h":"192.168.1.15","resp_h":"66.220.152.0","orig_hw":"50:50:50:50:50:50","resp_hw":"30:30:30:30:30:30"}
+{"ts":1665150785.996414,"operation":"reply","src_mac":"50:5b:c2:db:c3:17","dst_mac":"ff:ff:ff:ff:ff:ff","orig_h":"192.168.1.15","resp_h":"66.220.152.0","orig_hw":"50:50:50:50:50:50","resp_hw":"ff:ff:ff:ff:ff:ff"}

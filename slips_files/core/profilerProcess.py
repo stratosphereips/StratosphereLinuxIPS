@@ -20,7 +20,8 @@ import json
 from datetime import datetime, timedelta
 import sys
 import configparser
-from .database import __database__
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import ipaddress
 import traceback
@@ -36,21 +37,19 @@ class ProfilerProcess(multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, config, redis_port
+        self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
         self.name = 'ProfilerProcess'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.config = config
         self.columns_defined = False
         self.timeformat = None
         self.input_type = False
-        self.whitelist = Whitelist(outputqueue, config, redis_port)
+        self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
-        # Start the DB
-        __database__.start(self.config, redis_port)
+        __database__.start(redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
         # 1st. Get the data from the interpreted columns
@@ -92,42 +91,13 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
-        """Read the configuration file for what we need"""
-
-        def get(section, value, default_value):
-            """
-            read the given value from the given section in slips.conf
-            on error set the value to the default value
-            """
-            try:
-                 return self.config.get(section, value)
-            except (
-                configparser.NoOptionError,
-                configparser.NoSectionError,
-                NameError,
-            ):
-                # There is a conf, but there is no option, or no section or no
-                # configuration file specified
-                return default_value
-
-
-        self.whitelist_path = get('parameters', 'whitelist_path', 'whitelist.conf')
-        self.timeformat = get('timestamp', 'format', None)
-        self.analysis_direction = get('parameters', 'analysis_direction', 'all')
-        self.label = get('parameters', 'label', 'unknown')
-
-        self.home_net = utils.get_home_network(self.config)
-
-        self.width = get('parameters', 'time_window_width', 3600)
-        if 'only_one_tw' in str(self.width):
-            # Only one tw. Width is 10 9s, wich is ~11,500 days, ~311 years
-            self.width = 9999999999
-            self.print(
-                f'Time Windows Width used: {self.width} seconds.'
-                f' Only 1 time windows. Dates in the names of files are 100 years in the past.',3,0
-            )
-        else:
-            self.width = float(self.width)
+        conf = ConfigParser()
+        self.whitelist_path = conf.whitelist_path()
+        self.timeformat = conf.ts_format()
+        self.analysis_direction = conf.analysis_direction()
+        self.label = conf.label()
+        self.home_net = conf.get_home_network()
+        self.width = conf.get_tw_width_as_float()
 
     def define_type(self, line):
         """
@@ -414,17 +384,14 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['rcode_name'] = ''
             try:
-                self.column_values['answers'] = line[21]
-                if type(self.column_values['answers']) == str:
+                answers = line[21]
+                if type(answers) == str:
                     # If the answer is only 1, Zeek gives a string
                     # so convert to a list
-                    self.column_values['answers'] = [
-                        self.column_values['answers']
-                    ]
-                if type(self.column_values['answers']) == str:
-                    # If the answer is only 1, Zeek gives a string
-                    # so convert to a list
-                    self.column_values['answers'] = [self.column_values['answers']]
+                    answers = answers.split(',')
+                # ignore dns TXT records
+                answers = [answer for answer in answers if 'TXT ' not in answer]
+                self.column_values['answers'] = answers
             except IndexError:
                 self.column_values['answers'] = ''
             try:
@@ -556,7 +523,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Zeek can put in column 7 the auth success if it has one
             # or the auth attempts only. However if the auth
             # success is there, the auth attempts are too.
-            if 'success' in line[7]:
+            if 'T' in line[7]:
                 try:
                     self.column_values['auth_success'] = line[7]
                 except IndexError:
@@ -597,7 +564,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['host_key'] = line[17]
                 except IndexError:
                     self.column_values['host_key'] = ''
-            elif 'success' not in line[7]:
+            elif 'T' not in line[7]:
                 self.column_values['auth_success'] = ''
                 try:
                     self.column_values['auth_attempts'] = line[7]
@@ -767,7 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Generic fields in Zeek
         self.column_values = {}
-        # We need to set it to empty at the beggining so any new flow has the key 'type'
+        # We need to set it to empty at the beginning so any new flow has the key 'type'
         self.column_values['type'] = ''
 
         # to set the default value to '' if ts isn't found
@@ -1499,6 +1466,31 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['filesize'] = line['fileinfo']['size']
                 except KeyError:
                     self.column_values['filesize'] = ''
+            elif self.column_values['type'] == 'ssh':
+                try:
+                    self.column_values['client'] = line['ssh']['client']['software_version']
+                except KeyError:
+                    self.column_values['client'] = ''
+
+                try:
+                    self.column_values['version'] = line['ssh']['client']['proto_version']
+                except KeyError:
+                    self.column_values['version'] = ''
+
+                try:
+                    self.column_values['server'] = line['ssh']['server']['software_version']
+                except KeyError:
+                    self.column_values['server'] = ''
+                # these fields aren't available in suricata, they're available in zeek only
+                self.column_values['auth_success'] = ''
+                self.column_values['auth_attempts'] = ''
+                self.column_values['cipher_alg'] = ''
+                self.column_values['mac_alg'] = ''
+                self.column_values['kex_alg'] = ''
+                self.column_values['compression_alg'] = ''
+                self.column_values['host_key_alg'] = ''
+                self.column_values['host_key'] = ''
+
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
@@ -1508,26 +1500,26 @@ class ProfilerProcess(multiprocessing.Process):
         :param ip: src/dst ip
         src macs should be passed with srcips, dstmac with dstips
         """
-        if not mac:
+        if not mac or mac in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff'):
             return
         # get the src and dst addresses as objects
         try:
             ip_obj = ipaddress.ip_address(ip)
+            if ip_obj.is_multicast:
+                return
         except ValueError:
             return
-        if mac not in ('00:00:00:00:00:00', 'ff:ff:ff:ff:ff:ff') and not (
-            ip_obj.is_multicast or ip_obj.is_link_local
-        ):
-            # send the src and dst MAC to IP_Info module to get vendor info about this MAC
-            to_send = {
-                'MAC': mac,
-                'profileid': f'profile_{ip}'
-            }
-            if host_name:
-                to_send.update({
-                    'host_name': host_name
-                })
-            __database__.publish('new_MAC', json.dumps(to_send))
+
+        # send the src and dst MAC to IP_Info module to get vendor info about this MAC
+        to_send = {
+            'MAC': mac,
+            'profileid': f'profile_{ip}'
+        }
+        if host_name:
+            to_send.update({
+                'host_name': host_name
+            })
+        __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
 
@@ -2010,7 +2002,7 @@ class ProfilerProcess(multiprocessing.Process):
             # call the function that handles this flow
             cases[self.flow_type]()
         except KeyError:
-            # does flow contain a part of the key
+            # does flow contain a part of the key?
             for flow in cases:
                 if flow in self.flow_type:
                     cases[flow]()
@@ -2525,8 +2517,6 @@ class ProfilerProcess(multiprocessing.Process):
                                 }
                             )
                         _ = self.column_idx['starttime']
-                        # Yes
-                        # Quickly process all lines
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
@@ -2553,7 +2543,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("Can't recognize input file type.")
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

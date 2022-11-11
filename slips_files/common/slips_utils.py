@@ -1,4 +1,3 @@
-# Your imports
 import hashlib
 from datetime import datetime, timezone, timedelta
 import validators
@@ -9,6 +8,7 @@ import json
 import time
 import platform
 import os
+import sys
 import ipaddress
 import configparser
 
@@ -17,13 +17,7 @@ class Utils(object):
     name = 'utils'
     description = 'Common functions used by different modules of slips.'
     authors = ['Alya Gomaa']
-    supported_orgs = (
-            'google',
-            'microsoft',
-            'apple',
-            'facebook',
-            'twitter',
-        )
+
 
     def __init__(self):
         self.home_network_ranges = (
@@ -32,7 +26,13 @@ class Utils(object):
             '10.0.0.0/8',
         )
         self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges))
-
+        self.supported_orgs = (
+            'google',
+            'microsoft',
+            'apple',
+            'facebook',
+            'twitter',
+        )
         self.home_networks = ('192.168.0.0', '172.16.0.0', '10.0.0.0')
         self.threat_levels = {
             'info': 0,
@@ -46,6 +46,7 @@ class Utils(object):
             '%Y-%m-%d %H:%M:%S.%f',
             '%Y-%m-%d %H:%M:%S',
             '%Y-%m-%d %H:%M:%S.%f%z',
+            '%Y/%m/%d %H:%M:%S.%f%z',
             '%Y/%m/%d %H:%M:%S.%f',
             '%Y/%m/%d %H:%M:%S',
             '%Y-%m-%d %H:%M:%S%z',
@@ -56,80 +57,26 @@ class Utils(object):
 
          )
         # this format will be used accross all modules and logfiles of slips
-        self.alerts_format = '%Y/%m/%d %H:%M:%S'
+        self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
 
-    def read_configuration(self, config, section, name, default_value):
-        """Read the configuration file for what slips.py needs. Other processes also access the configuration"""
-        try:
-            return config.get(section, name)
-        except (
-            configparser.NoOptionError,
-            configparser.NoSectionError,
-            NameError,
-            ValueError
-        ):
-            # There is a conf, but there is no option, or no section or no configuration file specified
-            return default_value
+    def threat_level_to_string(self, threat_level: float):
+        for str_lvl, int_value in self.threat_levels.items():
+            if float(threat_level) <= int_value:
+                return str_lvl
 
-    def get_home_network(self, config) -> list:
+
+
+    def sanitize(self, string):
         """
-        :param config: configparser instance
-        Returns a list of network objects
+        Sanitize strings taken from the user
         """
-        home_net = self.read_configuration(
-            config, 'parameters', 'home_network', False
-        )
-
-        if home_net:
-            # we have home_network param set in slips.conf
-            home_nets = home_net.replace(']','').replace('[','').split(',')
-            home_nets = [network.strip() for network in home_nets]
-
-        else:
-            return self.home_network_ranges
-
-        return list(map(ipaddress.ip_network, home_nets))
-
-
-    def get_tw_width(self, config):
-        """
-        :param config: configparser instance
-        """
-        twid_width = self.read_configuration(config, 'parameters', 'time_window_width', 3600)
-        twid_width = int(twid_width)
-        # twid_width = f'{twid_width / 60} mins' if twid_width <= 60 else f'{twid_width / 60 / 60}h'
-        twid_width = str(timedelta(seconds=twid_width))
-        if ', 0:00:00' in twid_width:
-            # and int number of days. '1 day, 0:00:00' for example, we only need 1 day
-            return twid_width.replace(', 0:00:00', '')
-
-        if ':' in twid_width and 'day' not in twid_width:
-            # less than a day
-            hrs, mins, sec = twid_width.split(':')
-            hrs = int(hrs)
-            mins = int(mins)
-            sec = int(sec)
-
-            res = ''
-            if hrs:
-                res += f'{hrs} hrs '
-                # remove the s
-                if hrs == 1: res=res[:-2] + ' '
-
-            if mins:
-                res += f'{mins} mins '
-                if mins == 1: res=res[:-2] + ' '
-
-            if sec:
-                res += f'{sec} seconds '
-                if sec == 1: res=res[:-2] + ' '
-
-            if res.endswith(' '): res=res[:-1]
-            return res
-
-        # width is a combination of days mins and seconds
-        return twid_width
-
+        string = string.replace(';', '')
+        string = string.replace('\`', '')
+        string = string.replace('&', '')
+        string = string.replace('|', '')
+        string = string.replace('$(', '')
+        string = string.replace('\n', '')
+        return string
 
     def detect_data_type(self, data):
         """Detects if incoming data is ipv4, ipv6, domain or ip range"""
@@ -279,8 +226,14 @@ class Utils(object):
     def to_delta(self, time_in_seconds):
         return timedelta(seconds=int(time_in_seconds))
 
-    def get_own_IPs(self):
-        """Returns a list of our local and public IPs"""
+    def get_own_IPs(self) -> list:
+        """
+        Returns a list of our local and public IPs
+        """
+        if '-i' not in sys.argv:
+            # this method is only valid when running on an interface
+            return []
+
         IPs = []
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
@@ -303,6 +256,25 @@ class Utils(object):
 
     def convert_to_mb(self, bytes):
         return int(bytes)/(10**6)
+
+    def is_ignored_ip(self, ip) -> bool:
+        """
+        This function checks if an IP is a special list of IPs that
+        should not be alerted for different reasons
+        """
+        ip_obj = ipaddress.ip_address(ip)
+        # Is the IP multicast, private? (including localhost)
+        # local_link or reserved?
+        # The broadcast address 255.255.255.255 is reserved.
+        if (
+            ip_obj.is_multicast
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or '.255' in ip_obj.exploded
+        ):
+            return True
+        return False
 
     def get_hash_from_file(self, filename):
         """
@@ -537,5 +509,16 @@ class Utils(object):
 
         return IDEA_dict
 
+    def timing(f):
+        """Function to measure the time another function takes."""
+
+        def wrap(*args):
+            time1 = time.time()
+            ret = f(*args)
+            time2 = time.time()
+            print('[DB] Function took {:.3f} ms'.format((time2 - time1) * 1000.0))
+            return ret
+
+        return wrap
 
 utils = Utils()
