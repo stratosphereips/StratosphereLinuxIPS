@@ -576,17 +576,24 @@ class Main:
         if delete:
             shutil.rmtree(self.zeek_folder)
 
+    def green(self, txt):
+        """
+        returns the text in green
+        """
+        GREEN_s = '\033[1;32;40m'
+        GREEN_e = '\033[00m'
+        return f'{GREEN_s}{txt}{GREEN_e}'
+
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
+
         modules_left = len(list(self.PIDs.keys()))
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
-            f'\t{GREEN_s}{module}{GREEN_e} \tStopped. '
-            f'{GREEN_s}{modules_left}{GREEN_e} left.'
+            f'\t{self.green(module)} \tStopped. '
+            f'{self.green(modules_left)} left.'
         )
 
     def get_already_stopped_modules(self):
