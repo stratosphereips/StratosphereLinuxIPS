@@ -54,7 +54,7 @@ class GoDirector:
         # clear the logfile
         open(p2p_reports_logfile, 'w').close()
         self.reports_logfile = open(p2p_reports_logfile, 'a')
-
+        self.print(f"Storing peer reports in {self.reports_logfile}")
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
             'score_confidence': self.process_evaluation_score_confidence
@@ -70,7 +70,7 @@ class GoDirector:
         """
         now = time.time()
         human_readable_datetime = utils.convert_format(now, utils.alerts_format)
-        self.reports_logfile.write(f'{human_readable_datetime} - {text}')
+        self.reports_logfile.write(f'{human_readable_datetime} - {text}\n')
 
     def handle_gopy_data(self, data_dict: dict):
         """
@@ -463,13 +463,12 @@ class GoDirector:
             self.trustdb.insert_go_ip_pairing(
                 peerid, ip_address, timestamp=timestamp
             )
-            self.print(
-                f'[The Network -> Slips] Peer update or new peer {peerid} '
-                f'with IP: {ip_address} '
-                f'Reliability: {reliability } ',
-                2,
-                0,
-            )
+            msg = f'[The Network -> Slips] Peer update or new peer {peerid} ' \
+                  f'with IP: {ip_address} ' \
+                  f'Reliability: {reliability } '
+
+            self.print(msg,2,0,)
+            self.log(msg)
 
         except KeyError:
             self.print('IP address missing', 2, 0)
