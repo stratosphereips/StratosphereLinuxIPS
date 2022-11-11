@@ -1013,26 +1013,25 @@ class Database(ProfilingFlowsDatabase, object):
 
         self.r.hset(profileid, 'threat_level', threat_level)
         now = time.time()
+        now = utils.convert_format(now, utils.alerts_format)
         # keep track of old threat levels
         past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
-        threat_levels_update_time = self.r.hget(profileid, 'threat_levels_update_time')
-        if past_threat_levels and threat_levels_update_time:
-            # todo if the past threat level is the same as this one, replace the timestamp only
-            # add this threat level to the list of past threat levels
+        if past_threat_levels:
+            # get the lists of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
-            past_threat_levels.append(threat_level)
-            # add this ts to the list of past threat levels timestamps
-            threat_levels_update_time = json.loads(threat_levels_update_time)
-            threat_levels_update_time.append(now)
-
+            latest_threat_level = past_threat_levels[-1][0]
+            if latest_threat_level == threat_level:
+                # if the past threat level is the same as this one, replace the timestamp only
+                past_threat_levels[-1] = (threat_level, now)
+            else:
+                # add this threat level to the list of past threat levels
+                past_threat_levels.append((threat_level, now))
         else:
             # first time setting a threat level for this profile
-            past_threat_levels = [threat_level]
-            threat_levels_update_time = [now]
+            past_threat_levels = [(threat_level, now)]
+            # threat_levels_update_time = [now]
 
-        threat_levels_update_time = json.dumps(threat_levels_update_time)
         past_threat_levels = json.dumps(past_threat_levels)
-        self.r.hset(profileid, 'threat_levels_update_time', threat_levels_update_time)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
 
