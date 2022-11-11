@@ -677,9 +677,10 @@ class ConfigParser(object):
         to_ignore = (
             to_ignore.replace('[', '')
                 .replace(']', '')
-                .replace(' ', '')
                 .split(',')
         )
+        # strip each one of them
+        to_ignore = [mod.strip() for mod in to_ignore]
         use_p2p = self.use_p2p()
 
         # Ignore exporting alerts module if export_to is empty
