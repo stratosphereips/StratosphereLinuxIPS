@@ -1,3 +1,6 @@
+-0.9.7
+- ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
+
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek

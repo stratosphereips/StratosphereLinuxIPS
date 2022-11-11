@@ -592,7 +592,7 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def check_dns_without_connection(
-            self, domain, answers: list, timestamp, profileid, twid, uid
+            self, domain, answers: list, rcode_name: str, timestamp: str, profileid, twid, uid
     ):
         """
         Makes sure all cached DNS answers are used in contacted_ips
@@ -605,6 +605,8 @@ class Module(Module, multiprocessing.Process):
         # of an IP and its range. This DNS is meant not to have a connection later
         ## - Domains check from Chrome, like xrvwsrklpqrw
         ## - The WPAD domain of windows
+        # - When there is an NXDOMAIN as answer, it means
+        # the domain isn't resolved, so we should not expect any connection later
 
         if (
             'arpa' in domain
@@ -613,6 +615,8 @@ class Module(Module, multiprocessing.Process):
             or '.cymru.com' in domain[-10:]
             or len(domain.split('.')) == 1
             or domain == 'WPAD'
+            or rcode_name == 'NXDOMAIN'
+
         ):
             return False
         # One DNS query may not be answered exactly by UID, but the computer can re-ask the domain,
@@ -674,7 +678,7 @@ class Module(Module, multiprocessing.Process):
             # comes here if we haven't started the timer thread for this dns before
             # mark this dns as checked
             self.connections_checked_in_dns_conn_timer_thread.append(uid)
-            params = [domain, answers, timestamp, profileid, twid, uid]
+            params = [domain, answers, rcode_name, timestamp, profileid, twid, uid]
             # self.print(f'Starting the timer to check on {domain}, uid {uid}.
             # time {datetime.datetime.now()}')
             timer = TimerThread(
@@ -1550,7 +1554,7 @@ class Module(Module, multiprocessing.Process):
                     # so make sure we only check the uid once
                     if answers and uid not in self.connections_checked_in_dns_conn_timer_thread:
                         self.check_dns_without_connection(
-                            domain, answers, stime, profileid, twid, uid
+                            domain, answers, rcode_name, stime, profileid, twid, uid
                         )
                     if rcode_name:
                         self.detect_DGA(
