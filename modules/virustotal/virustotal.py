@@ -17,7 +17,7 @@ import validators
 
 
 class Module(Module, multiprocessing.Process):
-    name = 'virustotal'
+    name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
         'Dita Hollmannova, Kamila Babayeva',

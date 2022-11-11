@@ -19,9 +19,9 @@ class PortScanProcess(Module, multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = 'portscandetector-1'
+    name = 'Port Scan Detector'
     description = 'Detect Horizonal, Vertical and ICMP scans'
-    authors = ['Sebastian Garcia']
+    authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)

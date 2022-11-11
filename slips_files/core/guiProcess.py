@@ -30,7 +30,7 @@ class GuiProcess(multiprocessing.Process):
     def __init__(
         self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
-        self.myname = 'Gui'
+        self.myname = 'GUI'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -63,10 +63,10 @@ class GuiProcess(multiprocessing.Process):
                 f'cd modules/kalipso;node kalipso.js -p {self.redis_port}'
             )
         except KeyboardInterrupt:
-            self.print('Stoppting the Gui Process')
+            self.print('Stoppting the GUI Process')
             return True
         except Exception as inst:
-            self.print('Error in the Gui Process')
+            self.print('Error in the GUI Process')
             self.print(type(inst))
             self.print(inst)
             return True

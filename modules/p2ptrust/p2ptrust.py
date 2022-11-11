@@ -59,7 +59,7 @@ def validate_slips_data(message_data: str) -> (str, int):
 
 
 class Trust(Module, multiprocessing.Process):
-    name = 'p2ptrust'
+    name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita']
 

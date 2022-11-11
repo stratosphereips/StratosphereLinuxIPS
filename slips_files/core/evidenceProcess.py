@@ -47,7 +47,7 @@ class EvidenceProcess(multiprocessing.Process):
         logs_folder,
         redis_port,
     ):
-        self.name = 'EvidenceProcess'
+        self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -456,7 +456,7 @@ class EvidenceProcess(multiprocessing.Process):
     def shutdown_gracefully(self):
         self.logfile.close()
         self.jsonfile.close()
-        __database__.publish('finished_modules', 'EvidenceProcess')
+        __database__.publish('finished_modules', 'Evidence')
 
     def delete_alerted_evidence(self, proflied, twid, tw_evidence):
         """

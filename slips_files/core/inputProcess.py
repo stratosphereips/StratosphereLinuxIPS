@@ -49,7 +49,7 @@ class InputProcess(multiprocessing.Process):
             redis_port,
     ):
         multiprocessing.Process.__init__(self)
-        self.name = 'InputProcess'
+        self.name = 'Input'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
         __database__.start(redis_port)

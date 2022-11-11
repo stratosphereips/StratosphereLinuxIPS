@@ -49,7 +49,7 @@ class OutputProcess(multiprocessing.Process):
         ####### create the log files
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
-        self.name = 'OutputProcess'
+        self.name = 'Output'
         self.queue = inputqueue
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)

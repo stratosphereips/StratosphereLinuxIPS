@@ -25,7 +25,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
 
-    name = 'exporting_alerts'
+    name = 'Exporting Alerts'
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 

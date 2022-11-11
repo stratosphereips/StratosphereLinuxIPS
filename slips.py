@@ -314,7 +314,7 @@ class Main:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            if 'p2ptrust' == module_name:
+            if 'P2P Trust' == module_name:
                 ModuleProcess = module_class(
                     self.outputqueue,
                     self.redis_port,
@@ -363,11 +363,11 @@ class Main:
             )
             logs_process.start()
             self.print(
-                f'Started logs process '
+                f'Started Logs Process '
                 f'[PID {logs_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'logsProcess', int(logs_process.pid)
+                'Logs', int(logs_process.pid)
             )
         else:
             # If self.args.nologfiles is False, then we don't want log files,
@@ -381,11 +381,15 @@ class Main:
         if self.args.gui:
             # Create the curses thread
             guiProcessQueue = Queue()
-            guiProcessThread = GuiProcess(
+            guiProcess = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
                 self.args.debug
             )
-            guiProcessThread.start()
+            __database__.store_process_PID(
+                'GUI',
+                int(guiProcess.pid)
+            )
+            guiProcess.start()
             self.print('quiet')
 
 
@@ -505,7 +509,7 @@ class Main:
             self.print_stopped_module(module)
 
     def stop_core_processes(self):
-        self.kill('InputProcess')
+        self.kill('Input')
 
         if self.mode == 'daemonized':
             # when using -D, we kill the processes because
@@ -572,17 +576,24 @@ class Main:
         if delete:
             shutil.rmtree(self.zeek_folder)
 
+    def green(self, txt):
+        """
+        returns the text in green
+        """
+        GREEN_s = '\033[1;32;40m'
+        GREEN_e = '\033[00m'
+        return f'{GREEN_s}{txt}{GREEN_e}'
+
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
+
         modules_left = len(list(self.PIDs.keys()))
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
-            f'\t{GREEN_s}{module}{GREEN_e} \tStopped. '
-            f'{GREEN_s}{modules_left}{GREEN_e} left.'
+            f'\t{self.green(module)} \tStopped. '
+            f'{self.green(modules_left)} left.'
         )
 
     def get_already_stopped_modules(self):
@@ -684,7 +695,7 @@ class Main:
             modules_to_be_killed_last = {
                 'EvidenceProcess',
                 'Blocking',
-                'exporting_alerts',
+                'Exporting Alerts',
             }
 
             self.stop_core_processes()
@@ -1553,7 +1564,7 @@ class Main:
             )
             # this process starts the db
             output_process.start()
-            __database__.store_process_PID('OutputProcess', int(output_process.pid))
+            __database__.store_process_PID('Output', int(output_process.pid))
 
 
             # log the PID of the started redis-server
@@ -1584,7 +1595,7 @@ class Main:
 
             self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
             self.print(f'Started main program [PID {self.pid}]', 1, 0)
-            self.print(f'Started output process [PID {output_process.pid}]', 1, 0)
+            self.print(f'Started Output Process [PID {output_process.pid}]', 1, 0)
             self.print('Starting modules', 0, 1)
 
 
@@ -1616,11 +1627,11 @@ class Main:
             )
             evidence_process.start()
             self.print(
-                f'Started evidence process '
+                f'Started Evidence Process '
                 f'[PID {evidence_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'EvidenceProcess',
+                'Evidence',
                 int(evidence_process.pid)
             )
             __database__.store_process_PID(
@@ -1638,11 +1649,11 @@ class Main:
             )
             profiler_process.start()
             self.print(
-                f'Started profiler process '
+                f'Started Profiler Process '
                 f'[PID {profiler_process.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'ProfilerProcess',
+                'Profiler',
                 int(profiler_process.pid)
             )
 
@@ -1660,11 +1671,11 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started input process '
+                f'Started Input Process '
                 f'[PID {inputProcess.pid}]', 1, 0
             )
             __database__.store_process_PID(
-                'InputProcess',
+                'Input Process',
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
