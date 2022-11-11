@@ -183,7 +183,10 @@ class Module(Module, multiprocessing.Process):
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
-                time.sleep(5)
+                try:
+                    time.sleep(3)
+                except KeyboardInterrupt:
+                    return False
 
     def print(self, text, verbose=1, debug=0):
         """
