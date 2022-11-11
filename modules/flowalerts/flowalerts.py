@@ -615,7 +615,7 @@ class Module(Module, multiprocessing.Process):
             or '.cymru.com' in domain[-10:]
             or len(domain.split('.')) == 1
             or domain == 'WPAD'
-            or rcode_name == 'NXDOMAIN'
+            or rcode_name != 'NOERROR'
 
         ):
             return False
