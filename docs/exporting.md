@@ -30,7 +30,7 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 7. Put the bot OAuth token to the file: ```modules/exporting_alerts/slack_bot_token_secret```
 8. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the messae when you add an integration in the channel), and click 'Add this app to a channel'.
 9. Alternatively you can add the bot to the channel by going to the channel and doing ```/invite @bots_name```.
-9. Edit the slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
+9. Edit the config/slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
 
     [exporting_alerts]
     export_to = [slack]
@@ -89,9 +89,9 @@ By default Slips logs all alerts to ```output/alerts.json``` in [CESNET's IDEA0 
   
 Slips supports exporting alerts to warden servers, as well as importing alerts.  
   
-To enable the exporting, set ```receive_alerts``` to ```yes``` in slips.conf  
+To enable the exporting, set ```receive_alerts``` to ```yes``` in config/slips.conf  
   
-The default configuration file path is specified in the ```configuration_file``` variable in ```slips.conf```  
+The default configuration file path is specified in the ```configuration_file``` variable in ```config/slips.conf```  
   
 The default path is ```modules/CESNET/warden.conf```  
   
@@ -116,7 +116,7 @@ See the [difference between alerts and evidence](https://stratospherelinuxips.re
   
 You can change how often you get alerts (import) from warden server  
   
-By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```slips.conf```
+By default Slips imports alerts every 1 day, you can change this by changing the ```receive_delay``` value in ```config/slips.conf```
 
 Slips logs all alerts to ```output/alerts.json``` in
 [CESNET's IDEA0 format](https://idea.cesnet.cz/en/index) by default.

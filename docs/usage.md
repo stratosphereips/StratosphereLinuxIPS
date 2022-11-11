@@ -21,7 +21,7 @@ Either you are [running Slips in docker](https://stratospherelinuxips.readthedoc
 
 ## Reading the input
 
-The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c slips.conf** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
+The table below shows the commands Slips uses for different inputs. The first part of the command **./slips.py -c config/slips.conf** is same, the second part changes depending on the input type. Also, the user can execute **./slips.py --help** to find correct argument to run Slips on each type of the file.
 
 <style>
 table {
@@ -89,8 +89,8 @@ tr:nth-child(even) {
 
 (*) To find the interface in Linux, you can use the command ```ifconfig```.
 
-There is also a configuration file **slips.conf** where the user can set up parameters for Slips execution and models
-separately. Configuration of the **slips.conf** is described [here](#modifying-the-configuration-file).
+There is also a configuration file **config/slips.conf** where the user can set up parameters for Slips execution and models
+separately. Configuration of the **config/slips.conf** is described [here](#modifying-the-configuration-file).
 
 ## Daemonized vs interactive mode
 
@@ -99,7 +99,7 @@ Slips has 2 modes, interactive and daemonized.
 **Daemonized** : means , output, logs and alerts are written in files.
 
 In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
-```logsfile``` files specified in ```slips.conf``` 
+```logsfile``` files specified in ```config/slips.conf``` 
 
 by default, these are the paths used
 
@@ -113,7 +113,7 @@ creat /var/log/slips as root and slips will use it by default.
 If slips can't write there, slips will store the logs in the ```Slips/output/``` dir by default.
 
 NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the otput_dir specified in slips.conf 
+ instead of the otput_dir specified in config/slips.conf 
 
 
 
@@ -346,7 +346,7 @@ ranking hardened against manipulation here https://tranco-list.eu/
 Slips download the top 10k domains from this list and by default and 
 whitelists all evidence from and to these domains.
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the
-```online_whitelist_update_period``` key in slips.conf.
+```online_whitelist_update_period``` key in config/slips.conf.
 
 
 
@@ -391,7 +391,7 @@ The values for each column are the following:
 
 Slips Support displaying popup notifications whenever there's an alert. 
 
-This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```slips.conf``` 
+This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.conf``` 
 
 This feature is supported in Linux and it requires root privileges.
 
@@ -418,13 +418,13 @@ Even when Slips is run using sudo, it drops root privileges  in modules that don
 
 ## Modifying the configuration file
 
-Slips has a ```slips.conf``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
+Slips has a ```config/slips.conf``` the contains user configurations for different modules and general execution. Below are some of Slips features that can be modifie with respect to the user preferences.
 
 ### Generic configuration
 
 **Time window width.**
 
-Each IP address that appears in the network traffic of the input is represented as a profile in Slips. Each profile is divided into time windows. Each time window is 1 hour long by default, and it gathers the network traffic and its behaviour for the period of 1 hour. The duration of the timewindow can be changed in the the slips.conf using
+Each IP address that appears in the network traffic of the input is represented as a profile in Slips. Each profile is divided into time windows. Each time window is 1 hour long by default, and it gathers the network traffic and its behaviour for the period of 1 hour. The duration of the timewindow can be changed in the the config/slips.conf using
 
 ```time_window_width```
 
@@ -511,7 +511,7 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 
 To enable the creation of log files, there are two options:
 1. Running Slips with ```-l``` flag. 
-2. Setting ```create_log_files``` to ```yes``` in ```slips.conf```.
+2. Setting ```create_log_files``` to ```yes``` in ```config/slips.conf```.
 3. Running Slips with ```verbose``` and ```debug``` flags
 4. Using errors.log and running.log
 
@@ -522,7 +522,7 @@ create 3 summary files for each IP/profile it encounters.
 
 Summaries created contain profile data, complete timeline outgoing actions and timeline of all traffic that involves this IP.
 
-You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```slips.conf```.
+You can also change how often Slips creates log files using the ```log_report_time``` variable  in ```config/slips.conf```.
 
 You can enable or disable deleting zeek log files after stopping slips by setting ```delete_zeek_files``` to  yes or no.
 
@@ -530,7 +530,7 @@ DISCLAIMER: zeek generates log files that grow every second until they reach GBs
 Slips deletes all zeek log files after 1 day when running on an
 interface. this is called zeek rotation and is enabled by default.
 
-You can disable rotation by setting ```rotation``` to ```no``` in ```slips.conf```
+You can disable rotation by setting ```rotation``` to ```no``` in ```config/slips.conf```
 
 Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#rotation) for more info 
 
@@ -553,7 +553,7 @@ Rotation is done in zeek files to avoid growing zeek log files and save disk spa
 
 Rotating is only enabled when running on an interface.
 
-By default, Slips rotates zeek files every 1 day. this can be changed in ```slips.conf```
+By default, Slips rotates zeek files every 1 day. this can be changed in ```config/slips.conf```
 by changing the value of ```rotation_period```
 
 ```rotation_period``` value can be written as a numeric constant followed by a time unit where
@@ -583,7 +583,7 @@ To change them, We use ```-v``` for verbosity and ```-e``` for debugging
 
 For example:
 
-```./slips.py -c slips.conf -v 2 -e 1 -f zeek_dir ```
+```./slips.py -c config/slips.conf -v 2 -e 1 -f zeek_dir ```
 
 Verbosity is about less or more information on the normal work of slips. 
 

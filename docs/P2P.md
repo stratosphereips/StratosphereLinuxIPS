@@ -75,7 +75,7 @@ source ~/.bashrc
 
 The P2P module is disabled by default in Slips.
 
-To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```slips.conf```  
+To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```config/slips.conf```  
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 

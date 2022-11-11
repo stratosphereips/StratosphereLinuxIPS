@@ -39,7 +39,7 @@ Detect connections that are long, except the multicast connections.
 
 By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minutes). 
 
-This threshold can be changed ```slips.conf``` by changing the value of  ```long_connection_threshold```  
+This threshold can be changed ```config/slips.conf``` by changing the value of  ```long_connection_threshold```  
 
 ### Connections without DNS resolution
 This will detect connections done without a previous DNS resolution. The idea is that a connection without a DNS resolution is slightly suspicious.
@@ -105,7 +105,7 @@ Example of Spyware that uses custom ports are [hermit](https://www.lookout.com/b
 
 Slips generate a 'possible data exfiltration alerts when the number of uploaded files to any IP exceeds 700 MBs.
 
-The number of MBs can be modified by editting the value of ```data_exfiltration_threshold``` in ```slips.conf``` 
+The number of MBs can be modified by editting the value of ```data_exfiltration_threshold``` in ```config/slips.conf``` 
 
 ### Malicious JA3 and JA3s hashes
 
@@ -116,7 +116,7 @@ Slips is shipped with it’s own zeek scripts that add JA3 and JA3s fingerprints
 Slips supports JA3 feeds in addition to having more than 40 different threat intelligence feeds. 
 The JA3 feeds contain JA3 fingerprints that are identified as malicious. 
 The JA3 threat intelligence feed used by Slips now is Abuse.ch JA3 feed.
-And you can add other JA3 TI feeds in ```ja3_feeds``` in ```slips.conf```.
+And you can add other JA3 TI feeds in ```ja3_feeds``` in ```config/slips.conf```.
 
 ### Connections to port 0
 
@@ -162,7 +162,7 @@ It alerts when finding two or more connections to the same IP.
 Slips uses SSL certificates sha1 hashes to detect C&C servers.
 
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
-And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
+And you can add other SSL feeds in ```ssl_feeds``` in ```config/slips.conf```.
 
 ### Young Domains
 
@@ -384,7 +384,7 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
   
 The hash should be your 64 character API Key.  
   
-The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```slips.conf```
+The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf```
 
 ### Leak Detection Module
 
@@ -424,7 +424,7 @@ Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readt
 
 ### Disabled alerts
 
-All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```slips.conf``` 
+All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.conf``` 
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
 the ```disabled_detections``` list and slips will not generate any alerts of this type.
@@ -476,7 +476,7 @@ The domains are currently taken from:
 - HTTP host names
 - TLS SNI
 
-Once a domain is found, it is verified against the downloaded list of domains from the blacklists defined in ```ti_files``` in the configuration file ```slips.conf```. 
+Once a domain is found, it is verified against the downloaded list of domains from the blacklists defined in ```ti_files``` in the configuration file ```config/slips.conf```. 
 If an exact match is found, then an evidence is generated. 
 
 If an exact match is not found, then Slips verifies if the verified domain is a
@@ -493,7 +493,7 @@ Every time Slips encounters an TLS flow,
 it compares each JA3 and JA3s with the feeds of malicious JA3 and alerts when
 there’s a match.
 Slips is shipped with the Abuse.ch JA3 feed by default
-You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```slips.conf```
+You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf```
 
 #### Matching of SSL SHA1 Hashes
 
@@ -502,13 +502,13 @@ then it compares the hash with our list of blacklisted SSL certificates
 
 Slips is shipped with the Abuse.ch SSL feed by default,
 
-You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```slips.conf```
+You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf```
 
 #### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
 it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_iocs.csv``` by default,
-this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```slips.conf```.
+this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
 The format of the file is "IP address","Threat level", "Description"
 
@@ -542,7 +542,7 @@ Example:
 #### Adding your own remote feed
 
 
-We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
+We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in config/slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
 Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
 
@@ -560,7 +560,7 @@ link, threat_level=0-1, tags=['tag1','tag2']
 
 TI files commented using # may be processed as they're still in our database. 
 
-Use ```;``` for commenting TI files in ```slips.conf``` instead of ```#```.
+Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```.
 
 Commented TI files (lines starting with ;) will be completely removed from our database.
 
@@ -571,7 +571,7 @@ The remote files are downloaded to the path set in the ```download_path_for_loca
 #### Commenting a remote TI feed
 
 If you have a remote file link that you wish to comment and remove from the database
-you can do so by adding ';' to the line that contains the feed link in ```slips.conf```, don't use the '#'
+you can do so by adding ';' to the line that contains the feed link in ```config/slips.conf```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
     
     ;https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
@@ -586,7 +586,7 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by 
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```slips.conf```
+The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
@@ -684,13 +684,13 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 for detailed instructions on CESNET exporting and the format of the configuration files.
 
 To enable the importing alerts from warden servers,
-set ```receive_alerts```  to ```yes``` in slips.conf  
+set ```receive_alerts```  to ```yes``` in config/slips.conf  
 
 Slips imports 100 alerts from warden servers each day, and automatically stores the aleerts in our database
 
 
 Time to wait before receiving alerts from warden server is 1 day by default, you can change this
-by chaning the ```receive_delay``` in ```slips.conf```
+by chaning the ```receive_delay``` in ```config/slips.conf```
 
 
 These are the categories we import:
@@ -914,7 +914,7 @@ If the accumulated threat level reached the threashold, Slips generates and aler
 If not, slips waits for the next evidence, accumulates threat levels, and checks again until the threshold is reached.
 
 
-The threshold Slips uses is determined by the ```evidence_detection_threshold``` key in slips.conf, 
+The threshold Slips uses is determined by the ```evidence_detection_threshold``` key in config/slips.conf, 
 by default its 0.1 attacks per minute
 
 This threshold means minimum confirmed attacks per minute needed to generate an alert

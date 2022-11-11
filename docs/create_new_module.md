@@ -296,7 +296,7 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
+        # In case you need to read the config/slips.conf configuration file for
         # your own configurations
         self.config = config
         # Start the DB
@@ -429,7 +429,7 @@ and the text will be sent to the outputqueue to process, log, and print to the t
 self.config = config
 ```
 
-This line is necessary if you need to read the ```slips.conf ``` configuration file for your own configurations
+This line is necessary if you need to read the ```config/slips.conf ``` configuration file for your own configurations
 
 ```python
 __database__.start(redis_port)
@@ -487,7 +487,7 @@ is terminating.
 ### Troubleshooting
 Most errors occur when running the module inside SLIPS. These errors are hard to resolve, because warnings and debug messages may be hidden under extensive outputs from other modules.
 
-If the module does not start at all, make sure it is not disabled in the slips.conf file. If that is not the case, check that the \_\_init\_\_.py file is present in module directory, and read the outputs - if there were any errors (eg. import errors), they would prevent the module from starting. 
+If the module does not start at all, make sure it is not disabled in the config/slips.conf file. If that is not the case, check that the \_\_init\_\_.py file is present in module directory, and read the outputs - if there were any errors (eg. import errors), they would prevent the module from starting. 
 
 
 In case that the module is started, but does not receive any messages from the channel, make sure that:
