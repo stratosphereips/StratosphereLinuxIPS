@@ -89,6 +89,7 @@ class Trust(Module, multiprocessing.Process):
         used_interface = self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
+        self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
         # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
         # generate new keys, and therefore new peerid!
@@ -192,6 +193,7 @@ class Trust(Module, multiprocessing.Process):
             request_func=self.respond_to_message_request,
             gopy_channel=self.gopy_channel,
             pygo_channel=self.pygo_channel,
+            p2p_reports_logfile=self.p2p_reports_logfile
         )
 
         self.pigeon = None

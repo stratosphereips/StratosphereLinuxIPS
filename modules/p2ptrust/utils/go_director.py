@@ -10,10 +10,11 @@ from modules.p2ptrust.utils.utils import (
     send_evaluation_to_go,
     send_empty_evaluation_to_go,
 )
+from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.core.database.database import __database__
-
+import time
 
 
 class GoDirector:
@@ -34,6 +35,7 @@ class GoDirector:
         request_func=None,
         gopy_channel: str = 'p2p_gopy',
         pygo_channel: str = 'p2p_pygo',
+        p2p_reports_logfile: str = 'p2p_reports.log',
     ):
 
         # todo what is override_p2p
@@ -49,6 +51,9 @@ class GoDirector:
         self.override_p2p = override_p2p
         self.report_func = report_func
         self.request_func = request_func
+        # clear the logfile
+        open(p2p_reports_logfile, 'w').close()
+        self.reports_logfile = open(p2p_reports_logfile, 'a')
 
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
@@ -58,6 +63,14 @@ class GoDirector:
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print('[TrustDB] ' + text, verbose, debug)
+
+    def log(self, text: str):
+        """
+        Writes the log text to p2p_reports.log
+        """
+        now = time.time()
+        human_readable_datetime = utils.convert_format(now, utils.alerts_format)
+        self.reports_logfile.write(f'{human_readable_datetime} - {text}')
 
     def handle_gopy_data(self, data_dict: dict):
         """
@@ -323,10 +336,9 @@ class GoDirector:
             reporter, report_time, key_type, key, evaluation
         )
         if evaluation != None:
-            self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
-
-            )
+            msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+            self.print(msg)
+            self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
