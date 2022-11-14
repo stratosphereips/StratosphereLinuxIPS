@@ -27,7 +27,7 @@ You can do this by going to the channel, then clicking on the channel's name. Th
 5.3 Scroll down to the Scopes section, and pick channels:read and chat:write from the drop down menu.
 5.4 Scroll back to the top of this page and look for the button that says Install App to Workspace (or Reinstall App if you've done this before). Click it.
 6. In this same 'OAuth & Permissions' page, copy the 'Bot User OAuth Token'. It should look something like 'xoxb-nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn' with a lot of letters.
-7. Put the bot OAuth token to the file: ```modules/exporting_alerts/slack_bot_token_secret```
+7. Put the bot OAuth token to the file: ```config/slack_bot_token_secret```
 8. You need to add the new app to the channel in Slack. You do this by clicking on the bot's name (is in the messae when you add an integration in the channel), and click 'Add this app to a channel'.
 9. Alternatively you can add the bot to the channel by going to the channel and doing ```/invite @bots_name```.
 9. Edit the config/slips.conf file, put `slack` in the export\_to variable, and add the channel's name to which you want to send.
@@ -93,7 +93,7 @@ To enable the exporting, set ```receive_alerts``` to ```yes``` in config/slips.c
   
 The default configuration file path is specified in the ```configuration_file``` variable in ```config/slips.conf```  
   
-The default path is ```modules/CESNET/warden.conf```  
+The default path is ```config/warden.conf```  
   
 The format of ```warden.conf``` should be the following:  
 

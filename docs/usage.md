@@ -491,7 +491,7 @@ If you use the latest Dockerfile, it will be set by default. If not, you can set
 ### VirusTotal
 
 In order for virustotal module to work, you need to add your VirusTotal API key to the file
-```modules/virustotal/api_key_secret```.
+```config/vt_api_key```.
 
 You can specify the path to the file with VirusTotal API key in the ```api_key_file``` variable.
 

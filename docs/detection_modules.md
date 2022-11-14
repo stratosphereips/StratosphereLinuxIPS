@@ -132,12 +132,12 @@ tr:nth-child(even) {
 
 This module is used to lookup IPs, domains, and URLs on virustotal.
 
-To use it you need to add your virustotal API key in ```modules/virustotal/api_key_secret```
+To use it you need to add your virustotal API key in ```config/vt_api_key```
 
 ### RiskIQ Module
 
 This module is used to get different information (passive DNS, IoCs, etc.) from [RiskIQ](https://www.riskiq.com/)
-To use this module your RiskIQ email and API key should be stored in ```modules/RiskIQ/credentials```  
+To use this module your RiskIQ email and API key should be stored in ```config/RiskIQ_credentials```  
   
 the format of this file should be the following:  
   
@@ -279,7 +279,7 @@ You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```conf
 ### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
-it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_iocs.csv``` by default,
+it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
 The format of the file is "IP address","Threat level", "Description"
@@ -297,7 +297,7 @@ Example:
 ### Local JA3 hashes
 
 Slips has a local file for adding JA3 hashes of your own, 
-it's located in ```modules/ThreatIntelligence1/local_data_files/own_malicious_JA3.csv``` by default.
+it's located in ```config/local_data_files/own_malicious_JA3.csv``` by default.
 
 The format of the file is "JA3 hash", "Threat level", "Description"
 
@@ -337,7 +337,9 @@ Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#``
 Commented TI files (lines starting with ;) will be completely removed from our database.
 
 
-The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
+The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. 
+By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` and deleted after slips
+is done reading them
 
 
 ### Commenting a remote TI feed
