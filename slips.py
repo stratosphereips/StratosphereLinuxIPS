@@ -1707,10 +1707,11 @@ class Main:
             # In each interval we check if there has been any modifications to
             # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
-            # We choose 6 to wait 30 seconds.
             max_intervals_to_wait = 4
             intervals_to_wait = max_intervals_to_wait
             slips_internal_time = 0
+            # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
+            shouldnt_stop_slips: bool = self.args.interface or __database__.is_growing_zeek_dir()
             while True:
                 message = self.c1.get_message(timeout=0.01)
                 if (
@@ -1755,8 +1756,7 @@ class Main:
 
                 # In interface we keep track of the host IP. If there was no
                 # modified TWs in the host NotIP, we check if the network was changed.
-                # Don't try to stop slips if it's capturing from an interface
-                if self.args.interface:
+                if shouldnt_stop_slips:
                     # To check of there was a modified TW in the host IP. If not,
                     # count down.
                     modifiedTW_hostIP = False
@@ -1769,7 +1769,7 @@ class Main:
                     # then start counting down
                     # After count down we update the host IP, to check if the
                     # network was changed
-                    if not modifiedTW_hostIP and self.args.interface:
+                    if not modifiedTW_hostIP:
                         if intervals_to_wait == 0:
                             hostIP = self.get_host_ip()
                             if hostIP:
