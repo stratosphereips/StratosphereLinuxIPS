@@ -415,8 +415,8 @@ class EvidenceProcess(multiprocessing.Process):
         # # ip_direction is the direction of the last evidence, it's irrelevant! #TODO
         # if ip_direction != 'dstip':
         #     return False
-
-        if not ('-i' in sys.argv and '-p' in sys.argv):
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if not (running_on_interface and '-p' in sys.argv):
             # blocking is only supported when running on an interface
             return False
 

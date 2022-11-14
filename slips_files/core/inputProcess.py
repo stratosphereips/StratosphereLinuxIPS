@@ -706,7 +706,9 @@ class InputProcess(multiprocessing.Process):
         # this thread should be started from run() to get the PID of inputprocess and have shared variables
         # if it started from __init__() it will have the PID of slips.py therefore,
         # any changes made to the shared variables in inputprocess will not appear in the thread
-        if '-i' in sys.argv:
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if running_on_interface:
+            # delete old zeek-date.log files
             self.remover_thread.start()
 
         try:
