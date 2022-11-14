@@ -1,5 +1,6 @@
 -0.9.7
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
+- Don't force kill all modules when using -P
 
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME

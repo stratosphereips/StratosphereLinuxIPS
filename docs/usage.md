@@ -150,6 +150,9 @@ By default, Slips will assume you are running only 1 instance and will use the r
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory. 
 
+If you want Slips to run on a certain port, you can use the ```-P <portnumber>``` parameter to specify the
+port you want Slips to use. but it will always use port 6379 db 1 for the cache db.
+
 Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
 
 In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
@@ -173,6 +176,7 @@ Once you're done, you can run slips with ```--killall``` to close all the redis 
 
 NOTICE: if you run more than one instance of Slips on the same file or the same interface, 
 Slips will generate a new directory with the name of the file and the new timestamp inside the ```output/``` dir
+
 
 ## Closing redis servers
 
