@@ -1089,7 +1089,7 @@ class ProfilingFlowsDatabase(object):
                 print(f"@@@@@@@@@@@@@@@@@@  ip {ip} was reported before, by the same peer {reporter}. appending")
                 cached_p2p_reports[reporter].append(report_data)
             else:
-                #  ip was reported before, but not by the same peer
+                # ip was reported before, but not by the same peer
                 print(f"@@@@@@@@@@@@@@@@@@  ip {ip} was reported before, by a diff peer {cached_p2p_reports}. appending")
                 cached_p2p_reports[reporter] = [report_data]
             print(f"@@@@@@@@@@@@@@@@@@  now is {cached_p2p_reports}")
@@ -1097,7 +1097,7 @@ class ProfilingFlowsDatabase(object):
         else:
             # no old reports about this ip
             print(f"@@@@@@@@@@@@@@@@@@  no old reports about this ip {ip}")
-            report_data = {reporter: {report_data}}
+            report_data = {reporter: [report_data]}
 
         self.r.hset('p2p_reports', ip, json.dumps(report_data))
 
