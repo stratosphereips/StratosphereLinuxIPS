@@ -761,17 +761,21 @@ class Main:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
                                 warning_printed = True
 
-                            # -P flag is only used in integration tests,
+                            # -t flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
-                            if not self.args.port:
-                                # delay killing unstopped modules
-                                max_loops += 1
-                                # checks if 15 minutes has passed since the start of the function
-                                if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
-                                    print(f"Killing modules that took more than "
-                                          f"{wait_for_modules_to_finish} mins to finish.")
-                                    break
+                            if self.args.testing:
+                                break
+
+                            # delay killing unstopped modules until all of them
+                            # are done processing
+                            max_loops += 1
+
+                            # checks if 15 minutes has passed since the start of the function
+                            if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
+                                print(f"Killing modules that took more than "
+                                      f"{wait_for_modules_to_finish} mins to finish.")
+                                break
 
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)

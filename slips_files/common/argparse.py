@@ -254,6 +254,13 @@ class ArgumentParser(argparse.ArgumentParser):
             help='The redis-server port to use',
         )
         self.add_argument(
+            '-t',
+            '--testing',
+            action='store_true',
+            required=False,
+            help='used for testing slips',
+        )
+        self.add_argument(
             '-V',
             '--version',
             action='store_true',
