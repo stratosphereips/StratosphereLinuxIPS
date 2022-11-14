@@ -1063,10 +1063,28 @@ class ProfilingFlowsDatabase(object):
         if new_key:
             self.r.publish('ip_info_change', ip)
 
+    def get_p2p_reports_about_ip(self, ip) -> list:
+        """
+        returns  alist of all p2p past reports about the given ip
+        """
+        reports = self.r.hget('p2p_reports', ip)
+        if reports:
+            return json.loads(reports)
+        return []
+
     def store_p2p_report(self, ip: str, report_data: dict):
         """
         stores answers about IPs slips asked other peers for.
         """
+        # if we have old reports about this ip, append this one to them
+        if cached_p2p_reports := self.get_p2p_reports_about_ip(ip):
+
+            cached_p2p_reports.append(report_data)
+            report_data = cached_p2p_reports
+        else:
+            # no old reports about this ip
+            report_data = [report_data]
+
         self.r.hset('p2p_reports', ip, json.dumps(report_data))
 
 
