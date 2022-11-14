@@ -1063,27 +1063,41 @@ class ProfilingFlowsDatabase(object):
         if new_key:
             self.r.publish('ip_info_change', ip)
 
-    def get_p2p_reports_about_ip(self, ip) -> list:
+    def get_p2p_reports_about_ip(self, ip) -> dict:
         """
-        returns  alist of all p2p past reports about the given ip
+        returns a dict of all p2p past reports about the given ip
         """
         reports = self.r.hget('p2p_reports', ip)
         if reports:
             return json.loads(reports)
-        return []
+        return {}
 
     def store_p2p_report(self, ip: str, report_data: dict):
         """
         stores answers about IPs slips asked other peers for.
         """
-        # if we have old reports about this ip, append this one to them
-        if cached_p2p_reports := self.get_p2p_reports_about_ip(ip):
+        # reports in the db are sorted by reporter bydefault
+        reporter = report_data['reporter']
+        del report_data['reporter']
 
-            cached_p2p_reports.append(report_data)
+        # if we have old reports about this ip, append this one to them
+        # cached_p2p_reports is a dict
+        if cached_p2p_reports := self.get_p2p_reports_about_ip(ip):
+            # was this ip reported by the same peer before?
+            if reporter in cached_p2p_reports:
+                # ip was reported before, by the same peer
+                print(f"@@@@@@@@@@@@@@@@@@  ip {ip} was reported before, by the same peer {reporter}. appending")
+                cached_p2p_reports[reporter].append(report_data)
+            else:
+                #  ip was reported before, but not by the same peer
+                print(f"@@@@@@@@@@@@@@@@@@  ip {ip} was reported before, by a diff peer {cached_p2p_reports}. appending")
+                cached_p2p_reports[reporter] = [report_data]
+            print(f"@@@@@@@@@@@@@@@@@@  now is {cached_p2p_reports}")
             report_data = cached_p2p_reports
         else:
             # no old reports about this ip
-            report_data = [report_data]
+            print(f"@@@@@@@@@@@@@@@@@@  no old reports about this ip {ip}")
+            report_data = {reporter: {report_data}}
 
         self.r.hset('p2p_reports', ip, json.dumps(report_data))
 
