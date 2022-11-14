@@ -107,7 +107,8 @@ class Main:
         """
         Store the host IP address if input type is interface
         """
-        if self.input_type != 'interface':
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if not running_on_interface:
             return
 
         hostIP = self.get_host_ip()
@@ -563,7 +564,8 @@ class Main:
 
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
-        if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
+        was_running_zeek = self.input_type in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+        if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
             copy_tree(self.zeek_folder, dest_zeek_dir)
