@@ -1706,14 +1706,16 @@ class Main:
 
             # Check every 5 secs if we should stop slips or not
             sleep_time = 5
+
             # In each interval we check if there has been any modifications to
             # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
             max_intervals_to_wait = 4
             intervals_to_wait = max_intervals_to_wait
-            slips_internal_time = 0
+
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
-            shouldnt_stop_slips: bool = self.args.interface or __database__.is_growing_zeek_dir()
+            is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+
             while True:
                 message = self.c1.get_message(timeout=0.01)
                 if (
@@ -1735,74 +1737,51 @@ class Main:
                 ) = __database__.getModifiedProfilesSince(
                     slips_internal_time
                 )
-                amount_of_modified = len(modified_profiles)
+                modified_ips_in_the_last_tw = len(modified_profiles)
+
                 # Get the time of last modified timewindow and set it as a new
                 if last_modified_tw_time != 0:
                     __database__.setSlipsInternalTime(
                         last_modified_tw_time
                     )
-                # How many profiles we have?
-                profilesLen = str(__database__.getProfilesLen())
+
                 if self.mode != 'daemonized':
+                    # How many profiles we have?
+                    profilesLen = str(__database__.getProfilesLen())
+
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
-                        f'IPs sending traffic in the last {self.twid_width}: {amount_of_modified}. '
+                        f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
                         f'({now})',
                         end='\r',
                     )
 
-                # Check if we need to close some TW
+                # Check if we need to close any TWs
                 __database__.check_TW_to_close()
 
-                # In interface we keep track of the host IP. If there was no
-                # modified TWs in the host NotIP, we check if the network was changed.
-                if shouldnt_stop_slips:
-                    # To check of there was a modified TW in the host IP. If not,
-                    # count down.
-                    modifiedTW_hostIP = False
-                    for profileIP in modified_profiles:
-                        # True if there was a modified TW in the host IP
-                        if hostIP == profileIP:
-                            modifiedTW_hostIP = True
+                if is_interface and hostIP not in modified_profiles:
+                    # In interface we keep track of the host IP. If there was no
+                    # modified TWs in the host IP, we check if the network was changed.
+                    if hostIP := self.get_host_ip():
+                        __database__.set_host_ip(hostIP)
 
-                    # If there was no modified TW in the host IP
+                # these are the cases where slips should be running non-stop
+                if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
+                    continue
+
+                # Reaches this point if we're running Slips on a file.
+                # countdown until slips stops if no TW modifications are happening
+                if modified_ips_in_the_last_tw == 0:
+                    # waited enough. stop slips
+                    if intervals_to_wait == 0:
+                        self.shutdown_gracefully()
+
+                    # If there were no modified TWs in the last timewindow time,
                     # then start counting down
-                    # After count down we update the host IP, to check if the
-                    # network was changed
-                    if not modifiedTW_hostIP:
-                        if intervals_to_wait == 0:
-                            hostIP = self.get_host_ip()
-                            if hostIP:
-                                __database__.set_host_ip(hostIP)
-                            intervals_to_wait = max_intervals_to_wait
+                    intervals_to_wait -= 1
 
-                        intervals_to_wait -= 1
-                    else:
-                        intervals_to_wait = max_intervals_to_wait
-
-
-                # Running Slips in the file.
-                # If there were no modified TW in the last timewindow time,
-                # then start counting down
-                else:
-                    # don't shutdown slips if it's being debugged or reading flows from stdin
-                    if (
-                        amount_of_modified == 0
-                        and not self.is_debugger_active()
-                        and self.input_type != 'stdin'
-                    ):
-                        # print('Counter to stop Slips. Amount of modified
-                        # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                        if intervals_to_wait == 0:
-                            self.shutdown_gracefully()
-                            break
-                        intervals_to_wait -= 1
-                    else:
-                        intervals_to_wait = (
-                            max_intervals_to_wait
-                        )
 
                 __database__.pubsub.check_health()
         except KeyboardInterrupt:
