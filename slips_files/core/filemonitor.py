@@ -32,8 +32,6 @@ class FileEventHandler(RegexMatchingEventHandler):
         self.monitored_zeek_files = monitored_zeek_files
         __database__.start(redis_port)
         utils.drop_root_privs()
-        # is the dir we're observing marked as growing?
-        self.marked = False
         self.input_type = input_type
 
     def on_created(self, event):
@@ -71,10 +69,3 @@ class FileEventHandler(RegexMatchingEventHandler):
                             break
         elif 'whitelist' in filename:
             __database__.publish('reload_whitelist', 'reload')
-        else:
-            # a zeek dir is modified, mark it as growing zeek dir so slips can treat it
-            # is an interface
-            # execlude pcaps because their zeek dir is always growing and shouldn't be treated as an interface
-            if self.input_type != 'pcap' and not self.marked:
-                __database__.set_growing_zeek_dir()
-                self.marked = True
