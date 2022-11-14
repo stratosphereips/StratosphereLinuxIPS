@@ -1566,6 +1566,12 @@ class Main:
             output_process.start()
             __database__.store_process_PID('Output', int(output_process.pid))
 
+            if self.args.growing:
+                if self.input_type != 'zeek_folder':
+                    self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
+                else:
+                    self.print(f"Running on a growing zeek dir: {self.input_information}")
+                    __database__.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
