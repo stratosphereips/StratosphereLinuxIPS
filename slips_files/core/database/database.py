@@ -1484,7 +1484,8 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.set('growing_zeek_dir', 'yes')
 
     def is_growing_zeek_dir(self):
-        return True if 'yes' in str(self.r.get('growing_zeek_dir')) else False
+        """ Did slips mark the given dir as growing?"""
+        return 'yes' in str(self.r.get('growing_zeek_dir'))
 
     def set_module_label_to_flow(
         self, profileid, twid, uid, module_name, module_label
