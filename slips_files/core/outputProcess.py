@@ -21,7 +21,7 @@ import sys
 import io
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
+from pathlib import Path
 from datetime import datetime
 import os
 
@@ -81,7 +81,8 @@ class OutputProcess(multiprocessing.Process):
         try:
             open(path, 'a').close()
         except FileNotFoundError:
-            os.mkdir(os.path.dirname(path))
+            p = Path(os.path.dirname(path))
+            p.mkdir(parents=True, exist_ok=True)
             open(path, 'w').close()
 
         self.log_branch_info(path)
