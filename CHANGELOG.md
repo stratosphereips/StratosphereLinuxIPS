@@ -1,5 +1,7 @@
 -0.9.7
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
+- Keep track of old peer reports about the same ip
+- Add a new log file p2p_reports.log, for logging peer reports only  
 
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
