@@ -90,7 +90,7 @@ def test_pcap(
 ):
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -220,7 +220,7 @@ def test_zeek_dir(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_dir) == False
@@ -269,7 +269,7 @@ def test_zeek_conn_log(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_dir) == False
@@ -299,7 +299,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     expected_evidence2 = 'vertical port scan'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -332,7 +332,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -f {nfdump_path}  -o {output_dir}  -P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -370,7 +370,7 @@ def test_conf_file(
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test.conf  ' \
-              f'-P {redis_port} > {output_file} 2>&1'
+              f'-P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -435,7 +435,7 @@ def test_conf_file2(
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test2.conf  ' \
-              f'-P {redis_port} > {output_file} 2>&1'
+              f'-P {redis_port} -t > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
