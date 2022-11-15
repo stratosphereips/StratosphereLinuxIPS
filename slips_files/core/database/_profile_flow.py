@@ -1068,7 +1068,7 @@ class ProfilingFlowsDatabase(object):
         returns a dict of all p2p past reports about the given ip
         """
         #p2p_reports key is basically { ip:  { reporter1: [report1, report2, report3]} }
-        reports = self.r.hget('p2p_reports', ip)
+        reports = self.rcache.hget('p2p_reports', ip)
         if reports:
             return json.loads(reports)
         return {}
@@ -1109,7 +1109,7 @@ class ProfilingFlowsDatabase(object):
             # no old reports about this ip
             report_data = {reporter: [report_data]}
 
-        self.r.hset('p2p_reports', ip, json.dumps(report_data))
+        self.rcache.hset('p2p_reports', ip, json.dumps(report_data))
 
 
     def add_out_http(
