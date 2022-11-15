@@ -351,7 +351,7 @@ class GoDirector:
         evaluation: dict,
     ):
         """
-        Handle reported score and confidence
+        Handle reported score and confidence from another peer
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -408,9 +408,10 @@ class GoDirector:
         self.print(result, 2, 0)
         # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
         # save all report info in the db
+        # convert ts to human readable format
         report_info = {
             'reporter':reporter,
-            'report_time':report_time,
+            'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
         __database__.store_p2p_report(key, report_info)
