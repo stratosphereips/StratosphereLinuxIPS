@@ -73,8 +73,32 @@ class Whitelist:
         Given the domain of a flow, and a whitelisted domain,
         this function checks any of the flow domains
         is a subdomain or the same domain as the whitelisted domain
+
+        :param whitelisted_domain: the domain we want to check if it exists in the domains_of_flow
+        :param direction: src or dst or both
+        :param domains_of_flow: src domains of the src IP of the flow,
+                                or dst domains of the dst IP of the flow
         """
-        pass
+        whitelisted_domains = __database__.get_whitelist('domains')
+        if not whitelisted_domains:
+            return False
+
+        # do we wanna whitelist flows coming from or going to this domain or both?
+        from_ = whitelisted_domains[whitelisted_domain]['from']
+        what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+
+        # Now check the domains of the src IP
+        if direction in from_ or 'both' in from_:
+            for domain_to_check in domains_of_flow:
+                main_domain = domain_to_check[-len(whitelisted_domain) :]
+                if whitelisted_domain in main_domain:
+                    # We can ignore flows or alerts, what is it?
+                    if (
+                        'flows' in what_to_ignore
+                        or 'both' in what_to_ignore
+                    ):
+                        return True
+        return False
 
     def is_whitelisted_domain(self, domain_to_check, saddr, daddr):
         """
