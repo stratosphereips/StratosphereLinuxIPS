@@ -67,12 +67,59 @@ class Whitelist:
         if flow_type in self.ignored_flow_types:
             return True
 
-    def is_whitelisted_domain(self, domain):
+
+    def is_whitelisted_domain_in_flow(self, whitelisted_domain, direction, domains_of_flow):
+        """
+        Given the domain of a flow, and a whitelisted domain,
+        this function checks any of the flow domains
+        is a subdomain or the same domain as the whitelisted domain
+        """
+        pass
+
+    def is_whitelisted_domain(self, domain_to_check, saddr, daddr):
+        """
+        :param domain_to_check: the domain we want to know if whitelisted or not
+        :param saddr: saddr of the flow we're checking
+        :param daddr: daddr of the flow we're checking
+        """
+
         whitelisted_domains = __database__.get_whitelist('domains')
         if not whitelisted_domains:
             return False
-        #todo
 
+        # get the domains of this flow
+        (
+            dst_domains_of_flow,
+            src_domains_of_flow,
+        ) = self.get_domains_of_flow(saddr, daddr)
+
+        # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
+        # Go through each whitelisted domain and check if what arrived is there
+        for whitelisted_domain in list(whitelisted_domains.keys()):
+            what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+            # Here we iterate over all the domains to check if we can find
+            # subdomains. If slack.com was whitelisted, then test.slack.com
+            # should be ignored too. But not 'slack.com.test'
+            main_domain = domain_to_check[-len(whitelisted_domain) :]
+            if whitelisted_domain in main_domain:
+                # We can ignore flows or alerts, what is it?
+                if (
+                    'flows' in what_to_ignore
+                    or 'both' in what_to_ignore
+                ):
+                    # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
+                    return True
+
+
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'src', src_domains_of_flow):
+                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
+                #            f" to domain {domain} of dst IP {column_values['daddr']}")
+                return True
+
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'dst', dst_domains_of_flow):
+                # self.print(f"Whitelisting the domain {domain_to_check} because is
+                # related to domain {domain} of src IP {column_values['saddr']}")
+                return True
 
 
     def is_whitelisted_flow(self, column_values, flow_type) -> bool:
@@ -81,74 +128,27 @@ class Whitelist:
         """
         saddr = column_values.get('saddr', '')
         daddr = column_values.get('daddr', '')
-        # get the domains of this flow
+        # get the domains of the IPs this flow
         (
             domains_to_check_dst,
             domains_to_check_src,
         ) = self.get_domains_of_flow(saddr, daddr)
 
-        if whitelisted_domains := __database__.get_whitelist('domains'):
-            ssl_domain = column_values.get('server_name', '')  # ssl.log
-            # Domain names are stored in different zeek files using different names.
-            # Try to get the domain from each file.            domains_to_check = [ssl_domain]
-            domains_to_check = [ssl_domain]
-            http_domain = column_values.get('host', '')  # http.log
-            domains_to_check.append(http_domain)
-            notice_domain = column_values.get('sub', '').replace(
-                'CN=', ''
-            )  # in notice.log
-            domains_to_check.append(notice_domain)
+        # check if we have whitelisted domains
 
-            # todo call new function
+        # first get the domains of the flows we ewnt to check if whitelisted
+        # Domain names are stored in different zeek files using different names.
+        # Try to get the domain from each file.
+        ssl_domain = column_values.get('server_name', '')  # ssl.log
+        http_domain = column_values.get('host', '')  # http.log
+        notice_domain = column_values.get('sub', '').replace(
+            'CN=', ''
+        )  # in notice.log
+        domains_to_check = [ssl_domain, http_domain, notice_domain]
 
-
-            # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
-            # Go through each whitelisted domain and check if what arrived is there
-            for domain in list(whitelisted_domains.keys()):
-                what_to_ignore = whitelisted_domains[domain]['what_to_ignore']
-                # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then test.slack.com
-                # should be ignored too. But not 'slack.com.test'
-                for domain_to_check in domains_to_check:
-                    main_domain = domain_to_check[-len(domain) :]
-                    if domain in main_domain:
-                        # We can ignore flows or alerts, what is it?
-                        if (
-                            'flows' in what_to_ignore
-                            or 'both' in what_to_ignore
-                        ):
-                            # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
-                            return True
-
-                # do we wanna whitelist flows coming from or going to this domain or both?
-                from_ = whitelisted_domains[domain]['from']
-
-                # Now check the related domains of the src IP
-                if 'src' in from_ or 'both' in from_:
-                    for domain_to_check in domains_to_check_src:
-                        main_domain = domain_to_check[-len(domain) :]
-                        if domain in main_domain:
-                            # We can ignore flows or alerts, what is it?
-                            if (
-                                'flows' in what_to_ignore
-                                or 'both' in what_to_ignore
-                            ):
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of src IP {column_values['saddr']}")
-                                return True
-
-                # Now check the related domains of the dst IP
-                if 'dst' in from_ or 'both' in from_:
-                    for domain_to_check in domains_to_check_dst:
-                        main_domain = domain_to_check[-len(domain) :]
-                        if domain in main_domain:
-                            # We can ignore flows or alerts, what is it?
-                            if (
-                                'flows' in what_to_ignore
-                                or 'both' in what_to_ignore
-                            ):
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
-                                #            f" to domain {domain} of dst IP {column_values['daddr']}")
-                                return True
+        for domain in domains_to_check:
+            if self.is_whitelisted_domain(domain, saddr, daddr):
+                return True
 
 
         if whitelisted_IPs := __database__.get_whitelist('IPs'):
