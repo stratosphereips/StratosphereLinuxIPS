@@ -60,6 +60,8 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_conn_dns_timer_thread = []
         # Cache list of connections that we already checked in the timer thread for ssh check
         self.connections_checked_in_ssh_timer_thread = []
+        # Cache list of connections that we already checked in the timer thread for ssl check
+        self.ssl_checked_in_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In mins
@@ -247,18 +249,69 @@ class Module(Module, multiprocessing.Process):
             return True
 
 
-    def check_pastebin_download(self, daddr, server_name, uid, ts, profileid, twid):
+    def check_pastebin_download(
+            self, daddr, server_name, uid, ts, profileid, twid, wait_time=120
+    ):
+        """
+        Alerts on downloads from pastebin.con with mor ethan 12000 bytes
+        :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
+                every time the timer is over, we multiply it by 2 and call the function again
+        """
+
         if 'pastebin' not in server_name:
             return False
 
-        # get the conn.log witht hte same uid, returns {uid: {actual flow..}}
+        # get the conn.log with the same uid, returns {uid: {actual flow..}}
         flow: dict = __database__.get_flow(profileid, twid, uid)
         flow = flow[uid]
-        # todo what if flow isn't found yet?
         # orig_bytes is number of payload bytes downloaded
         downloaded_bytes = flow.get('resp_bytes', 0)
         if downloaded_bytes > 12000:
             self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+
+            try:
+                self.ssl_checked_in_timer_thread.remove(uid)
+            except ValueError:
+                pass
+
+            # no need to wait 40 seconds for the connection to appear in conn.log
+            return True
+
+
+        if uid not in self.ssl_checked_in_timer_thread:
+            # comes here if we haven't started the timer thread for this uid before
+            # mark this ssl as checked
+            self.ssl_checked_in_timer_thread.append(uid)
+            params = [daddr, server_name, uid, ts, profileid, twid]
+
+            # print(f"@@@@@@@@@@@@@@@@@@  waiting 2 min s for {uid} to appear in conn.log")
+
+            # wait 2 min for the connection to appear in conn.log
+            # it appears in ssl.log as soon as it happens, and in conn.log as soon as it ends
+            timer = TimerThread(
+                wait_time, self.check_pastebin_download, params
+            )
+            timer.start()
+        else:
+            # It means we already waited 120 seconds this ssl with the Timer
+            # but still no connection for it.
+            try:
+                self.ssl_checked_in_timer_thread.remove(uid)
+            except ValueError:
+                pass
+
+            # maximum wait time for an ssl to appear in conn.log is 8 mins
+            if wait_time >= 120*4:
+                return False
+
+
+            # double the time and wait again
+            self.helper.set_evidence_pastebin_download(
+                daddr, downloaded_bytes, ts, profileid, twid, uid, wait_time=120*2
+            )
+            return True
+
+
 
 
     def detect_data_upload_in_twid(self, profileid, twid):
