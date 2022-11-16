@@ -1342,11 +1342,6 @@ class Main:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
-        if self.conf.use_p2p() and not self.args.interface:
-            print('P2P is only supported using an interface.\n'
-                  'set use_p2p=no in slips.conf and restart Slips.')
-            self.terminate_slips()
-
         if self.args.config and not os.path.exists(self.args.config):
             print(f"{self.args.config} doesn't exist. Stopping Slips")
             self.terminate_slips()
@@ -1692,6 +1687,10 @@ class Main:
             )
             self.zeek_folder = inputProcess.zeek_folder
             self.set_input_metadata()
+
+            if self.conf.use_p2p() and not self.args.interface:
+                self.print('Warning: P2P is only supported using an interface. Disabled P2P.')
+
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
