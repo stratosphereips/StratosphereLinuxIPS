@@ -247,6 +247,20 @@ class Module(Module, multiprocessing.Process):
             return True
 
 
+    def check_pastebin_download(self, daddr, server_name, uid, ts, profileid, twid):
+        if 'pastebin' not in server_name:
+            return False
+
+        # get the conn.log witht hte same uid, returns {uid: {actual flow..}}
+        flow: dict = __database__.get_flow(profileid, twid, uid)
+        flow = flow[uid]
+        # todo what if flow isn't found yet?
+        # orig_bytes is number of payload bytes downloaded
+        downloaded_bytes = flow.get('resp_bytes', 0)
+        if downloaded_bytes > 12000:
+            self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+
+
     def detect_data_upload_in_twid(self, profileid, twid):
         """
         For each contacted ip in this twid,
@@ -1176,6 +1190,7 @@ class Module(Module, multiprocessing.Process):
             ssl_info, ssl_info_from_db
         )
 
+
     def run(self):
         utils.drop_root_privs()
         while True:
@@ -1313,6 +1328,7 @@ class Module(Module, multiprocessing.Process):
                         self.check_connection_without_dns_resolution(
                             daddr, twid, profileid, timestamp, uid
                         )
+
 
                     # --- Detect Connection to multiple ports (for RAT) ---
                     self.detect_connection_to_multiple_ports(
@@ -1463,7 +1479,10 @@ class Module(Module, multiprocessing.Process):
                         twid = data['twid']
                         daddr = flow['daddr']
                         saddr = profileid.split('_')[1]
-                        server_name = flow.get('server_name')   # returns None if not found
+                        server_name = flow.get('server_name')
+
+                        self.check_pastebin_download(daddr, server_name, uid, timestamp, profileid, twid)
+
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
                             ip_identification = (

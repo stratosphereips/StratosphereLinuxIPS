@@ -146,6 +146,37 @@ class Helper:
             uid=uid,
         )
 
+
+    def set_evidence_pastebin_download(
+            self, daddr, bytes_downloaded, timestamp, profileid, twid, uid
+       ):
+        type_detection = 'dstip'
+        source_target_tag = 'Malware'
+        detection_info = daddr
+        type_evidence = 'PastebinDownload'
+        threat_level = 'info'
+        category = 'Anomaly.Behaviour'
+        confidence = 1
+        response_body_len = utils.convert_to_mb(bytes_downloaded)
+        description = (
+           f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+        )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+        return True
+
     def set_evidence_conn_without_dns(
         self, daddr, timestamp, profileid, twid, uid
     ):
