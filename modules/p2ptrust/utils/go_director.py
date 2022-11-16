@@ -338,6 +338,8 @@ class GoDirector:
         if evaluation != None:
             msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
             self.print(msg)
+            # log the reporter too
+            msg += f' from peer: {reporter}'
             self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
