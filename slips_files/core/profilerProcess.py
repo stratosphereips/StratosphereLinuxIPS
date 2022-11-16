@@ -1772,6 +1772,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.add_out_dns(
             self.profileid,
             self.twid,
+            self.column_values['daddr'],
             self.starttime,
             self.flow_type,
             self.uid,
