@@ -927,9 +927,9 @@ class Module(Module, multiprocessing.Process):
         if (
             not 'NXDOMAIN' in rcode_name
             or not query
-            or query.endswith('.in-addr.arpa')
+            or query.endswith('.arpa')
             or query.endswith('.local')
-            or self.whitelist.is_whitelisted_domain(query, saddr, daddr)
+            or self.whitelist.is_whitelisted_domain(query, saddr, daddr, 'alerts')
         ):
             return False
 
@@ -1542,10 +1542,10 @@ class Module(Module, multiprocessing.Process):
                     profileid = data['profileid']
                     twid = data['twid']
                     uid = data['uid']
+                    daddr = data.get('daddr', False)
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}
-                    daddr = flow_data.get('daddr', False)
                     domain = flow_data.get('query', False)
                     answers = flow_data.get('answers', False)
                     rcode_name = flow_data.get('rcode_name', False)

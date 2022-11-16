@@ -68,13 +68,14 @@ class Whitelist:
             return True
 
 
-    def is_whitelisted_domain_in_flow(self, whitelisted_domain, direction, domains_of_flow):
+    def is_whitelisted_domain_in_flow(self, whitelisted_domain, direction, domains_of_flow, ignore_type):
         """
         Given the domain of a flow, and a whitelisted domain,
         this function checks any of the flow domains
         is a subdomain or the same domain as the whitelisted domain
 
         :param whitelisted_domain: the domain we want to check if it exists in the domains_of_flow
+        :param ignore_type: alerts or flows or both
         :param direction: src or dst or both
         :param domains_of_flow: src domains of the src IP of the flow,
                                 or dst domains of the dst IP of the flow
@@ -94,17 +95,18 @@ class Whitelist:
                 if whitelisted_domain in main_domain:
                     # We can ignore flows or alerts, what is it?
                     if (
-                        'flows' in what_to_ignore
+                        ignore_type in what_to_ignore
                         or 'both' in what_to_ignore
                     ):
                         return True
         return False
 
-    def is_whitelisted_domain(self, domain_to_check, saddr, daddr):
+    def is_whitelisted_domain(self, domain_to_check, saddr, daddr, ignore_type):
         """
         :param domain_to_check: the domain we want to know if whitelisted or not
         :param saddr: saddr of the flow we're checking
         :param daddr: daddr of the flow we're checking
+        :param ignore_type: alerts or flows or both
         """
 
         whitelisted_domains = __database__.get_whitelist('domains')
@@ -128,22 +130,23 @@ class Whitelist:
             if whitelisted_domain in main_domain:
                 # We can ignore flows or alerts, what is it?
                 if (
-                    'flows' in what_to_ignore
+                    ignore_type in what_to_ignore
                     or 'both' in what_to_ignore
                 ):
                     # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
                     return True
 
 
-            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'src', src_domains_of_flow):
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'src', src_domains_of_flow, ignore_type):
                 # self.print(f"Whitelisting the domain {domain_to_check} because is related"
                 #            f" to domain {domain} of dst IP {column_values['daddr']}")
                 return True
 
-            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'dst', dst_domains_of_flow):
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'dst', dst_domains_of_flow, ignore_type):
                 # self.print(f"Whitelisting the domain {domain_to_check} because is
                 # related to domain {domain} of src IP {column_values['saddr']}")
                 return True
+        return False
 
 
     def is_whitelisted_flow(self, column_values, flow_type) -> bool:
@@ -171,7 +174,7 @@ class Whitelist:
         domains_to_check = [ssl_domain, http_domain, notice_domain]
 
         for domain in domains_to_check:
-            if self.is_whitelisted_domain(domain, saddr, daddr):
+            if self.is_whitelisted_domain(domain, saddr, daddr, 'flows'):
                 return True
 
 
