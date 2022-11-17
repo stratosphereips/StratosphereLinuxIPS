@@ -603,9 +603,9 @@ This module is responsibe for detecting scans such as:
 
 ### Vertical port scans
 
-Slips considers an IP performing a vertical port scan if it contacts 6 or more different destination ports in the same destination IP. The flows can be TCP or UDP, and both Established or Not Established. The initial threshold is 5 destination ports. On each flow the check is performed.
+Slips considers an IP performing a vertical port scan if it contacts 5 or more different destination ports to the same destination IP in at least one time window (usually 1hs). The flows can be TCP or UDP, and both Established or Not Established. On each arriving flow this check is performed.
 
-After detecting a vertical port scan, Slips waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one port scan alert per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
+After detecting a vertical port scan for the first time, if Slips detects new flows to 5 destination ports, then it triggers a waiting process to find out how many packets to new ports will arrive. For this it waits 10 seconds to see if more flows arrive, since in most port scans the attcker will scan more ports. This avoids generating one alert 'port scan' per flow in a long scan. Therfore Slips will wait until the scan finishes to alert on it. However, the first portscan is detected as soon as it happens so the analysts knows.
 
 If one alert was generated (Slips waited 10 seconds and no more flows arrived to new ports in that dst IP) then the counter resets and the same attacker needs to do _again_ more than threshold destinations ports in one IP to be detected. This avoids the problem that after 5 flows that generated an alert, the 6 flow also generates an alert.
 
