@@ -137,7 +137,9 @@ the same destination IP on the same destination port.
 ## Zeek alerts
 
 By default, Slips depends on Zeek for detecting different behaviours, for example 
-Self-signed certs, invalid certs, port-scans and address scans, and password guessing.
+Self-signed certs, invalid certs, port-scans, address scans, and password guessing.
+
+Password guessing is detected by zeek when 30 failed ssh non-successful logins over 30 mins.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
 Check 

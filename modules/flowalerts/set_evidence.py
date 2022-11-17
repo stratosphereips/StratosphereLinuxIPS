@@ -161,7 +161,8 @@ class Helper:
         start_time = __database__.get_slips_start_time()
         now = time.time()
         confidence = 0.8
-        if '-i' in sys.argv:
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if running_on_interface:
             diff = utils.get_time_diff(start_time, now, return_type='hours')
             if diff < 5:
                 confidence = 0.1

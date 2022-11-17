@@ -314,7 +314,7 @@ class Module(Module, multiprocessing.Process):
             # We're sure this is unsolicited arp
             confidence = 0.8
             threat_level = 'info'
-            description = 'sending unsolicited ARP'
+            description = 'broadcasting unsolicited ARP'
             type_evidence = 'UnsolicitedARP'
             # This may be arp spoofing
             category = 'Information'

@@ -298,7 +298,7 @@ class UpdateFileManager:
             except requests.exceptions.ReadTimeout:
                 error = f'Timeout reached while downloading the file {file_to_download}. Aborting.'
 
-            except requests.exceptions.ConnectionError:
+            except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
                 error = f'Connection error while downloading the file {file_to_download}. Aborting.'
 
         if error:

@@ -446,8 +446,9 @@ class Module(Module, multiprocessing.Process):
             return MAC
 
         # we don't have it in arp.log
-        if not '-i' in sys.argv:
-            # no mac in arp.log and can't use arp table, so no way to get the MAC
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if not running_on_interface:
+            # no mac in arp.log and can't use arp table, so no way to get the gateway MAC
             return
 
         # get it using arp table

@@ -254,6 +254,20 @@ class ArgumentParser(argparse.ArgumentParser):
             help='The redis-server port to use',
         )
         self.add_argument(
+            '-t',
+            '--testing',
+            action='store_true',
+            required=False,
+            help='used for testing slips',
+        )
+        self.add_argument(
+            '-g',
+            '--growing',
+            action='store_true',
+            required=False,
+            help='Treat the given zeek directory as growing. eg. zeek dirs generated when running on an interface',
+        )
+        self.add_argument(
             '-V',
             '--version',
             action='store_true',

@@ -90,7 +90,7 @@ def test_pcap(
 ):
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -162,7 +162,7 @@ def test_binetflow(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
+    command = f'./slips.py -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -188,12 +188,11 @@ def test_binetflow(
                 'bad SMTP login to 80.75.42.226',
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
-                'Detected Possible SSH bruteforce by using multiple SSH versions 9_1 then 8_1',
+                'Detected Possible SSH bruteforce',
                 'Incompatible certificate CN',
                 'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
-                'sending arp packet to a destination address outside of local network',
-                'Detected sending unsolicited ARP',
-                'Detected using incompatible user-agent',
+                'sending ARP packet to a destination address outside of local network',
+                'Detected broadcasting unsolicited ARP',
                 'suspicious user-agent'
             ],
             'test9-mixed-zeek-dir/',
@@ -220,7 +219,7 @@ def test_zeek_dir(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_dir) == False
@@ -269,7 +268,7 @@ def test_zeek_conn_log(
     output_dir = create_output_dir(output_dir)
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
     assert has_errors(output_dir) == False
@@ -299,7 +298,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     expected_evidence2 = 'vertical port scan'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -332,7 +331,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
+    command = f'./slips.py -t -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
@@ -369,7 +368,7 @@ def test_conf_file(
     """
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test.conf  ' \
+    command = f'./slips.py -t -f {pcap_path} -o {output_dir} -c tests/test.conf  ' \
               f'-P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
@@ -434,7 +433,7 @@ def test_conf_file2(
 
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
-    command = f'./slips.py -f {pcap_path} -o {output_dir} -c tests/test2.conf  ' \
+    command = f'./slips.py -t -f {pcap_path} -o {output_dir} -c tests/test2.conf  ' \
               f'-P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)

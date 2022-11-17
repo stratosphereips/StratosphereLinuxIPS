@@ -338,6 +338,8 @@ class GoDirector:
         if evaluation != None:
             msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
             self.print(msg)
+            # log the reporter too
+            msg += f' from peer: {reporter}'
             self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
@@ -351,7 +353,7 @@ class GoDirector:
         evaluation: dict,
     ):
         """
-        Handle reported score and confidence
+        Handle reported score and confidence from another peer
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -408,9 +410,10 @@ class GoDirector:
         self.print(result, 2, 0)
         # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
         # save all report info in the db
+        # convert ts to human readable format
         report_info = {
             'reporter':reporter,
-            'report_time':report_time,
+            'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
         __database__.store_p2p_report(key, report_info)
