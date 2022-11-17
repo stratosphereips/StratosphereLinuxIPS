@@ -50,7 +50,7 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
-RUN git clone -b develop https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
 
