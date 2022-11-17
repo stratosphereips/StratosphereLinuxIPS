@@ -60,7 +60,7 @@ RUN sed -i "s/analysis_direction = out/analysis_direction = yes/g" ${SLIPS_DIR}/
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-image/requirements-macos-m1-docker.txt
+RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-P2P-image/requirements-macos-m1-docker.txt
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
