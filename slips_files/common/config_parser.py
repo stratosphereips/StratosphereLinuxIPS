@@ -710,7 +710,7 @@ class ConfigParser(object):
                  '-cb' in sys.argv
                 or '-p' in sys.argv
         ):
-            to_ignore.append('blocking')
+            to_ignore.append('Blocking')
 
         # leak detector only works on pcap files
         if input_type != 'pcap':
