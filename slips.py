@@ -762,7 +762,7 @@ class Main:
                         if len(self.PIDs) > len(modules_to_be_killed_last) and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
                                 if 'Update Manager' not in finished_modules:
-                                    self.print(
+                                    print(
                                         f"[Main] Update Manager may take several minutes "
                                         f"to finish updating 45+ TI files."
                                     )
