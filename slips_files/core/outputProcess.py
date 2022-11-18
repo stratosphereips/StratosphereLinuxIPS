@@ -231,7 +231,7 @@ class OutputProcess(multiprocessing.Process):
             self.log_error(sender, msg)
 
     def shutdown_gracefully(self):
-        self.log_line('[Output Process]', 'Stopping output process. '
+        self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
