@@ -105,5 +105,5 @@ if __name__ == '__main__':
     zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing')
     try:
         os.rmdir(zeek_tmp_dir)
-    except FileNotFoundError:
+    except (FileNotFoundError, OSError):
         pass
