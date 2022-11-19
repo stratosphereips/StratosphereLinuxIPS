@@ -420,7 +420,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def check_if_gratutitous_ARP(
-            saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation
+            self, saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation
         ):
         """
         Check if an ARP packet is gratuitous
@@ -485,7 +485,7 @@ class Module(Module, multiprocessing.Process):
                     uid = flow['uid']
 
                     # Check if it is gratuitous ARP
-                    is_grautitous = check_if_gratutitous_ARP(
+                    is_gratuitous = self.check_if_gratutitous_ARP(
                                     saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation
                                     )
                     if is_gratuitous:
