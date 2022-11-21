@@ -135,9 +135,15 @@ class Module(Module, multiprocessing.Process):
             direction = 'from'
         elif 'dst' in type_detection:
             direction = 'to'
-        ip_identification = __database__.getIPIdentification(ip)
 
-        if self.is_dns_response :
+        # getting the ip identification adds ti description and tags to the returned str
+        # in this alert, we only want the description and tags of the TI feed that has
+        # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
+        # setting it to true results in the following alert
+        # blacklisted ip description: <Spamhaus description> source: ipsum
+        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False).strip()
+
+        if self.is_dns_response:
             description = (
                 f'DNS answer with a blacklisted ip: {ip} '
                 f'for query: {self.dns_query} '
@@ -145,7 +151,7 @@ class Module(Module, multiprocessing.Process):
         else:
             description = f'connection {direction} blacklisted IP {ip} '
 
-        description += f'{ip_identification}. Source: {ip_info["source"]}.'
+        description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
         tags = ''
         if tags_temp := ip_info.get('tags', False):

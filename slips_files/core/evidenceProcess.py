@@ -617,8 +617,7 @@ class EvidenceProcess(multiprocessing.Process):
                     description = data.get('description')
                     timestamp = data.get('stime')
                     uid = data.get('uid')
-                    # in case of blacklisted ip evidence, we add the tag to the description like this [tag]
-                    tags = data.get('tags', False)
+                    # tags = data.get('tags', False)
                     confidence = data.get('confidence', False)
                     threat_level = data.get('threat_level', False)
                     category = data.get('category', False)

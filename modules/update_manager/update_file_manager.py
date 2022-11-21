@@ -1064,7 +1064,7 @@ class UpdateFileManager:
                 description_column = None
 
                 while line := feed.readline():
-                    # Try to find the line that has coluself.mn names
+                    # Try to find the line that has column names
                     for keyword in self.header_keywords:
                         if line.startswith(keyword):
                             # looks like the column names, search where is the description column
@@ -1135,6 +1135,7 @@ class UpdateFileManager:
                             ), 0, 1,
                         )
                         continue
+
                     if data_type == 'domain':
                         # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
                         try:
