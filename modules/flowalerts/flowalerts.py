@@ -803,8 +803,10 @@ class Module(Module, multiprocessing.Process):
         """
         Function to check if an SSH connection logged in successfully
         """
-        if auth_success:
+        # it's true in zeek json files, T in zeke tab files
+        if auth_success == 'true' or auth_success == 'T':
             self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
+
         else:
             self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, auth_success)
 
@@ -1144,6 +1146,10 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
             )
 
+    def check_ssh_password_guessing(self):
+        #todo
+        pass
+
     def check_malicious_ssl(self, ssl_info):
         source = ssl_info.get('source', '')
         analyzers = ssl_info.get('analyzers', '')
@@ -1329,9 +1335,12 @@ class Module(Module, multiprocessing.Process):
                     flow_dict = json.loads(flow)
                     timestamp = flow_dict['stime']
                     uid = flow_dict['uid']
+                    # it's set to true in zeek json files, T in zeke tab files
                     auth_success = flow_dict['auth_success']
+
                     self.check_successful_ssh(uid, timestamp, profileid, twid, auth_success)
-                    #self.check_ssh_password_guessing()
+                    if auth_success not in ('true', 'T'):
+                        self.check_ssh_password_guessing()
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = __database__.get_message(self.c3)
