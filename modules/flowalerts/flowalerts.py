@@ -700,7 +700,7 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
 
-    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid, message):
+    def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid):
         """
         Check for auth_success: true in the given zeek flow
         """
@@ -738,13 +738,13 @@ class Module(Module, multiprocessing.Process):
             self.connections_checked_in_ssh_timer_thread.append(
                 uid
             )
-            params = [uid, timestamp, profileid, twid, message]
+            params = [uid, timestamp, profileid, twid]
             timer = TimerThread(
                 15, self.detect_successful_ssh_by_zeek, params
             )
             timer.start()
 
-    def detect_successful_ssh_by_slips(self, uid, timestamp, profileid, twid, message):
+    def detect_successful_ssh_by_slips(self, uid, timestamp, profileid, twid, auth_success):
         """
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
@@ -793,38 +793,22 @@ class Module(Module, multiprocessing.Process):
                 self.connections_checked_in_ssh_timer_thread.append(
                     uid
                 )
-                params = [message]
+                params = [uid, timestamp, profileid, twid, auth_success]
                 timer = TimerThread(
                     15, self.check_successful_ssh, params
                 )
                 timer.start()
 
-    def check_successful_ssh(self, message):
+    def check_successful_ssh(self, uid, timestamp, profileid, twid, auth_success):
         """
         Function to check if an SSH connection logged in successfully
         """
-        try:
-            data = message['data']
-            data = json.loads(data)
-            profileid = data['profileid']
-            twid = data['twid']
-            # Get flow as a json
-            flow = data['flow']
-            flow_dict = json.loads(flow)
-            timestamp = flow_dict['stime']
-            uid = flow_dict['uid']
-            if auth_success := flow_dict['auth_success']:
-                self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid, message)
-            else:
-                self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, message)
+        if auth_success:
+            self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
+        else:
+            self.detect_successful_ssh_by_slips(uid, timestamp, profileid, twid, auth_success)
 
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on check_ssh() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return False
+
 
     def detect_incompatible_CN(
             self,
@@ -1336,7 +1320,18 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_ssh'):
-                    self.check_successful_ssh(message)
+                    data = message['data']
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    flow_dict = json.loads(flow)
+                    timestamp = flow_dict['stime']
+                    uid = flow_dict['uid']
+                    auth_success = flow_dict['auth_success']
+                    self.check_successful_ssh(uid, timestamp, profileid, twid, auth_success)
+                    #self.check_ssh_password_guessing()
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = __database__.get_message(self.c3)
