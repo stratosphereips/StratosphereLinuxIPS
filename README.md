@@ -127,6 +127,37 @@ In Linux OS, the Slips can be used to analyze and **block** network traffic on t
 You can build the Docker of Slips, but consider that system requirements vary depending on the operating system, primarily because of TensorFlow. TensorFlow accesses the hardware directly, so Docker will not always work well. For example, in macOS M1 computers, the use of TensorFlow from inside Docker is still not supported. 
 
 
+
+
+```mermaid
+    MacOS[MacOS] --> |M1| p2p_m1
+    p2p_m1 --> |yes| macosm1-P2P-image
+    p2p_m1 --> |no| macosm1-image
+
+    MacOS --> |Other Processor| p2p_other_processor
+    p2p_other_processor --> |yes| macos_other_processor_p2p
+    p2p_other_processor --> |no| macos_other_processor_nop2p
+
+    Windows --> linux_p2p
+    Linux --> linux_p2p
+    linux_p2p --> |yes| linux_p2p_image
+    linux_p2p --> |no| slips_image
+    
+    
+    p2p_other_processor{P2P Support}
+    linux_p2p_image[P2p-image]
+    
+    p2p_m1{P2P Support}
+    slips_image[ubuntu-image]
+
+    macos_other_processor_p2p[todo]
+    macos_other_processor_nop2p[todo]
+
+    linux_p2p{P2P Support}
+
+```
+
+
 #### Building a Docker For macOS
 To build a Docker image of Slips for macOS follow the next steps:
 
