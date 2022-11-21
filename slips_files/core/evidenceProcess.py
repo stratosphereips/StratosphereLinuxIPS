@@ -211,7 +211,7 @@ class EvidenceProcess(multiprocessing.Process):
         line wraps the given text so it looks nice
         """
         # max chars per line
-        wrap_at = 120
+        wrap_at = 155
 
         wrapped_txt = ''
         for indx in range(0, len(txt), wrap_at):
