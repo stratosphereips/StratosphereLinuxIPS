@@ -24,7 +24,7 @@ import sys
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'Template Module'
+    name = 'Template'
     description = 'Template module'
     authors = ['Template Author']
 

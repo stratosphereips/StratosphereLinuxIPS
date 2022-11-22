@@ -1537,10 +1537,11 @@ class Database(ProfilingFlowsDatabase, object):
             return json.loads(tws)
         return []
 
-    def getIPIdentification(self, ip: str):
+    def getIPIdentification(self, ip: str, get_ti_data=True):
         """
         Return the identification of this IP based
         on the data stored so far
+        :param get_ti_data: do we want to get info about this IP from out TI lists?
         """
         current_data = self.getIPData(ip)
         identification = ''
@@ -1559,7 +1560,7 @@ class Database(ProfilingFlowsDatabase, object):
             if 'reverse_dns' in current_data:
                 identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
 
-            if 'threatintelligence' in current_data:
+            if 'threatintelligence' in current_data and get_ti_data:
                 identification += (
                     'Description: '
                     + current_data['threatintelligence']['description']
