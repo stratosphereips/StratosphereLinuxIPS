@@ -27,7 +27,7 @@ class Module(Module, multiprocessing.Process):
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
-        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com']
+        self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
 
     def print(self, text, verbose=1, debug=0):
         """

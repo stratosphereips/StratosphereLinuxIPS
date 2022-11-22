@@ -494,7 +494,7 @@ Available detection are:
 Due to the usage of empty connections to popular site by malware to check for internet connectivity,
 We consider this type of behaviour suspicious activity that shouldn't happen
 
-We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' etc.
+We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' , 'duckduckgo.com' etc.
 
 ### Suspicious user agents
 
