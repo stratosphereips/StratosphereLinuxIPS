@@ -256,7 +256,7 @@ class Module(Module, multiprocessing.Process):
             self, daddr, server_name, uid, ts, profileid, twid, wait_time=120
     ):
         """
-        Alerts on downloads from pastebin.con with mor ethan 12000 bytes
+        Alerts on downloads from pastebin.com with more than 12000 bytes
         :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
                 every time the timer is over, we multiply it by 2 and call the function again
         """

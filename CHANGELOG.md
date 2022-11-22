@@ -8,8 +8,11 @@
 - Make sure the domains that are part of DGA alerts are not whitelisted
 - Don't stop slips when p2p is enabled but slips is given a file, not an interface.
 - Add Detection of SSH password guessing by slips in addition to zeek.
+- Blacklist IP used by blackmatter for exfiltration in config/own_malicious_iocs
+- Detect empty connections to duckduckgo used by blackmatter for checking internet connection
+- Fix pastebin downloads detection to include HTTPs too
+- Change colors and CLI evidence format
 - 
-
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek
