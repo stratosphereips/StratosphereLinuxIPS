@@ -1229,6 +1229,7 @@ class ProfilingFlowsDatabase(object):
             'host_key_alg': host_key_alg,
             'host_key': host_key,
             'stime': stime,
+            'daddr': daddr
         }
         # Convert to json string
         data = json.dumps(data)
