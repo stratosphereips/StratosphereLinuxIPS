@@ -457,7 +457,7 @@ class EvidenceProcess(multiprocessing.Process):
         #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
         blocking_data = {
             'ip': ip,
-            'block' : True,
+            'block': True,
         }
         blocking_data = json.dumps(blocking_data)
         __database__.publish('new_blocking', blocking_data)

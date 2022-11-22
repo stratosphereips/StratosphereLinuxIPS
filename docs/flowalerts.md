@@ -139,12 +139,18 @@ the same destination IP on the same destination port.
 By default, Slips depends on Zeek for detecting different behaviours, for example 
 Self-signed certs, invalid certs, port-scans, address scans, and password guessing.
 
-Password guessing is detected by zeek when 30 failed ssh non-successful logins over 30 mins.
+Password guessing is detected by zeek when 30 failed ssh logins happen over 30 mins.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
 Check 
 [PING Sweeps](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#ping-sweeps) 
 section for more info 
+
+## Password Guessing
+
+Password guessing is detected using 2 ethods in slips
+1. by Zeek engine. when 30 failed ssh logins happen over 30 mins.
+2. By slips. when 20 failed ssh logins happen over 1 tiemwindow.
 
 ## DGA
 
