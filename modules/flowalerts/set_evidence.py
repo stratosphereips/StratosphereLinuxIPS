@@ -251,7 +251,7 @@ class Helper:
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'
-        description += f'.Detected by {by}.'
+        description += f'. by {by}.'
 
         __database__.setEvidence(
             type_evidence,

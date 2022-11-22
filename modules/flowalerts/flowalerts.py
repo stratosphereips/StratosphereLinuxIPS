@@ -80,6 +80,9 @@ class Module(Module, multiprocessing.Process):
         self.arpa_scan_threshold = 10
         # If 1 flow uploaded this amount of MBs or more, slips will alert data upload
         self.flow_upload_threshold = 100
+        # after this number of failed ssh logins, we alert pw guessing
+        self.pw_guessing_threshold = 20
+        self.password_guessing_cache = {}
 
 
     def read_configuration(self):
@@ -1146,9 +1149,31 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
             )
 
-    def check_ssh_password_guessing(self):
-        #todo
-        pass
+    def check_ssh_password_guessing(self, daddr, uid, timestamp, profileid, twid, auth_success):
+        """
+        This is only called when there's a failed ssh attempt
+        alerts ssh pw bruteforce when there's more than 20 failed attempts by the same ip to the same IP
+        """
+        cache_key = f'{profileid}-{twid}-{daddr}'
+        # update the number of times this ip performed a failed ssh login
+        if cache_key in self.password_guessing_cache:
+            self.password_guessing_cache[cache_key].append(uid)
+        else:
+            self.password_guessing_cache = {cache_key: [uid]}
+
+        conn_count = len(self.password_guessing_cache[cache_key])
+
+        if conn_count >= self.pw_guessing_threshold:
+            description = f'SSH password guessing to IP {daddr}'
+            uids = self.password_guessing_cache[cache_key]
+            self.helper.set_evidence_pw_guessing(
+                description, timestamp, profileid, twid, uids, conn_count, profileid.split('_')[-1], by='Slips'
+            )
+
+            #reset the counter
+            del self.password_guessing_cache[cache_key]
+
+
 
     def check_malicious_ssl(self, ssl_info):
         source = ssl_info.get('source', '')
@@ -1332,15 +1357,16 @@ class Module(Module, multiprocessing.Process):
                     twid = data['twid']
                     # Get flow as a json
                     flow = data['flow']
-                    flow_dict = json.loads(flow)
-                    timestamp = flow_dict['stime']
-                    uid = flow_dict['uid']
+                    flow = json.loads(flow)
+                    timestamp = flow['stime']
+                    uid = flow['uid']
+                    daddr = flow['daddr']
                     # it's set to true in zeek json files, T in zeke tab files
-                    auth_success = flow_dict['auth_success']
+                    auth_success = flow['auth_success']
 
                     self.check_successful_ssh(uid, timestamp, profileid, twid, auth_success)
                     if auth_success not in ('true', 'T'):
-                        self.check_ssh_password_guessing()
+                        self.check_ssh_password_guessing(daddr, uid, timestamp, profileid, twid, auth_success)
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = __database__.get_message(self.c3)
@@ -1439,8 +1465,11 @@ class Module(Module, multiprocessing.Process):
                             )
                         # --- Detect password guessing by zeek ---
                         if 'Password_Guessing' in note:
+                            scanning_ip = msg.split(' appears')[0]
+                            conn_count = int(msg.split('in ')[1].split('connections')[0])
+                            description = f'password guessing. {msg}'
                             self.helper.set_evidence_pw_guessing(
-                                msg, timestamp, profileid, twid, uid
+                                description, timestamp, profileid, twid, uid, conn_count, scanning_ip, by='Zeek'
                             )
 
                 # --- Detect maliciuos JA3 TLS servers ---
@@ -1632,10 +1661,10 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                return True
+            # except Exception as inst:
+            #     exception_line = sys.exc_info()[2].tb_lineno
+            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            #     self.print(str(type(inst)), 0, 1)
+            #     self.print(str(inst.args), 0, 1)
+            #     self.print(str(inst), 0, 1)
+            #     return True
