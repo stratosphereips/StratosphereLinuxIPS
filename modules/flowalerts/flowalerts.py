@@ -981,21 +981,22 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
-    def detect_DGA(self, rcode_name, query, stime, profileid, twid, uid):
+    def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
         Ignore queries done to *.in-addr.arpa domains and to *.local domains
         """
-
-
-        # don't count nxdomains to cymru.com as DGA as they're made
-        # by slips to get the range of an ip
+        saddr = profileid.split('_')[-1]
+        # check whitelisted queries because we
+        # don't want to count nxdomains to cymru.com or spamhaus as DGA as they're made
+        # by slips
         if (
             not 'NXDOMAIN' in rcode_name
-            or query.endswith('.in-addr.arpa')
-            or query.endswith('.local')
             or not query
+            or query.endswith('.arpa')
+            or query.endswith('.local')
+            or self.whitelist.is_whitelisted_domain(query, saddr, daddr, 'alerts')
         ):
             return False
 
@@ -1613,6 +1614,7 @@ class Module(Module, multiprocessing.Process):
                     profileid = data['profileid']
                     twid = data['twid']
                     uid = data['uid']
+                    daddr = data.get('daddr', False)
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}
@@ -1631,7 +1633,7 @@ class Module(Module, multiprocessing.Process):
                         )
                     if rcode_name:
                         self.detect_DGA(
-                            rcode_name, domain, stime, profileid, twid, uid
+                            rcode_name, domain, stime, daddr, profileid, twid, uid
                         )
 
                     if domain:

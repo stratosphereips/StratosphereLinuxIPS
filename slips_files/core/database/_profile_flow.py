@@ -1588,6 +1588,7 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
+        daddr,
         stime,
         flowtype,
         uid,
@@ -1631,6 +1632,7 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
             'uid': uid,
             'rcode_name': rcode_name,
+            'daddr': daddr
         }
 
         to_send = json.dumps(to_send)
