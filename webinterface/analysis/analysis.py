@@ -4,7 +4,6 @@ import json
 from collections import defaultdict
 from datetime import datetime
 from database.database import __database__
-from database.signals import message_sent
 
 analysis = Blueprint('analysis', __name__, static_folder='static', static_url_path='/analysis/static',
                      template_folder='templates')

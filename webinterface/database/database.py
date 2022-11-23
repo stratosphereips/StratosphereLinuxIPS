@@ -25,7 +25,3 @@ class Database(object):
 
 
 __database__ = Database()
-
-@message_sent.connect
-def update_db(app, port, dbnumber):
-    __database__.set_db(port, dbnumber)

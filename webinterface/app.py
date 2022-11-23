@@ -1,7 +1,5 @@
 from flask import Flask, render_template, request, redirect, url_for, current_app
 from database.database import __database__
-from database.signals import message_sent
-
 from analysis.analysis import analysis
 from general.general import general
 from argparse import ArgumentParser
