@@ -3,6 +3,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 import platform
 import sys
 
@@ -209,16 +210,17 @@ class Module(Module, multiprocessing.Process):
           delete : to delete an existing rule
         """
 
-        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} -m comment --comment "Slips rule" >/dev/null 2>&1'
+        command = f'{self.sudo}iptables --{action} slipsBlocking {flag} {ip_to_block} ' \
+                  f'-m comment --comment "Slips rule" >/dev/null 2>&1'
         # Add the options constructed in block_ip or unblock_ip to the iptables command
         for key in options.keys():
             command += options[key]
         command += ' -j DROP'
         # Execute
         exit_status = os.system(command)
+
         # 0 is the success value
-        success = False if exit_status != 0 else True
-        return success
+        return exit_status == 0
 
     def is_ip_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not"""
@@ -245,11 +247,15 @@ class Module(Module, multiprocessing.Process):
         By default this function blocks all traffic from and to the given ip.
         """
 
+        if type(ip_to_block) != str:
+            return False
+
         # Make sure ip isn't already blocked before blocking
+        if self.is_ip_blocked(ip_to_block):
+            return False
+
         if (
-            type(ip_to_block) == str
-            and not self.is_ip_blocked(ip_to_block)
-            and self.firewall == 'iptables'
+            self.firewall == 'iptables'
         ):
             # Blocking in iptables
             # Set the default behaviour to block all traffic from and to an ip
@@ -270,6 +276,9 @@ class Module(Module, multiprocessing.Process):
                     flag='-s',
                     options=options,
                 )
+                if blocked:
+                    self.print(f'Blocked all traffic from: {ip_to_block}')
+
             if to:
                 # Add rule to block traffic to ip_to_block (-d)
                 blocked = self.exec_iptables_command(
@@ -278,6 +287,9 @@ class Module(Module, multiprocessing.Process):
                     flag='-d',
                     options=options,
                 )
+                if blocked:
+                    self.print(f'Blocked all traffic to: {ip_to_block}')
+
             if block_for:
                 time_of_blocking = time.time()
                 #  unblock ip after block_for period passes
@@ -299,14 +311,9 @@ class Module(Module, multiprocessing.Process):
 
             if blocked:
                 # Successfully blocked an ip
-                self.print('Blocked: ' + ip_to_block)
                 return True
 
-        return (
-            type(ip_to_block) == str,
-            self.is_ip_blocked(ip_to_block),
-            self.firewall,
-        )
+        return False
 
     def unblock_ip(
         self,
@@ -368,11 +375,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 # There's an IP that needs to be blocked
-                if (
-                    message
-                    and message['channel'] == 'new_blocking'
-                    and message['type'] == 'message'
-                ):
+                if utils.is_msg_intended_for(message, 'new_blocking'):
                     # message['data'] in the new_blocking channel is a dictionary that contains
                     # the ip and the blocking options
                     # Example of the data dictionary to block or unblock an ip:
