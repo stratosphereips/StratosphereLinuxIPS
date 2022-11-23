@@ -11,6 +11,10 @@ def create_app():
     return app
 
 
+def connect_db(port_num=6379, db_num=0):
+    __database__.connect_to_database(port_num, db_num)
+
+
 app = create_app()
 
 
@@ -31,17 +35,12 @@ def read_redis_port():
 def index():
     return render_template('app.html', title='Slips')
 
-# Example of redirect and signal sent
+
 @app.route('/db/<new_port>')
-def get_post_javascript_data(new_port):
-    print("app: recevied port")
-    message_sent.send(
-        current_app._get_current_object(),
-        port=int(new_port),
-        dbnumber=0
-    )
-    print("redirect")
-    return redirect(url_for('index'))
+def choose_db(new_port):
+    connect_db(int(new_port), 0)
+    return None
+
 
 @app.route('/info')
 def set_pcap_info():
@@ -57,6 +56,9 @@ if __name__ == '__main__':
     parser.add_argument('-p')
     args = parser.parse_args()
     port = args.p
+
+    if port:
+        connect_db(port)
 
     app.register_blueprint(analysis, url_prefix="/analysis")
 
