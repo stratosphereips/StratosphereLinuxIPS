@@ -522,6 +522,23 @@ class EvidenceProcess(multiprocessing.Process):
                 res[evidence_ID] = evidence_info
         return res
 
+    def delete_evidence_done_by_others(self, tw_evidence):
+        """
+        given all the tw evidence, we should only consider evidence that makes this given
+        profile malicious, aka evidence of this profile attacking others.
+        """
+        res = {}
+        for evidence_ID, evidence_info in tw_evidence.items():
+            evidence_info = json.loads(evidence_info)
+            type_detection = evidence_info.get('type_detection', '')
+            # the following type detections are the ones
+            # expected to be seen when we are attacking others
+            # marking this profileid (srcip) as malicious
+            if type_detection in ('srcip', 'sport', 'srcport'):
+                res[evidence_ID] = json.dumps(evidence_info)
+
+        return res
+
 
     def get_evidence_for_tw(self, profileid, twid):
         # Get all the evidence for this profile in this TW
@@ -533,6 +550,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         tw_evidence: dict = json.loads(tw_evidence)
         tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
+        tw_evidence = self.delete_evidence_done_by_others( tw_evidence)
         tw_evidence = self.delete_whitelisted_evidence(tw_evidence)
         return tw_evidence
 
