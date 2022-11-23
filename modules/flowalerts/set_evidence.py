@@ -248,9 +248,9 @@ class Helper:
         confidence = 1
         threat_level = 'high'
         category = 'Anomaly.Connection'
-        type_detection = 'dstip'
+        type_detection = 'srcip'
         type_evidence = 'UnknownPort'
-        detection_info = daddr
+        detection_info = profileid.split('_')[-1]
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
             f'Connection to unknown destination port {dport}/{proto.upper()} '
