@@ -212,16 +212,14 @@ class TrustDB:
         :param peerid: the id of the peer we want the ip of
         """
         cache_cur = self.conn.execute(
-            'SELECT MAX(update_time) AS ip_update_time, ipaddress '
-            'FROM peer_ips '
-            'WHERE peerid = ?;',
-            (peerid),
+            'SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;',
+            ((peerid),)
         )
         res = cache_cur.fetchone()
         if res:
-            last_ipdate_time, ip = res
-            print(f"@@@@@@@@@@@@@@@@@@  peerid {peerid} has ip {ip} last_ipdate_time: {last_ipdate_time}")
-            return last_ipdate_time, ip
+            last_update_time, ip = res
+            print(f"@@@@@@@@@@@@@@@@@@  peerid {peerid} has ip {ip} last_ipdate_time: {last_update_time}")
+            return last_update_time, ip
         return False
 
 
