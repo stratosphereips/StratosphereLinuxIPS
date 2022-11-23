@@ -445,7 +445,7 @@ class GoDirector:
 
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
-        ip_identification = __database__.getIPIdentification(ip)
+        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False)
         last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
 
         # this should never happen. if we have a report, we will have a reporter
