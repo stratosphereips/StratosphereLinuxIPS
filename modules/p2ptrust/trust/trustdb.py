@@ -218,9 +218,8 @@ class TrustDB:
         res = cache_cur.fetchone()
         if res:
             last_update_time, ip = res
-            print(f"@@@@@@@@@@@@@@@@@@  peerid {peerid} has ip {ip} last_ipdate_time: {last_update_time}")
             return last_update_time, ip
-        return False
+        return False, False
 
 
 
