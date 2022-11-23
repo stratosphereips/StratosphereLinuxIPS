@@ -427,7 +427,6 @@ class GoDirector:
 
         # create a new profile for the reported ip
         # with the width from slips.conf and the starttime as the report time
-        print(f"@@@@@@@@@@@@@@@@@@  reported is {self.trustdb.get_ip_of_peer(reporter)}")
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
             # print(f"@@@@@@@@@@@@@@@@@@ created profile for {key} reported by {report_time} .. {report_time} .. {self.width}")
@@ -447,11 +446,12 @@ class GoDirector:
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
         ip_identification = __database__.getIPIdentification(ip)
-        description = f'attacking another peer: {reporter}. threat level: {threat_level} confidence: {confidence} {ip_identification}'
-        #todo
-        twid = []
-        uid = []
-
+        reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+        description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
+                      f'confidence: {confidence} {ip_identification}'
+        # get the tw of this report time
+        twid = __database__.getTWofTime(profileid_of_attacker, timestamp)
+        uid = ''
         __database__.setEvidence(
             type_evidence,
             type_detection,
