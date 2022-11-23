@@ -243,6 +243,7 @@ class Utils(object):
             IPs.append('127.0.0.1')
         finally:
             s.close()
+
         # get public ip
         command = f'curl -m 5 -s http://ipinfo.io/json'
         result = subprocess.run(command.split(), capture_output=True)
