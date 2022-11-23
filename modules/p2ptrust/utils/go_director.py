@@ -450,7 +450,13 @@ class GoDirector:
         description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
         # get the tw of this report time
-        twid = __database__.getTWofTime(profileid_of_attacker, timestamp)
+        if twid := __database__.getTWofTime(profileid_of_attacker, timestamp):
+            twid = twid[0]
+        else:
+            # create a new twid for the attacker profile that has the
+            # report time to add this evidence to
+            twid = __database__.get_timewindow(timestamp, profileid_of_attacker)
+
         uid = ''
         __database__.setEvidence(
             type_evidence,
