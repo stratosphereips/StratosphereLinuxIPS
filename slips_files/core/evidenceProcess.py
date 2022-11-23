@@ -435,28 +435,32 @@ class EvidenceProcess(multiprocessing.Process):
         alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
-    def decide_blocking(self, ip, profileid, twid, ip_direction) -> bool:
+    def decide_blocking(self, profileid) -> bool:
         """
         Decide whether to block or not and send to the blocking module
         :param ip: IP to block
-        :param ip_direction: either src or dst ip
-        profileid and twid are used to log the blocking to alerts.log and other log files.
         """
         # # ip_direction is the direction of the last evidence, it's irrelevant! #TODO
         # if ip_direction != 'dstip':
         #     return False
         running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         if not (running_on_interface and '-p' in sys.argv):
-            # bloc+king is only supported when running on an interface
+            # blocking is only supported when running on an interface
             return False
+
+        # now since this source ip(profileid) caused an alert,
+        # it means it caused so many evidence(attacked others a lot)
+        # that we decided to alert and block it
+        ip_to_block = profileid.split('_')[-1]
 
         # Make sure we don't block our own IP
-        if ip in self.our_ips:
+        if ip_to_block in self.our_ips:
             return False
 
-        #  TODO: edit the options in blocking_data, by default it'll block all traffic to or from this ip
+        #  TODO: edit the options in blocking_data, by default it'll block
+        #  all traffic to or from this ip
         blocking_data = {
-            'ip': ip,
+            'ip': ip_to_block,
             'block': True,
         }
         blocking_data = json.dumps(blocking_data)
@@ -791,15 +795,7 @@ class EvidenceProcess(multiprocessing.Process):
                                     )
                                     self.notify.show_popup(alert_to_print)
 
-                                # make sure we're blocking IPs only.
-                                # for now, always mark as blocked until we have working logic for the blocking module
-                                if (
-                                        ('ip' in type_detection
-                                            and self.decide_blocking(
-                                                detection_info, profileid, twid, type_detection
-                                            )
-                                        ) or True
-                                ):
+                                if self.decide_blocking(profileid):
                                     self.mark_as_blocked(
                                         profileid,
                                         twid,
