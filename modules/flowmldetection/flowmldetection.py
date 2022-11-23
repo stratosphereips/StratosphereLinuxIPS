@@ -27,7 +27,7 @@ warnings.warn = warn
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'flowmldetection'
+    name = 'Flow ML Detection'
     description = (
         'Train or test a Machine Learning model to detect malicious flows'
     )
@@ -44,8 +44,6 @@ class Module(Module, multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         # Read the configuration
         self.read_configuration()
-        # Channel timeout
-        self.timeout = 0.00000001
         # Minum amount of new lables needed to trigger the train
         self.minimum_lables_to_retrain = 50
         # To plot the scores of training
@@ -439,7 +437,7 @@ class Module(Module, multiprocessing.Process):
         self.read_model()
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
 
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

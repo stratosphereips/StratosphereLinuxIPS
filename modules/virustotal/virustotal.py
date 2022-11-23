@@ -17,7 +17,7 @@ import validators
 
 
 class Module(Module, multiprocessing.Process):
-    name = 'virustotal'
+    name = 'Virustotal'
     description = 'IP, domain and file hash lookup on Virustotal'
     authors = [
         'Dita Hollmannova, Kamila Babayeva',
@@ -56,8 +56,6 @@ class Module(Module, multiprocessing.Process):
         self.http = urllib3.PoolManager(
             cert_reqs='CERT_REQUIRED', ca_certs=certifi.where()
         )
-        self.timeout = 0.0000001
-        self.counter = 0
         # create the queue thread
         self.api_calls_thread = threading.Thread(
             target=self.API_calls_thread, daemon=True
@@ -118,6 +116,7 @@ class Module(Module, multiprocessing.Process):
         It also set passive dns retrieved from VirusTotal.
         """
         vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
+
         ts = time.time()
         vtdata = {
             'URL': vt_scores[0],
@@ -134,7 +133,10 @@ class Module(Module, multiprocessing.Process):
             'asn' not in cached_data
             or cached_data['asn']['asnorg'] == 'Unknown'
         ):
-            data['asn'] = {'asnorg': as_owner, 'timestamp': ts}
+            data['asn'] = {
+                'asnorg': as_owner,
+                'timestamp': ts
+            }
 
         __database__.setInfoForIPs(ip, data)
         __database__.set_passive_dns(ip, passive_dns)
@@ -146,10 +148,22 @@ class Module(Module, multiprocessing.Process):
         :param url: url to check
         :return: URL ratio
         """
+
+        def is_valid_response(response: dict) -> bool:
+            if not type(response) == dict:
+                return False
+
+            response_code = response.get('response_code', -1)
+            if response_code == -1:
+                return False
+            verbose_msg = response.get('verbose_msg', '')
+            if 'Resource does not exist' in verbose_msg:
+                return False
+            return True
+
         response = self.api_query_(url)
         # Can't get url report
-        if type(response) == dict and response.get('response_code', '') == -1:
-            self.print(f"VT API returned an Error - {response['verbose_msg']}")
+        if not is_valid_response(response):
             return 0
         try:
             score = int(response['positives']) / int(response['total'])
@@ -389,7 +403,8 @@ class Module(Module, multiprocessing.Process):
             # query successful
             data = json.loads(response.data)
             if type(data) == list:
-                # this is an empty list, vt dometimes returns it with status code 200
+                # response.data is an empty list,
+                # vt sometimes returns it with status code 200
                 data = {}
             # optionally, save data to file
             if save_data and ioc_type == 'ip':
@@ -519,7 +534,7 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         try:
-            if self.key is None:
+            if self.key in ('', None):
                 # We don't have a virustotal key
                 return
             self.api_calls_thread.start()
@@ -537,8 +552,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
-
+                message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time, Slips is stopped automatically.
                 # exit module if there's a problem with the API key
                 if (
@@ -584,7 +598,7 @@ class Module(Module, multiprocessing.Process):
                         ) > self.update_period:
                             self.set_vt_data_in_IPInfo(ip, cached_data)
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -618,7 +632,7 @@ class Module(Module, multiprocessing.Process):
                                 domain, cached_data
                             )
 
-                message = self.c3.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -628,7 +642,7 @@ class Module(Module, multiprocessing.Process):
                     # profileid = data['profileid']
                     # twid = data['twid']
                     flow_data = json.loads(data['flow'])
-                    url = flow_data['host'] + flow_data.get('uri', '')
+                    url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
                     cached_data = __database__.getURLData(url)
                     # If VT data of this domain is not in the DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
@@ -642,8 +656,6 @@ class Module(Module, multiprocessing.Process):
                             - cached_data['VirusTotal']['timestamp']
                         ) > self.update_period:
                             self.set_url_data_in_URLInfo(url, cached_data)
-
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

@@ -14,9 +14,9 @@ from modules.update_manager.update_file_manager import UpdateFileManager
 
 class UpdateManager(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'UpdateManager'
+    name = 'Update Manager'
     description = 'Update Threat Intelligence files'
-    authors = ['Kamila Babayeva']
+    authors = ['Kamila Babayeva', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
@@ -37,15 +37,20 @@ class UpdateManager(Module, multiprocessing.Process):
             self.update_period, self.update_ti_files
         )
         # Timer to update the MAC db
+        # when update_ti_files is called, it decides what exactly to update, the mac db,
+        # online whitelist OT online ti files.
         self.mac_db_update_manager = InfiniteTimer(
             self.mac_db_update_period, self.update_ti_files
         )
-        self.timeout = 0.000001
+        self.online_whitelist_update_timer = InfiniteTimer(
+            self.online_whitelist_update_period, self.update_ti_files
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
         self.update_period = conf.update_period()
         self.mac_db_update_period = conf.mac_db_update_period()
+        self.online_whitelist_update_period = conf.online_whitelist_update_period()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -73,6 +78,7 @@ class UpdateManager(Module, multiprocessing.Process):
         # terminating the timer for the process to be killed
         self.timer_manager.cancel()
         self.mac_db_update_manager.cancel()
+        self.online_whitelist_update_timer.cancel()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return True
@@ -94,6 +100,7 @@ class UpdateManager(Module, multiprocessing.Process):
             # Starting timer to update files
             self.timer_manager.start()
             self.mac_db_update_manager.start()
+            self.online_whitelist_update_timer.start()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
@@ -108,7 +115,7 @@ class UpdateManager(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()

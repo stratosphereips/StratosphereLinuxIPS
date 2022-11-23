@@ -6,7 +6,7 @@ Until Slips 0.7.3, there is only one module for now that can do this, the one ca
 
 To re-train this machine learning algorithm, you need to do the following:
 
-1- Edit the slips.conf file to put Slips in train mode. Search the word __train__ in the section __[flowmldetection]__ and uncomment the __mode = train__ and comment __mode = test__. It should look like
+1- Edit the config/slips.conf file to put Slips in train mode. Search the word __train__ in the section __[flowmldetection]__ and uncomment the __mode = train__ and comment __mode = test__. It should look like
     
     [flowmldetection]
     # The mode 'train' should be used to tell the flowmldetection module that the flows received are all for training.
@@ -26,30 +26,30 @@ To re-train this machine learning algorithm, you need to do the following:
 
 After this edits, just run Slips as usual with any type of input, for example with a Zeek folder.
 
-    ./slips.py -c slips.conf -f ~/my-computer-normal/
+    ./slips.py -c config/slips.conf -f ~/my-computer-normal/
 
 Or with a pcap file.
 
-    ./slips.py -c slips.conf -f ~/my-computer-normal2.pcap
+    ./slips.py -c config/slips.conf -f ~/my-computer-normal2.pcap
 
-3- If you have also malicious traffic, first change the label to malicious in slips.conf
+3- If you have also malicious traffic, first change the label to malicious in config/slips.conf
 
     # Set the label for all the flows that are being read. For now only normal and malware directly. No option for setting labels with a filter
     #label = normal
     label = malicious
     #label = unknown
 
-    ./slips.py -c slips.conf -f ~/my-computer-normal2.pcap
+    ./slips.py -c config/slips.conf -f ~/my-computer-normal2.pcap
 
 After this edits, just run Slips as usual with any type of input, for example another pcap
 
-    ./slips.py -c slips.conf -f ~/malware1.pcap
+    ./slips.py -c config/slips.conf -f ~/malware1.pcap
 
 You can also run slips in an interface and train it directly with your data 
 
-    ./slips.py -c slips.conf -i eth0
+    ./slips.py -c config/slips.conf -i eth0
 
-4- Finally to use the model, put back the __test__ mode in the configuration slips.conf
+4- Finally to use the model, put back the __test__ mode in the configuration config/slips.conf
     
     [flowmldetection]
     # The mode 'train' should be used to tell the flowmldetection module that the flows received are all for training.
@@ -62,4 +62,4 @@ You can also run slips in an interface and train it directly with your data
 
 5- Use slips normally in files or interfaces
 
-    ./slips.py -c slips.conf -i eth0
+    ./slips.py -c config/slips.conf -i eth0

@@ -39,6 +39,8 @@ let analysisSubTableDefs = {
         ]
     }
 }
+
+
 let analysisTableDefs = {
     "timeline": {
         destroy: true,
@@ -187,6 +189,23 @@ let analysisTableDefs = {
                     break;
             }
         }
+    },
+
+    "evidence": {
+        "bDestroy": true,
+        dom: custom_dom,
+        bInfo: false,
+        paging: true,
+        searching: false,
+        scrollX: false,
+        columns: [
+            { data: 'stime'},
+            { data: 'confidence'},
+            { data: 'threat_level'},
+            { data: 'category'},
+            { data: 'source_target_tag'},
+            { data: 'description'}
+        ]
     }
 }
 

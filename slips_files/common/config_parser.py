@@ -100,9 +100,18 @@ class ConfigParser(object):
 
 
     def packet_filter(self):
-        return self.read_configuration(
-            'parameters', 'pcapfilter',  'ip or not ip'
+        pcapfilter = self.read_configuration(
+            'parameters', 'pcapfilter', 'no'
         )
+        if pcapfilter in ('no'):
+            return False
+        return pcapfilter
+
+    def online_whitelist(self):
+        return self.read_configuration(
+            'threatintelligence', 'online_whitelist',  False
+        )
+
 
     def tcp_inactivity_timeout(self):
         timeout = self.read_configuration(
@@ -114,17 +123,28 @@ class ConfigParser(object):
             timeout = 5
         return timeout
 
+    def online_whitelist_update_period(self):
+        update_period = self.read_configuration(
+            'threatintelligence', 'online_whitelist_update_period', 604800
+        )
+        try:
+            update_period = int(update_period)
+        except ValueError:
+            update_period = 604800
+        return update_period
+
+
     def popup_alerts(self):
         popups = self.read_configuration(
             'detection', 'popup_alerts', 'False'
         )
-        return True if 'yes' in popups.lower() else False
+        return  'yes' in popups.lower() 
 
     def rotation(self):
         rotation = self.read_configuration(
             'parameters', 'rotation', 'yes'
         )
-        return True if 'yes' in rotation.lower() else False
+        return  'yes' in rotation.lower() 
 
     def store_a_copy_of_zeek_files(self):
         store_a_copy_of_zeek_files = self.read_configuration(
@@ -140,7 +160,7 @@ class ConfigParser(object):
         do_logs = self.read_configuration(
             'parameters', 'create_log_files', 'no'
         )
-        return True if 'yes' in do_logs else False
+        return  'yes' in do_logs 
 
     def whitelist_path(self):
         return self.read_configuration(
@@ -373,9 +393,11 @@ class ConfigParser(object):
 
 
     def taxii_server(self):
-        return self.read_configuration(
+        taxii_server =  self.read_configuration(
             'exporting_alerts', 'TAXII_server', False
         )
+        return taxii_server.replace('www.','')
+
 
     def taxii_port(self):
         return self.read_configuration(
@@ -386,7 +408,7 @@ class ConfigParser(object):
         use_https = self.read_configuration(
             'exporting_alerts', 'use_https', 'false'
         )
-        return True if use_https.lower() == 'true' else False
+        return use_https.lower() == 'true'
 
     def discovery_path(self):
         return self.read_configuration(
@@ -399,13 +421,14 @@ class ConfigParser(object):
         )
 
     def push_delay(self):
+        # 3600 = 1h
         delay = self.read_configuration(
-            'exporting_alerts', 'push_delay', 60*60
+            'exporting_alerts', 'push_delay', 3600
         )
         try:
             delay = float(delay)
         except ValueError:
-            delay = 60*60
+            delay = 3600
         return delay
 
     def collection_name(self):
@@ -423,9 +446,9 @@ class ConfigParser(object):
             'exporting_alerts', 'taxii_password', False
         )
 
-    def jwt_auth_url(self):
+    def jwt_auth_path(self):
         return self.read_configuration(
-            'exporting_alerts', 'jwt_auth_url', False
+            'exporting_alerts', 'jwt_auth_path', False
         )
 
 
@@ -484,7 +507,7 @@ class ConfigParser(object):
     def local_ti_data_path(self):
         return self.read_configuration(
             'threatintelligence',
-            'download_path_for_local_threat_intelligence',
+            'local_threat_intelligence_files',
             'modules/threat_intelligence/local_data_files/'
         )
 
@@ -539,7 +562,7 @@ class ConfigParser(object):
 
     def update_period(self):
         update_period =  self.read_configuration(
-             'threatintelligence', 'malicious_data_update_period', 86400
+             'threatintelligence', 'TI_files_update_period', 86400
         )
         try:
             update_period = float(update_period)
@@ -591,7 +614,7 @@ class ConfigParser(object):
 
     def rotation_period(self):
         rotation_period = self.read_configuration(
-             'parameters', 'rotation_period', '1d'
+             'parameters', 'rotation_period', '1 day'
         )
         return utils.sanitize(rotation_period)
 
@@ -609,11 +632,33 @@ class ConfigParser(object):
 
         return period *24*60*60
 
+    def wait_for_modules_to_finish(self) -> int:
+        """ returns period in mins"""
+        wait_for_modules_to_finish = self.read_configuration(
+             'parameters', 'wait_for_modules_to_finish', '15 mins'
+        )
+        try:
+            period = utils.sanitize(wait_for_modules_to_finish)
+            period = period\
+                .replace('mins', '')\
+                .replace(' ','')\
+                .replace('s','')
+            period = float(period)
+        except ValueError:
+            period = 15
+
+        return period
 
     def mac_db_link(self):
         return utils.sanitize(self.read_configuration(
              'threatintelligence', 'mac_db', ''
         ))
+
+    def store_zeek_files_in_the_output_dir(self):
+        store_in_output = self.read_configuration(
+         'parameters', 'store_zeek_files_in_the_output_dir', 'no'
+        )
+        return 'yes' in store_in_output
 
 
     def label(self):
@@ -632,9 +677,10 @@ class ConfigParser(object):
         to_ignore = (
             to_ignore.replace('[', '')
                 .replace(']', '')
-                .replace(' ', '')
                 .split(',')
         )
+        # strip each one of them
+        to_ignore = [mod.strip() for mod in to_ignore]
         use_p2p = self.use_p2p()
 
         # Ignore exporting alerts module if export_to is empty
@@ -643,13 +689,13 @@ class ConfigParser(object):
                 'stix' not in export_to
                 and 'slack' not in export_to
         ):
-            to_ignore.append('exporting_alerts')
+            to_ignore.append('Exporting Alerts')
 
         if (
                 not use_p2p
                 or '-i' not in sys.argv
         ):
-            to_ignore.append('p2ptrust')
+            to_ignore.append('P2P Trust')
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.conf
@@ -664,11 +710,11 @@ class ConfigParser(object):
                  '-cb' in sys.argv
                 or '-p' in sys.argv
         ):
-            to_ignore.append('blocking')
+            to_ignore.append('Blocking')
 
         # leak detector only works on pcap files
         if input_type != 'pcap':
-            to_ignore.append('leak_detector')
+            to_ignore.append('Leak Detector')
 
         return to_ignore
 

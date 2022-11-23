@@ -39,7 +39,7 @@ class ProfilerProcess(multiprocessing.Process):
     def __init__(
         self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
-        self.name = 'ProfilerProcess'
+        self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
@@ -734,7 +734,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Generic fields in Zeek
         self.column_values = {}
-        # We need to set it to empty at the beggining so any new flow has the key 'type'
+        # We need to set it to empty at the beginning so any new flow has the key 'type'
         self.column_values['type'] = ''
 
         # to set the default value to '' if ts isn't found
@@ -1702,7 +1702,7 @@ class ProfilerProcess(multiprocessing.Process):
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
             self.print(
-                f'Error in add_flow_to_profile profilerProcess. {traceback.format_exc()}'
+                f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
             ,0,1)
             self.print('{}'.format(type(inst)), 0, 1)
             self.print('{}'.format(inst), 0, 1)
@@ -1772,6 +1772,7 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.add_out_dns(
             self.profileid,
             self.twid,
+            self.column_values['daddr'],
             self.starttime,
             self.flow_type,
             self.uid,
@@ -2318,7 +2319,7 @@ class ProfilerProcess(multiprocessing.Process):
             return symbol, (last_ts, now_ts)
         except Exception as inst:
             # For some reason we can not use the output queue here.. check
-            self.print('Error in compute_symbol in profilerProcess.', 0, 1)
+            self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(type(inst)), 0, 1)
             self.print('{}'.format(inst), 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
@@ -2456,7 +2457,7 @@ class ProfilerProcess(multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
-        __database__.publish('finished_modules', 'ProfilerProcess')
+        __database__.publish('finished_modules', 'Profiler')
 
     def run(self):
         utils.drop_root_privs()
@@ -2517,8 +2518,6 @@ class ProfilerProcess(multiprocessing.Process):
                                 }
                             )
                         _ = self.column_idx['starttime']
-                        # Yes
-                        # Quickly process all lines
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
@@ -2545,7 +2544,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("Can't recognize input file type.")
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True

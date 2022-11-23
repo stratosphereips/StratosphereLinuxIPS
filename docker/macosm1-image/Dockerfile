@@ -1,3 +1,5 @@
+# This dockerfile is for macos 
+
 FROM ubuntu
 
 # To avoid user interaction when installing libraries
@@ -16,7 +18,6 @@ RUN apt update && apt install -y --no-install-recommends \
     git \
     curl \
     gnupg \
-    nano \
  && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
  && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
 
@@ -39,32 +40,31 @@ RUN apt update && apt install -y --no-install-recommends \
     tshark \
     git \
     whois \
-    golang \
     vim \
+    less \
+    tcpdump \
+    screen \
+    mc \
+    iputils-ping \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
-RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
-# Switch to Slips installation dir when login.
-WORKDIR ${SLIPS_DIR}
-RUN chmod 774 slips.py &&  git submodule init && git submodule update
-# so we can set use_p2p to yes
-COPY config/slips.conf ${SLIPS_DIR}/config/slips.conf
 
-# build the pigeon and Add pigeon to path
-SHELL ["/bin/bash", "-c"]
-RUN cd p2p4slips && go build && echo "export PATH=$PATH:/StratosphereLinuxIPS/p2p4slips/" >> ~/.bashrc && source ~/.bashrc
+RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
-WORKDIR ${SLIPS_DIR}
+
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r requirements.txt
-
+RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-image/requirements-macos-m1-docker.txt
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
 RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
 
+# Switch to Slips installation dir when login.
+WORKDIR ${SLIPS_DIR}
 
-CMD redis-server --daemonize yes && /bin/bash
+#CMD redis-server --daemonize yes && /bin/bash
+CMD /bin/bash

@@ -62,7 +62,7 @@ modules/
 
 The __init__.py is to make sure the module is treated as a python package, don't delete it.
 
-Remember to deleet the __pycache__ dir if it's copied to the new module using:
+Remember to delete the __pycache__ dir if it's copied to the new module using:
 
 ```rm -r modules/local_connection_detector/__pycache__```
 
@@ -78,7 +78,7 @@ self.c1 = __database__.subscribe('new_flow')
 So now everytime slips sees a new flow, you can access it from your module using the following line
 
 ```python
-message = self.c1.get_message(timeout=self.timeout)
+message = __database__.get_message(self.c1)
 ```
 
 The above line checks if a message was recieved on the channel you subscribed to.
@@ -109,7 +109,7 @@ def run(self):
         utils.drop_root_privs()
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -296,7 +296,7 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        # In case you need to read the slips.conf configuration file for
+        # In case you need to read the config/slips.conf configuration file for
         # your own configurations
         self.config = config
         # Start the DB
@@ -310,7 +310,7 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_flow')
-        self.timeout = 0.0000001
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -341,7 +341,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -429,7 +429,7 @@ and the text will be sent to the outputqueue to process, log, and print to the t
 self.config = config
 ```
 
-This line is necessary if you need to read the ```slips.conf ``` configuration file for your own configurations
+This line is necessary if you need to read the ```config/slips.conf ``` configuration file for your own configurations
 
 ```python
 __database__.start(redis_port)
@@ -437,14 +437,6 @@ __database__.start(redis_port)
 
 This line starts the redis database, Slips mainly depends on redis Pub/Sub system for modules communications, 
 so if you need to listen on a specific channel after starting the db you can add the following line to __init__()
-
-
-```python
- self.timeout = 0.0000001
- ```
-
-Is used for listening on the redis channel, if your module will be using 1 channel, timeout=0 will work fine, but in order to 
-listen on more than 1 channel, you need to set a timeout so that the module won't be stck listening on the same channel forever.
 
 
 Now here's the run() function, this is the main function of each module, it's the one that gets executed when the module starts.
@@ -460,7 +452,7 @@ utils.drop_root_privs()
 the above line is responsible for dropping root priveledges, so if slips starts with sudo and the module doesn't need the sudo permissions, we drop them.
 
 ```python
-message = self.c1.get_message(timeout=self.timeout)
+message = __database__.get_message(self.c1)
 ```
 
 The above line listen on the c1 channel ('new ip') that we subscribed to earlier.
@@ -495,7 +487,7 @@ is terminating.
 ### Troubleshooting
 Most errors occur when running the module inside SLIPS. These errors are hard to resolve, because warnings and debug messages may be hidden under extensive outputs from other modules.
 
-If the module does not start at all, make sure it is not disabled in the slips.conf file. If that is not the case, check that the \_\_init\_\_.py file is present in module directory, and read the outputs - if there were any errors (eg. import errors), they would prevent the module from starting. 
+If the module does not start at all, make sure it is not disabled in the config/slips.conf file. If that is not the case, check that the \_\_init\_\_.py file is present in module directory, and read the outputs - if there were any errors (eg. import errors), they would prevent the module from starting. 
 
 
 In case that the module is started, but does not receive any messages from the channel, make sure that:
@@ -524,8 +516,8 @@ Before pushing, run the unit tests and integration tests by:
 
 2- Run all tests ```./tests/run_all_tests.sh``` 
 
-Slips supports the -P flag to run redis on your port of choice. this flag is only used for
-testing and integration tests so that slips can keep track of the ports it opened while testing and close them later.
+Slips supports the -P flag to run redis on your port of choice. this flag is
+used so that slips can keep track of the ports it opened while testing and close them later.
 
 ### Adding your own unit tests
 

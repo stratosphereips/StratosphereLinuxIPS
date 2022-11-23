@@ -1,11 +1,11 @@
 <h1 align="center"> 
 
-Slips v0.9.5
+Slips v0.9.6
 
 
 <h3 align="center"> 
 
-[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](#features) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
+[Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
 </h3>
 
 ##### Repo Stars Over Time
@@ -52,16 +52,16 @@ The following table summarizes all active modules in Slips, their status, and th
 |   Module            | Status | Description | 
 | --------------------|   :-:  |------------ |  
 | HTTPS               |   ⏳   | training and testing of the Random Forest algorithm to detect malicious HTTPS flows |
-| Port scan detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
-| RNN C&C etection    |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
-| Flowalerts          |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
+| Port Scan Detector  |   ✅   | detects horizontal, vertical port scans and ICMP Sweeps |
+| RNN C&C Detection   |   ✅   | detects command and control channels using recurrent neural network and the Stratosphere behavioral letters |
+| Flow Alerts         |   ✅   | detects a malicious behaviour in each flow. There are more than 20 detections here |
 | Flow ML detection   |   ✅   | detects malicious flows using ML pretrained models |
-| Leak detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
+| Leak Detector       |   ✅   | detects leaks of data in the traffic using YARA rules |
 | Threat Intelligence |   ✅   | checks IPs against known threat intelligence lists |
 | ARP                 |   ✅   | checks for ARP attacks in ARP traffic  |
 | Timeline            |   ✅   | creates a timeline of what happened in the network based on all the flows and type of data available  |
 | VirusTotal          |   ✅   | lookups IP addresses on VirusTotal |
-| RiskIQ              |   ✅   | lookups IP addresses on RiskIQ  |
+| Risk IQ             |   ✅   | lookups IP addresses on RiskIQ  |
 | IP Info             |   ✅   | lookups Geolocation, ASN, RDNS information from IPs and MAC vendors |
 | CESNET              |   ✅   | sends and receives alerts from CESNET Warden servers |
 | Exporting Alerts    |   ✅   | exports alerts to Slack or STIX format |
@@ -107,7 +107,7 @@ The following instructions will guide you on how to run a Slips docker container
     docker run -it --rm --net=host --name slips -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
     
     # run Slips on the pcap file mapped to the container
-    ./slips.py -c slips.conf -f dataset/myfile.pcap
+    ./slips.py -c config/slips.conf -f dataset/myfile.pcap
 ```
 
 ### Run Slips with access to block traffic on the host network
@@ -119,7 +119,7 @@ In Linux OS, the Slips can be used to analyze and **block** network traffic on t
     docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
     
     # run Slips on the host interface `eno1` with active blocking `-p`
-    ./slips.py -c slips.conf -i eno1 -p
+    ./slips.py -c config/slips.conf -i eno1 -p
 ```
 
 ### Build Slips from the Dockerfile
@@ -148,7 +148,7 @@ To use Slips with files already inside the Docker you can do;
     docker run -it --rm --net=host --name slips slips
     
     # run Slips using the default configuration in one of the provided test datasets
-    ./slips.py -c slips.conf -f dataset/test3.binetflow
+    ./slips.py -c config/slips.conf -f dataset/test3.binetflow
 ```
 
 To use Slips with files shared with the host, run:
@@ -160,7 +160,7 @@ To use Slips with files shared with the host, run:
     cp yourfile.pcap $(pwd)/datasets/
     
     # run Slips using the default configuration in one of the provided test datasets
-    ./slips.py -c slips.conf -f dataset/yourfile.pcap
+    ./slips.py -c config/slips.conf -f dataset/yourfile.pcap
 ```
 
 To use Slips with packets from the host interface, run the following. BUT beware that the big limitation of using Docker in macOS for interface capture is that until 2022/06/28, Docker for macOS does not entirely pass all packets to the container when run in mode `--cap-add=NET_ADMIN`.
@@ -188,7 +188,7 @@ To build a Docker image of Slips for Linux follow the next steps:
     docker run -it --rm --net=host --name slips slips
     
     # run Slips using the default configuration in one of the provided test datasets
-    ./slips.py -c slips.conf -f dataset/test3-mixed.binetflow
+    ./slips.py -c config/slips.conf -f dataset/test3-mixed.binetflow
 ```
 
 #### First run
@@ -288,7 +288,7 @@ After all dependencies are installed and Redis is running,  you are ready to run
 ```bash
     # run Slips with the default configuration
     # use a sample pcap of your own
-    ./slips.py -c slips.conf -f dataset/myfile.pcap
+    ./slips.py -c config/slips.conf -f dataset/myfile.pcap
 ```
 
 ## Viewing Slips Output
@@ -328,7 +328,7 @@ You can use Slips with P2P directly in a special docker image by doing:
 
 Slips' machine learning models can be extended by running Slips in _training_ mode with the user network traffic, leading to a improvement in the detection.
 
-To use this feature you need to modify the configuration file ```slips.conf``` to add in the ```[flowmldetection]``` section:
+To use this feature you need to modify the configuration file ```config/slips.conf``` to add in the ```[flowmldetection]``` section:
 
         mode = train
 
@@ -338,7 +338,7 @@ The machine learning model needs a label for this new traffic to know what type 
 
 Run Slips normally in your data, interface or any input file, and the machine learning model will be updated automatically.
 
-To use the new model, reconfigure Slips to run in `test` mode by updating the ```slips.conf``` file with:
+To use the new model, reconfigure Slips to run in `test` mode by updating the ```config/slips.conf``` file with:
 
         mode = train
     

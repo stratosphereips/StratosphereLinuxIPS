@@ -65,7 +65,7 @@ of the docs for info on how slips detects DoH.
 Slips detects successful SSH connections using 2 ways
 
 1. Using Zeek. Zeek logs successful SSH connection to ssh.log by default
-2. if all bytes sent in a SSH connection is more than 4290 bytes
+2. If all bytes sent in a SSH connection is more than 4290 bytes
 
 ## DNS resolutions without a connection
 This will detect DNS resolutions for which no further connection was done. A resolution without a usage is slightly suspicious.
@@ -137,12 +137,20 @@ the same destination IP on the same destination port.
 ## Zeek alerts
 
 By default, Slips depends on Zeek for detecting different behaviours, for example 
-Self-signed certs, invalid certs, port-scans and address scans, and password guessing.
+Self-signed certs, invalid certs, port-scans, address scans, and password guessing.
+
+Password guessing is detected by zeek when 30 failed ssh logins happen over 30 mins.
 
 Some scans are also detected by Slips independently of Zeek, like ICMP sweeps and vertical/horizontal portscans.
 Check 
 [PING Sweeps](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#ping-sweeps) 
 section for more info 
+
+## Password Guessing
+
+Password guessing is detected using 2 ethods in slips
+1. by Zeek engine. when 30 failed ssh logins happen over 30 mins.
+2. By slips. when 20 failed ssh logins happen over 1 tiemwindow.
 
 ## DGA
 

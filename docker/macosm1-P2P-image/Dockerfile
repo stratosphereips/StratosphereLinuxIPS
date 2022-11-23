@@ -24,7 +24,7 @@ RUN apt update && apt install -y --no-install-recommends \
 # Install Slips dependencies.
 RUN apt update && apt install -y --no-install-recommends \
     python3 \
-    redis-server \ 
+    redis-server \
     zeek \
     python3-pip \
     python3-certifi \
@@ -50,13 +50,17 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
-RUN git clone -b develop https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN git clone -b master https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
+# Change the configuration file to have use_p2p = yes
+RUN sed -i "s/use_p2p = no/use_p2p = yes/g" ${SLIPS_DIR}/config/slips.conf
+# Change the configuration file to have analysis_direction = out
+RUN sed -i "s/analysis_direction = out/analysis_direction = yes/g" ${SLIPS_DIR}/config/slips.conf
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/docker/macos-image/requirements-macos-docker.txt
+RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-P2P-image/requirements-macos-m1-docker.txt
 
 # For Kalipso:
 RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -

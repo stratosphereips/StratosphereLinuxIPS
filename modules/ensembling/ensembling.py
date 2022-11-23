@@ -12,7 +12,7 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ensembling'
+    name = 'Ensembling'
     description = 'The module to assign '
     authors = ['Kamila Babayeva, Sebastian Garcia']
 
@@ -26,9 +26,7 @@ class Module(Module, multiprocessing.Process):
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
         self.c1 = __database__.subscribe('tw_closed')
-        # get separator
         self.separator = __database__.separator
-        self.timeout = 0.00000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -112,7 +110,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 if message and message['data'] == 'stop_process':
                     # Confirm that the module is done processing

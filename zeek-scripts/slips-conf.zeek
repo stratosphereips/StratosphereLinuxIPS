@@ -20,3 +20,7 @@ redef Site::local_nets += { 192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8 };
 # zeek needs to know where maxmind db is. mmdb_dir should now be slips/databases
 redef mmdb_dir = get_mmdb_path();
 #global mmind = mmdb_dir;
+
+# zeek  only tracks software for local networks by default to conserve memory.
+# this setting makes it do software for all networks
+redef Software::asset_tracking = ALL_HOSTS;

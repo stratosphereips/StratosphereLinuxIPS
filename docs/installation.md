@@ -11,7 +11,25 @@ Slips can be run inside a Docker. There is a prepared docker image with Slips av
 	mkdir ~/dataset
 	cp <some-place>/myfile.pcap ~/dataset
 	docker run -it --rm --net=host -v ~/dataset:/StratosphereLinuxIPS/dataset stratosphereips/slips:latest
-	./slips.py -c slips.conf -r dataset/myfile.pcap
+	./slips.py -c config/slips.conf -r dataset/myfile.pcap
+
+### Running Slips using docker compose
+
+
+Change enp1s0 to your current interface in docker/docker-compose.yml and start slips using
+    
+    docker compose -f docker/docker-compose.yml up
+
+Now everything inside your host's ```config``` and ```dataset``` directories is
+mounted to ```/StratosphereLinuxIPS/config/``` and ```/StratosphereLinuxIPS/dataset/``` in Slips docker.
+
+To run slips on a pcap instead of your interface you can do the following:
+
+1. put the pcap in the ```dataset/``` dir in your host
+2. change the entrypoint in the docker compose file to
+    ["python3","/StratosphereLinuxIPS/slips.py","-f","dataset/<pcapname>.pcap"]
+3. restart slips using ```docker compose -f docker/docker-compose.yml up```
+
 
 ### Building Slips from the Dockerfile
 
@@ -24,7 +42,7 @@ If you cloned Slips in '~/code/StratosphereLinuxIPS', then you can build the Doc
 	cd ~/code/StratosphereLinuxIPS/docker/ubunutu-image
 	docker build --no-cache -t slips -f Dockerfile .
 	docker run -it --rm --net=host -v ~/code/StratosphereLinuxIPS/dataset:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f dataset/test3.binetflow
+	./slips.py -c config/slips.conf -f dataset/test3.binetflow
 
 If you don't have Internet connection from inside your Docker image while building, you may have another set of networks defined in your Docker. For that try:
 
@@ -34,7 +52,7 @@ You can also put your own files in the /dataset/ folder and analyze them with Sl
 
 	cp some-pcap-file.pcap ~/code/StratosphereLinuxIPS/dataset
 	docker run -it --rm --net=host -v ../dataset/:/StratosphereLinuxIPS/dataset slips
-	./slips.py -c slips.conf -f dataset/some-pcap-file.pcap
+	./slips.py -c config/slips.conf -f dataset/some-pcap-file.pcap
 
 
 Note that some GPUs don't support tensorflow in docker which may cause "Illegal instruction" errors when running slips.
@@ -112,7 +130,7 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/
-	./slips.py -c slips.conf -r datasets/hide-and-seek-short.pcap
+	./slips.py -c config/slips.conf -r datasets/hide-and-seek-short.pcap
 
 Run slips with sudo to enable blocking (Optional) 
 
@@ -135,7 +153,7 @@ If you cloned Slips in '~/StratosphereLinuxIPS', make sufe you are in slips root
 	docker build --network=host --no-cache -t slips_p2p -f docker/P2P-image/Dockerfile .
 	docker run -it --rm --net=host slips_p2p
 
-Now you can edit slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
+Now you can edit config/slips.conf to enable p2p. [usage instructions here](https://stratospherelinuxips.readthedocs.io/en/develop/p2p.html#usage). then run Slips using your interface:
 
 	./slips.py -i wlp3s0
 

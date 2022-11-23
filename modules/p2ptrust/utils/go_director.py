@@ -1,6 +1,5 @@
 import base64
 import binascii
-import configparser
 import json
 from typing import Dict
 
@@ -11,8 +10,11 @@ from modules.p2ptrust.utils.utils import (
     send_evaluation_to_go,
     send_empty_evaluation_to_go,
 )
+from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
+from slips_files.core.database.database import __database__
+import time
 
 
 class GoDirector:
@@ -27,13 +29,13 @@ class GoDirector:
         self,
         printer: Printer,
         trustdb: TrustDB,
-        config: configparser.ConfigParser,
         storage_name: str,
         override_p2p: bool = False,
         report_func=None,
         request_func=None,
         gopy_channel: str = 'p2p_gopy',
         pygo_channel: str = 'p2p_pygo',
+        p2p_reports_logfile: str = 'p2p_reports.log',
     ):
 
         # todo what is override_p2p
@@ -44,13 +46,15 @@ class GoDirector:
 
         self.printer = printer
         self.trustdb = trustdb
-        self.config = config
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
         self.report_func = report_func
         self.request_func = request_func
-
+        # clear the logfile
+        open(p2p_reports_logfile, 'w').close()
+        self.reports_logfile = open(p2p_reports_logfile, 'a')
+        self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
             'score_confidence': self.process_evaluation_score_confidence
@@ -59,6 +63,14 @@ class GoDirector:
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print('[TrustDB] ' + text, verbose, debug)
+
+    def log(self, text: str):
+        """
+        Writes the log text to p2p_reports.log
+        """
+        now = time.time()
+        human_readable_datetime = utils.convert_format(now, utils.alerts_format)
+        self.reports_logfile.write(f'{human_readable_datetime} - {text}\n')
 
     def handle_gopy_data(self, data_dict: dict):
         """
@@ -116,9 +128,7 @@ class GoDirector:
         expected_keys = {key_reporter, key_report_time, key_message}
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
-        if len(expected_keys & set(report.keys())) != 3:
-            self.print('Some key is missing in report', 0, 1)
-            return
+
 
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
@@ -143,6 +153,7 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == 'blame':
+            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
             # self.print("blame is not implemented yet", 0, 2)
             # calls process_message_report in p2ptrust.py
             # which gives the report to evidenceProcess to decide whether to block or not
@@ -219,9 +230,10 @@ class GoDirector:
         self, reporter: str, _: int, data: Dict
     ) -> None:
         """
-        Handle data request from a peer
+        Process and answer a msg from a peer that requests info about an IP
 
-        Details are read from the request, and response is read from slips database. Response data is formatted as json
+        Details are read from the request, and response is read from slips database.
+        Response data is formatted as json
         and sent to the peer that asked.
 
         :param reporter: The peer that sent the request
@@ -236,10 +248,9 @@ class GoDirector:
         key = data['key']
         self.print(
             f'[The Network -> Slips] request about {key} from: {reporter}',
-            2,
-            0,
         )
 
+        #  override_p2p is false by default
         if self.override_p2p:
             # print("Overriding p2p")
             # calls respond_to_message_request in p2ptrust.py
@@ -325,11 +336,11 @@ class GoDirector:
             reporter, report_time, key_type, key, evaluation
         )
         if evaluation != None:
-            self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}',
-                2,
-                0,
-            )
+            msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+            self.print(msg)
+            # log the reporter too
+            msg += f' from peer: {reporter}'
+            self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
@@ -342,7 +353,7 @@ class GoDirector:
         evaluation: dict,
     ):
         """
-        Handle reported score and confidence
+        Handle reported score and confidence from another peer
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -397,6 +408,15 @@ class GoDirector:
             f'score {score}, confidence {confidence}'
         )
         self.print(result, 2, 0)
+        # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
+        # save all report info in the db
+        # convert ts to human readable format
+        report_info = {
+            'reporter':reporter,
+            'report_time': utils.convert_format(report_time, utils.alerts_format),
+        }
+        report_info.update(evaluation)
+        __database__.store_p2p_report(key, report_info)
 
     def process_go_update(self, data: dict) -> None:
         """
@@ -446,13 +466,12 @@ class GoDirector:
             self.trustdb.insert_go_ip_pairing(
                 peerid, ip_address, timestamp=timestamp
             )
-            self.print(
-                f'[The Network -> Slips] Peer update or new peer {peerid} '
-                f'with IP: {ip_address} '
-                f'Reliability: {reliability } ',
-                2,
-                0,
-            )
+            msg = f'[The Network -> Slips] Peer update or new peer {peerid} ' \
+                  f'with IP: {ip_address} ' \
+                  f'Reliability: {reliability } '
+
+            self.print(msg,2,0,)
+            self.log(msg)
 
         except KeyError:
             self.print('IP address missing', 2, 0)

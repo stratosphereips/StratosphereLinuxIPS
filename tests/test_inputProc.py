@@ -1,14 +1,27 @@
 import pytest
 from slips_files.core.inputProcess import InputProcess
-import configparser
 import shutil
 import os
 
 def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
+    """Used to override the print function because using the print causes broken pipes"""
     pass
 
 zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+
+def check_zeek_or_bro():
+    """
+    Check if we have zeek or bro
+    """
+    zeek_bro = None
+    if shutil.which('zeek'):
+        zeek_bro = 'zeek'
+    elif shutil.which('bro'):
+        zeek_bro = 'bro'
+    else:
+        return False
+
+    return zeek_bro
 
 def create_inputProcess_instance(
     outputQueue, profilerQueue, input_information, input_type
@@ -21,16 +34,17 @@ def create_inputProcess_instance(
         input_type,
         input_information,
         None,
-        'zeek',
+        check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
         65531
     )
     inputProcess.bro_timeout = 1
-    # override the self.print function to avoid broken pipes
+    # override the print function to avoid broken pipes
     inputProcess.print = do_nothing
     inputProcess.stop_queues = do_nothing
     inputProcess.testing = True
+
     return inputProcess
 
 
@@ -45,6 +59,7 @@ def test_handle_pcap_and_interface(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
+    inputProcess.zeek_pid = 'False'
     assert inputProcess.handle_pcap_and_interface() == True
 
 

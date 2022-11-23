@@ -19,7 +19,7 @@ import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'threatintelligence'
+    name = 'Threat Intelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
     authors = ['Frantisek Strasak, Sebastian Garcia']
 
@@ -31,7 +31,6 @@ class Module(Module, multiprocessing.Process):
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.c2 = __database__.subscribe('new_downloaded_file')
-        self.timeout = 0.0000001
         self.__read_configuration()
         self.get_malicious_ip_ranges()
         self.create_urlhaus_session()
@@ -136,9 +135,15 @@ class Module(Module, multiprocessing.Process):
             direction = 'from'
         elif 'dst' in type_detection:
             direction = 'to'
-        ip_identification = __database__.getIPIdentification(ip)
 
-        if self.is_dns_response :
+        # getting the ip identification adds ti description and tags to the returned str
+        # in this alert, we only want the description and tags of the TI feed that has
+        # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
+        # setting it to true results in the following alert
+        # blacklisted ip description: <Spamhaus description> source: ipsum
+        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False).strip()
+
+        if self.is_dns_response:
             description = (
                 f'DNS answer with a blacklisted ip: {ip} '
                 f'for query: {self.dns_query} '
@@ -146,7 +151,7 @@ class Module(Module, multiprocessing.Process):
         else:
             description = f'connection {direction} blacklisted IP {ip} '
 
-        description += f'{ip_identification}. Source: {ip_info["source"]}.'
+        description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
         tags = ''
         if tags_temp := ip_info.get('tags', False):
@@ -483,7 +488,7 @@ class Module(Module, multiprocessing.Process):
                 self.print(f'File {localfile} is up to date.', 2, 0)
 
             else:
-                # Our malicious file was changed. Load the new one
+                # Our TI file was changed. Load the new one
                 self.print(f'Updating the local TI file {localfile}', 2, 0)
                 if old_hash:
                     # File is updated and was in database.
@@ -798,9 +803,6 @@ class Module(Module, multiprocessing.Process):
         spamhaus_res = self.spamhaus(ip)
         if spamhaus_res:
             return spamhaus_res
-        urlhaus_res = self.urlhaus(ip)
-        if urlhaus_res:
-            return urlhaus_res
 
 
     def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
@@ -952,7 +954,7 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 
@@ -1001,7 +1003,7 @@ class Module(Module, multiprocessing.Process):
                             twid
                         )
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 

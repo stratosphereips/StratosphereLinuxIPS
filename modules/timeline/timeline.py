@@ -14,7 +14,7 @@ import json
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'timeline'
+    name = 'Timeline'
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
@@ -34,7 +34,6 @@ class Module(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
         self.analysis_direction = conf.analysis_direction()
-        self.timeout = 0.0000001
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -401,7 +400,7 @@ class Module(Module, multiprocessing.Process):
         # Main loop function
         while True:
             try:
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
                 # if timewindows are not updated for a long time (see at logsProcess.py),
                 # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.

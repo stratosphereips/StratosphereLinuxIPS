@@ -338,6 +338,26 @@ def set_evidence(profile, timewindow, alert_id):
     return {"data": data}
 
 
+@analysis.route("/evidence/<profile>/<timewindow>/")
+def set_evidence_general(profile, timewindow):
+    """
+    Set an analysis tag with general evidence
+    :param profile:
+    :param timewindow:
+    :return: {"data": data} where data is a list of evidences
+    """
+    data = []
+    evidence = __database__.db.hget("evidence"+"profile_" + profile, timewindow)
+    if evidence:
+        evidence = json.loads(evidence)
+        for id, content in evidence.items():
+            content = json.loads(content)
+            if "source_target_tag" not in content:
+                content["source_target_tag"] = "-"
+            data.append(content)
+    return {"data": data}
+
+
 @analysis.route('/')
 def index():
     return render_template('analysis.html', title='Slips')

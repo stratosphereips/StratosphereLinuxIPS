@@ -19,9 +19,9 @@ class PortScanProcess(Module, multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = 'portscandetector-1'
+    name = 'Port Scan Detector'
     description = 'Detect Horizonal, Vertical and ICMP scans'
-    authors = ['Sebastian Garcia']
+    authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
@@ -42,14 +42,15 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Retrieve malicious/benigh labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.timeout = 0.0000001
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips_threshold = 6
+        self.port_scan_minimum_dips = 6
         # The minimum amount of ports to scan in vertical scan
-        self.port_scan_minimum_dports_threshold = 5
+        self.port_scan_minimum_dports = 5
+        self.pingscan_minimum_flows = 5
+        self.pingscan_minimum_scanned_ips = 5
         # time in seconds to wait before alerting port scan
-        self.time_to_wait = 10
+        self.time_to_wait_before_generating_new_alert = 25
         # list of tuples, each tuple is the args to setevidence
         self.pending_vertical_ps_evidence = Queue()
         self.pending_horizontal_ps_evidence = Queue()
@@ -66,6 +67,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 target=self.wait_for_horizontal_scans,
                                 daemon=True
         )
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -153,7 +155,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # The idea is that after X dips we detect a connection. And then
                     # we 'reset' the counter until we see again X more.
                     if (
-                        amount_of_dips % self.port_scan_minimum_dips_threshold == 0
+                        amount_of_dips % self.port_scan_minimum_dips == 0
                         and prev_amount_dips < amount_of_dips
                     ):
                         # Get the total amount of pkts sent to the same port from all IPs
@@ -224,8 +226,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dports, \
                 dstip = evidence
 
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            # wait 10s for new evidence to arrive so we can combine them
+            time.sleep(self.time_to_wait_before_generating_new_alert)
             combined_evidence = 0
 
             while True:
@@ -311,8 +313,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 uids, \
                 dport, \
                 amount_of_dips = evidence
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            # wait 10s for new evidence to arrive so we can combine them
+            time.sleep(self.time_to_wait_before_generating_new_alert)
             combined_evidence = 0
 
             while True:
@@ -478,7 +480,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         )
 
 
-
     def calculate_confidence(self, pkts_sent):
         if pkts_sent > 10:
             confidence = 1
@@ -520,7 +521,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # And then we 'reset' the counter
                     # until we see again X more.
                     if (
-                            amount_of_dports % self.port_scan_minimum_dports_threshold == 0
+                            amount_of_dports % self.port_scan_minimum_dports == 0
                             and prev_amount_dports < amount_of_dports
                     ):
                         # Get the total amount of pkts sent different ports on the same host
@@ -631,6 +632,159 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
+    def check_icmp_scan(self, profileid, twid):
+        # Map the ICMP port scanned to it's attack
+        port_map = {
+            '0x0008': 'AddressScan',
+            '0x0013': 'TimestampScan',
+            '0x0014': 'TimestampScan',
+            '0x0017': 'AddressMaskScan',
+            '0x0018': 'AddressMaskScan',
+        }
+
+        direction = 'Src'
+        role = 'Client'
+        type_data = 'Ports'
+        protocol = 'ICMP'
+        state = 'Established'
+        sports = __database__.getDataFromProfileTW(
+                    profileid, twid, direction, state, protocol, role, type_data
+                )
+        for sport, sport_info in sports.items():
+            # get the name of this attack
+            attack = port_map.get(sport)
+            if not attack:
+                return
+
+            # get the IPs attacked
+            scanned_ips = sport_info['dstips']
+            # are we pinging a single IP or ping scanning several IPs?
+            amount_of_scanned_ips = len(scanned_ips)
+
+            if amount_of_scanned_ips == 1:
+                # how many icmp flows were found?
+                for scanned_ip, scan_info in scanned_ips.items():
+                    icmp_flows_uids = scan_info['uid']
+                    number_of_flows = len(icmp_flows_uids)
+                    # how many flows are responsible for this attack
+                    # (from this srcip to this dstip on the same port)
+                    cache_key = f'{profileid}:{twid}:dstip:{scanned_ip}:{sport}:{attack}'
+                    prev_flows = self.cache_det_thresholds.get(cache_key, 0)
+
+                    # We detect a scan every Threshold. So we detect when there
+                    # is 5,10,15 etc. scan to the same dstip on the same port
+                    # The idea is that after X dips we detect a connection.
+                    # And then we 'reset' the counter
+                    # until we see again X more.
+                    if (
+                            number_of_flows % self.pingscan_minimum_flows == 0
+                            and prev_flows < number_of_flows
+                    ):
+                        self.cache_det_thresholds[cache_key] = number_of_flows
+                        pkts_sent = scan_info['spkts']
+                        timestamp = scan_info['stime']
+                        self.set_evidence_icmpscan(
+                            amount_of_scanned_ips,
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            icmp_flows_uids,
+                            attack,
+                            scanned_ip=scanned_ip
+                        )
+
+            elif amount_of_scanned_ips > 1:
+                # this srcip is scanning several IPs (a network maybe)
+                # how many dstips scanned by this srcip on this port?
+                cache_key = f'{profileid}:{twid}:{attack}'
+                prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
+                # detect every 5, 10, 15 scanned IPs
+                if (
+                        amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
+                        and prev_scanned_ips < amount_of_scanned_ips
+                ):
+
+                    pkts_sent = 0
+                    uids = []
+                    for scanned_ip, scan_info in scanned_ips.items():
+                        # get the total amount of pkts sent to all scanned IP
+                        pkts_sent += scan_info['spkts']
+                        # get all flows that were part of this scan
+                        uids.extend(scan_info['uid'])
+                        timestamp = scan_info['stime']
+
+                    self.set_evidence_icmpscan(
+                            amount_of_scanned_ips,
+                            timestamp,
+                            pkts_sent,
+                            protocol,
+                            profileid,
+                            twid,
+                            uids,
+                            attack
+                        )
+                    self.cache_det_thresholds[cache_key] = amount_of_scanned_ips
+
+
+
+    def set_evidence_icmpscan(
+            self,
+            number_of_scanned_ips,
+            timestamp,
+            pkts_sent,
+            protocol,
+            profileid,
+            twid,
+            icmp_flows_uids,
+            attack,
+            scanned_ip=False
+    ):
+        confidence = self.calculate_confidence(pkts_sent)
+        type_detection = 'srcip'
+        type_evidence = attack
+        source_target_tag = 'Recon'
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        srcip = profileid.split('_')[-1]
+        detection_info = srcip
+
+        if number_of_scanned_ips == 1:
+            description = (
+                            f'ICMP scanning {scanned_ip} ICMP scan type: {attack}. '
+                            f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                            f'Confidence: {confidence}. by Slips'
+                        )
+        else:
+            description = (
+                f'ICMP scanning {number_of_scanned_ips} different IPs. ICMP scan type: {attack}. '
+                f'Total packets sent: {pkts_sent} over {len(icmp_flows_uids)} flows. '
+                f'Confidence: {confidence}. by Slips'
+            )
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            conn_count=pkts_sent,
+            source_target_tag=source_target_tag,
+            proto=protocol,
+            profileid=profileid,
+            twid=twid,
+            uid=icmp_flows_uids,
+        )
+        # Set 'malicious' label in the detected profile
+        __database__.set_profile_module_label(
+            profileid, type_evidence, self.malicious_label
+        )
+
+
     def run(self):
         utils.drop_root_privs()
         self.timer_thread_vertical_ps.start()
@@ -639,7 +793,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             try:
                 # Wait for a message from the channel that a TW was modified
-                message = self.c1.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c1)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -671,8 +825,9 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     self.check_horizontal_portscan(profileid, twid)
                     self.check_vertical_portscan(profileid, twid)
+                    self.check_icmp_scan(profileid, twid)
 
-                message = self.c2.get_message(timeout=self.timeout)
+                message = __database__.get_message(self.c2)
                 # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
