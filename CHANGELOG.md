@@ -12,6 +12,12 @@
 - Detect empty connections to duckduckgo used by blackmatter for checking internet connection
 - Fix pastebin downloads detection to include HTTPs too
 - Change colors and CLI evidence format
+- don't detect 'connection without dns' when running on an interface except for when it's done by your own IP 
+- Create profiles for all IPs by default (source and destination IPs)
+- Create profiles for all ips reported by peers
+- Alerts now contain attacks done by the profile only (excluding those done to the profile) 
+- Set evidence for each p2p report in the attackers profile
+- Take p2p reports into consideration when deciding to block an IP
 - 
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
