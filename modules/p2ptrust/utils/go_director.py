@@ -1,5 +1,6 @@
 import base64
 import binascii
+from slips_files.common.config_parser import ConfigParser
 import json
 from typing import Dict
 
@@ -60,9 +61,15 @@ class GoDirector:
             'score_confidence': self.process_evaluation_score_confidence
         }
         self.key_type_processors = {'ip': validate_ip_address}
+        self.read_configuration()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print('[TrustDB] ' + text, verbose, debug)
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.width = conf.get_tw_width_as_float()
+
 
     def log(self, text: str):
         """
@@ -412,11 +419,16 @@ class GoDirector:
         # save all report info in the db
         # convert ts to human readable format
         report_info = {
-            'reporter':reporter,
+            'reporter': reporter,
             'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
         __database__.store_p2p_report(key, report_info)
+
+        # create a new profile for the reported ip
+        # with the width from slips.conf and the starttime as the report time
+        if key_type == 'ip':
+            __database__.addProfile(f'profile_{key}', report_time, self.width)
 
     def process_go_update(self, data: dict) -> None:
         """
