@@ -304,7 +304,7 @@ class Database(ProfilingFlowsDatabase, object):
         is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
         """
         # make sure the user specified a home network
-        if self.home_network == utils.home_network_ranges:
+        if not self.home_network:
             # no home_network is specified
             return True
 

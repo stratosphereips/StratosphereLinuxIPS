@@ -71,9 +71,13 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
-    def get_home_network(self) -> list:
+
+    def get_all_homenet_ranges(self):
+        return self.home_network_ranges
+
+    def get_home_network(self):
         """
-        Returns a list of network objects
+        Returns a list of network objects if defined in slips.conf. or False
         """
         home_net = self.read_configuration(
             'parameters', 'home_network', False
@@ -83,10 +87,12 @@ class ConfigParser(object):
             # we have home_network param set in slips.conf
             home_nets = home_net.replace(']','').replace('[','').split(',')
             home_nets = [network.strip() for network in home_nets]
+            return list(map(ipaddress.ip_network, home_nets))
         else:
-            return self.home_network_ranges
+            # return self.home_network_ranges
+            return False
 
-        return list(map(ipaddress.ip_network, home_nets))
+
 
     def evidence_detection_threshold(self):
         threshold = self.read_configuration(

@@ -76,7 +76,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.home_network = conf.get_home_network()
+        self.home_network = conf.home_network_ranges
         self.delete_zeek_files = conf.delete_zeek_files()
         self.store_zeek_files_copy = conf.store_zeek_files_copy()
 
