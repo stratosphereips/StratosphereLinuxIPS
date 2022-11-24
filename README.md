@@ -130,6 +130,7 @@ You can build the Docker of Slips, but consider that system requirements vary de
 
 
 ```mermaid
+graph TD;
     MacOS[MacOS] --> |M1| p2p_m1
     p2p_m1 --> |yes| macosm1-P2P-image
     p2p_m1 --> |no| macosm1-image
