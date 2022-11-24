@@ -51,7 +51,9 @@ RUN apt update && apt install -y --no-install-recommends \
     python3-tzlocal \
     nfdump \
     tshark \
+    git \
     whois \
+    vim \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
