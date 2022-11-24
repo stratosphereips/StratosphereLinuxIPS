@@ -626,7 +626,7 @@ class UpdateFileManager:
             }
             # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
-            response = requests.get(url, auth=auth, json=data).json()
+            response = requests.get(url, timeout=5, auth=auth, json=data).json()
             # extract domains only from the response
             try:
                 response = response['indicators']
