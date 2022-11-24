@@ -1922,7 +1922,7 @@ class Database(ProfilingFlowsDatabase, object):
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
-        """Given a uid, get the alternative flow realted to it"""
+        """ Given a uid, get the alternative flow realted to it """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
