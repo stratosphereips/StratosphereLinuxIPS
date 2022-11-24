@@ -268,17 +268,20 @@ class Module(Module, multiprocessing.Process):
 
     def get_vendor_online(self, mac_addr):
         # couldn't find vendor using offline db, search online
+
+        # If there is no match in the online database,
+        # you will receive an empty response with a status code
+        # of HTTP/1.1 204 No Content
+
         url = 'https://api.macvendors.com'
         try:
             response = requests.get(f'{url}/{mac_addr}', timeout=5)
             if response.status_code == 200:
-                # this onnline db returns results in an array like str [{results}],
+                # this online db returns results in an array like str [{results}],
                 # make it json
                 if vendor:= response.text:
                     return vendor
             return False
-                # If there is no match in the online database,
-                # you will receive an empty response with a status code of HTTP/1.1 204 No Content
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,

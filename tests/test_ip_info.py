@@ -1,7 +1,8 @@
 """Unit test for modules/ip_info/ip_info.py"""
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
-import asyncio
+from ..modules.update_manager.update_file_manager import UpdateFileManager
+import maxminddb
 import pytest
 
 def do_nothing(*args):
@@ -17,6 +18,14 @@ def create_ip_info_instance(outputQueue):
     ip_info.print = do_nothing
     return ip_info
 
+# needed to make sure the macdb is downloaded before running the unit tests
+def create_update_manager_instance(outputQueue):
+    """Create an instance of update_manager.py
+    needed by every other test in this file"""
+    update_manager = UpdateFileManager(outputQueue, 6380)
+    # override the self.print function to avoid broken pipes
+    update_manager.print = do_nothing
+    return update_manager
 
 def create_ASN_Info_instance():
     """Create an instance of asn_info.py
@@ -74,18 +83,34 @@ def test_get_rdns(outputQueue, database):
 
 def test_get_geocountry(outputQueue, database):
     ip_info = create_ip_info_instance(outputQueue)
-    # open the db we'll be using for this test
-    ip_info.wait_for_dbs()
+
+    #open the db we'll be using for this test
+    # ip_info.wait_for_dbs()
+    ip_info.country_db = maxminddb.open_database(
+                'databases/GeoLite2-Country.mmdb'
+            )
+
     assert ip_info.get_geocountry('153.107.41.230') == {
         'geocountry': 'Australia'
     }
     assert ip_info.get_geocountry('23.188.195.255') == {
         'geocountry': 'Unknown'
     }
+def download_mac_db(outputQueue):
+    """ Downloads sthe mac db if not already downloaded"""
+    try:
+        open('databases/macaddress-db.json','r').close()
+    except:
+        ip_info = create_ip_info_instance(outputQueue)
+        update_manager = create_update_manager_instance(outputQueue)
+        response = update_manager.download_file('https://maclookup.app/downloads/json-database/get-db?t=22-08-19&h=d1d39c52de447a7e7194331f379e1e99f94f35f1')
+        assert response != False, 'Connection error while downloading mac db'
+        assert update_manager.update_mac_db(response) == True, 'Error writing mac db to disk'
 
 
 # MAC vendor unit tests
 def test_get_vendor_offline(outputQueue, database):
+    download_mac_db(outputQueue)
     ip_info = create_ip_info_instance(outputQueue)
     # open the db we'll be using for this test
     ip_info.wait_for_dbs()
@@ -104,6 +129,8 @@ def test_get_vendor_online(outputQueue, database):
 
 
 def test_get_vendor(outputQueue, database):
+    # make sure the mac db is download so that wai_for_dbs doesn't wait forever :'D
+    download_mac_db(outputQueue)
     ip_info = create_ip_info_instance(outputQueue)
     # open the db we'll be using for this test
     ip_info.wait_for_dbs()

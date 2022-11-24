@@ -1428,7 +1428,7 @@ class UpdateFileManager:
 
     def update_mac_db(self, response):
         if response.status_code != 200:
-            return
+            return False
         self.log(f'Updating the MAC database.')
         path_to_mac_db = 'databases/macaddress-db.json'
 
@@ -1438,7 +1438,7 @@ class UpdateFileManager:
             mac_db.write(mac_info)
 
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
-
+        return True
 
     def update_online_whitelist(self, response):
         """
