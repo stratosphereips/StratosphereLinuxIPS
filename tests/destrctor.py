@@ -80,7 +80,7 @@ def kill_redis_server(pid):
 
 
 if __name__ == '__main__':
-    redis_server_ports = [65531, 6380, 6381, 1234, 6667]
+    redis_server_ports = [65531, 6380, 6381, 1234]
     closed_servers = 0
     for redis_port in redis_server_ports:
         # On modern systems, the netstat utility comes pre-installed,
@@ -89,7 +89,8 @@ if __name__ == '__main__':
         if not redis_pid:
             # server isn't started yet
             continue
-        print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
+
+        # print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
         try:
             flush_redis_server(str(redis_port))
             print(f'Flushed redis-server opened on port: {redis_port}')
