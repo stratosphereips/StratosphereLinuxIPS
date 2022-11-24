@@ -33,16 +33,14 @@ def read_redis_port():
 def index():
     return render_template('app.html', title='Slips')
 
-# Example of redirect and signal sent
 @app.route('/db/<new_port>')
 def get_post_javascript_data(new_port):
-    print("app: recevied port")
+
     message_sent.send(
         current_app._get_current_object(),
         port=int(new_port),
         dbnumber=0
     )
-    print("redirect")
     return redirect(url_for('index'))
 
 @app.route('/info')
@@ -55,10 +53,10 @@ def set_pcap_info():
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('-p')
-    args = parser.parse_args()
-    port = args.p
+    # parser = ArgumentParser()
+    # parser.add_argument('-p')
+    # args = parser.parse_args()
+    # port = args.p
 
     app.register_blueprint(analysis, url_prefix="/analysis")
 
