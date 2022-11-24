@@ -19,7 +19,7 @@ $("#table_choose_redis").DataTable({
     searching: false,
     ajax: '/redis',
     "bInfo": false,
-    scrollY: 100,
+    scrollY: "15vh",
     paging: false,
     select:true,
     columns: [
