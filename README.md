@@ -151,8 +151,8 @@ graph TD;
     p2p_m1{P2P Support}
     slips_image[ubuntu-image]
 
-    macos_other_processor_p2p[ubuntu-image]
-    macos_other_processor_nop2p[P2p-image]
+    macos_other_processor_p2p[P2p-image]
+    macos_other_processor_nop2p[ubuntu-image]
 
     linux_p2p{P2P Support}
 
