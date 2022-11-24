@@ -263,7 +263,7 @@ class Module(Module, multiprocessing.Process):
         url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
 
         try:
-            response = requests.get(url)
+            response = requests.get(url, timeout=5)
             if response.status_code != 200 or not response.text:
                raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
