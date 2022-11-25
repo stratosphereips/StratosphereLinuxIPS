@@ -139,11 +139,17 @@ class Module(Module, multiprocessing.Process):
             self.print("No models found! Please train first. ")
             return False
 
-    def train(self):
+    def train(self, flows):
+        """
+        :param flows: flows of the closed tw to train on
+        """
+
         # make sure it is not first run so we don't save an empty model to disk
-        if self.current_srcip != self.new_srcip: # todo not self.is_first_run and
-            # srcip changed
-            self.current_srcip = self.new_srcip
+        # first run is the only case that the new srcip will be == the curr ip,
+        # so we should create a new df. but starting from next run, don't chaneg self.bro_df unless the srcipip changes
+        if self.current_srcip != self.new_srcip or self.is_first_run:
+            self.is_first_run = False
+
             try:
                 # there is a dataframe for this src ip, append to it
                 self.bro_df = self.dataframes[self.current_srcip]
@@ -153,10 +159,7 @@ class Module(Module, multiprocessing.Process):
                 # empty the current dataframe so we can create a new one for the new srcip
                 self.bro_df = None
 
-        # get all flows in the tw
-        flows = __database__.get_all_flows_in_profileid_twid(self.profileid, self.twid)
-        if not flows:
-            return
+
 
         # flows is a dict {uid: serialized flow dict}
         for flow in flows.values():
@@ -189,105 +192,102 @@ class Module(Module, multiprocessing.Process):
         self.normalize_col_with_no_data('dpkts', 'int32')
         self.normalize_col_with_no_data('resp_ip_bytes', 'int32')
         self.normalize_col_with_no_data('dur', 'float64')
-        self.is_first_run = False
 
 
-    def test(self, flow_dict):
+
+    def test(self, flows):
         """
         test for every flow in the closed tw
         """
-        # Create a dataframe
-        bro_df = pd.DataFrame(flow_dict, index=[0])
 
-        # Get the values we're interested in from the flow in a list to give the model
-        try:
-            X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
-        except KeyError:
-            # This flow doesn't have the fields we're interested in
-            return
+        # flows is a dict {uid: serialized flow dict}
+        for flow in flows.values():
+            flow = json.loads(flow)
 
-        # if the srcip changed open the right model (don't reopen the same model on every run)
-        if self.current_srcip != self.new_srcip or (self.current_srcip is self.new_srcip and self.is_first_run):
-            path_to_model = self.get_model()
+            # Create a dataframe
+            bro_df = pd.DataFrame(flow, index=[0])
+
+            # Get the values we're interested in from the flow in a list to give the model
             try:
-                with open(path_to_model, 'rb') as model:
-                    clf = pickle.load(model)
-            except FileNotFoundError :
-                # probably because slips wasn't run in train mode first
-                self.print(f"No models found in modules/anomaly-detection for {self.current_srcip}. Stopping.")
-                return True
+                X_test = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
+            except KeyError:
+                # This flow doesn't have the fields we're interested in
+                return
+
+            # if the srcip changed open the right model (don't reopen the same model on every run)
+            # first run is the only case that the new ip will be == the curr ip,
+            # so we should open the model. but starting from next run, don't open the model unless the ip changes
+            if self.current_srcip != self.new_srcip or self.is_first_run:
+                self.is_first_run = False
+                path_to_model = self.get_model()
+                try:
+                    with open(path_to_model, 'rb') as model:
+                        clf = pickle.load(model)
+                except FileNotFoundError :
+                    # probably because slips wasn't run in train mode first
+                    self.print(f"No models found in modules/anomaly-detection for {self.current_srcip}. Stopping.")
+                    return True
 
 
-        # Get the prediction on the test data
-        y_test_scores = clf.decision_function(X_test)  # outlier scores
-        # Convert the ndarrays of scores and predictions to  pandas series
-        scores_series = pd.Series(y_test_scores)
+            # Get the prediction on the test data
+            y_test_scores = clf.decision_function(X_test)  # outlier scores
+            # Convert the ndarrays of scores and predictions to  pandas series
+            scores_series = pd.Series(y_test_scores)
 
-        # Add the score to the flow
-        __database__.set_module_label_to_flow(
-            self.profileid,
-            self.twid,
-            self.uid,
-            'anomaly-detection-score',
-            str(scores_series.values[0])
-        )
-        # update the current srcip
-        self.current_srcip = self.new_srcip
-        self.is_first_run = False
+            # Add the score to the flow
+            __database__.set_module_label_to_flow(
+                self.profileid,
+                self.twid,
+                self.uid,
+                'anomaly-detection-score',
+                str(scores_series.values[0])
+            )
+            # update the current srcip
+            self.current_srcip = self.new_srcip
+
+
 
     def run(self):
         if 'train' in self.mode:
             self.saving_thread.start()
 
         if self.mode.lower() in ('none', ''):
+            self.print(f"{self.mode} is not a valid mode, available options are: "
+                       f"training or testing. Anomaly Detector module stopping.")
             self.shutdown_gracefully()
             return True
 
         while True:
             try:
-                if 'train' in self.mode:
-                    msg = __database__.get_message(self.c1)
-                    if msg and msg['data'] == 'stop_process':
-                        self.shutdown_gracefully()
+                msg = __database__.get_message(self.c1)
+                if msg and msg['data'] == 'stop_process':
+                    self.shutdown_gracefully()
 
-                    if utils.is_msg_intended_for(msg, 'tw_closed'):
-                        profileid_twid = msg["data"]
-                        # example: profile_192.168.1.1_timewindow1
-                        self.profileid_twid = profileid_twid.split('_')
-                        self.new_srcip = profileid_twid[1]
-                        self.twid = profileid_twid[2]
-                        self.profileid = f'{profileid_twid[0]}_{profileid_twid[1]}'
-                        self.train()
+                if utils.is_msg_intended_for(msg, 'tw_closed'):
+                    profileid_twid = msg["data"]
+                    # example: profile_192.168.1.1_timewindow1
+                    self.profileid_twid = profileid_twid.split('_')
+                    self.new_srcip = self.profileid_twid[1]
+                    self.twid = self.profileid_twid[2]
+                    self.profileid = f'{self.profileid_twid[0]}_{self.profileid_twid[1]}'
 
-                elif 'test' in self.mode:
-                    if not self.are_there_models_to_test():
-                        return True
+                    if self.is_first_run:
+                        self.current_srcip = self.new_srcip
 
-                    msg = __database__.get_message(self.c1)
-                    if msg and msg['data'] == 'stop_process':
-                        self.shutdown_gracefully()
+                    # get all flows in the tw
+                    flows = __database__.get_all_flows_in_profileid_twid(self.profileid, self.twid)
+                    if not flows:
+                        continue
 
-                    if utils.is_msg_intended_for(msg, 'tw_closed'):
-                        flow = msg["data"]
-                        flow = json.loads(flow)
-                        self.profileid = flow['profileid']
-                        self.twid = flow['twid']
-                        # flow is a json serialized dict of one key {'uid' : str(flow)}
-                        flow = json.loads(flow['flow'])
-                        #  flow contains only one key(uid). Get it.
-                        self.uid = list(flow.keys())[0]
-                        # Get the flow as dict
-                        flow_dict = json.loads(flow[self.uid])
-                        self.new_srcip = flow_dict['saddr']
-                        if self.is_first_run:
-                            self.current_srcip = self.new_srcip
+                    if 'train' in self.mode:
+                        self.train(flows)
 
-                        self.test(flow_dict)
+                    elif 'test' in self.mode:
+                        if not self.are_there_models_to_test():
+                            return True
 
-                else:
-                    self.print(f"{self.mode} is not a valid mode, available options are: "
-                               f"training or testing. Anomaly Detector module stopping.")
-                    return True
+                        self.test(flows)
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
             except Exception as inst:
