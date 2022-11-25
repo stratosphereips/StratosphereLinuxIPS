@@ -34,7 +34,6 @@ class Module(Module, multiprocessing.Process):
             target=self.save_models_thread,
             daemon=True
         )
-        self.thread_started = False
         self.models_path = 'modules/anomaly-detection/models/'
 
     def print(self, text, verbose=1, debug=0):
@@ -59,7 +58,7 @@ class Module(Module, multiprocessing.Process):
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.mode =  conf.get_anomaly_detection_mode()
+        self.mode = conf.get_anomaly_detection_mode()
 
     def save_models_thread(self):
         """ Saves models to disk every 1h """
@@ -74,6 +73,7 @@ class Module(Module, multiprocessing.Process):
         # make sure there's a dir to save the models to
         if not os.path.isdir(self.models_path):
             os.mkdir(self.models_path)
+
         for srcip, bro_df in self.dataframes.items():
             if not bro_df:
                 continue
@@ -85,14 +85,18 @@ class Module(Module, multiprocessing.Process):
             X_train = X_train.values
             # Fit the model to the train data
             clf.fit(X_train)
-
             # save the model to disk
-            path_to_df = self.models_path + srcip
+            path_to_df = os.path.join(self.models_path, srcip)
             with open(path_to_df, 'wb') as model:
                 pickle.dump(clf, model)
+
         self.print('Done.')
 
     def shutdown_gracefully(self):
+        if 'train' in self.mode:
+            # train and save the models before exiting
+            self.save_models()
+
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -132,14 +136,12 @@ class Module(Module, multiprocessing.Process):
         # Check if there's models to test or not
         if (not os.path.isdir(self.models_path)
                 or not os.listdir(self.models_path)):
-            self.print("No models found! "
-                       "Please train first. "
-                       "https://stratospherelinuxips.readthedocs.io/en/develop/")
+            self.print("No models found! Please train first. ")
             return False
 
     def train(self):
         # make sure it is not first run so we don't save an empty model to disk
-        if not self.is_first_run and self.current_srcip != self.new_srcip:
+        if self.current_srcip != self.new_srcip: # todo not self.is_first_run and
             # srcip changed
             self.current_srcip = self.new_srcip
             try:
@@ -234,25 +236,19 @@ class Module(Module, multiprocessing.Process):
         self.is_first_run = False
 
     def run(self):
-        # Main loop function
+        if 'train' in self.mode:
+            self.saving_thread.start()
+
+        if self.mode.lower() in ('none', ''):
+            self.shutdown_gracefully()
+            return True
+
         while True:
             try:
-                if self.mode.lower() in ('none', ''):
-                    # ignore this module
-                    return True
-
                 if 'train' in self.mode:
-                    # start the saving thread only once
-                    if not self.thread_started :
-                        self.saving_thread.start()
-                        self.thread_started = True
-
                     msg = __database__.get_message(self.c1)
                     if msg and msg['data'] == 'stop_process':
-                        # train and save the models before exiting
-                        self.save_models()
                         self.shutdown_gracefully()
-                        return True
 
                     if utils.is_msg_intended_for(msg, 'tw_closed'):
                         profileid_twid = msg["data"]
@@ -270,7 +266,6 @@ class Module(Module, multiprocessing.Process):
                     msg = __database__.get_message(self.c1)
                     if msg and msg['data'] == 'stop_process':
                         self.shutdown_gracefully()
-                        return True
 
                     if utils.is_msg_intended_for(msg, 'tw_closed'):
                         flow = msg["data"]
@@ -291,11 +286,10 @@ class Module(Module, multiprocessing.Process):
 
                 else:
                     self.print(f"{self.mode} is not a valid mode, available options are: "
-                               f"training or testing. anomaly-detection module stopping.")
+                               f"training or testing. Anomaly Detector module stopping.")
                     return True
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
-                return False
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
