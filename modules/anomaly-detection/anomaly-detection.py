@@ -2,8 +2,8 @@
 from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 import multiprocessing
-from slips_files.core.database import __database__
-import platform
+from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 import sys
 
 # Your imports
@@ -17,18 +17,16 @@ import time
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'anomaly-detection'
+    name = 'Anomaly Detector'
     description = 'Anomaly detector for zeek conn.log files'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, config, redis_port):
+    def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.outputqueue = outputqueue
-        self.config = config
-        self.mode = self.config.get('parameters', 'anomaly_detection_mode').lower()
-        __database__.start(self.config, redis_port)
+        self.read_configuration()
+        __database__.start(redis_port)
         self.c1 = __database__.subscribe('tw_closed')
-        self.timeout = 0.0000001
         self.is_first_run = True
         self.current_srcip = ''
         self.dataframes = {}
@@ -58,6 +56,10 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.mode =  conf.get_anomaly_detection_mode()
 
     def save_models_thread(self):
         """ Saves models to disk every 1h """
@@ -245,7 +247,7 @@ class Module(Module, multiprocessing.Process):
                         self.saving_thread.start()
                         self.thread_started = True
 
-                    msg = self.c1.get_message(timeout=self.timeout)
+                    msg = __database__.get_message(self.c1)
                     if msg and msg['data'] == 'stop_process':
                         # train and save the models before exiting
                         self.save_models()
@@ -265,7 +267,7 @@ class Module(Module, multiprocessing.Process):
                     if not self.are_there_models_to_test():
                         return True
 
-                    msg = self.c3.get_message(timeout=self.timeout)
+                    msg = __database__.get_message(self.c1)
                     if msg and msg['data'] == 'stop_process':
                         self.shutdown_gracefully()
                         return True
