@@ -184,6 +184,11 @@ class Module(Module, multiprocessing.Process):
                         # flows is a dict {uid: serialized flow dict}
                         for flow in flows.values():
                             flow = json.loads(flow)
+                            # execlude ARP flows from this module since they don't have any of these values
+                            # (pkts allbytes spkts sbytes appproto)
+                            if flow.get('proto', '') == 'ARP':
+                                continue
+
                             try:
                                 # Is there a dataframe? append to it
                                 self.bro_df = self.bro_df.append(flow, ignore_index=True)
