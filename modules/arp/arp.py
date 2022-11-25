@@ -9,7 +9,7 @@ from multiprocessing import Queue
 class ARP(IModule, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'ARP'
-    description = 'Detect arp attacks'
+    description = 'Detect ARP attacks'
     authors = ['Alya Gomaa']
     def init(self):
         self.c1 = self.db.subscribe('new_arp')
