@@ -109,21 +109,25 @@ class Module(Module, multiprocessing.Process):
             # return a random model
             return self.models_path + model_name
 
-    def normalize_col_with_no_data(self, column, type):
+    def normalize_col_with_no_data(self, column, type_):
         """
         Replace the rows without data (with '-') with 0.
-        Even though this may add a bias in the algorithms,
-        is better than not using the lines.
         Also fill the no values with 0
-        Finally put a type to each column
+        and change the type of each column
         """
+        # Even though this may add a bias in the algorithms,
+        # is better than not using the lines.
         try:
-            self.bro_df[column].replace('-', '0', inplace=True)  # orig_bytes
-            self.bro_df[column] = self.bro_df[column].fillna(0).astype(type)
+            self.bro_df[column].replace('-', '0', inplace=True)
+            self.bro_df[column].replace('', '0', inplace=True)
+            # fillna() replaces the NULL values with a specified value
+            self.bro_df[column] = self.bro_df[column].fillna(0)
+            # astype converts the result to the given type_
+            self.bro_df[column] = self.bro_df[column].astype(type_)
         except KeyError:
             pass
 
-    def is_there_models_to_test(self):
+    def are_there_models_to_test(self):
         # Check if there's models to test or not
         if (not os.path.isdir(self.models_path)
                 or not os.listdir(self.models_path)):
@@ -159,7 +163,7 @@ class Module(Module, multiprocessing.Process):
                         profileid_twid = profileid_twid.split('_')
                         self.new_srcip = profileid_twid[1]
                         twid = profileid_twid[2]
-
+                        profileid = f'{profileid_twid[0]}_{profileid_twid[1]}'
                         # make sure it is not first run so we don't save an empty model to disk
                         if not self.is_first_run and self.current_srcip != self.new_srcip:
                             # srcip changed
@@ -172,8 +176,6 @@ class Module(Module, multiprocessing.Process):
                                 self.dataframes[self.current_srcip] = None
                                 # empty the current dataframe so we can create a new one for the new srcip
                                 self.bro_df = None
-
-                        profileid = f'{profileid_twid[0]}_{profileid_twid[1]}'
 
                         # get all flows in the tw
                         flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
@@ -192,9 +194,12 @@ class Module(Module, multiprocessing.Process):
                                 self.bro_df = pd.DataFrame(flow, index=[0])
 
                         # In case you need a label, due to some models being able to work in a
-                        # semisupervized mode, then put it here. For now everything is
+                        # semisupervised mode, then put it here. For now everything is
                         # 'normal', but we are not using this for detection
                         self.bro_df['label'] = 'normal'
+
+                        # from IPython.display import display
+                        # display(self.bro_df)
                         self.normalize_col_with_no_data('sbytes', 'int32')
                         self.normalize_col_with_no_data('dbytes', 'int32')
                         self.normalize_col_with_no_data('orig_ip_bytes', 'int32')
@@ -204,14 +209,15 @@ class Module(Module, multiprocessing.Process):
                         self.is_first_run = False
 
                 elif 'test' in self.mode:
-                    msg = self.c2.get_message(timeout=self.timeout)
+                    if not self.are_there_models_to_test():
+                        return True
+
+                    msg = self.c3.get_message(timeout=self.timeout)
                     if msg and msg['data'] == 'stop_process':
                         self.shutdown_gracefully()
                         return True
 
-                    if utils.is_msg_intended_for(msg, 'new_flow'):
-                        if not self.is_there_models_to_test():
-                            return True
+                    if utils.is_msg_intended_for(msg, 'tw_closed'):
                         flow = msg["data"]
                         flow = json.loads(flow)
                         profileid = flow['profileid']
