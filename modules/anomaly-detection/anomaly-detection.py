@@ -96,7 +96,6 @@ class Module(Module, multiprocessing.Process):
         if 'train' in self.mode:
             # train and save the models before exiting
             self.save_models()
-
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -175,8 +174,20 @@ class Module(Module, multiprocessing.Process):
             except (UnboundLocalError, AttributeError):
                 # There's no dataframe, create one
                 # current srcip will be used as the model name
-                self.current_srcip = self.profileid_twid[1]
+                # self.current_srcip = self.profileid_twid[1]
                 self.bro_df = pd.DataFrame(flow, index=[0])
+
+
+        try:
+            if self.bro_df == None:
+                # if it's still None, this means that all flows in this profile and tw
+                # were ARP, ignore them
+                return
+        except ValueError:
+            # this try except is a way to check that there is a df!
+            # comes here if there is
+            # todo more nice way to do so??
+            pass
 
         # In case you need a label, due to some models being able to work in a
         # semisupervised mode, then put it here. For now everything is
