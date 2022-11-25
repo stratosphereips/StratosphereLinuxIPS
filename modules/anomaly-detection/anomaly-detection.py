@@ -75,7 +75,8 @@ class Module(Module, multiprocessing.Process):
             os.mkdir(self.models_path)
 
         for srcip, bro_df in self.dataframes.items():
-            if not bro_df:
+
+            if not self.df_exists(bro_df):
                 continue
             # Add the columns from the log file that we know are numbers. This is only for conn.log files.
             X_train = bro_df[['dur', 'sbytes', 'dport', 'dbytes', 'orig_ip_bytes', 'dpkts', 'resp_ip_bytes']]
@@ -138,6 +139,22 @@ class Module(Module, multiprocessing.Process):
             self.print("No models found! Please train first. ")
             return False
 
+    def df_exists(self, bro_df):
+        """
+        return False if the dataframe is None
+        """
+        try:
+            if self.bro_df == None:
+                # if it's still None, this means that all flows in this profile and tw
+                # were ARP, ignore them
+                return False
+        except ValueError:
+            # this try except is a way to check that there is a df!
+            # comes here if there is
+            # todo more nice way to do so??
+            return True
+
+
     def train(self, flows):
         """
         :param flows: flows of the closed tw to train on
@@ -170,6 +187,7 @@ class Module(Module, multiprocessing.Process):
 
             try:
                 # Is there a dataframe? append to it
+
                 self.bro_df = self.bro_df.append(flow, ignore_index=True)
             except (UnboundLocalError, AttributeError):
                 # There's no dataframe, create one
@@ -177,17 +195,7 @@ class Module(Module, multiprocessing.Process):
                 # self.current_srcip = self.profileid_twid[1]
                 self.bro_df = pd.DataFrame(flow, index=[0])
 
-
-        try:
-            if self.bro_df == None:
-                # if it's still None, this means that all flows in this profile and tw
-                # were ARP, ignore them
-                return
-        except ValueError:
-            # this try except is a way to check that there is a df!
-            # comes here if there is
-            # todo more nice way to do so??
-            pass
+        if not self.df_exists(self.bro_df): return
 
         # In case you need a label, due to some models being able to work in a
         # semisupervised mode, then put it here. For now everything is
@@ -203,7 +211,7 @@ class Module(Module, multiprocessing.Process):
         self.normalize_col_with_no_data('dpkts', 'int32')
         self.normalize_col_with_no_data('resp_ip_bytes', 'int32')
         self.normalize_col_with_no_data('dur', 'float64')
-
+        self.dataframes[self.current_srcip] = self.bro_df
 
 
     def test(self, flows):
@@ -281,6 +289,7 @@ class Module(Module, multiprocessing.Process):
                     self.new_srcip = self.profileid_twid[1]
                     self.twid = self.profileid_twid[2]
                     self.profileid = f'{self.profileid_twid[0]}_{self.profileid_twid[1]}'
+
 
                     if self.is_first_run:
                         self.current_srcip = self.new_srcip
