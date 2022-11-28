@@ -253,7 +253,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_pastebin_download(
-            self, daddr, server_name, uid, ts, profileid, twid, wait_time=120
+            self, daddr, server_name, uid, ts, profileid, twid, wait_time=10
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
@@ -267,14 +267,14 @@ class Module(Module, multiprocessing.Process):
         # get the conn.log with the same uid, returns {uid: {actual flow..}}
         # always returns a dict, neever returns None
         flow: dict = __database__.get_flow(profileid, twid, uid)
-        flow = flow.get('uid')
+        flow = flow.get(uid)
 
         if flow:
+            flow = json.loads(flow)
             # orig_bytes is number of payload bytes downloaded
-            downloaded_bytes = flow.get('resp_bytes', False)
+            downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
 
             if downloaded_bytes >= 12000:
-
                 self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
 
                 try:
@@ -289,7 +289,6 @@ class Module(Module, multiprocessing.Process):
                 return False
 
         # reaching this point means we didn't get the conn.log flow yet
-
         if uid not in self.ssl_checked_in_timer_thread:
             # comes here if we haven't started the timer thread for this uid before
             # mark this ssl as checked
@@ -303,7 +302,6 @@ class Module(Module, multiprocessing.Process):
                 self.ssl_checked_in_timer_thread.remove(uid)
             except ValueError:
                 pass
-
 
         # uid in the ssl checked list of not, we will keep waiting 2 mins until we find the conn.log flow
         params = [daddr, server_name, uid, ts, profileid, twid]
