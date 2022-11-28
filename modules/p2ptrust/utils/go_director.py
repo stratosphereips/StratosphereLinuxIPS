@@ -1,5 +1,6 @@
 import base64
 import binascii
+from slips_files.common.config_parser import ConfigParser
 import json
 from typing import Dict
 
@@ -60,9 +61,15 @@ class GoDirector:
             'score_confidence': self.process_evaluation_score_confidence
         }
         self.key_type_processors = {'ip': validate_ip_address}
+        self.read_configuration()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print('[TrustDB] ' + text, verbose, debug)
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.width = conf.get_tw_width_as_float()
+
 
     def log(self, text: str):
         """
@@ -412,11 +419,66 @@ class GoDirector:
         # save all report info in the db
         # convert ts to human readable format
         report_info = {
-            'reporter':reporter,
+            'reporter': reporter,
             'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
         __database__.store_p2p_report(key, report_info)
+
+        # create a new profile for the reported ip
+        # with the width from slips.conf and the starttime as the report time
+        if key_type == 'ip':
+            profileid_of_attacker = f'profile_{key}'
+            # print(f"@@@@@@@@@@@@@@@@@@ created profile for {key} reported by {report_time} .. {report_time} .. {self.width}")
+            __database__.addProfile(profileid_of_attacker, report_time, self.width)
+            self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
+
+    def set_evidence_p2p_report(self, ip, reporter, score, confidence, timestamp, profileid_of_attacker):
+        """
+        set evidence for the newly created attacker profile stating that it attacked another peer
+        """
+        type_detection = 'srcip'
+        detection_info = ip
+        type_evidence = 'P2PReport'
+        threat_level = utils.threat_level_to_string(score)
+        category = 'Anomaly.Connection'
+
+        # confidence depends on how long the connection
+        # scale the confidence from 0 to 1, 1 means 24 hours long
+        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False)
+        last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+
+        # this should never happen. if we have a report, we will have a reporter
+        # and will have the ip of the reporter
+        # but just in case
+        if not reporter_ip:
+            reporter_ip = ''
+
+        description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
+                      f'confidence: {confidence} {ip_identification}'
+        # get the tw of this report time
+        if twid := __database__.getTWofTime(profileid_of_attacker, timestamp):
+            twid = twid[0]
+        else:
+            # create a new twid for the attacker profile that has the
+            # report time to add this evidence to
+            twid = __database__.get_timewindow(timestamp, profileid_of_attacker)
+
+        uid = ''
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid_of_attacker,
+            twid=twid,
+            uid=uid,
+        )
+
 
     def process_go_update(self, data: dict) -> None:
         """

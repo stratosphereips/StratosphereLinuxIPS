@@ -146,6 +146,37 @@ class Helper:
             uid=uid,
         )
 
+
+    def set_evidence_pastebin_download(
+            self, daddr, bytes_downloaded, timestamp, profileid, twid, uid
+       ):
+        type_detection = 'dstip'
+        source_target_tag = 'Malware'
+        detection_info = daddr
+        type_evidence = 'PastebinDownload'
+        threat_level = 'info'
+        category = 'Anomaly.Behaviour'
+        confidence = 1
+        response_body_len = utils.convert_to_mb(bytes_downloaded)
+        description = (
+           f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
+        )
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+        return True
+
     def set_evidence_conn_without_dns(
         self, daddr, timestamp, profileid, twid, uid
     ):
@@ -217,9 +248,9 @@ class Helper:
         confidence = 1
         threat_level = 'high'
         category = 'Anomaly.Connection'
-        type_detection = 'dstip'
+        type_detection = 'srcip'
         type_evidence = 'UnknownPort'
-        detection_info = daddr
+        detection_info = profileid.split('_')[-1]
         ip_identification = __database__.getIPIdentification(daddr)
         description = (
             f'Connection to unknown destination port {dport}/{proto.upper()} '
@@ -242,22 +273,21 @@ class Helper:
             uid=uid,
         )
 
-    def set_evidence_pw_guessing(self, msg, timestamp, profileid, twid, uid):
+    def set_evidence_pw_guessing(self, description, timestamp, profileid, twid, uid, conn_count, scanning_ip, by=''):
         # 222.186.30.112 appears to be guessing SSH passwords (seen in 30 connections)
         # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
-        description = f'password guessing by Zeek engine. {msg}'
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'
-        detection_info = msg.split(' appears')[0]
-        conn_count = int(msg.split('in ')[1].split('connections')[0])
+        description += f'. by {by}.'
+
         __database__.setEvidence(
             type_evidence,
             type_detection,
-            detection_info,
+            scanning_ip,
             threat_level,
             confidence,
             description,

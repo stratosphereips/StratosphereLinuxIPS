@@ -316,25 +316,25 @@ class Main:
 
             module_class = modules_to_call[module_name]['obj']
             if 'P2P Trust' == module_name:
-                ModuleProcess = module_class(
+                module = module_class(
                     self.outputqueue,
                     self.redis_port,
                     output_dir=self.args.output
                 )
             else:
-                ModuleProcess = module_class(
+                module = module_class(
                     self.outputqueue,
                     self.redis_port
                 )
-            ModuleProcess.start()
+            module.start()
             __database__.store_process_PID(
-                module_name, int(ModuleProcess.pid)
+                module_name, int(module.pid)
             )
             description = modules_to_call[module_name]['description']
             self.print(
-                f'\t\tStarting the module {module_name} '
+                f'\t\tStarting the module {self.green(module_name)} '
                 f'({description}) '
-                f'[PID {ModuleProcess.pid}]', 1, 0
+                f'[PID {self.green(module.pid)}]', 1, 0
                 )
         # give outputprocess time to print all the started modules
         time.sleep(0.5)
@@ -364,8 +364,8 @@ class Main:
             )
             logs_process.start()
             self.print(
-                f'Started Logs Process '
-                f'[PID {logs_process.pid}]', 1, 0
+                f'Started {self.green("Logs Process")} '
+                f'[PID {self.green(logs_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Logs', int(logs_process.pid)
@@ -761,6 +761,11 @@ class Main:
                         # are closed, the only ones left are the ones we want to kill last
                         if len(self.PIDs) > len(modules_to_be_killed_last) and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
+                                if 'Update Manager' not in finished_modules:
+                                    print(
+                                        f"[Main] Update Manager may take several minutes "
+                                        f"to finish updating 45+ TI files."
+                                    )
                                 warning_printed = True
 
                             # -t flag is only used in integration tests,
@@ -1342,11 +1347,6 @@ class Main:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
-        if self.conf.use_p2p() and not self.args.interface:
-            print('P2P is only supported using an interface.\n'
-                  'set use_p2p=no in slips.conf and restart Slips.')
-            self.terminate_slips()
-
         if self.args.config and not os.path.exists(self.args.config):
             print(f"{self.args.config} doesn't exist. Stopping Slips")
             self.terminate_slips()
@@ -1504,7 +1504,7 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {version}'
+        slips_version = f'Slips. Version {self.green(version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
@@ -1605,9 +1605,9 @@ class Main:
             __database__.store_std_file(**std_files)
 
 
-            self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
-            self.print(f'Started main program [PID {self.pid}]', 1, 0)
-            self.print(f'Started Output Process [PID {output_process.pid}]', 1, 0)
+            self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
+            self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
+            self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 0, 1)
 
 
@@ -1639,8 +1639,8 @@ class Main:
             )
             evidence_process.start()
             self.print(
-                f'Started Evidence Process '
-                f'[PID {evidence_process.pid}]', 1, 0
+                f'Started {self.green("Evidence Process")} '
+                f'[PID {self.green(evidence_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Evidence',
@@ -1661,8 +1661,8 @@ class Main:
             )
             profiler_process.start()
             self.print(
-                f'Started Profiler Process '
-                f'[PID {profiler_process.pid}]', 1, 0
+                f'Started {self.green("Profiler Process")} '
+                f'[PID {self.green(profiler_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Profiler',
@@ -1683,8 +1683,8 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started Input Process '
-                f'[PID {inputProcess.pid}]', 1, 0
+                f'Started {self.green("Input Process")} '
+                f'[PID {self.green(inputProcess.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Input Process',
@@ -1692,6 +1692,10 @@ class Main:
             )
             self.zeek_folder = inputProcess.zeek_folder
             self.set_input_metadata()
+
+            if self.conf.use_p2p() and not self.args.interface:
+                self.print('Warning: P2P is only supported using an interface. Disabled P2P.')
+
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:

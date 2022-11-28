@@ -68,87 +68,115 @@ class Whitelist:
             return True
 
 
+    def is_whitelisted_domain_in_flow(self, whitelisted_domain, direction, domains_of_flow, ignore_type):
+        """
+        Given the domain of a flow, and a whitelisted domain,
+        this function checks any of the flow domains
+        is a subdomain or the same domain as the whitelisted domain
+
+        :param whitelisted_domain: the domain we want to check if it exists in the domains_of_flow
+        :param ignore_type: alerts or flows or both
+        :param direction: src or dst or both
+        :param domains_of_flow: src domains of the src IP of the flow,
+                                or dst domains of the dst IP of the flow
+        """
+        whitelisted_domains = __database__.get_whitelist('domains')
+        if not whitelisted_domains:
+            return False
+
+        # do we wanna whitelist flows coming from or going to this domain or both?
+        from_ = whitelisted_domains[whitelisted_domain]['from']
+        what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+
+        # Now check the domains of the src IP
+        if direction in from_ or 'both' in from_:
+            for domain_to_check in domains_of_flow:
+                main_domain = domain_to_check[-len(whitelisted_domain) :]
+                if whitelisted_domain in main_domain:
+                    # We can ignore flows or alerts, what is it?
+                    if (
+                        ignore_type in what_to_ignore
+                        or 'both' in what_to_ignore
+                    ):
+                        return True
+        return False
+
+    def is_whitelisted_domain(self, domain_to_check, saddr, daddr, ignore_type):
+        """
+        :param domain_to_check: the domain we want to know if whitelisted or not
+        :param saddr: saddr of the flow we're checking
+        :param daddr: daddr of the flow we're checking
+        :param ignore_type: alerts or flows or both
+        """
+
+        whitelisted_domains = __database__.get_whitelist('domains')
+        if not whitelisted_domains:
+            return False
+
+        # get the domains of this flow
+        (
+            dst_domains_of_flow,
+            src_domains_of_flow,
+        ) = self.get_domains_of_flow(saddr, daddr)
+
+        # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
+        # Go through each whitelisted domain and check if what arrived is there
+        for whitelisted_domain in list(whitelisted_domains.keys()):
+            what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
+            # Here we iterate over all the domains to check if we can find
+            # subdomains. If slack.com was whitelisted, then test.slack.com
+            # should be ignored too. But not 'slack.com.test'
+            main_domain = domain_to_check[-len(whitelisted_domain) :]
+            if whitelisted_domain in main_domain:
+                # We can ignore flows or alerts, what is it?
+                if (
+                    ignore_type in what_to_ignore
+                    or 'both' in what_to_ignore
+                ):
+                    # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
+                    return True
+
+
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'src', src_domains_of_flow, ignore_type):
+                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
+                #            f" to domain {domain} of dst IP {column_values['daddr']}")
+                return True
+
+            if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'dst', dst_domains_of_flow, ignore_type):
+                # self.print(f"Whitelisting the domain {domain_to_check} because is
+                # related to domain {domain} of src IP {column_values['saddr']}")
+                return True
+        return False
+
+
     def is_whitelisted_flow(self, column_values, flow_type) -> bool:
         """
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
+        saddr = column_values.get('saddr', '')
+        daddr = column_values.get('daddr', '')
+        # get the domains of the IPs this flow
+        (
+            domains_to_check_dst,
+            domains_to_check_src,
+        ) = self.get_domains_of_flow(saddr, daddr)
 
-        if whitelisted_domains := __database__.get_whitelist('domains'):
-            ssl_domain = column_values.get('server_name', '')  # ssl.log
-            # Domain names are stored in different zeek files using different names.
-            # Try to get the domain from each file.            domains_to_check = [ssl_domain]
-            domains_to_check = [ssl_domain]
-            http_domain = column_values.get('host', '')  # http.log
-            domains_to_check.append(http_domain)
-            notice_domain = column_values.get('sub', '').replace(
-                'CN=', ''
-            )  # in notice.log
-            domains_to_check.append(notice_domain)
+        # check if we have whitelisted domains
 
-            (
-                domains_to_check_dst,
-                domains_to_check_src,
-            ) = self.get_domains_of_flow(column_values)
+        # first get the domains of the flows we ewnt to check if whitelisted
+        # Domain names are stored in different zeek files using different names.
+        # Try to get the domain from each file.
+        ssl_domain = column_values.get('server_name', '')  # ssl.log
+        http_domain = column_values.get('host', '')  # http.log
+        notice_domain = column_values.get('sub', '').replace(
+            'CN=', ''
+        )  # in notice.log
+        domains_to_check = [ssl_domain, http_domain, notice_domain]
 
-            try:
-                # self.print(f"DNS of dst IP {column_values['daddr']}: {__database__.get_dns_resolution(column_values['daddr'])}")
-                dst_dns_domains = __database__.get_dns_resolution(column_values['daddr'])
-                dst_dns_domains = dst_dns_domains.get('domains', [])
-                for dns_domain in dst_dns_domains:
-                    domains_to_check_dst.append(dns_domain)
-            except (KeyError, TypeError):
-                pass
+        for domain in domains_to_check:
+            if self.is_whitelisted_domain(domain, saddr, daddr, 'flows'):
+                return True
 
-            # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
-            # Go through each whitelisted domain and check if what arrived is there
-            for domain in list(whitelisted_domains.keys()):
-                what_to_ignore = whitelisted_domains[domain]['what_to_ignore']
-                # Here we iterate over all the domains to check so we can find
-                # subdomains. If slack.com was whitelisted, then test.slack.com
-                # should be ignored too. But not 'slack.com.test'
-                for domain_to_check in domains_to_check:
-                    main_domain = domain_to_check[-len(domain) :]
-                    if domain in main_domain:
-                        # We can ignore flows or alerts, what is it?
-                        if (
-                            'flows' in what_to_ignore
-                            or 'both' in what_to_ignore
-                        ):
-                            # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
-                            return True
-
-                # do we wanna whitelist flows coming from or going to this domain or both?
-                from_ = whitelisted_domains[domain]['from']
-
-                # Now check the related domains of the src IP
-                if 'src' in from_ or 'both' in from_:
-                    for domain_to_check in domains_to_check_src:
-                        main_domain = domain_to_check[-len(domain) :]
-                        if domain in main_domain:
-                            # We can ignore flows or alerts, what is it?
-                            if (
-                                'flows' in what_to_ignore
-                                or 'both' in what_to_ignore
-                            ):
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related to domain {domain} of src IP {column_values['saddr']}")
-                                return True
-
-                # Now check the related domains of the dst IP
-                if 'dst' in from_ or 'both' in from_:
-                    for domain_to_check in domains_to_check_dst:
-                        main_domain = domain_to_check[-len(domain) :]
-                        if domain in main_domain:
-                            # We can ignore flows or alerts, what is it?
-                            if (
-                                'flows' in what_to_ignore
-                                or 'both' in what_to_ignore
-                            ):
-                                # self.print(f"Whitelisting the domain {domain_to_check} because is related"
-                                #            f" to domain {domain} of dst IP {column_values['daddr']}")
-                                return True
-
-        saddr = column_values['saddr']
-        daddr = column_values['daddr']
 
         if whitelisted_IPs := __database__.get_whitelist('IPs'):
             # self.print('Check the IPs')
@@ -230,11 +258,7 @@ class Whitelist:
                 ]  # flows, alerts or both
                 # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
-                # get the domains of this flow
-                (
-                    domains_to_check_dst,
-                    domains_to_check_src,
-                ) = self.get_domains_of_flow(column_values)
+
 
                 if 'flows' in what_to_ignore or 'both' in what_to_ignore:
                     # We want to block flows from this org. get the domains of this flow based on the direction.
@@ -461,23 +485,23 @@ class Whitelist:
 
         return line_number
 
-    def get_domains_of_flow(self, column_values):
+    def get_domains_of_flow(self, saddr, daddr):
         """Returns the domains of each ip (src and dst) that appeard in this flow"""
         # These separate lists, hold the domains that we should only check if they are SRC or DST. Not both
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
             # self.print(f"IPData of src IP {column_values['saddr']}: {__database__.getIPData(column_values['saddr'])}")
-            ip_data = __database__.getIPData(column_values['saddr'])
+            ip_data = __database__.getIPData(saddr)
             if ip_data:
                 sni_info = ip_data.get('SNI', [{}])[0]
                 if sni_info:
-                    domains_to_check_src.append(sni_info.get('server_name'))
+                    domains_to_check_src.append(sni_info.get('server_name', ''))
         except (KeyError, TypeError):
             pass
         try:
             # self.print(f"DNS of src IP {column_values['saddr']}: {__database__.get_dns_resolution(column_values['saddr'])}")
-            src_dns_domains = __database__.get_dns_resolution(column_values['saddr'])
+            src_dns_domains = __database__.get_dns_resolution(saddr)
             src_dns_domains = src_dns_domains.get('domains', [])
             for dns_domain in src_dns_domains:
                 domains_to_check_src.append(dns_domain)
@@ -485,13 +509,23 @@ class Whitelist:
             pass
         try:
             # self.print(f"IPData of dst IP {column_values['daddr']}: {__database__.getIPData(column_values['daddr'])}")
-            ip_data = __database__.getIPData(column_values['daddr'])
+            ip_data = __database__.getIPData(daddr)
             if ip_data:
                 sni_info = ip_data.get('SNI', [{}])[0]
                 if sni_info:
                     domains_to_check_dst.append(sni_info.get('server_name'))
         except (KeyError, TypeError):
             pass
+
+        try:
+            # self.print(f"DNS of dst IP {column_values['daddr']}: {__database__.get_dns_resolution(column_values['daddr'])}")
+            dst_dns_domains = __database__.get_dns_resolution(daddr)
+            dst_dns_domains = dst_dns_domains.get('domains', [])
+            for dns_domain in dst_dns_domains:
+                domains_to_check_dst.append(dns_domain)
+        except (KeyError, TypeError):
+            pass
+
         return domains_to_check_dst, domains_to_check_src
 
 

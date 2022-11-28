@@ -140,9 +140,11 @@ def test_check_dns_arpa_scan(outputQueue, database):
 def test_detect_DGA(outputQueue, database):
     flowalerts = create_flowalerts_instance(outputQueue)
     rcode_name = 'NXDOMAIN'
+    # arbitrary ip to be able to call detect_DGA
+    daddr = '10.0.0.1'
     for i in range(10):
         dga_detected = flowalerts.detect_DGA(
-            rcode_name, f'example{i}.com', timestamp, profileid, twid, uid
+            rcode_name, f'example{i}.com', timestamp, daddr, profileid, twid, uid
         )
     assert dga_detected == True
 

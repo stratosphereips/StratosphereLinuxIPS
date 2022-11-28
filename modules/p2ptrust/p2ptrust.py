@@ -307,12 +307,12 @@ class Trust(Module, multiprocessing.Process):
         this function is called whenever slips receives peers requests/updates
         happens when a msg is sent in the gopy_channel.
         """
-        try:
-            data: str = msg['data']
-            data: dict = json.loads(data)
-            self.go_director.handle_gopy_data(data)
-        except Exception as e:
-            self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
+        # try:
+        data: str = msg['data']
+        data: dict = json.loads(data)
+        self.go_director.handle_gopy_data(data)
+        # except Exception as e:
+        #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
 
     # def update_callback(self, msg: Dict):
     #     try:
@@ -650,10 +650,10 @@ class Trust(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem with P2P. line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+        # except Exception as inst:
+        #     exception_line = sys.exc_info()[2].tb_lineno
+        #     self.print(f'Problem with P2P. line {exception_line}', 0, 1)
+        #     self.print(str(type(inst)), 0, 1)
+        #     self.print(str(inst.args), 0, 1)
+        #     self.print(str(inst), 0, 1)
+        #     return True

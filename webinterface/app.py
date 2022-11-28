@@ -16,19 +16,32 @@ def create_app():
 app = create_app()
 
 
+@app.route('/redis')
+def read_redis_port():
+    data = []
+    file_path = '../running_slips_info.txt'
+    with open(file_path) as file:
+        for line in file:
+            if line.startswith("Date") or line.startswith("#"):
+                continue
+            line = line.split(',')
+            data.append({"filename": line[1], "redis_port": line[2]})
+    return {"data": data}
+
+
 @app.route('/')
 def index():
     return render_template('app.html', title='Slips')
 
-# Example of redirect and signal sent
-# @app.route('/db')
-# def rem():
-#     message_sent.send(
-#         current_app._get_current_object(),
-#         port=63777,
-#         dbnumber=0
-#     )
-#     return redirect(url_for('index'))
+@app.route('/db/<new_port>')
+def get_post_javascript_data(new_port):
+
+    message_sent.send(
+        current_app._get_current_object(),
+        port=int(new_port),
+        dbnumber=0
+    )
+    return redirect(url_for('index'))
 
 @app.route('/info')
 def set_pcap_info():
@@ -40,10 +53,10 @@ def set_pcap_info():
 
 
 if __name__ == '__main__':
-    parser = ArgumentParser()
-    parser.add_argument('-p')
-    args = parser.parse_args()
-    port = args.p
+    # parser = ArgumentParser()
+    # parser.add_argument('-p')
+    # args = parser.parse_args()
+    # port = args.p
 
     app.register_blueprint(analysis, url_prefix="/analysis")
 

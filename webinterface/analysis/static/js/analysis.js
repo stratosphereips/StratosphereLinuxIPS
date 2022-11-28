@@ -1,4 +1,5 @@
 import { analysisTableDefs, analysisSubTableDefs } from "./tableDefs.js"
+
 /*---------GLOBALS---------*/
 let active_profile = "";
 let active_timewindow = "";
@@ -54,7 +55,7 @@ function addTableEvidence(table_id) {
      "<th>Confidence</th>" +
      "<th>Threat Level</th>" +
      "<th>Category</th>" +
-      "<th>Tag</th>" +
+     "<th>Tag</th>" +
      "<th>Description</th>" +
      "</tr>"+
      "</thead>"

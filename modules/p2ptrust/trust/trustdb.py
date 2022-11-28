@@ -205,6 +205,24 @@ class TrustDB:
             result = None, None, None, None
         return result
 
+
+    def get_ip_of_peer(self, peerid):
+        """
+        Returns the latest IP seen associated with the given peerid
+        :param peerid: the id of the peer we want the ip of
+        """
+        cache_cur = self.conn.execute(
+            'SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;',
+            ((peerid),)
+        )
+        res = cache_cur.fetchone()
+        if res:
+            last_update_time, ip = res
+            return last_update_time, ip
+        return False, False
+
+
+
     def get_opinion_on_ip(self, ipaddress: str):
         """
         :param ipaddress: The ip we're asking other peers about

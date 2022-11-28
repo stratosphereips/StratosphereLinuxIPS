@@ -275,6 +275,17 @@ Then navigate to ```http://localhost:55000/``` from your browser.
 <img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px"
 title="Web Interface">
 
+If you're running slips in docker you will need to add one of the following
+parameters to docker to be able to use the web interface:
+
+Use the host network by adding ```--net=host```, for example:
+
+    docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
+
+
+Use port mapping to access the container's port to the host's port by adding ```-p 55000:55000```, for example:
+
+    docker run -it --rm -p 55000:55000 --name slips stratosphereips/slips:latest
 
 
 ## Saving the database
