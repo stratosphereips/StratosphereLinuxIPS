@@ -562,9 +562,13 @@ class Main:
             '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
         )
 
+    def was_running_zeek(self) -> bool:
+        """returns true if zeek wa sused in this run """
+        return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
-        was_running_zeek = self.input_type in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+        was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
