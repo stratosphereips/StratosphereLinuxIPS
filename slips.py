@@ -129,6 +129,8 @@ class Main:
         Create a dir for logs if logs are enabled
         """
         logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
+        # place the logs dir inside the output dir
+        logs_folder = os.path.join(self.args.output, f'detailed_logs_{logs_folder}')
         try:
             os.makedirs(logs_folder)
         except OSError as e:
