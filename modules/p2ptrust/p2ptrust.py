@@ -253,7 +253,6 @@ class Trust(Module, multiprocessing.Process):
 
         type_evidence = data.get('type_evidence')
         if 'P2PReport' in type_evidence:
-            print(f"@@@@@@@@@@@@@@@@@@  not sharring {data} because it's reported by another peer")
             # we shouldn't re-share evidence reported by other peers
             return
 
