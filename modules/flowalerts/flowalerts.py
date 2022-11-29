@@ -253,69 +253,64 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_pastebin_download(
-            self, daddr, server_name, uid, ts, profileid, twid, wait_time=120
+            self, daddr, server_name, uid, ts, profileid, twid, wait_time=10
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
         :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
-                every time the timer is over, we multiply it by 2 and call the function again
+                every time the timer is over, we wait extra 2 min and call the function again
         """
 
         if 'pastebin' not in server_name:
             return False
 
         # get the conn.log with the same uid, returns {uid: {actual flow..}}
+        # always returns a dict, neever returns None
         flow: dict = __database__.get_flow(profileid, twid, uid)
-        flow = flow[uid]
-        # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = flow.get('resp_bytes', 0)
-        if downloaded_bytes > 12000:
-            self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+        flow = flow.get(uid)
 
-            try:
-                self.ssl_checked_in_timer_thread.remove(uid)
-            except ValueError:
-                pass
+        if flow:
+            flow = json.loads(flow)
+            # orig_bytes is number of payload bytes downloaded
+            downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
 
-            # no need to wait 40 seconds for the connection to appear in conn.log
-            return True
+            if downloaded_bytes >= 12000:
+                self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
 
+                try:
+                    self.ssl_checked_in_timer_thread.remove(uid)
+                except ValueError:
+                    pass
+                return True
 
+            else:
+                # reaching this point means that the conn to pastebin did appear
+                # in conn.log, but the downloaded bytes didnt reach the threshold yet.
+                return False
+
+        # reaching this point means we didn't get the conn.log flow yet
         if uid not in self.ssl_checked_in_timer_thread:
             # comes here if we haven't started the timer thread for this uid before
             # mark this ssl as checked
             self.ssl_checked_in_timer_thread.append(uid)
-            params = [daddr, server_name, uid, ts, profileid, twid]
 
-            # print(f"@@@@@@@@@@@@@@@@@@  waiting 2 min s for {uid} to appear in conn.log")
 
-            # wait 2 min for the connection to appear in conn.log
-            # it appears in ssl.log as soon as it happens, and in conn.log as soon as it ends
-            timer = TimerThread(
-                wait_time, self.check_pastebin_download, params
-            )
-            timer.start()
         else:
-            # It means we already waited 120 seconds this ssl with the Timer
+            # It means we already waited enough for this ssl with the Timer
             # but still no connection for it.
             try:
                 self.ssl_checked_in_timer_thread.remove(uid)
             except ValueError:
                 pass
 
-            # maximum wait time for an ssl to appear in conn.log is 8 mins
-            if wait_time >= 120*4:
-                return False
-
-
-            # double the time and wait again
-            self.helper.set_evidence_pastebin_download(
-                daddr, downloaded_bytes, ts, profileid, twid, uid, wait_time=120*2
-            )
-            return True
-
-
-
+        # uid in the ssl checked list of not, we will keep waiting 2 mins until we find the conn.log flow
+        params = [daddr, server_name, uid, ts, profileid, twid]
+        # wait 2 min for the connection to appear in conn.log
+        # it appears in ssl.log as soon as it happens, and in conn.log as soon as it ends
+        timer = TimerThread(
+            wait_time, self.check_pastebin_download, params
+        )
+        timer.start()
 
     def detect_data_upload_in_twid(self, profileid, twid):
         """

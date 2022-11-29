@@ -695,13 +695,13 @@ class ConfigParser(object):
                 'stix' not in export_to
                 and 'slack' not in export_to
         ):
-            to_ignore.append('Exporting Alerts')
+            to_ignore.append('exporting_alerts')
 
         if (
                 not use_p2p
                 or '-i' not in sys.argv
         ):
-            to_ignore.append('P2P Trust')
+            to_ignore.append('p2ptrust')
 
         # ignore CESNET sharing module if send and receive are
         # disabled in slips.conf
@@ -716,11 +716,11 @@ class ConfigParser(object):
                  '-cb' in sys.argv
                 or '-p' in sys.argv
         ):
-            to_ignore.append('Blocking')
+            to_ignore.append('blocking')
 
         # leak detector only works on pcap files
         if input_type != 'pcap':
-            to_ignore.append('Leak Detector')
+            to_ignore.append('leak_detector')
 
         return to_ignore
 

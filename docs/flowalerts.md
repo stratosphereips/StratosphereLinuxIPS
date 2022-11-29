@@ -17,6 +17,7 @@ The detection techniques are:
 - DGA
 - Connection to multiple ports
 - Malicious SSL certificates
+- Pastebin downloads
 - Young domains
 - Bad SMTP logins
 - SMTP login bruteforce
@@ -174,6 +175,15 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
+
+
+## Pastebin downloads
+
+Slips detects downloads from pastebin using SSL and HTTP
+
+It alerts when a downloaded file from pastebin exceeds 12000 bytes 
+
+Slips detects the pastebin download once the SSL connection is over , which may take hours.  
 
 ## Young Domains
 
