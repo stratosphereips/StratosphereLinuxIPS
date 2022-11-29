@@ -374,7 +374,7 @@ class Module(Module, multiprocessing.Process):
             # so this is either a MITM arp attack or the IP address of this src_mac simply changed
             # todo how to find out which one is it??
             confidence = 0.2   # low confidence for now
-            threat_level = 'ciritical'
+            threat_level = 'critical'
             type_evidence = 'MITM-arp-attack'
             # This may be arp spoofing
             category = 'Recon'
