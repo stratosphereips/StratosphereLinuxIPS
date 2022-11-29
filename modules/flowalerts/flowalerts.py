@@ -92,6 +92,8 @@ class Module(Module, multiprocessing.Process):
         self.long_connection_threshold = conf.long_connection_threshold()
         self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
+        self.our_ips = utils.get_own_IPs()
+
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -571,7 +573,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         # disable this alert when running on a zeek conn.log file
-        # because there's no dns.log to know i the dns was made
+        # because there's no dns.log to know if the dns was made
         if __database__.get_input_type() == 'zeek_log_file':
             return False
 
@@ -586,6 +588,14 @@ class Module(Module, multiprocessing.Process):
         # after starting slips because the dns may have happened before starting slips
         running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         if running_on_interface:
+
+            # connection without dns in case of an interface,
+            # should only be detected from the srcip of this instance,
+            # not all ips, to avoid so many alerts of this type when port scanning
+            saddr = profileid.split("_")[-1]
+            if saddr not in self.our_ips:
+                return False
+
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')

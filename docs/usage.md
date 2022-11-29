@@ -485,6 +485,9 @@ The ```home_network``` parameter also supports one host as an argument,
 which is written like this ```[192.168.2.16/32]```.
 When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
 
+By default, the home_network parameter is not set, which means slips will
+create profiles for every IP it sees in the network
+
 **Analysis Direction**
 
 

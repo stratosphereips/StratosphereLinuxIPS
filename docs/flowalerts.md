@@ -57,6 +57,9 @@ so we simply ignore alerts of this type when connected to well known organizatio
 
 Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs). They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain of each flow belong to a known org or not.
 
+Slips doesn't detect 'connection without DNS' when running
+on an interface except for when it's done by this instance's own IP.
+
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
 of the docs for info on how slips detects DoH.
 
