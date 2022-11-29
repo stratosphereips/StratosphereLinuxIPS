@@ -499,6 +499,8 @@ When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.1
 
 You can disable modules easily by appending the module name to the ```disable``` list.
 
+The module name to disable should be the same as the name of it's directory name inside modules/ directory
+
 ### ML Detection
 
 The ```mode=train``` should be used to tell the MLdetection1 module that the flows received are all for training.
