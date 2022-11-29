@@ -3,9 +3,10 @@ const listTable = require("../lib_widgets/listtable.js")
 
 class OutTuples extends listTable.ListTableClass{
 
-    constructor(grid, redis_database,screen, characteristics){
+    constructor(grid, redis_database,screen, characteristics, limit_letter_outtuple){
         super(grid, redis_database, characteristics)
         this.screen = screen
+        this.limit_letter_outtuple = limit_letter_outtuple
     }
 
     /*Combine data for the outtuple hotkey - key, behavioral letters, asn, geo VT*/
