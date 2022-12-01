@@ -44,7 +44,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.6'
+version = '1.0.0'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -1517,6 +1517,7 @@ class Main:
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
         print(slips_version)
+
 
 
     def start(self):
