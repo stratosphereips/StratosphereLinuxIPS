@@ -1063,11 +1063,53 @@ class ProfilingFlowsDatabase(object):
         if new_key:
             self.r.publish('ip_info_change', ip)
 
+    def get_p2p_reports_about_ip(self, ip) -> dict:
+        """
+        returns a dict of all p2p past reports about the given ip
+        """
+        #p2p_reports key is basically { ip:  { reporter1: [report1, report2, report3]} }
+        reports = self.rcache.hget('p2p_reports', ip)
+        if reports:
+            return json.loads(reports)
+        return {}
+
     def store_p2p_report(self, ip: str, report_data: dict):
         """
         stores answers about IPs slips asked other peers for.
         """
-        self.r.hset('p2p_reports', ip, json.dumps(report_data))
+        # reports in the db are sorted by reporter bydefault
+        reporter = report_data['reporter']
+        del report_data['reporter']
+
+        # if we have old reports about this ip, append this one to them
+        # cached_p2p_reports is a dict
+        if cached_p2p_reports := self.get_p2p_reports_about_ip(ip):
+            # was this ip reported by the same peer before?
+            if reporter in cached_p2p_reports:
+                # ip was reported before, by the same peer
+                # did the same peer report the same score and confidence about the same ip twice in a row?
+                last_report_about_this_ip = cached_p2p_reports[reporter][-1]
+                score = report_data['score']
+                confidence = report_data['confidence']
+                report_time = report_data['report_time']
+                if (
+                        last_report_about_this_ip['score'] == score
+                        and last_report_about_this_ip['confidence'] == confidence
+                ):
+                    # score and confidence are the same as the last report, only update the time
+                    last_report_about_this_ip['report_time'] = report_time
+                else:
+                    # score and confidence are the different from the last report, add report to the list
+                    cached_p2p_reports[reporter].append(report_data)
+            else:
+                # ip was reported before, but not by the same peer
+                cached_p2p_reports[reporter] = [report_data]
+            report_data = cached_p2p_reports
+        else:
+            # no old reports about this ip
+            report_data = {reporter: [report_data]}
+
+        self.rcache.hset('p2p_reports', ip, json.dumps(report_data))
 
 
     def add_out_http(
@@ -1187,6 +1229,7 @@ class ProfilingFlowsDatabase(object):
             'host_key_alg': host_key_alg,
             'host_key': host_key,
             'stime': stime,
+            'daddr': daddr
         }
         # Convert to json string
         data = json.dumps(data)
@@ -1546,6 +1589,7 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
+        daddr,
         stime,
         flowtype,
         uid,
@@ -1589,6 +1633,7 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
             'uid': uid,
             'rcode_name': rcode_name,
+            'daddr': daddr
         }
 
         to_send = json.dumps(to_send)

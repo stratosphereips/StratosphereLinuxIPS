@@ -19,9 +19,9 @@ class PortScanProcess(Module, multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = 'portscandetector-1'
+    name = 'Port Scan Detector'
     description = 'Detect Horizonal, Vertical and ICMP scans'
-    authors = ['Sebastian Garcia']
+    authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
@@ -50,7 +50,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.pingscan_minimum_flows = 5
         self.pingscan_minimum_scanned_ips = 5
         # time in seconds to wait before alerting port scan
-        self.time_to_wait = 10
+        self.time_to_wait_before_generating_new_alert = 25
         # list of tuples, each tuple is the args to setevidence
         self.pending_vertical_ps_evidence = Queue()
         self.pending_horizontal_ps_evidence = Queue()
@@ -67,6 +67,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 target=self.wait_for_horizontal_scans,
                                 daemon=True
         )
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -225,8 +226,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 amount_of_dports, \
                 dstip = evidence
 
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            # wait 10s for new evidence to arrive so we can combine them
+            time.sleep(self.time_to_wait_before_generating_new_alert)
             combined_evidence = 0
 
             while True:
@@ -312,8 +313,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 uids, \
                 dport, \
                 amount_of_dips = evidence
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            # wait 10s for new evidence to arrive so we can combine them
+            time.sleep(self.time_to_wait_before_generating_new_alert)
             combined_evidence = 0
 
             while True:
@@ -477,7 +478,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
-
 
 
     def calculate_confidence(self, pkts_sent):

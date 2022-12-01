@@ -304,7 +304,7 @@ class Database(ProfilingFlowsDatabase, object):
         is the user specified the home_network param, make sure the given profile/ip belongs to it before adding
         """
         # make sure the user specified a home network
-        if self.home_network == utils.home_network_ranges:
+        if not self.home_network:
             # no home_network is specified
             return True
 
@@ -853,6 +853,8 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(f'01|database|{type(e)}', 0, 1)
             self.outputqueue.put(f'01|database|{e}', 0, 1)
 
+
+
     def addNewTW(self, profileid, startoftw):
         try:
             """
@@ -1013,26 +1015,25 @@ class Database(ProfilingFlowsDatabase, object):
 
         self.r.hset(profileid, 'threat_level', threat_level)
         now = time.time()
+        now = utils.convert_format(now, utils.alerts_format)
         # keep track of old threat levels
         past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
-        threat_levels_update_time = self.r.hget(profileid, 'threat_levels_update_time')
-        if past_threat_levels and threat_levels_update_time:
-            # todo if the past threat level is the same as this one, replace the timestamp only
-            # add this threat level to the list of past threat levels
+        if past_threat_levels:
+            # get the lists of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
-            past_threat_levels.append(threat_level)
-            # add this ts to the list of past threat levels timestamps
-            threat_levels_update_time = json.loads(threat_levels_update_time)
-            threat_levels_update_time.append(now)
-
+            latest_threat_level = past_threat_levels[-1][0]
+            if latest_threat_level == threat_level:
+                # if the past threat level is the same as this one, replace the timestamp only
+                past_threat_levels[-1] = (threat_level, now)
+            else:
+                # add this threat level to the list of past threat levels
+                past_threat_levels.append((threat_level, now))
         else:
             # first time setting a threat level for this profile
-            past_threat_levels = [threat_level]
-            threat_levels_update_time = [now]
+            past_threat_levels = [(threat_level, now)]
+            # threat_levels_update_time = [now]
 
-        threat_levels_update_time = json.dumps(threat_levels_update_time)
         past_threat_levels = json.dumps(past_threat_levels)
-        self.r.hset(profileid, 'threat_levels_update_time', threat_levels_update_time)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
 
@@ -1092,6 +1093,139 @@ class Database(ProfilingFlowsDatabase, object):
 
         profile_alerts = json.dumps(profile_alerts)
         self.r.hset('alerts', profileid, profile_alerts)
+
+
+    def get_timewindow(self, flowtime, profileid):
+        """
+        This function should get the id of the TW in the database where the flow belong.
+        If the TW is not there, we create as many tw as necessary in the future or past until we get the correct TW for this flow.
+        - We use this function to avoid retrieving all the data from the DB for the complete profile. We use a separate table for the TW per profile.
+        -- Returns the time window id
+        THIS IS NOT WORKING:
+        - The empty profiles in the middle are not being created!!!
+        - The Dtp ips are stored in the first time win
+        """
+        try:
+            # First check if we are not in the last TW. Since this will be the majority of cases
+            try:
+                if not profileid:
+                    # profileid is None if we're dealing with a profile
+                    # outside of home_network when this param is given
+                    return False
+                [(lasttwid, lasttw_start_time)] = self.getLastTWforProfile(profileid)
+                lasttw_start_time = float(lasttw_start_time)
+                lasttw_end_time = lasttw_start_time + self.width
+                flowtime = float(flowtime)
+                self.print(
+                    'The last TW id for profile {} was {}. Start:{}. End: {}'.format(
+                        profileid, lasttwid, lasttw_start_time, lasttw_end_time
+                    ), 3,0,
+                )
+                # There was a last TW, so check if the current flow belongs here.
+                if (
+                    lasttw_end_time > flowtime
+                    and lasttw_start_time <= flowtime
+                ):
+                    self.print(
+                        'The flow ({}) is on the last time window ({})'.format(
+                            flowtime, lasttw_end_time
+                        ), 3, 0
+                    )
+                    twid = lasttwid
+                elif lasttw_end_time <= flowtime:
+                    # The flow was not in the last TW, its NEWER than it
+                    self.print(
+                        'The flow ({}) is NOT on the last time window ({}). Its newer'.format(
+                            flowtime, lasttw_end_time
+                        ), 3, 0
+                    )
+                    amount_of_new_tw = int(
+                        (flowtime - lasttw_end_time) / self.width
+                    )
+                    self.print(
+                        'We have to create {} empty TWs in the midle.'.format(
+                            amount_of_new_tw
+                        ), 3, 0
+                    )
+                    temp_end = lasttw_end_time
+                    for id in range(0, amount_of_new_tw + 1):
+                        new_start = temp_end
+                        twid = self.addNewTW(profileid, new_start)
+                        self.print(
+                            'Creating the TW id {}. Start: {}.'.format(
+                                twid, new_start
+                            ), 3, 0
+                        )
+                        temp_end = new_start + self.width
+                    # Now get the id of the last TW so we can return it
+                elif lasttw_start_time > flowtime:
+                    # The flow was not in the last TW, its OLDER that it
+                    self.print(
+                        'The flow ({}) is NOT on the last time window ({}). Its older'.format(
+                            flowtime, lasttw_end_time
+                        ), 3, 0
+                    )
+                    # Find out if we already have this TW in the past
+                    data = __database__.getTWofTime(profileid, flowtime)
+                    if data:
+                        # We found a TW where this flow belongs to
+                        (twid, tw_start_time) = data
+                        return twid
+                    else:
+                        # There was no TW that included the time of this flow, so create them in the past
+                        # How many new TW we need in the past?
+                        # amount_of_new_tw is the total amount of tw we should have under the new situation
+                        amount_of_new_tw = int(
+                            (lasttw_end_time - flowtime) / self.width
+                        )
+                        # amount_of_current_tw is the real amount of tw we have now
+                        amount_of_current_tw = (
+                            __database__.getamountTWsfromProfile(profileid)
+                        )
+                        # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
+                        diff = amount_of_new_tw - amount_of_current_tw
+                        self.print(
+                            'We need to create {} TW before the first'.format(
+                                diff + 1
+                            ), 3, 0
+                        )
+                        # Get the first TW
+                        [
+                            (firsttwid, firsttw_start_time)
+                        ] = __database__.getFirstTWforProfile(profileid)
+                        firsttw_start_time = float(firsttw_start_time)
+                        # The start of the new older TW should be the first - the width
+                        temp_start = firsttw_start_time - self.width
+                        for id in range(0, diff + 1):
+                            new_start = temp_start
+                            # The method to add an older TW is the same as
+                            # to add a new one, just the starttime changes
+                            twid = __database__.addNewOlderTW(
+                                profileid, new_start
+                            )
+                            self.print(
+                                'Creating the new older TW id {}. Start: {}.'.format(
+                                    twid, new_start
+                                ), 3, 0
+                            )
+                            temp_start = new_start - self.width
+            except ValueError:
+                # There is no last tw. So create the first TW
+                # If the option for only-one-tw was selected, we should create the TW at least 100 years before the flowtime, to cover for
+                # 'flows in the past'. Which means we should cover for any flow that is coming later with time before the first flow
+                if self.width == 9999999999:
+                    # Seconds in 1 year = 31536000
+                    startoftw = float(flowtime - (31536000 * 100))
+                else:
+                    startoftw = float(flowtime)
+
+                # Add this TW, of this profile, to the DB
+                twid = self.addNewTW(profileid, startoftw)
+                # self.print("First TW ({}) created for profile {}.".format(twid, profileid), 0, 1)
+            return twid
+        except Exception as e:
+            self.print('Error in get_timewindow().', 0, 1)
+            self.print('{}'.format(e), 0, 1)
 
     def get_profileid_twid_alerts(self, profileid, twid) -> dict:
         """
@@ -1485,7 +1619,8 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.set('growing_zeek_dir', 'yes')
 
     def is_growing_zeek_dir(self):
-        return True if 'yes' in str(self.r.get('growing_zeek_dir')) else False
+        """ Did slips mark the given dir as growing?"""
+        return 'yes' in str(self.r.get('growing_zeek_dir'))
 
     def set_module_label_to_flow(
         self, profileid, twid, uid, module_name, module_label
@@ -1537,10 +1672,11 @@ class Database(ProfilingFlowsDatabase, object):
             return json.loads(tws)
         return []
 
-    def getIPIdentification(self, ip: str):
+    def getIPIdentification(self, ip: str, get_ti_data=True):
         """
         Return the identification of this IP based
         on the data stored so far
+        :param get_ti_data: do we want to get info about this IP from out TI lists?
         """
         current_data = self.getIPData(ip)
         identification = ''
@@ -1559,7 +1695,7 @@ class Database(ProfilingFlowsDatabase, object):
             if 'reverse_dns' in current_data:
                 identification += 'rDNS: ' + current_data['reverse_dns'] + ', '
 
-            if 'threatintelligence' in current_data:
+            if 'threatintelligence' in current_data and get_ti_data:
                 identification += (
                     'Description: '
                     + current_data['threatintelligence']['description']

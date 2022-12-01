@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'rnn-cc-detection'
+    name = 'RNN C&C Detection'
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 

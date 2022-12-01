@@ -59,7 +59,7 @@ def validate_slips_data(message_data: str) -> (str, int):
 
 
 class Trust(Module, multiprocessing.Process):
-    name = 'p2ptrust'
+    name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
     authors = ['Dita']
 
@@ -89,6 +89,7 @@ class Trust(Module, multiprocessing.Process):
         used_interface = self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
+        self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
         # pigeon generate keys and stores them in the following dir, if this is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new output dir! so it wont find them and will
         # generate new keys, and therefore new peerid!
@@ -192,6 +193,7 @@ class Trust(Module, multiprocessing.Process):
             request_func=self.respond_to_message_request,
             gopy_channel=self.gopy_channel,
             pygo_channel=self.pygo_channel,
+            p2p_reports_logfile=self.p2p_reports_logfile
         )
 
         self.pigeon = None
@@ -242,13 +244,18 @@ class Trust(Module, multiprocessing.Process):
             # not a valid json dict
             return
 
-        type_detection = data.get(
-            'type_detection'
-        )   # example: dstip srcip dport sport dstdomain
+        # example: dstip srcip dport sport dstdomain
+        type_detection = data.get('type_detection')
         if not 'ip' in type_detection:   # and not 'domain' in type_detection:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
+
+        type_evidence = data.get('type_evidence')
+        if 'P2PReport' in type_evidence:
+            # we shouldn't re-share evidence reported by other peers
+            return
+
 
         detection_info = data.get('detection_info')
         confidence = data.get('confidence', False)
@@ -268,7 +275,7 @@ class Trust(Module, multiprocessing.Process):
         score = self.threat_levels[threat_level]
         # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
 
-        # todo when we genarate a new evidence,
+        # todo when we generate a new evidence,
         #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
@@ -305,12 +312,12 @@ class Trust(Module, multiprocessing.Process):
         this function is called whenever slips receives peers requests/updates
         happens when a msg is sent in the gopy_channel.
         """
-        try:
-            data: str = msg['data']
-            data: dict = json.loads(data)
-            self.go_director.handle_gopy_data(data)
-        except Exception as e:
-            self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
+        # try:
+        data: str = msg['data']
+        data: dict = json.loads(data)
+        self.go_director.handle_gopy_data(data)
+        # except Exception as e:
+        #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
 
     # def update_callback(self, msg: Dict):
     #     try:
@@ -648,10 +655,10 @@ class Trust(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem with P2P. line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
+        # except Exception as inst:
+        #     exception_line = sys.exc_info()[2].tb_lineno
+        #     self.print(f'Problem with P2P. line {exception_line}', 0, 1)
+        #     self.print(str(type(inst)), 0, 1)
+        #     self.print(str(inst.args), 0, 1)
+        #     self.print(str(inst), 0, 1)
+        #     return True

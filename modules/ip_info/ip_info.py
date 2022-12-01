@@ -24,7 +24,7 @@ import asyncio
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'ip_info'
+    name = 'IP Info'
     description = 'Get different info about an IP/MAC address'
     authors = ['Alya Gomaa', 'Sebastian Garcia']
 
@@ -183,7 +183,10 @@ class Module(Module, multiprocessing.Process):
                 return True
             except OSError:
                 # update manager hasn't downloaded it yet
-                time.sleep(5)
+                try:
+                    time.sleep(3)
+                except KeyboardInterrupt:
+                    return False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -443,8 +446,9 @@ class Module(Module, multiprocessing.Process):
             return MAC
 
         # we don't have it in arp.log
-        if not '-i' in sys.argv:
-            # no mac in arp.log and can't use arp table, so no way to get the MAC
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if not running_on_interface:
+            # no mac in arp.log and can't use arp table, so no way to get the gateway MAC
             return
 
         # get it using arp table

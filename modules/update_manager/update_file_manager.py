@@ -18,7 +18,7 @@ class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):
         self.outputqueue = outputqueue
         # For now, read the malicious IPs from here
-        self.name = 'update_manager'
+        self.name = 'Update File Manager'
         __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
@@ -298,7 +298,7 @@ class UpdateFileManager:
             except requests.exceptions.ReadTimeout:
                 error = f'Timeout reached while downloading the file {file_to_download}. Aborting.'
 
-            except requests.exceptions.ConnectionError:
+            except (requests.exceptions.ConnectionError, requests.exceptions.ChunkedEncodingError):
                 error = f'Connection error while downloading the file {file_to_download}. Aborting.'
 
         if error:
@@ -1064,7 +1064,7 @@ class UpdateFileManager:
                 description_column = None
 
                 while line := feed.readline():
-                    # Try to find the line that has coluself.mn names
+                    # Try to find the line that has column names
                     for keyword in self.header_keywords:
                         if line.startswith(keyword):
                             # looks like the column names, search where is the description column
@@ -1135,6 +1135,7 @@ class UpdateFileManager:
                             ), 0, 1,
                         )
                         continue
+
                     if data_type == 'domain':
                         # if we have info about the ioc, append to it, if we don't add a new entry in the correct dict
                         try:

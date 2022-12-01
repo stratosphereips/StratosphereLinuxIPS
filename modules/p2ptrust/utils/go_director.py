@@ -1,5 +1,6 @@
 import base64
 import binascii
+from slips_files.common.config_parser import ConfigParser
 import json
 from typing import Dict
 
@@ -10,10 +11,11 @@ from modules.p2ptrust.utils.utils import (
     send_evaluation_to_go,
     send_empty_evaluation_to_go,
 )
+from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
 from slips_files.core.database.database import __database__
-
+import time
 
 
 class GoDirector:
@@ -34,6 +36,7 @@ class GoDirector:
         request_func=None,
         gopy_channel: str = 'p2p_gopy',
         pygo_channel: str = 'p2p_pygo',
+        p2p_reports_logfile: str = 'p2p_reports.log',
     ):
 
         # todo what is override_p2p
@@ -49,15 +52,32 @@ class GoDirector:
         self.override_p2p = override_p2p
         self.report_func = report_func
         self.request_func = request_func
-
+        # clear the logfile
+        open(p2p_reports_logfile, 'w').close()
+        self.reports_logfile = open(p2p_reports_logfile, 'a')
+        self.print(f"Storing peer reports in {p2p_reports_logfile}")
         # TODO: there should be some better mechanism to add new processing functions.. Maybe load from files?
         self.evaluation_processors = {
             'score_confidence': self.process_evaluation_score_confidence
         }
         self.key_type_processors = {'ip': validate_ip_address}
+        self.read_configuration()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print('[TrustDB] ' + text, verbose, debug)
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.width = conf.get_tw_width_as_float()
+
+
+    def log(self, text: str):
+        """
+        Writes the log text to p2p_reports.log
+        """
+        now = time.time()
+        human_readable_datetime = utils.convert_format(now, utils.alerts_format)
+        self.reports_logfile.write(f'{human_readable_datetime} - {text}\n')
 
     def handle_gopy_data(self, data_dict: dict):
         """
@@ -323,10 +343,11 @@ class GoDirector:
             reporter, report_time, key_type, key, evaluation
         )
         if evaluation != None:
-            self.print(
-                f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
-
-            )
+            msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
+            self.print(msg)
+            # log the reporter too
+            msg += f' from peer: {reporter}'
+            self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
 
@@ -339,7 +360,7 @@ class GoDirector:
         evaluation: dict,
     ):
         """
-        Handle reported score and confidence
+        Handle reported score and confidence from another peer
 
         Data is read from provided dictionary, and saved into the database.
 
@@ -396,12 +417,68 @@ class GoDirector:
         self.print(result, 2, 0)
         # print(f"*** [debugging p2p] ***  stored a report about about  {key} from {reporter} in p2p_reports key in the db ")
         # save all report info in the db
+        # convert ts to human readable format
         report_info = {
-            'reporter':reporter,
-            'report_time':report_time,
+            'reporter': reporter,
+            'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
         __database__.store_p2p_report(key, report_info)
+
+        # create a new profile for the reported ip
+        # with the width from slips.conf and the starttime as the report time
+        if key_type == 'ip':
+            profileid_of_attacker = f'profile_{key}'
+            # print(f"@@@@@@@@@@@@@@@@@@ created profile for {key} reported by {report_time} .. {report_time} .. {self.width}")
+            __database__.addProfile(profileid_of_attacker, report_time, self.width)
+            self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
+
+    def set_evidence_p2p_report(self, ip, reporter, score, confidence, timestamp, profileid_of_attacker):
+        """
+        set evidence for the newly created attacker profile stating that it attacked another peer
+        """
+        type_detection = 'srcip'
+        detection_info = ip
+        type_evidence = 'P2PReport'
+        threat_level = utils.threat_level_to_string(score)
+        category = 'Anomaly.Connection'
+
+        # confidence depends on how long the connection
+        # scale the confidence from 0 to 1, 1 means 24 hours long
+        ip_identification = __database__.getIPIdentification(ip, get_ti_data=False)
+        last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+
+        # this should never happen. if we have a report, we will have a reporter
+        # and will have the ip of the reporter
+        # but just in case
+        if not reporter_ip:
+            reporter_ip = ''
+
+        description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
+                      f'confidence: {confidence} {ip_identification}'
+        # get the tw of this report time
+        if twid := __database__.getTWofTime(profileid_of_attacker, timestamp):
+            twid = twid[0]
+        else:
+            # create a new twid for the attacker profile that has the
+            # report time to add this evidence to
+            twid = __database__.get_timewindow(timestamp, profileid_of_attacker)
+
+        uid = ''
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid_of_attacker,
+            twid=twid,
+            uid=uid,
+        )
+
 
     def process_go_update(self, data: dict) -> None:
         """
@@ -451,13 +528,12 @@ class GoDirector:
             self.trustdb.insert_go_ip_pairing(
                 peerid, ip_address, timestamp=timestamp
             )
-            self.print(
-                f'[The Network -> Slips] Peer update or new peer {peerid} '
-                f'with IP: {ip_address} '
-                f'Reliability: {reliability } ',
-                2,
-                0,
-            )
+            msg = f'[The Network -> Slips] Peer update or new peer {peerid} ' \
+                  f'with IP: {ip_address} ' \
+                  f'Reliability: {reliability } '
+
+            self.print(msg,2,0,)
+            self.log(msg)
 
         except KeyError:
             self.print('IP address missing', 2, 0)

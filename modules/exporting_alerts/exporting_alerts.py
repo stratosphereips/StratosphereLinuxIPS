@@ -25,7 +25,7 @@ class Module(Module, multiprocessing.Process):
     You need to have the token in your environment variables to use this module
     """
 
-    name = 'exporting_alerts'
+    name = 'Exporting Alerts'
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
@@ -42,7 +42,7 @@ class Module(Module, multiprocessing.Process):
         self.is_bundle_created = False
         # To avoid duplicates in STIX_data.json
         self.added_ips = set()
-        self.is_running_on_interface = True if '-i' in sys.argv else False
+        self.is_running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         self.export_to_taxii_thread = threading.Thread(
             target=self.send_to_server, daemon=True
         )

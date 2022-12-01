@@ -13,7 +13,7 @@ import sys
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
-    name = 'RiskIQ'
+    name = 'Risk IQ'
     description = 'Module to get passive DNS info about IPs from RiskIQ'
     authors = ['Alya Gomaa']
 

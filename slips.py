@@ -107,7 +107,8 @@ class Main:
         """
         Store the host IP address if input type is interface
         """
-        if self.input_type != 'interface':
+        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
+        if not running_on_interface:
             return
 
         hostIP = self.get_host_ip()
@@ -128,6 +129,8 @@ class Main:
         Create a dir for logs if logs are enabled
         """
         logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
+        # place the logs dir inside the output dir
+        logs_folder = os.path.join(self.args.output, f'detailed_logs_{logs_folder}')
         try:
             os.makedirs(logs_folder)
         except OSError as e:
@@ -314,26 +317,26 @@ class Main:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            if 'p2ptrust' == module_name:
-                ModuleProcess = module_class(
+            if 'P2P Trust' == module_name:
+                module = module_class(
                     self.outputqueue,
                     self.redis_port,
                     output_dir=self.args.output
                 )
             else:
-                ModuleProcess = module_class(
+                module = module_class(
                     self.outputqueue,
                     self.redis_port
                 )
-            ModuleProcess.start()
+            module.start()
             __database__.store_process_PID(
-                module_name, int(ModuleProcess.pid)
+                module_name, int(module.pid)
             )
             description = modules_to_call[module_name]['description']
             self.print(
-                f'\t\tStarting the module {module_name} '
+                f'\t\tStarting the module {self.green(module_name)} '
                 f'({description}) '
-                f'[PID {ModuleProcess.pid}]', 1, 0
+                f'[PID {self.green(module.pid)}]', 1, 0
                 )
         # give outputprocess time to print all the started modules
         time.sleep(0.5)
@@ -363,11 +366,11 @@ class Main:
             )
             logs_process.start()
             self.print(
-                f'Started logs process '
-                f'[PID {logs_process.pid}]', 1, 0
+                f'Started {self.green("Logs Process")} '
+                f'[PID {self.green(logs_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
-                'logsProcess', int(logs_process.pid)
+                'Logs', int(logs_process.pid)
             )
         else:
             # If self.args.nologfiles is False, then we don't want log files,
@@ -381,11 +384,15 @@ class Main:
         if self.args.gui:
             # Create the curses thread
             guiProcessQueue = Queue()
-            guiProcessThread = GuiProcess(
+            guiProcess = GuiProcess(
                 guiProcessQueue, self.outputqueue, self.args.verbose,
                 self.args.debug
             )
-            guiProcessThread.start()
+            __database__.store_process_PID(
+                'GUI',
+                int(guiProcess.pid)
+            )
+            guiProcess.start()
             self.print('quiet')
 
 
@@ -505,7 +512,7 @@ class Main:
             self.print_stopped_module(module)
 
     def stop_core_processes(self):
-        self.kill('InputProcess')
+        self.kill('Input')
 
         if self.mode == 'daemonized':
             # when using -D, we kill the processes because
@@ -557,9 +564,14 @@ class Main:
             '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
         )
 
+    def was_running_zeek(self) -> bool:
+        """returns true if zeek wa sused in this run """
+        return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
-        if store_a_copy_of_zeek_files and self.input_type in ('pcap', 'interface'):
+        was_running_zeek = self.was_running_zeek()
+        if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
             copy_tree(self.zeek_folder, dest_zeek_dir)
@@ -572,17 +584,24 @@ class Main:
         if delete:
             shutil.rmtree(self.zeek_folder)
 
+    def green(self, txt):
+        """
+        returns the text in green
+        """
+        GREEN_s = '\033[1;32;40m'
+        GREEN_e = '\033[00m'
+        return f'{GREEN_s}{txt}{GREEN_e}'
+
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
+
         modules_left = len(list(self.PIDs.keys()))
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
-            f'\t{GREEN_s}{module}{GREEN_e} \tStopped. '
-            f'{GREEN_s}{modules_left}{GREEN_e} left.'
+            f'\t{self.green(module)} \tStopped. '
+            f'{self.green(modules_left)} left.'
         )
 
     def get_already_stopped_modules(self):
@@ -684,7 +703,7 @@ class Main:
             modules_to_be_killed_last = {
                 'EvidenceProcess',
                 'Blocking',
-                'exporting_alerts',
+                'Exporting Alerts',
             }
 
             self.stop_core_processes()
@@ -748,19 +767,28 @@ class Main:
                         # are closed, the only ones left are the ones we want to kill last
                         if len(self.PIDs) > len(modules_to_be_killed_last) and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
+                                if 'Update Manager' not in finished_modules:
+                                    print(
+                                        f"[Main] Update Manager may take several minutes "
+                                        f"to finish updating 45+ TI files."
+                                    )
                                 warning_printed = True
 
-                            # -P flag is only used in integration tests,
+                            # -t flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
-                            if not self.args.port:
-                                # delay killing unstopped modules
-                                max_loops += 1
-                                # checks if 15 minutes has passed since the start of the function
-                                if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
-                                    print(f"Killing modules that took more than "
-                                          f"{wait_for_modules_to_finish} mins to finish.")
-                                    break
+                            if self.args.testing:
+                                break
+
+                            # delay killing unstopped modules until all of them
+                            # are done processing
+                            max_loops += 1
+
+                            # checks if 15 minutes has passed since the start of the function
+                            if self.should_kill_all_modules(function_start_time, wait_for_modules_to_finish):
+                                print(f"Killing modules that took more than "
+                                      f"{wait_for_modules_to_finish} mins to finish.")
+                                break
 
                 except KeyboardInterrupt:
                     # either the user wants to kill the remaining modules (pressed ctrl +c again)
@@ -1325,11 +1353,6 @@ class Main:
             print('Redis database is not running. Stopping Slips')
             self.terminate_slips()
 
-        if self.conf.use_p2p() and not self.args.interface:
-            print('P2P is only supported using an interface.\n'
-                  'set use_p2p=no in slips.conf and restart Slips.')
-            self.terminate_slips()
-
         if self.args.config and not os.path.exists(self.args.config):
             print(f"{self.args.config} doesn't exist. Stopping Slips")
             self.terminate_slips()
@@ -1487,7 +1510,7 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {version}'
+        slips_version = f'Slips. Version {self.green(version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
@@ -1553,8 +1576,14 @@ class Main:
             )
             # this process starts the db
             output_process.start()
-            __database__.store_process_PID('OutputProcess', int(output_process.pid))
+            __database__.store_process_PID('Output', int(output_process.pid))
 
+            if self.args.growing:
+                if self.input_type != 'zeek_folder':
+                    self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
+                else:
+                    self.print(f"Running on a growing zeek dir: {self.input_information}")
+                    __database__.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
@@ -1582,9 +1611,9 @@ class Main:
             __database__.store_std_file(**std_files)
 
 
-            self.print(f'Using redis server on port: {self.redis_port}', 1, 0)
-            self.print(f'Started main program [PID {self.pid}]', 1, 0)
-            self.print(f'Started output process [PID {output_process.pid}]', 1, 0)
+            self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
+            self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
+            self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 0, 1)
 
 
@@ -1616,11 +1645,11 @@ class Main:
             )
             evidence_process.start()
             self.print(
-                f'Started evidence process '
-                f'[PID {evidence_process.pid}]', 1, 0
+                f'Started {self.green("Evidence Process")} '
+                f'[PID {self.green(evidence_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
-                'EvidenceProcess',
+                'Evidence',
                 int(evidence_process.pid)
             )
             __database__.store_process_PID(
@@ -1638,11 +1667,11 @@ class Main:
             )
             profiler_process.start()
             self.print(
-                f'Started profiler process '
-                f'[PID {profiler_process.pid}]', 1, 0
+                f'Started {self.green("Profiler Process")} '
+                f'[PID {self.green(profiler_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
-                'ProfilerProcess',
+                'Profiler',
                 int(profiler_process.pid)
             )
 
@@ -1660,15 +1689,19 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started input process '
-                f'[PID {inputProcess.pid}]', 1, 0
+                f'Started {self.green("Input Process")} '
+                f'[PID {self.green(inputProcess.pid)}]', 1, 0
             )
             __database__.store_process_PID(
-                'InputProcess',
+                'Input Process',
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
             self.set_input_metadata()
+
+            if self.conf.use_p2p() and not self.args.interface:
+                self.print('Warning: P2P is only supported using an interface. Disabled P2P.')
+
             # warn about unused open redis servers
             open_servers = len(self.get_open_redis_servers())
             if open_servers > 1:
@@ -1687,13 +1720,16 @@ class Main:
 
             # Check every 5 secs if we should stop slips or not
             sleep_time = 5
+
             # In each interval we check if there has been any modifications to
             # the database by any module.
             # If not, wait this amount of intervals and then stop slips.
-            # We choose 6 to wait 30 seconds.
             max_intervals_to_wait = 4
             intervals_to_wait = max_intervals_to_wait
-            slips_internal_time = 0
+
+            # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
+            is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+
             while True:
                 message = self.c1.get_message(timeout=0.01)
                 if (
@@ -1715,75 +1751,51 @@ class Main:
                 ) = __database__.getModifiedProfilesSince(
                     slips_internal_time
                 )
-                amount_of_modified = len(modified_profiles)
+                modified_ips_in_the_last_tw = len(modified_profiles)
+
                 # Get the time of last modified timewindow and set it as a new
                 if last_modified_tw_time != 0:
                     __database__.setSlipsInternalTime(
                         last_modified_tw_time
                     )
-                # How many profiles we have?
-                profilesLen = str(__database__.getProfilesLen())
+
                 if self.mode != 'daemonized':
+                    # How many profiles we have?
+                    profilesLen = str(__database__.getProfilesLen())
+
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
                         f'far: {profilesLen}. '
-                        f'IPs sending traffic in the last {self.twid_width}: {amount_of_modified}. '
+                        f'IPs sending traffic in the last {self.twid_width}: {modified_ips_in_the_last_tw}. '
                         f'({now})',
                         end='\r',
                     )
 
-                # Check if we need to close some TW
+                # Check if we need to close any TWs
                 __database__.check_TW_to_close()
 
-                # In interface we keep track of the host IP. If there was no
-                # modified TWs in the host NotIP, we check if the network was changed.
-                # Don't try to stop slips if it's capturing from an interface
-                if self.args.interface:
-                    # To check of there was a modified TW in the host IP. If not,
-                    # count down.
-                    modifiedTW_hostIP = False
-                    for profileIP in modified_profiles:
-                        # True if there was a modified TW in the host IP
-                        if hostIP == profileIP:
-                            modifiedTW_hostIP = True
+                if is_interface and hostIP not in modified_profiles:
+                    # In interface we keep track of the host IP. If there was no
+                    # modified TWs in the host IP, we check if the network was changed.
+                    if hostIP := self.get_host_ip():
+                        __database__.set_host_ip(hostIP)
 
-                    # If there was no modified TW in the host IP
+                # these are the cases where slips should be running non-stop
+                if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
+                    continue
+
+                # Reaches this point if we're running Slips on a file.
+                # countdown until slips stops if no TW modifications are happening
+                if modified_ips_in_the_last_tw == 0:
+                    # waited enough. stop slips
+                    if intervals_to_wait == 0:
+                        self.shutdown_gracefully()
+
+                    # If there were no modified TWs in the last timewindow time,
                     # then start counting down
-                    # After count down we update the host IP, to check if the
-                    # network was changed
-                    if not modifiedTW_hostIP and self.args.interface:
-                        if intervals_to_wait == 0:
-                            hostIP = self.get_host_ip()
-                            if hostIP:
-                                __database__.set_host_ip(hostIP)
-                            intervals_to_wait = max_intervals_to_wait
+                    intervals_to_wait -= 1
 
-                        intervals_to_wait -= 1
-                    else:
-                        intervals_to_wait = max_intervals_to_wait
-
-
-                # Running Slips in the file.
-                # If there were no modified TW in the last timewindow time,
-                # then start counting down
-                else:
-                    # don't shutdown slips if it's being debugged or reading flows from stdin
-                    if (
-                        amount_of_modified == 0
-                        and not self.is_debugger_active()
-                        and self.input_type != 'stdin'
-                    ):
-                        # print('Counter to stop Slips. Amount of modified
-                        # timewindows: {}. Stop counter: {}'.format(amount_of_modified, minimum_intervals_to_wait))
-                        if intervals_to_wait == 0:
-                            self.shutdown_gracefully()
-                            break
-                        intervals_to_wait -= 1
-                    else:
-                        intervals_to_wait = (
-                            max_intervals_to_wait
-                        )
 
                 __database__.pubsub.check_health()
         except KeyboardInterrupt:

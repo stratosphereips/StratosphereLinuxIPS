@@ -47,6 +47,7 @@
                     <button class="btn btn-outline-danger" type="button" id="button_outtuples" data-tableid="outtuples">Outgoing</button>
                     <button class="btn btn-outline-success" type="button" id="button_intuples" data-tableid="intuples">Incoming</button>
                     <button class="btn btn-outline-info" type="button" id="button_alerts" data-tableid="alerts">Alerts</button>
+                    <button class="btn btn-outline-info" type="button" id="button_evidence" data-tableid="evidence">Evidence</button>
                   </div>
                 </form>
               </nav>
@@ -91,6 +92,21 @@
                       <th>Profile</th>
                       <th>Timewindow</th>
                       <th>Evidence Count</th>
+                    </tr>
+                  </thead>
+                </table>
+              </div>
+
+              <div id="evidence" class="mt-4" style="display:none;">
+                <table id="table_evidence" class="table table-striped display  nowrap" style="width:100%">
+                  <thead>
+                    <tr>
+                     <th>Evidence</th>
+                     <th>Confidence</th>
+                     <th>Threat Level</th>
+                     <th>Category</th>
+                     <th>Tag</th>
+                     <th>Description</th>
                     </tr>
                   </thead>
                 </table>
