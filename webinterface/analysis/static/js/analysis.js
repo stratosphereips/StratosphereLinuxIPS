@@ -248,9 +248,25 @@ function removeListeners(analysisTag){
 }
 
 function initAllAnalysisTables(){
+
     for (const [key, value] of Object.entries(analysisTableDefs)) {
+        //remove the default 'Search' text for all DataTable search boxes
+        $.extend(true, $.fn.dataTable.defaults, {
+            language: {
+                search: ""
+            }
+        });
+        // init datatables
         $("#table_" + key).DataTable(value);
+
+        // custom search
+        $('[type=search]').each(function () {
+
+            $(this).attr("placeholder", "Search...");
+            $(this).before('<span class="fa fa-search"></span>');
+        });
     }
+
 }
 
 function initAnalysisPage(){
