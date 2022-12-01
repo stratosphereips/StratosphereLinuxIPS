@@ -34,3 +34,24 @@ tr.row_selected td{
 .table-hover > tbody > tr:hover > th {
     background-color: #C2F0FF;
 }
+
+.dataTables_filter {
+    position: relative;
+}
+
+.dataTables_filter input {
+    width: 250px;
+    height: 32px;
+    background: #fcfcfc;
+    border: 1px solid #aaa;
+    border-radius: 5px;
+    box-shadow: 0 0 3px #ccc, 0 10px 15px #ebebeb inset;
+    text-indent: 10px;
+}
+
+.dataTables_filter .fa-search {
+    position: absolute;
+    top: 10px;
+    left: auto;
+    right: 10px;
+}
