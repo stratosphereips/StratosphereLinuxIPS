@@ -62,11 +62,11 @@ function addTableEvidence(table_id) {
     return (entry + head  + exit);
 }
 
-function searchReload(filter_parameter){
-    let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow
-    if (filter_parameter){ link += "/" + filter_parameter; }
-    $("#table_"+active_analysisTable).DataTable().ajax.url(link).load();
-}
+//function searchReload(filter_parameter){
+//    let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow
+//    if (filter_parameter){ link += "/" + filter_parameter; }
+//    $("#table_"+active_analysisTable).DataTable().ajax.url(link).load();
+//}
 
 function addTableTWs(tableID) {
     let entry ='<table' + ' id="'+ tableID + '"' + ' class="table table-striped" >'
@@ -201,10 +201,10 @@ function initTimelineListeners(){
         updateIPInfo(row, "daddr")
     })
 
-    $('#table_timeline_filter_button').click(function(){
-        var filter_gender = $('#table_timeline_filter_input').val();
-        searchReload(filter_gender);
-    });
+//    $('#table_timeline_filter_button').click(function(){
+//        var filter_gender = $('#table_timeline_filter_input').val();
+//        searchReload(filter_gender);
+//    });
 
     $('#table_timeline').on('click', 'tbody tr', function () {
         let tr = $(this).closest('tr');
