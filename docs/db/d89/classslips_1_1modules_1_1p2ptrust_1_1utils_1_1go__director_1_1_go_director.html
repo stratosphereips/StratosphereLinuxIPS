@@ -1,0 +1,937 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.8.17"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: slips.modules.p2ptrust.utils.go_director.GoDirector Class Reference</title>
+<link href="../../tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="../../jquery.js"></script>
+<script type="text/javascript" src="../../dynsections.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="../../toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="../../navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../resize.js"></script>
+<script type="text/javascript" src="../../navtreedata.js"></script>
+<script type="text/javascript" src="../../navtree.js"></script>
+<link href="../../search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../search/searchdata.js"></script>
+<script type="text/javascript" src="../../search/search.js"></script>
+<link href="../../doxygen.css" rel="stylesheet" type="text/css" />
+<link href="../../doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.8.17 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "../../search",false,'Search');
+/* @license-end */
+</script>
+<script type="text/javascript" src="../../menudata.js"></script>
+<script type="text/javascript" src="../../menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('../../',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html','../../'); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="../../d5/d25/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">slips.modules.p2ptrust.utils.go_director.GoDirector Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a5a2b69596d5680a4c8aec4dbc4b470eb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a5a2b69596d5680a4c8aec4dbc4b470eb">__init__</a> (self, <a class="el" href="../../d4/d0c/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html">Printer</a> <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8a6be125b9832c69d78350c94421b3f0">printer</a>, <a class="el" href="../../d3/da7/classslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html">TrustDB</a> <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ad752ba99834534a28081432c7dec0ee1">trustdb</a>, str <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a226773ab468049045cb51cf6607b6d82">storage_name</a>, bool <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a94a3fc890c401b82c4be52ece168da6e">override_p2p</a>=False, <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a3c103dc497d035928606b577e5e383bb">report_func</a>=None, <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a42a1b15fcd4d8dc4f5c804900048dc6e">request_func</a>=None, str gopy_channel='p2p_gopy', str <a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ac5031cca13014f129df2590a4e44fe64">pygo_channel</a>='p2p_pygo', str p2p_reports_logfile='p2p_reports.log')</td></tr>
+<tr class="separator:a5a2b69596d5680a4c8aec4dbc4b470eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab2504a20e144f7fea589d5411029985c"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ab2504a20e144f7fea589d5411029985c">print</a> (self, str text, int verbose=1, int debug=0)</td></tr>
+<tr class="separator:ab2504a20e144f7fea589d5411029985c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4d23dace670f49ea383070e7c9f10182"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a4d23dace670f49ea383070e7c9f10182">read_configuration</a> (self)</td></tr>
+<tr class="separator:a4d23dace670f49ea383070e7c9f10182"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a47a0e13e57eb884638f9430bf86ddc85"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a47a0e13e57eb884638f9430bf86ddc85">log</a> (self, str text)</td></tr>
+<tr class="separator:a47a0e13e57eb884638f9430bf86ddc85"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5097235845b46f46e3e59a29787c557b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a5097235845b46f46e3e59a29787c557b">handle_gopy_data</a> (self, dict data_dict)</td></tr>
+<tr class="separator:a5097235845b46f46e3e59a29787c557b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e107b1925f4ce34315e7649b33a30ed"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8e107b1925f4ce34315e7649b33a30ed">process_go_data</a> (self, dict report)</td></tr>
+<tr class="separator:a8e107b1925f4ce34315e7649b33a30ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2fa21d4c959aac2d749b05ea97454ea1"><td class="memItemLeft" align="right" valign="top">(str, dict)&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a2fa21d4c959aac2d749b05ea97454ea1">validate_message</a> (self, str message)</td></tr>
+<tr class="separator:a2fa21d4c959aac2d749b05ea97454ea1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ceed1e437032389476b75090db3f217"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8ceed1e437032389476b75090db3f217">validate_message_request</a> (self, Dict data)</td></tr>
+<tr class="separator:a8ceed1e437032389476b75090db3f217"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0f37f4cbc8c2f8d4c9ef127925f0c22d"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a0f37f4cbc8c2f8d4c9ef127925f0c22d">process_message_request</a> (self, str reporter, int _, Dict data)</td></tr>
+<tr class="separator:a0f37f4cbc8c2f8d4c9ef127925f0c22d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ada3ac2f8a6108937e6e29a6153e7c7e7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ada3ac2f8a6108937e6e29a6153e7c7e7">respond_to_message_request</a> (self, key, reporter)</td></tr>
+<tr class="separator:ada3ac2f8a6108937e6e29a6153e7c7e7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2817cdfa55ab9dac464625e74579d8a3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a2817cdfa55ab9dac464625e74579d8a3">process_message_report</a> (self, str reporter, int report_time, dict data)</td></tr>
+<tr class="separator:a2817cdfa55ab9dac464625e74579d8a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4086c8b37b99e31f3b3db72ea20b0c9e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a4086c8b37b99e31f3b3db72ea20b0c9e">process_evaluation_score_confidence</a> (self, str reporter, int report_time, str key_type, str key, dict evaluation)</td></tr>
+<tr class="separator:a4086c8b37b99e31f3b3db72ea20b0c9e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8f9842c8c50f219f4a9163ecdf56a008"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8f9842c8c50f219f4a9163ecdf56a008">set_evidence_p2p_report</a> (self, ip, reporter, score, confidence, timestamp, profileid_of_attacker)</td></tr>
+<tr class="separator:a8f9842c8c50f219f4a9163ecdf56a008"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aacb9be4d305ca0dc7c1f7b766b5a1502"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#aacb9be4d305ca0dc7c1f7b766b5a1502">process_go_update</a> (self, dict data)</td></tr>
+<tr class="separator:aacb9be4d305ca0dc7c1f7b766b5a1502"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a8a6be125b9832c69d78350c94421b3f0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8a6be125b9832c69d78350c94421b3f0">printer</a></td></tr>
+<tr class="separator:a8a6be125b9832c69d78350c94421b3f0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad752ba99834534a28081432c7dec0ee1"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ad752ba99834534a28081432c7dec0ee1">trustdb</a></td></tr>
+<tr class="separator:ad752ba99834534a28081432c7dec0ee1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac5031cca13014f129df2590a4e44fe64"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#ac5031cca13014f129df2590a4e44fe64">pygo_channel</a></td></tr>
+<tr class="separator:ac5031cca13014f129df2590a4e44fe64"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a226773ab468049045cb51cf6607b6d82"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a226773ab468049045cb51cf6607b6d82">storage_name</a></td></tr>
+<tr class="separator:a226773ab468049045cb51cf6607b6d82"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a94a3fc890c401b82c4be52ece168da6e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a94a3fc890c401b82c4be52ece168da6e">override_p2p</a></td></tr>
+<tr class="separator:a94a3fc890c401b82c4be52ece168da6e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3c103dc497d035928606b577e5e383bb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a3c103dc497d035928606b577e5e383bb">report_func</a></td></tr>
+<tr class="separator:a3c103dc497d035928606b577e5e383bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a42a1b15fcd4d8dc4f5c804900048dc6e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a42a1b15fcd4d8dc4f5c804900048dc6e">request_func</a></td></tr>
+<tr class="separator:a42a1b15fcd4d8dc4f5c804900048dc6e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a89e64f4a1c49dd834aff8eed85bd315c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a89e64f4a1c49dd834aff8eed85bd315c">reports_logfile</a></td></tr>
+<tr class="separator:a89e64f4a1c49dd834aff8eed85bd315c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9917f55ebaa21e8111a9c7a72390337b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a9917f55ebaa21e8111a9c7a72390337b">evaluation_processors</a></td></tr>
+<tr class="separator:a9917f55ebaa21e8111a9c7a72390337b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2d903f012aae41eac8e17f199fdb1071"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a2d903f012aae41eac8e17f199fdb1071">key_type_processors</a></td></tr>
+<tr class="separator:a2d903f012aae41eac8e17f199fdb1071"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8bf1bd7a901d2245c4deb48e8ebf5926"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html#a8bf1bd7a901d2245c4deb48e8ebf5926">width</a></td></tr>
+<tr class="separator:a8bf1bd7a901d2245c4deb48e8ebf5926"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">Class that deals with requests and reports from the go part of p2ptrust
+
+The reports from other peers are processed and inserted into the database directly.
+Requests from other peers are validated, data is read from the database and from slips, and the response is sent.
+If peer sends invalid data, his reputation is lowered.
+</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a5a2b69596d5680a4c8aec4dbc4b470eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a2b69596d5680a4c8aec4dbc4b470eb">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d4/d0c/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html">Printer</a>&#160;</td>
+          <td class="paramname"><em>printer</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="../../d3/da7/classslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html">TrustDB</a>&#160;</td>
+          <td class="paramname"><em>trustdb</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>storage_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool &#160;</td>
+          <td class="paramname"><em>override_p2p</em> = <code>False</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>report_func</em> = <code>None</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>request_func</em> = <code>None</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str &#160;</td>
+          <td class="paramname"><em>gopy_channel</em> = <code>'p2p_gopy'</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str &#160;</td>
+          <td class="paramname"><em>pygo_channel</em> = <code>'p2p_pygo'</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str &#160;</td>
+          <td class="paramname"><em>p2p_reports_logfile</em> = <code>'p2p_reports.log'</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a5097235845b46f46e3e59a29787c557b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5097235845b46f46e3e59a29787c557b">&#9670;&nbsp;</a></span>handle_gopy_data()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.handle_gopy_data </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>data_dict</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Method that receives raw data from peers sent into p2p_gopy redis channel
+</pre> 
+</div>
+</div>
+<a id="a47a0e13e57eb884638f9430bf86ddc85"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47a0e13e57eb884638f9430bf86ddc85">&#9670;&nbsp;</a></span>log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.log </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>text</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Writes the log text to p2p_reports.log
+</pre> 
+</div>
+</div>
+<a id="ab2504a20e144f7fea589d5411029985c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2504a20e144f7fea589d5411029985c">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None slips.modules.p2ptrust.utils.go_director.GoDirector.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4086c8b37b99e31f3b3db72ea20b0c9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4086c8b37b99e31f3b3db72ea20b0c9e">&#9670;&nbsp;</a></span>process_evaluation_score_confidence()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.process_evaluation_score_confidence </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reporter</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>report_time</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>key_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>evaluation</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Handle reported score and confidence from another peer
+
+Data is read from provided dictionary, and saved into the database.
+
+:param reporter: The peer that sent the data
+:param report_time: Time of receiving the data, provided by the go part
+:param key_type: The type of key the peer is reporting (only "ip" is supported now)
+:param key: The key itself
+:param evaluation: Dictionary containing score and confidence values
+:return: None, data is saved to the database
+</pre> 
+</div>
+</div>
+<a id="a8e107b1925f4ce34315e7649b33a30ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e107b1925f4ce34315e7649b33a30ed">&#9670;&nbsp;</a></span>process_go_data()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None slips.modules.p2ptrust.utils.go_director.GoDirector.process_go_data </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>report</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process peer updates, requests and reports sent by the go layer
+
+The data is expected to be a list of messages received from go peers.
+They are parsed and inserted into the database.
+If a message does not comply with the format, the reporter's reputation is lowered.
+</pre> 
+</div>
+</div>
+<a id="aacb9be4d305ca0dc7c1f7b766b5a1502"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aacb9be4d305ca0dc7c1f7b766b5a1502">&#9670;&nbsp;</a></span>process_go_update()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None slips.modules.p2ptrust.utils.go_director.GoDirector.process_go_update </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Handle update in peers reliability or IP address.
+
+The message is expected to be JSON string, and it should contain data according to the specified format.
+It must have the field `peerid`, which specifies the peer that is being updated,
+and then values to update: `ip` or `reliability`.
+It is OK if only one of these is provided.
+Additionally, `timestamp` may be set, but is not mandatory - if it is missing, current time will be used.
+:param message: A string sent from go, should be json as specified above
+:return: None
+</pre> 
+</div>
+</div>
+<a id="a2817cdfa55ab9dac464625e74579d8a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2817cdfa55ab9dac464625e74579d8a3">&#9670;&nbsp;</a></span>process_message_report()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.process_message_report </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reporter</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>report_time</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict
+    &#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Handle a report from a peer
+
+Details are read from the report and inserted into the database.
+
+:param reporter: The peer that sent the report
+:param report_time: Time of receiving the report, provided by the go part
+:param data: Report data
+:return: None. Result is saved to the database
+</pre> 
+</div>
+</div>
+<a id="a0f37f4cbc8c2f8d4c9ef127925f0c22d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0f37f4cbc8c2f8d4c9ef127925f0c22d">&#9670;&nbsp;</a></span>process_message_request()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None slips.modules.p2ptrust.utils.go_director.GoDirector.process_message_request </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reporter</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>_</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Dict
+    &#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process and answer a msg from a peer that requests info about an IP
+
+Details are read from the request, and response is read from slips database.
+Response data is formatted as json
+and sent to the peer that asked.
+
+:param reporter: The peer that sent the request
+:param _: Time of receiving the request, provided by the go part
+:param data: Request data
+:return: None. Result is sent directly to the peer
+</pre> 
+</div>
+</div>
+<a id="a4d23dace670f49ea383070e7c9f10182"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d23dace670f49ea383070e7c9f10182">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ada3ac2f8a6108937e6e29a6153e7c7e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ada3ac2f8a6108937e6e29a6153e7c7e7">&#9670;&nbsp;</a></span>respond_to_message_request()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.respond_to_message_request </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>reporter</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Gets the info about the IP the peer asked about, and send it to the network
+</pre> 
+</div>
+</div>
+<a id="a8f9842c8c50f219f4a9163ecdf56a008"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f9842c8c50f219f4a9163ecdf56a008">&#9670;&nbsp;</a></span>set_evidence_p2p_report()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.p2ptrust.utils.go_director.GoDirector.set_evidence_p2p_report </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>reporter</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>score</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>confidence</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid_of_attacker</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">set evidence for the newly created attacker profile stating that it attacked another peer
+</pre> 
+</div>
+</div>
+<a id="a2fa21d4c959aac2d749b05ea97454ea1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2fa21d4c959aac2d749b05ea97454ea1">&#9670;&nbsp;</a></span>validate_message()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> (str, dict) slips.modules.p2ptrust.utils.go_director.GoDirector.validate_message </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>message</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check that message is formatted correctly, read message type and return decoded data.
+
+:param message: base64 encoded message sent by the peer
+:return: message type, message as dictionary
+</pre> 
+</div>
+</div>
+<a id="a8ceed1e437032389476b75090db3f217"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ceed1e437032389476b75090db3f217">&#9670;&nbsp;</a></span>validate_message_request()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool slips.modules.p2ptrust.utils.go_director.GoDirector.validate_message_request </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">Dict&#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Validate keys in message request. Check for corrupted fields and also supported fields
+</pre> 
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a9917f55ebaa21e8111a9c7a72390337b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9917f55ebaa21e8111a9c7a72390337b">&#9670;&nbsp;</a></span>evaluation_processors</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.evaluation_processors</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2d903f012aae41eac8e17f199fdb1071"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2d903f012aae41eac8e17f199fdb1071">&#9670;&nbsp;</a></span>key_type_processors</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.key_type_processors</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a94a3fc890c401b82c4be52ece168da6e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a94a3fc890c401b82c4be52ece168da6e">&#9670;&nbsp;</a></span>override_p2p</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.override_p2p</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8a6be125b9832c69d78350c94421b3f0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8a6be125b9832c69d78350c94421b3f0">&#9670;&nbsp;</a></span>printer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.printer</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac5031cca13014f129df2590a4e44fe64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac5031cca13014f129df2590a4e44fe64">&#9670;&nbsp;</a></span>pygo_channel</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.pygo_channel</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3c103dc497d035928606b577e5e383bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c103dc497d035928606b577e5e383bb">&#9670;&nbsp;</a></span>report_func</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.report_func</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a89e64f4a1c49dd834aff8eed85bd315c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a89e64f4a1c49dd834aff8eed85bd315c">&#9670;&nbsp;</a></span>reports_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.reports_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a42a1b15fcd4d8dc4f5c804900048dc6e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a42a1b15fcd4d8dc4f5c804900048dc6e">&#9670;&nbsp;</a></span>request_func</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.request_func</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a226773ab468049045cb51cf6607b6d82"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a226773ab468049045cb51cf6607b6d82">&#9670;&nbsp;</a></span>storage_name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.storage_name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad752ba99834534a28081432c7dec0ee1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad752ba99834534a28081432c7dec0ee1">&#9670;&nbsp;</a></span>trustdb</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.trustdb</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8bf1bd7a901d2245c4deb48e8ebf5926"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8bf1bd7a901d2245c4deb48e8ebf5926">&#9670;&nbsp;</a></span>width</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.p2ptrust.utils.go_director.GoDirector.width</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/alya/Desktop/slips/modules/p2ptrust/utils/<a class="el" href="../../de/d70/go__director_8py.html">go_director.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><a class="el" href="../../df/d73/namespaceslips.html">slips</a></li><li class="navelem"><a class="el" href="../../d4/d10/namespaceslips_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="../../de/d7e/namespaceslips_1_1modules_1_1p2ptrust.html">p2ptrust</a></li><li class="navelem"><a class="el" href="../../de/d67/namespaceslips_1_1modules_1_1p2ptrust_1_1utils.html">utils</a></li><li class="navelem"><a class="el" href="../../dd/d18/namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director.html">go_director</a></li><li class="navelem"><a class="el" href="../../db/d89/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html">GoDirector</a></li>
+    <li class="footer">Generated by
+    <a href="http://www.doxygen.org/index.html">
+    <img class="footer" src="../../doxygen.png" alt="doxygen"/></a> 1.8.17 </li>
+  </ul>
+</div>
+</body>
+</html>

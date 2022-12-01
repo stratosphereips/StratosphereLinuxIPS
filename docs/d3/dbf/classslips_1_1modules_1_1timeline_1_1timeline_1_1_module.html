@@ -1,0 +1,552 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.8.17"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: slips.modules.timeline.timeline.Module Class Reference</title>
+<link href="../../tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="../../jquery.js"></script>
+<script type="text/javascript" src="../../dynsections.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="../../doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="../../toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="../../navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../resize.js"></script>
+<script type="text/javascript" src="../../navtreedata.js"></script>
+<script type="text/javascript" src="../../navtree.js"></script>
+<link href="../../search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="../../search/searchdata.js"></script>
+<script type="text/javascript" src="../../search/search.js"></script>
+<link href="../../doxygen.css" rel="stylesheet" type="text/css" />
+<link href="../../doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="../../doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="../../custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.8.17 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "../../search",false,'Search');
+/* @license-end */
+</script>
+<script type="text/javascript" src="../../menudata.js"></script>
+<script type="text/javascript" src="../../menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('../../',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html','../../'); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
+<a href="../../d0/d52/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">slips.modules.timeline.timeline.Module Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<div class="dynheader">
+Inheritance diagram for slips.modules.timeline.timeline.Module:</div>
+<div class="dyncontent">
+<div class="center"><!-- SVG 0 -->
+</div>
+<center><span class="legend">[<a target="top" href="../../graph_legend.html">legend</a>]</span></center></div>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a66d9bbfb4b3195314c8d9e761b3ecb6d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a66d9bbfb4b3195314c8d9e761b3ecb6d">__init__</a> (self, <a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#ab22d505cbed111e942f3410362b34ca0">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:a66d9bbfb4b3195314c8d9e761b3ecb6d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e1473176add2614e89026a8cf09b7a4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a8e1473176add2614e89026a8cf09b7a4">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:a8e1473176add2614e89026a8cf09b7a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8efc05c28a850de80afad1fe2ae292f1"><td class="memItemLeft" align="right" valign="top">str&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a8efc05c28a850de80afad1fe2ae292f1">process_timestamp</a> (self, float timestamp)</td></tr>
+<tr class="separator:a8efc05c28a850de80afad1fe2ae292f1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3b74bf5731f5874593bcc29d3d451d0e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a3b74bf5731f5874593bcc29d3d451d0e">process_flow</a> (self, profileid, twid, flow, float timestamp)</td></tr>
+<tr class="separator:a3b74bf5731f5874593bcc29d3d451d0e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5366619004e390a0e0b501914ccbc43b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a5366619004e390a0e0b501914ccbc43b">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a5366619004e390a0e0b501914ccbc43b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acc375fa146f65d8c637b26df19f7e306"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#acc375fa146f65d8c637b26df19f7e306">run</a> (self)</td></tr>
+<tr class="separator:acc375fa146f65d8c637b26df19f7e306"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:ab22d505cbed111e942f3410362b34ca0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#ab22d505cbed111e942f3410362b34ca0">outputqueue</a></td></tr>
+<tr class="separator:ab22d505cbed111e942f3410362b34ca0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a312b3f4a79b92802da77f6ec19a714ed"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a312b3f4a79b92802da77f6ec19a714ed">separator</a></td></tr>
+<tr class="separator:a312b3f4a79b92802da77f6ec19a714ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab2f2a65fd01a507b05fe58eeab67f6f2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#ab2f2a65fd01a507b05fe58eeab67f6f2">c1</a></td></tr>
+<tr class="separator:ab2f2a65fd01a507b05fe58eeab67f6f2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2de900ec4a3ca7ade66c978d899b0aa6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a2de900ec4a3ca7ade66c978d899b0aa6">profiles_tw</a></td></tr>
+<tr class="separator:a2de900ec4a3ca7ade66c978d899b0aa6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a545b6058b5743d851081bde4ec650ab5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a545b6058b5743d851081bde4ec650ab5">alerted_malicous_ips_dict</a></td></tr>
+<tr class="separator:a545b6058b5743d851081bde4ec650ab5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab718faaf1d80ea8f4e5d852c1a702ef1"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#ab718faaf1d80ea8f4e5d852c1a702ef1">is_human_timestamp</a></td></tr>
+<tr class="separator:ab718faaf1d80ea8f4e5d852c1a702ef1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ade3cb10870a2c77274d34239a15a02ab"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#ade3cb10870a2c77274d34239a15a02ab">analysis_direction</a></td></tr>
+<tr class="separator:ade3cb10870a2c77274d34239a15a02ab"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a3f495e7749c55c0a75360b3cedc37de4"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a3f495e7749c55c0a75360b3cedc37de4">name</a> = 'Timeline'</td></tr>
+<tr class="separator:a3f495e7749c55c0a75360b3cedc37de4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a70f5a29876a53b12f5a364bd62111bf4"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a70f5a29876a53b12f5a364bd62111bf4">description</a> = 'Creates kalipso timeline of what happened in the network based on flows and available data'</td></tr>
+<tr class="separator:a70f5a29876a53b12f5a364bd62111bf4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7135b6090f439de16197f148bde2f085"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html#a7135b6090f439de16197f148bde2f085">authors</a> = ['Sebastian Garcia']</td></tr>
+<tr class="separator:a7135b6090f439de16197f148bde2f085"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a66d9bbfb4b3195314c8d9e761b3ecb6d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66d9bbfb4b3195314c8d9e761b3ecb6d">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.timeline.timeline.Module.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a8e1473176add2614e89026a8cf09b7a4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e1473176add2614e89026a8cf09b7a4">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.timeline.timeline.Module.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a3b74bf5731f5874593bcc29d3d451d0e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b74bf5731f5874593bcc29d3d451d0e">&#9670;&nbsp;</a></span>process_flow()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.timeline.timeline.Module.process_flow </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
+</pre> 
+</div>
+</div>
+<a id="a8efc05c28a850de80afad1fe2ae292f1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8efc05c28a850de80afad1fe2ae292f1">&#9670;&nbsp;</a></span>process_timestamp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> str slips.modules.timeline.timeline.Module.process_timestamp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acc375fa146f65d8c637b26df19f7e306"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc375fa146f65d8c637b26df19f7e306">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.timeline.timeline.Module.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5366619004e390a0e0b501914ccbc43b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5366619004e390a0e0b501914ccbc43b">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.timeline.timeline.Module.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a545b6058b5743d851081bde4ec650ab5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a545b6058b5743d851081bde4ec650ab5">&#9670;&nbsp;</a></span>alerted_malicous_ips_dict</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.alerted_malicous_ips_dict</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ade3cb10870a2c77274d34239a15a02ab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade3cb10870a2c77274d34239a15a02ab">&#9670;&nbsp;</a></span>analysis_direction</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.analysis_direction</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7135b6090f439de16197f148bde2f085"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7135b6090f439de16197f148bde2f085">&#9670;&nbsp;</a></span>authors</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">list slips.modules.timeline.timeline.Module.authors = ['Sebastian Garcia']</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab2f2a65fd01a507b05fe58eeab67f6f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2f2a65fd01a507b05fe58eeab67f6f2">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a70f5a29876a53b12f5a364bd62111bf4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70f5a29876a53b12f5a364bd62111bf4">&#9670;&nbsp;</a></span>description</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string slips.modules.timeline.timeline.Module.description = 'Creates kalipso timeline of what happened in the network based on flows and available data'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab718faaf1d80ea8f4e5d852c1a702ef1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab718faaf1d80ea8f4e5d852c1a702ef1">&#9670;&nbsp;</a></span>is_human_timestamp</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.is_human_timestamp</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3f495e7749c55c0a75360b3cedc37de4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3f495e7749c55c0a75360b3cedc37de4">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string slips.modules.timeline.timeline.Module.name = 'Timeline'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab22d505cbed111e942f3410362b34ca0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab22d505cbed111e942f3410362b34ca0">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2de900ec4a3ca7ade66c978d899b0aa6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2de900ec4a3ca7ade66c978d899b0aa6">&#9670;&nbsp;</a></span>profiles_tw</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.profiles_tw</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a312b3f4a79b92802da77f6ec19a714ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a312b3f4a79b92802da77f6ec19a714ed">&#9670;&nbsp;</a></span>separator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.timeline.timeline.Module.separator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/alya/Desktop/slips/modules/timeline/<a class="el" href="../../d3/dee/timeline_8py.html">timeline.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><a class="el" href="../../df/d73/namespaceslips.html">slips</a></li><li class="navelem"><a class="el" href="../../d4/d10/namespaceslips_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="../../d7/d7d/namespaceslips_1_1modules_1_1timeline.html">timeline</a></li><li class="navelem"><a class="el" href="../../d9/ddb/namespaceslips_1_1modules_1_1timeline_1_1timeline.html">timeline</a></li><li class="navelem"><a class="el" href="../../d3/dbf/classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html">Module</a></li>
+    <li class="footer">Generated by
+    <a href="http://www.doxygen.org/index.html">
+    <img class="footer" src="../../doxygen.png" alt="doxygen"/></a> 1.8.17 </li>
+  </ul>
+</div>
+</body>
+</html>

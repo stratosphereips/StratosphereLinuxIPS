@@ -1,0 +1,9 @@
+digraph "Graphical Class Hierarchy"
+{
+ // LATEX_PDF_SIZE
+  bgcolor="transparent";
+  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
+  node [fontname="Helvetica",fontsize="10",shape=record];
+  rankdir="LR";
+  Node0 [label="slips.modules.update\l_manager.timer_manager.Infinite\lTimer",height=0.2,width=0.4,color="black",URL="$df/dd7/classslips_1_1modules_1_1update__manager_1_1timer__manager_1_1_infinite_timer.html",tooltip=" "];
+}
