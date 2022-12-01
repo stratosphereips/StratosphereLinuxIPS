@@ -1038,7 +1038,7 @@ class UpdateFileManager:
             try:
                 filesize = os.path.getsize(ti_file_path)
             except FileNotFoundError:
-                # happens inntegration tests, another instance of slips deleted the file
+                # happens in integration tests, another instance of slips deleted the file
                 return False
 
             if filesize == 0:
@@ -1084,7 +1084,7 @@ class UpdateFileManager:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
                 data_column = self.get_data_column(amount_of_columns, line_fields, ti_file_path)
-                if data_column == 'False':  # don't use if not becayuse it may be 0
+                if data_column == 'False':  # don't use if not because it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it

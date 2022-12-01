@@ -97,7 +97,7 @@ redef digest_salt = "Please change this value.";
 @load frameworks/files/hash-all-files
 
 # Detect SHA1 sums in Team Cymru's Malware Hash Registry.
-@load frameworks/files/detect-MHR
+#@load frameworks/files/detect-MHR
 
 # Extend email alerting to include hostnames
 # don't load extend-email/hostnames as we're not using it, it's used for notices that are being sent to email.
