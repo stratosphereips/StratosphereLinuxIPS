@@ -44,7 +44,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.6'
+version = '1.0.0'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -129,6 +129,8 @@ class Main:
         Create a dir for logs if logs are enabled
         """
         logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
+        # place the logs dir inside the output dir
+        logs_folder = os.path.join(self.args.output, f'detailed_logs_{logs_folder}')
         try:
             os.makedirs(logs_folder)
         except OSError as e:
@@ -562,9 +564,13 @@ class Main:
             '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
         )
 
+    def was_running_zeek(self) -> bool:
+        """returns true if zeek wa sused in this run """
+        return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
-        was_running_zeek = self.input_type in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+        was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, 'zeek_files')
@@ -1511,6 +1517,7 @@ class Main:
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
         print(slips_version)
+
 
 
     def start(self):

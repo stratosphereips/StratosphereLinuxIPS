@@ -1,4 +1,4 @@
--0.9.7
+-1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
 - Add a new log file p2p_reports.log, for logging peer reports only  
@@ -12,7 +12,14 @@
 - Detect empty connections to duckduckgo used by blackmatter for checking internet connection
 - Fix pastebin downloads detection to include HTTPs too
 - Change colors and CLI evidence format
-- 
+- don't detect 'connection without dns' when running on an interface except for when it's done by your own IP 
+- Create profiles for all IPs by default (source and destination IPs)
+- Create profiles for all ips reported by peers
+- Alerts now contain attacks done by the profile only (excluding those done to the profile) 
+- Set evidence for each p2p report in the attackers profile
+- Take p2p reports into consideration when deciding to block an IP
+- Add Dockerfiles for MacOS M1
+- Fix P2P and ubutnu-image Dockerfiles 
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek

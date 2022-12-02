@@ -72,7 +72,7 @@ class EvidenceProcess(multiprocessing.Process):
         self.c2 = __database__.subscribe('new_blame')
         # clear alerts.log
         self.logfile = self.clean_file(output_folder, 'alerts.log')
-
+        self.is_interface = self.is_running_on_interface()
         # clear alerts.json
         self.jsonfile = self.clean_file(output_folder, 'alerts.json')
         self.print(f'Storing Slips logs in {output_folder}')
@@ -132,22 +132,19 @@ class EvidenceProcess(multiprocessing.Process):
         if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
             self.popup_alerts = False
 
-    def format_blocked_srcip_evidence(self, profileid, twid, flow_datetime):
+    def format_blocked_srcip_evidence(self, ip, twid, flow_datetime, now):
         """
         Function to prepare evidence about the blocked profileid and twid
         This evidence will be written in alerts.log, it won't be displayed in the terminal
         """
         try:
-            now = datetime.now()
-            now = utils.convert_format(now, utils.alerts_format)
-            ip = profileid.split('_')[-1].strip()
-            return f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence ' \
-                   f'on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            return
 
         except Exception as inst:
             self.print('Error in print_alert()')
             self.print(type(inst))
             self.print(inst)
+
 
     def format_evidence_string(
         self,
@@ -435,18 +432,15 @@ class EvidenceProcess(multiprocessing.Process):
         alert_to_print = f'{Fore.RED}{readable_datetime}{Style.RESET_ALL} {alert_to_print}'
         return alert_to_print
 
+    def is_running_on_interface(self):
+        return '-i' in sys.argv or __database__.is_growing_zeek_dir()
+
+
     def decide_blocking(self, profileid) -> bool:
         """
         Decide whether to block or not and send to the blocking module
         :param ip: IP to block
         """
-        # # ip_direction is the direction of the last evidence, it's irrelevant! #TODO
-        # if ip_direction != 'dstip':
-        #     return False
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
-        if not (running_on_interface and '-p' in sys.argv):
-            # blocking is only supported when running on an interface
-            return False
 
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
@@ -458,7 +452,7 @@ class EvidenceProcess(multiprocessing.Process):
             return False
 
         #  TODO: edit the options in blocking_data, by default it'll block
-        #  all traffic to or from this ip
+        #  TODO: all traffic to or from this ip
         blocking_data = {
             'ip': ip_to_block,
             'block': True,
@@ -468,17 +462,28 @@ class EvidenceProcess(multiprocessing.Process):
         return True
 
     def mark_as_blocked(
-            self, profileid, twid, flow_datetime, accumulated_threat_level
+            self, profileid, twid, flow_datetime, accumulated_threat_level, blocked=False
     ):
-        __database__.markProfileTWAsBlocked(profileid, twid)
-        # Add to log files that this srcip is being blocked
-        blocked_srcip_to_log = (
-            self.format_blocked_srcip_evidence(
-                profileid, twid, flow_datetime
-            )
-        )
-        self.addDataToLogFile(blocked_srcip_to_log)
+        """
+        :param blocked: bool. if the ip was blocked by the blocked modules, we should say so
+                    in alerts.log, if not, we should say that we generated an alert
+        """
 
+        now = datetime.now()
+        now = utils.convert_format(now, utils.alerts_format)
+        ip = profileid.split('_')[-1].strip()
+        if blocked:
+            __database__.markProfileTWAsBlocked(profileid, twid)
+            # Add to log files that this srcip is being blocked
+            msg = (
+                f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence '
+                f'on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            )
+        else:
+            msg = f'{flow_datetime}: Src IP {ip:26}. Generated an alert given enough evidence ' \
+                   f'on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+
+        # log the alert
         blocked_srcip_dict = {
             'type': 'alert',
             'profileid': profileid,
@@ -486,6 +491,9 @@ class EvidenceProcess(multiprocessing.Process):
             'threat_level': accumulated_threat_level,
         }
         self.add_to_log_folder(blocked_srcip_dict)
+
+        # log in alerts.log
+        self.addDataToLogFile(msg)
 
     def shutdown_gracefully(self):
         self.logfile.close()
@@ -795,13 +803,26 @@ class EvidenceProcess(multiprocessing.Process):
                                     )
                                     self.notify.show_popup(alert_to_print)
 
-                                if self.decide_blocking(profileid):
-                                    self.mark_as_blocked(
-                                        profileid,
-                                        twid,
-                                        flow_datetime,
-                                        accumulated_threat_level
-                                    )
+
+
+                                blocked = False
+                                if self.is_interface and '-p' in sys.argv:
+                                    # send ip to the blocking module
+                                    if self.decide_blocking(profileid):
+                                        blocked = True
+
+                                # since we don't block when running slips on files,
+                                # log this in alerts.log
+
+                                # running on an interface and slips should block
+                                # mark ip as blocked and add it to alerts.log
+                                self.mark_as_blocked(
+                                    profileid,
+                                    twid,
+                                    flow_datetime,
+                                    accumulated_threat_level,
+                                    blocked=blocked
+                                )
 
                 message = __database__.get_message(self.c2)
                 if utils.is_msg_intended_for(message, 'new_blame'):

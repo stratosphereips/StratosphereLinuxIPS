@@ -244,13 +244,18 @@ class Trust(Module, multiprocessing.Process):
             # not a valid json dict
             return
 
-        type_detection = data.get(
-            'type_detection'
-        )   # example: dstip srcip dport sport dstdomain
+        # example: dstip srcip dport sport dstdomain
+        type_detection = data.get('type_detection')
         if not 'ip' in type_detection:   # and not 'domain' in type_detection:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
+
+        type_evidence = data.get('type_evidence')
+        if 'P2PReport' in type_evidence:
+            # we shouldn't re-share evidence reported by other peers
+            return
+
 
         detection_info = data.get('detection_info')
         confidence = data.get('confidence', False)
@@ -270,7 +275,7 @@ class Trust(Module, multiprocessing.Process):
         score = self.threat_levels[threat_level]
         # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
 
-        # todo when we genarate a new evidence,
+        # todo when we generate a new evidence,
         #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?

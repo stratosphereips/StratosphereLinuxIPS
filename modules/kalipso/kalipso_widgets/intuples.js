@@ -3,9 +3,10 @@ const listTable = require("../lib_widgets/listtable.js")
 
 class InTuples extends listTable.ListTableClass{
 
-    constructor(grid, redis_database,screen, characteristics){
+    constructor(grid, redis_database,screen, characteristics, limit_letter_intuple){
         super(grid, redis_database, characteristics)
                 this.screen = screen
+                this.limit_letter_intuple = limit_letter_intuple
     }
 
     /*Combine data for InTuples*/

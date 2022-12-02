@@ -64,6 +64,9 @@ so we simply ignore alerts of this time about well known org such as (facebook, 
 Slips uses it's own lists of organizations info (IPs, IP ranges, domains, and ASNs) stored in ```slips_files/organizations_info``` to check
 whether the IP/domain of each flow belong to a known org or not.
 
+Slips doesn't detect 'connection without DNS' when running
+on an interface except for when it's done by this instance's own IP.
+
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
 of the docs for info on how slips detects DoH.
 
@@ -714,7 +717,7 @@ Available detection are:
 Due to the usage of empty connections to popular site by malware to check for internet connectivity,
 We consider this type of behaviour suspicious activity that shouldn't happen
 
-We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' etc.
+We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com' etc.
 
 #### Suspicious user agents
 

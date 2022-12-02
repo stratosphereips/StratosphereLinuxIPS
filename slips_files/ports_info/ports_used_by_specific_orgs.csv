@@ -2,6 +2,14 @@
 # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
 # Here we have a list of organizations range/ip and the port it's known to use
 "Organization","IP/IP range","port","protocol"
+MicrosoftTeams,13.107.64.0/18,3478,udp
+MicrosoftTeams,13.107.64.0/18,3479,udp
+MicrosoftTeams,13.107.64.0/18,3480,udp
+MicrosoftTeams,13.107.64.0/18,3481,udp
+MicrosoftTeams,52.112.0.0/14,3478,udp
+MicrosoftTeams,52.112.0.0/14,3479,udp
+MicrosoftTeams,52.112.0.0/14,3480,udp
+MicrosoftTeams,52.112.0.0/14,3481,udp
 Viber,44.192.201.158,80,tcp
 Viber,44.192.201.158,80,udp
 Viber,44.192.201.158,443,tcp

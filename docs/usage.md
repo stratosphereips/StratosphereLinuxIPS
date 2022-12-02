@@ -487,6 +487,9 @@ The ```home_network``` parameter also supports one host as an argument,
 which is written like this ```[192.168.2.16/32]```.
 When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
 
+By default, the home_network parameter is not set, which means slips will
+create profiles for every IP it sees in the network
+
 **Analysis Direction**
 
 
@@ -500,6 +503,8 @@ When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.1
 ### Disabling a module
 
 You can disable modules easily by appending the module name to the ```disable``` list.
+
+The module name to disable should be the same as the name of it's directory name inside modules/ directory
 
 ### ML Detection
 
