@@ -526,7 +526,7 @@ class UpdateFileManager:
                     )
                 else:
                     self.log(
-                        f'The data {data} is not valid. It was found in {filename}.', 3, 0,
+                        f'The data {data} is not valid. It was found in {filename}.'
                     )
                     continue
         # Add all loaded malicious sha1 to the database
