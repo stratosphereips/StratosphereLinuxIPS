@@ -18,7 +18,8 @@
 - Alerts now contain attacks done by the profile only (excluding those done to the profile) 
 - Set evidence for each p2p report in the attackers profile
 - Take p2p reports into consideration when deciding to block an IP
-- 
+- Add Dockerfiles for MacOS M1
+- Fix P2P and ubutnu-image Dockerfiles 
 -0.9.6
 - Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek
