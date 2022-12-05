@@ -350,11 +350,6 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['state_hist'] = self.column_values['state']
 
             try:
-                self.column_values['state_hist'] = line[15]
-            except IndexError:
-                self.column_values['state_hist'] = self.column_values['state']
-
-            try:
                 self.column_values['smac'] = line[21]
             except IndexError:
                 self.column_values['smac'] = ''
