@@ -601,8 +601,6 @@ class Module(Module, multiprocessing.Process):
     def is_ignored_domain(self, domain):
         if not domain:
             return True
-        # to reduce the number of requests sent, don't send google domains
-        # requests to spamhaus and urlhaus domains are done by slips
         ignored_TLDs = ('.arpa',
                         '.local')
 
@@ -616,26 +614,18 @@ class Module(Module, multiprocessing.Process):
         Supports IPs, domains, and hashes (MD5, sha256) lookups
         :param ioc: can be domain or ip
         """
-        def get_description(url: dict):
-            """
-            returns a meaningful description from the given list of urls
-            """
-
-            description = f"{url['threat']}, url status: {url['url_status']}"
-            return description
 
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
 
         # available types at urlhaus are host, md5 or sha256
         types = {
-            'ip': 'host',
-            'domain': 'host',
+            'url': 'url',
             'md5': 'md5',
         }
         ioc_type = utils.detect_data_type(ioc)
         # urlhaus doesn't support ipv6
-        if not ioc_type or validators.ipv6(ioc):
-            # not a valid ip, domain or hash
+        if not ioc_type or ioc_type not in types:
+            # not a valid url or hash
             return
 
         # get the urlhause supported type
@@ -645,9 +635,9 @@ class Module(Module, multiprocessing.Process):
         }
         try:
 
-            if indicator_type == 'host':
+            if indicator_type == 'url':
                 urlhaus_api_response = self.urlhaus_session.post(
-                    f'{urlhaus_base_url}/host/',
+                    f'{urlhaus_base_url}/url/',
                     urlhaus_data,
                     headers=self.urlhaus_session.headers
                 )
@@ -666,19 +656,18 @@ class Module(Module, multiprocessing.Process):
             return
 
         response = json.loads(urlhaus_api_response.text)
+
         if (
                 response['query_status'] == 'no_results'
-                or 'urls' not in response
-                or response['urls'] == []
+                or response['query_status'] == 'invalid_url'
         ):
             # no response or empty response
             return
 
-        # get the first description available
-        url = response['urls'][0]
-        description = get_description(url)
+        description = f"{response['threat']}, URL status: {response['url_status']}"
+
         try:
-            tags = " ".join(tag for tag in url['tags'])
+            tags = " ".join(tag for tag in response['tags'])
         except TypeError:
             # no tags available
             tags = ''
@@ -729,6 +718,7 @@ class Module(Module, multiprocessing.Process):
             twid=file_info["twid"],
             uid=file_info["uid"],
         )
+
 
 
 
@@ -847,8 +837,7 @@ class Module(Module, multiprocessing.Process):
             return domain_info, is_subdomain
         return False, False
 
-    def search_online_for_domain(self, domain):
-        return self.urlhaus(domain)
+
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
@@ -900,11 +889,7 @@ class Module(Module, multiprocessing.Process):
 
         domain_info, is_subdomain = self.search_offline_for_domain(domain)
         if not domain_info:
-            is_subdomain = False
-            domain_info = self.search_online_for_domain(domain)
-            if not domain_info:
-                # not malicious
-                return False
+            return False
 
         self.set_evidence_malicious_domain(
                 domain,
@@ -996,6 +981,14 @@ class Module(Module, multiprocessing.Process):
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(
+                            to_lookup,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid
+                        )
+                    elif type_ == 'url':
+                        self.is_malicious_url(
                             to_lookup,
                             uid,
                             timestamp,
