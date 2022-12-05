@@ -1039,17 +1039,24 @@ class Database(ProfilingFlowsDatabase, object):
 
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
-        When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
-         database
+        When we have a bunch of evidence causing an alert,
+        we associate all evidence IDs with the alert ID in our database
         stores in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
+        old_profileid_twid_alerts: dict = self.get_profileid_twid_alerts(profileid, twid)
+
         alert = {
             alert_ID: json.dumps(evidence_IDs)
         }
-        alert = json.dumps(alert)
-        self.r.hset(profileid + self.separator + twid, 'alerts', alert)
+
+        # add the alert we have to the old alerts of this profileid_twid
+        profileid_twid_alerts: dict = old_profileid_twid_alerts | alert
+
+
+        profileid_twid_alerts = json.dumps(profileid_twid_alerts)
+        self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
 
         # the structure of alerts key is
         # alerts {
@@ -1232,7 +1239,7 @@ class Database(ProfilingFlowsDatabase, object):
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if not alerts:
             return {}
         alerts = json.loads(alerts)
@@ -1244,7 +1251,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if alerts:
             alerts = json.loads(alerts)
             evidence = alerts.get(alert_ID, False)
