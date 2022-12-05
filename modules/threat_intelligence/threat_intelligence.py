@@ -614,6 +614,7 @@ class Module(Module, multiprocessing.Process):
         Supports IPs, domains, and hashes (MD5, sha256) lookups
         :param ioc: can be domain or ip
         """
+        #todo test hashes
 
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
 
@@ -664,10 +665,13 @@ class Module(Module, multiprocessing.Process):
             # no response or empty response
             return
 
-        description = f"{response['threat']}, URL status: {response['url_status']}"
-
+        threat = response['threat']
+        url_status = response['url_status']
+        description = f"Connecting to a malicious URL {ioc}. Detected by: URLhaus " \
+                      f"threat: {threat}, URL status: {url_status}"
         try:
             tags = " ".join(tag for tag in response['tags'])
+            description += f', tags: {tags}'
         except TypeError:
             # no tags available
             tags = ''
@@ -680,26 +684,32 @@ class Module(Module, multiprocessing.Process):
             md5 = payloads.get("response_md5", "")
             signature = payloads.get("signature", "")
 
-            description += f', the file hosted in {ioc} is of type: {file_type},' \
+            description += f', the file hosted in this url is of type: {file_type},' \
                            f' filename: {file_name} md5: {md5} signature: {signature}. '
 
+            # if we dont have a percentage repprted by vt, we will set out own
+            # tl in set_evidence_malicious_url() function
+            threat_level = False
             virustotal_info = payloads.get("virustotal", "")
             if virustotal_info:
                 virustotal_percent = virustotal_info.get("percent", "")
+                threat_level = virustotal_percent
                 # virustotal_result = virustotal_info.get("result", "")
                 # virustotal_result.replace('\',''')
                 description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
 
         except (KeyError, IndexError):
+            # no payloads available
             pass
 
 
         info = {
             # get all the blacklists where this ioc is listed
             'source': 'URLhaus',
+            'url': ioc,
             'description': description,
-            'therat_level': 'medium',
-            'tags': tags
+            'threat_level': threat_level,
+            'tags': tags,
         }
         return info
 
@@ -742,11 +752,51 @@ class Module(Module, multiprocessing.Process):
         )
 
     def set_evidence_malicious_url(
-            self
+            self,
+            url_info,
+            uid,
+            timestamp,
+            profileid,
+            twid
     ):
-        #todo
-        pass
+        """
+        :param url_info: dict with source, description, therat_level, and tags of url
+        """
+        threat_level = url_info['threat_level']
+        detection_info = url_info['url']
+        description = url_info['description']
 
+        confidence = 0.7
+
+        if not threat_level:
+            threat_level = 'medium'
+        else:
+            # convert percentage reporte by urlhaus(virustotal) to
+            # a valid slips confidence
+            try:
+                threat_level = int(threat_level)/100
+                threat_level = utils.threat_level_to_string(threat_level)
+            except ValueError:
+                threat_level = 'medium'
+
+
+        type_detection = 'url'
+        category = 'Malware'
+        type_evidence = 'MaliciousURL'
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
 
     def circl_lu(self, flow_info):
         """
@@ -915,7 +965,13 @@ class Module(Module, multiprocessing.Process):
         if not url_info:
             # not malicious
             return False
-        #self.set_evidence_malicious_url()
+        self.set_evidence_malicious_url(
+            url_info,
+            uid,
+            timestamp,
+            profileid,
+            twid
+        )
 
 
     def is_malicious_domain(
