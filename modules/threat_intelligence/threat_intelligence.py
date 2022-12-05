@@ -672,6 +672,28 @@ class Module(Module, multiprocessing.Process):
             # no tags available
             tags = ''
 
+
+        try:
+            payloads: dict = response['payloads'][0]
+            file_type = payloads.get("file_type", "")
+            file_name = payloads.get("filename", "")
+            md5 = payloads.get("response_md5", "")
+            signature = payloads.get("signature", "")
+
+            description += f', the file hosted in {ioc} is of type: {file_type},' \
+                           f' filename: {file_name} md5: {md5} signature: {signature}. '
+
+            virustotal_info = payloads.get("virustotal", "")
+            if virustotal_info:
+                virustotal_percent = virustotal_info.get("percent", "")
+                # virustotal_result = virustotal_info.get("result", "")
+                # virustotal_result.replace('\',''')
+                description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
+
+        except (KeyError, IndexError):
+            pass
+
+
         info = {
             # get all the blacklists where this ioc is listed
             'source': 'URLhaus',
@@ -719,7 +741,11 @@ class Module(Module, multiprocessing.Process):
             uid=file_info["uid"],
         )
 
-
+    def set_evidence_malicious_url(
+            self
+    ):
+        #todo
+        pass
 
 
     def circl_lu(self, flow_info):
@@ -837,7 +863,8 @@ class Module(Module, multiprocessing.Process):
             return domain_info, is_subdomain
         return False, False
 
-
+    def search_online_for_url(self, url):
+        return self.urlhaus(url)
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
@@ -874,6 +901,21 @@ class Module(Module, multiprocessing.Process):
             self.set_evidence_malicious_hash(
                 file_info
             )
+
+    def is_malicious_url(
+            self,
+            url,
+            uid,
+            timestamp,
+            profileid,
+            twid
+    ):
+
+        url_info = self.search_online_for_url(url)
+        if not url_info:
+            # not malicious
+            return False
+        #self.set_evidence_malicious_url()
 
 
     def is_malicious_domain(
