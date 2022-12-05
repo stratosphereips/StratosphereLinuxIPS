@@ -958,12 +958,18 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'files.log' in file_type:
             """Parse the fields we're interested in in the files.log file"""
             # the slash before files to distinguish between 'files' in the dir name and file.log
+            saddr =  line.get('tx_hosts', [''])[0]
+            if saddr:
+                self.column_values['saddr'] = saddr
+
+            daddr = line.get('rx_hosts', [''])[0]
+            if daddr:
+                self.column_values['daddr'] = daddr
+
             self.column_values.update(
                 {
                     'type': 'files',
                     'uid': line.get('conn_uids', [''])[0],
-                    'saddr': line.get('tx_hosts', [''])[0],
-                    'daddr': line.get('rx_hosts', [''])[0],
                     'size': line.get('seen_bytes', ''),  # downloaded file size
                     'md5': line.get('md5', ''),
                     # used for detecting ssl certs
@@ -972,7 +978,6 @@ class ProfilerProcess(multiprocessing.Process):
                     'sha1': line.get('sha1', ''),
                 }
             )
-
         elif 'arp' in file_type:
             self.column_values.update(
                 {
@@ -1936,7 +1941,6 @@ class ProfilerProcess(multiprocessing.Process):
         }
         to_send = json.dumps(to_send)
         __database__.publish('new_downloaded_file', to_send)
-
 
     def handle_arp(self):
         to_send = {
