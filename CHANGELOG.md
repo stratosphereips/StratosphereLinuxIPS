@@ -2,6 +2,7 @@
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
 - Fix FP urlhaus detetcions, now we use it to check urls only, not domains.
+- remove the support for md5 urlhaus lookups
 
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
