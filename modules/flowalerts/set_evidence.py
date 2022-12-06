@@ -64,6 +64,39 @@ class Helper:
             uid=uid,
         )
 
+
+    def set_evidence_weird_http_method(
+        self,
+        profileid,
+        twid,
+        daddr,
+        weird_method,
+        uid,
+        timestamp,
+    ):
+        confidence = 0.9
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'srcip'
+        type_evidence = 'WeirdHTTPMethod'
+        detection_info = profileid.split("_")[-1]
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_incompatible_CN(
         self, org, timestamp, daddr, profileid, twid, uid
     ):
