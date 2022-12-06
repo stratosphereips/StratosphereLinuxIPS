@@ -44,7 +44,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.malicious_label = __database__.malicious_label
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips = 6
+        self.port_scan_minimum_dips = 5
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         self.pingscan_minimum_flows = 5

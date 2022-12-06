@@ -351,7 +351,6 @@ class ProfilingFlowsDatabase(object):
         proto = columns['proto'].upper()
         daddr = columns['daddr']
         saddr = columns['saddr']
-        state_hist = columns['state_hist']
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
@@ -722,7 +721,7 @@ class ProfilingFlowsDatabase(object):
         uid = columns['uid']
         ip = str(ip_address)
         spkts = columns['spkts']
-        state_hist = columns['state_hist']
+        state_hist = columns.get('state_hist','')
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
