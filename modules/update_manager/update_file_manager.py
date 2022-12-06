@@ -174,7 +174,6 @@ class UpdateFileManager:
         # there are ports that are by default considered unknown to slips,
         # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
         with open(ports_info_filepath, 'r') as f:
             line_number = 0
             while True:
@@ -186,13 +185,31 @@ class UpdateFileManager:
                 # skip the header and the comments at the begining
                 if line.startswith('#') or line.startswith('"Organization"'):
                     continue
+
                 line = line.split(',')
                 try:
                     organization, ip = line[0], line[1]
-                    portproto = f'{line[2]}/{line[3].lower().strip()}'
-                    __database__.set_organization_of_port(
-                        organization, ip, portproto
-                    )
+                    ports_range = line[2]
+                    proto = line[3].lower().strip()
+
+                    # is it a range of ports or a single port
+                    if '-' in ports_range:
+                        # it's a range of ports
+                        first_port, last_port = ports_range.split('-')
+                        first_port = int(first_port)
+                        last_port = int(last_port)
+
+                        for port in range(first_port, last_port+1):
+                            portproto = f'{port}/{proto}'
+                            __database__.set_organization_of_port(
+                                organization, ip, portproto
+                            )
+                    else:
+                        # it's a single port
+                        portproto = f'{ports_range}/{proto}'
+                        __database__.set_organization_of_port(
+                            organization, ip, portproto
+                        )
 
                 except IndexError:
                     self.print(
