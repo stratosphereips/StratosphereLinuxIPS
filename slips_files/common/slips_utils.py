@@ -115,6 +115,10 @@ class Utils(object):
         elif '/' in data:
             return 'url'
 
+        if validators.sha256(data):
+            return 'sha256'
+
+
 
     def drop_root_privs(self):
         """
