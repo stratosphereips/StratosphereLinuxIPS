@@ -82,7 +82,6 @@ class InputProcess(multiprocessing.Process):
             'packet_filter',
             'stats',
             'ocsp',
-            'weird',
             'reporter',
             'x509',
         }
