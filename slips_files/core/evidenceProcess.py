@@ -500,13 +500,13 @@ class EvidenceProcess(multiprocessing.Process):
         self.jsonfile.close()
         __database__.publish('finished_modules', 'Evidence')
 
-    def delete_alerted_evidence(self, proflied, twid, tw_evidence):
+    def delete_alerted_evidence(self, profileid, twid, tw_evidence:dict):
         """
         if there was an alert in this tw before, remove the evidence that were part of the past alert
         from the current evidence
         """
         # format of tw_evidence is {<ev_id>: {evidence_details}}
-        past_alerts = __database__.get_profileid_twid_alerts(proflied, twid)
+        past_alerts = __database__.get_profileid_twid_alerts(profileid, twid)
         if not past_alerts:
             return tw_evidence
 
@@ -562,7 +562,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         tw_evidence: dict = json.loads(tw_evidence)
         tw_evidence = self.delete_alerted_evidence(profileid, twid, tw_evidence)
-        tw_evidence = self.delete_evidence_done_by_others( tw_evidence)
+        tw_evidence = self.delete_evidence_done_by_others(tw_evidence)
         tw_evidence = self.delete_whitelisted_evidence(tw_evidence)
         return tw_evidence
 
@@ -762,67 +762,67 @@ class EvidenceProcess(multiprocessing.Process):
                         if (
                             accumulated_threat_level
                             >= self.detection_threshold_in_this_width
-                        ):
-                            if not __database__.checkBlockedProfTW(
+                            and not __database__.checkBlockedProfTW(
                                 profileid, twid
-                            ):
-                                # store the alert in our database
-                                # the alert ID is profileid_twid + the ID of the last evidence causing this alert
-                                alert_ID = f'{profileid}_{twid}_{ID}'
-                                __database__.set_evidence_causing_alert(
-                                    profileid,
-                                    twid,
-                                    alert_ID,
-                                    self.IDs_causing_an_alert
-                                )
-                                __database__.publish('new_alert', alert_ID)
+                            )
+                        ):
+                            # store the alert in our database
+                            # the alert ID is profileid_twid + the ID of the last evidence causing this alert
+                            alert_ID = f'{profileid}_{twid}_{ID}'
+                            __database__.set_evidence_causing_alert(
+                                profileid,
+                                twid,
+                                alert_ID,
+                                self.IDs_causing_an_alert
+                            )
+                            __database__.publish('new_alert', alert_ID)
 
-                                self.send_to_exporting_module(tw_evidence)
+                            self.send_to_exporting_module(tw_evidence)
 
-                                # print the alert
-                                alert_to_print = (
-                                    self.format_evidence_causing_this_alert(
-                                        tw_evidence,
-                                        profileid,
-                                        twid,
-                                        flow_datetime,
-                                    )
-                                )
-                                self.print(f'{alert_to_print}', 1, 0)
-
-                                # alerts.json should only contain alerts in idea format,
-                                # blocked srcips should only be printed in alerts.log
-                                # self.addDataToJSONFile(blocked_srcip_dict)
-
-                                if self.popup_alerts:
-                                    # remove the colors from the alerts before printing
-                                    alert_to_print = (
-                                        alert_to_print.replace(Fore.RED, '')
-                                        .replace(Fore.CYAN, '')
-                                        .replace(Style.RESET_ALL, '')
-                                    )
-                                    self.notify.show_popup(alert_to_print)
-
-
-
-                                blocked = False
-                                if self.is_interface and '-p' in sys.argv:
-                                    # send ip to the blocking module
-                                    if self.decide_blocking(profileid):
-                                        blocked = True
-
-                                # since we don't block when running slips on files,
-                                # log this in alerts.log
-
-                                # running on an interface and slips should block
-                                # mark ip as blocked and add it to alerts.log
-                                self.mark_as_blocked(
+                            # print the alert
+                            alert_to_print = (
+                                self.format_evidence_causing_this_alert(
+                                    tw_evidence,
                                     profileid,
                                     twid,
                                     flow_datetime,
-                                    accumulated_threat_level,
-                                    blocked=blocked
                                 )
+                            )
+                            self.print(f'{alert_to_print}', 1, 0)
+
+                            # alerts.json should only contain alerts in idea format,
+                            # blocked srcips should only be printed in alerts.log
+                            # self.addDataToJSONFile(blocked_srcip_dict)
+
+                            if self.popup_alerts:
+                                # remove the colors from the alerts before printing
+                                alert_to_print = (
+                                    alert_to_print.replace(Fore.RED, '')
+                                    .replace(Fore.CYAN, '')
+                                    .replace(Style.RESET_ALL, '')
+                                )
+                                self.notify.show_popup(alert_to_print)
+
+
+
+                            blocked = False
+                            if self.is_interface and '-p' in sys.argv:
+                                # send ip to the blocking module
+                                if self.decide_blocking(profileid):
+                                    blocked = True
+
+                            # since we don't block when running slips on files,
+                            # log this in alerts.log
+
+                            # running on an interface and slips should block
+                            # mark ip as blocked and add it to alerts.log
+                            self.mark_as_blocked(
+                                profileid,
+                                twid,
+                                flow_datetime,
+                                accumulated_threat_level,
+                                blocked=blocked
+                            )
 
                 message = __database__.get_message(self.c2)
                 if utils.is_msg_intended_for(message, 'new_blame'):
