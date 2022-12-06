@@ -1162,17 +1162,26 @@ class ProfilingFlowsDatabase(object):
             uid,
             data,
         )
-        to_send = {
+
+        http_flow = {
             'profileid': profileid,
             'twid': twid,
             'flow': data,
             'stime': stime,
         }
-        to_send = json.dumps(to_send)
+        to_send = json.dumps(http_flow)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
+
+        http_flow.pop('flow', None)
+        http_flow.update(
+            {
+                'uid': uid,
+            }
+        )
+
         # Check if the host domain is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
         if len(host) > 2:
@@ -1186,6 +1195,25 @@ class ProfilingFlowsDatabase(object):
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence', data_to_send)
+
+            self.give_url_to_ti(host, uri, http_flow, uid)
+        else:
+            # use the daddr since there's no host
+            self.give_url_to_ti(daddr, uri, http_flow, uid)
+
+    def give_url_to_ti(self, host, uri, http_flow, uid):
+        """
+        :param host: can be an ip or a domain
+        """
+        # give the url to ti module
+        http_flow.update(
+            {
+                'to_lookup': f'http://{host}{uri}'
+            }
+        )
+        to_send = json.dumps(http_flow)
+        self.publish('give_threat_intelligence', to_send)
+
 
     def add_out_ssh(
         self,
