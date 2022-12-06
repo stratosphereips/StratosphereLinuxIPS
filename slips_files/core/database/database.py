@@ -50,6 +50,7 @@ class Database(ProfilingFlowsDatabase, object):
         'new_blame',
         'new_alert',
         'new_dhcp',
+        'new_weird',
         'new_software',
         'p2p_data_request',
         'remove_old_files',

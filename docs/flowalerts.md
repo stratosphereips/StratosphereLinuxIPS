@@ -24,6 +24,7 @@ The detection techniques are:
 - DNS ARPA Scans
 - Multiple SSH versions
 - Incompatible CN
+- Weird HTTP methods
 
 The details of each detection follows.
 
@@ -264,3 +265,10 @@ When slips enccounters a cn that claims to belong to any of Slips supported orgs
 Slips checks if the destination address or the destination server name belongs to these org. 
 
 If not, slips generates an alert.
+
+## Weird HTTP methods
+
+Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
+
+When there's a weird HTTP method, slips detects it as well.
+

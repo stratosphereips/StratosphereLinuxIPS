@@ -271,6 +271,7 @@ class ProfilerProcess(multiprocessing.Process):
             # using regex split, split line when you encounter more than 2 spaces in a row
             line = split(r'\s{2,}', line)
 
+
         # Generic fields in Zeek
         self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
@@ -709,6 +710,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['src_hw'] = line[6]
             self.column_values['dst_hw'] = line[7]
 
+        elif 'weird' in new_line['type']:
+            self.column_values['type'] = 'weird'
+            self.column_values['name'] = line[6]
+            self.column_values['addl'] = line[7]
+
+
     def process_zeek_input(self, new_line: dict):
         """
         Process one zeek line(new_line) and extract columns
@@ -1000,6 +1007,15 @@ class ProfilerProcess(multiprocessing.Process):
                     'unparsed_version': line.get('unparsed_version', ''),
                     'version.major': line.get('version.major', ''),
                     'version.minor': line.get('version.minor', ''),
+                }
+            )
+
+        elif 'weird' in file_type:
+            self.column_values.update(
+                {
+                    'type': 'weird',
+                    'name': line.get('name', ''),
+                    'addl': line.get('addl', ''),
                 }
             )
         else:
@@ -1537,7 +1553,8 @@ class ProfilerProcess(multiprocessing.Process):
             'arp',
             'ftp',
             'smtp',
-            'software'
+            'software',
+            'weird'
         )
 
         if (
@@ -1644,6 +1661,7 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
         """
+
         try:
             if not self.is_supported_flow():
                 return False
@@ -1974,11 +1992,27 @@ class ProfilerProcess(multiprocessing.Process):
             uid=self.uid,
         )
 
+    def handle_weird(self):
+        """
+        handles weird.log zeek flows
+        """
+        to_send = {
+            'uid': self.uid,
+            'ts': self.starttime,
+            'daddr': self.daddr,
+            'saddr': self.saddr,
+            'profileid': self.profileid,
+            'twid': self.twid,
+            'name': self.column_values['name'],
+            'addl': self.column_values['addl']
+        }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_weird', to_send)
+
     def store_features_going_out(self):
         """
         function for adding the features going out of the profile
         """
-
         cases = {
             'flow': self.handle_conn,
             'conn': self.handle_conn,
@@ -1994,8 +2028,8 @@ class ProfilerProcess(multiprocessing.Process):
             'files': self.handle_files,
             'arp': self.handle_arp,
             'dhcp': self.handle_dhcp,
-            'software': self.handle_software
-
+            'software': self.handle_software,
+            'weird': self.handle_weird,
         }
 
         try:
