@@ -61,9 +61,9 @@ Zoom,149.137.0.0/17,3478-3479,udp
 Zoom,149.137.0.0/17,8801-8810,udp
 JE-apps,52.208.51.0,3515,tcp
 Kaspersky,"",1443,tcp
-Apple,"",8000–8999,tcp
-Apple,"",42000–42999,tcp
-Apple,"",49152–65535,tcp
+Apple,"",8000-8999,tcp
+Apple,"",42000-42999,tcp
+Apple,"",49152-65535,tcp
 Apple,"",2195-2197,tcp
 Apple,"",3283-3285,tcp
 Apple,"",3689-3690,tcp
@@ -79,10 +79,10 @@ Apple,"",5297,tcp
 Apple,"",9100,tcp
 Apple,"",9418,tcp
 Apple,"",478–3497,udp
-Apple,"",16384–16403,udp
-Apple,"",16384–16387,udp
-Apple,"",16393–16402,udp
-Apple,"",16403–16472,udp
+Apple,"",16384-16403,udp
+Apple,"",16384-16387,udp
+Apple,"",16393-16402,udp
+Apple,"",16403-16472,udp
 Apple,"",500,udp
 Apple,"",749,udp
 Apple,"",3031,udp
