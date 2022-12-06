@@ -46,6 +46,7 @@ class Module(Module, multiprocessing.Process):
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
+        self.c10 = __database__.subscribe('new_weird')
         self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
@@ -1264,6 +1265,33 @@ class Module(Module, multiprocessing.Process):
             ssl_info, ssl_info_from_db
         )
 
+    def check_weird_http_method(self, msg):
+        """
+        detect weird http methods in zeek's weird.log
+        """
+
+        # what's the weird.log about
+        name = msg['name']
+
+        if 'unknown_HTTP_method' not in name:
+            return False
+
+        addl = msg['addl']
+        uid = msg['uid']
+        profileid = msg['profileid']
+        twid = msg['twid']
+        daddr = msg['daddr']
+        ts = msg['ts']
+
+        self.helper.set_evidence_weird_http_method(
+            profileid,
+            twid,
+            daddr,
+            addl,
+            uid,
+            ts
+        )
+
 
     def run(self):
         utils.drop_root_privs()
@@ -1464,29 +1492,6 @@ class Module(Module, multiprocessing.Process):
                         msg = flow['msg']
                         note = flow['note']
 
-                        # --- Self signed CERTS ---
-                        # We're looking for self signed certs in notice.log in the 'msg' field
-                        # The self-signed certs apear in both ssl and notice log. But if we check both
-                        # we are going to have repeated evidences. So we only check the ssl log for those
-                        """
-                        if 'self signed' in msg or 'self-signed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
-                            ip = flow['daddr']
-                            ip_identification = __database__.getIPIdentification(ip)
-                            description = f'Self-signed certificate. Destination IP {ip}. {ip_identification}'
-                            confidence = 0.5
-                            threat_level = 'low'
-                            category = "Anomaly.Behaviour"
-                            type_detection = 'dstip'
-                            type_evidence = 'SelfSignedCertificate'
-                            detection_info = ip
-                            __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                                     threat_level, confidence, description,
-                                                     timestamp, category, profileid=profileid,
-                                                     twid=twid, uid=uid)
-                        """
-
                         # --- Detect port scans from Zeek logs ---
                         # We're looking for port scans in notice.log in the note field
                         if 'Port_Scan' in note:
@@ -1500,31 +1505,6 @@ class Module(Module, multiprocessing.Process):
                                 twid,
                                 uid,
                             )
-
-                        # --- Detect SSL cert validation failed ---
-                        # if (
-                        #     'SSL certificate validation failed' in msg
-                        #     and 'unable to get local issuer certificate'
-                        #     not in msg
-                        # ):
-                        #     ip = flow['daddr']
-                        #     # get the description inside parenthesis
-                        #     ip_identification = (
-                        #         __database__.getIPIdentification(ip)
-                        #     )
-                        #     description = (
-                        #         msg
-                        #         + f' Destination IP: {ip}. {ip_identification}'
-                        #     )
-                        #     self.helper.set_evidence_for_invalid_certificates(
-                        #         profileid,
-                        #         twid,
-                        #         ip,
-                        #         description,
-                        #         uid,
-                        #         timestamp,
-                        #     )
-                        #     # self.print(description, 3, 0)
 
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
@@ -1736,6 +1716,16 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid,
                     )
+
+                message = __database__.get_message(self.c10)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_weird'):
+                    msg = json.loads(message['data'])
+                    self.check_weird_http_method(msg)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
