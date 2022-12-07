@@ -150,21 +150,26 @@ class ProfilerProcess(multiprocessing.Process):
                 except (ValueError, KeyError):
                     data = str(data)
                     # not suricata, data is a tab or comma separated str
-                    nr_commas = len(data.split(','))
-                    nr_tabs = len(data.split('   '))
-                    if nr_commas > nr_tabs:
-                        # Commas is the separator
-                        # self.separator = ','
-                        self.input_type = 'nfdump' if nr_commas > 40 else 'argus'
+                    nr_commas = data.count(',')
+                    if nr_commas > 3:
+                        # comma separated str
+                        # we have 2 files where Commas is the separator
+                        # argus comma-separated files, or nfdump lines
+                        # in argus, the ts format has a space
+                        # in nfdump lines, the ts format doesn't
+                        ts = data.split(',')[0]
+                        if ' ' in ts:
+                            self.input_type = 'nfdump'
+                        else:
+                            self.input_type = 'argus'
                     else:
-                        # Tabs is the separator
-                        # Probably a conn.log file alone from zeek
-                        # probably a zeek tab file or a binetflow tab file
+                        # tab separated str
+                        # a zeek tab file or a binetflow tab file
                         if '->' in data or 'StartTime' in data:
                             self.input_type = 'argus-tabs'
                         else:
                             self.input_type = 'zeek-tabs'
-                        # self.separator = '\t'
+
             self.separator = self.separators[self.input_type]
             return self.input_type
 
@@ -1938,7 +1943,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.publish_to_new_dhcp()
 
     def handle_files(self):
-        """ " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
+        """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
         to_send = {
             'uid': self.uid,
             'daddr': self.daddr,
