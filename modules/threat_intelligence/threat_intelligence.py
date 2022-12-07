@@ -609,10 +609,11 @@ class Module(Module, multiprocessing.Process):
                 return True
 
 
-    def urlhaus(self, ioc):
+    def urlhaus(self, ioc, type_of_ioc: str):
         """
         Supports URL lookups only
         :param ioc: can be domain or ip
+        :param type_of_ioc: can be md5, or url
         """
         def parse_urlhaus_url_response(response):
             threat = response['threat']
@@ -663,49 +664,71 @@ class Module(Module, multiprocessing.Process):
             }
             return info
 
+        def parse_urlhaus_md5_response():
+
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
 
-        # available types at urlhaus are host, md5 or sha256
-
-        ioc_type = utils.detect_data_type(ioc)
-        # urlhaus doesn't support ipv6
-        if not ioc_type or ioc_type != 'url':
-            # not a valid url or hash
-            return
-
-        # get the urlhause supported type
-        # indicator_type = types[ioc_type]
+        # available types at urlhaus are url, md5 or sha256
         urlhaus_data = {
-            'url': ioc
+            type_of_ioc: ioc
         }
+        if type_of_ioc == 'url':
+            try:
+                urlhaus_api_response = self.urlhaus_session.post(
+                    f'{urlhaus_base_url}/url/',
+                    urlhaus_data,
+                    headers=self.urlhaus_session.headers
+                )
+            except requests.exceptions.ConnectionError:
+                self.create_urlhaus_session()
+                return
 
-        try:
+            if urlhaus_api_response.status_code != 200:
+                return
 
-            urlhaus_api_response = self.urlhaus_session.post(
-                f'{urlhaus_base_url}/url/',
-                urlhaus_data,
-                headers=self.urlhaus_session.headers
-            )
-        except requests.exceptions.ConnectionError:
-            self.create_urlhaus_session()
-            return
-
-        if urlhaus_api_response.status_code != 200:
-            return
-
-        response: dict = json.loads(urlhaus_api_response.text)
+            response: dict = json.loads(urlhaus_api_response.text)
 
 
-        if(
-            response['query_status'] == 'no_results'
-            or response['query_status'] == 'invalid_url'
-        ):
-            # no response or empty response
-            return
+            if(
+                response['query_status'] == 'no_results'
+                or response['query_status'] == 'invalid_url'
+            ):
+                # no response or empty response
+                return
 
-        info = parse_urlhaus_url_response(response)
+            info = parse_urlhaus_url_response(response)
 
-        return info
+            return info
+
+        elif type_of_ioc == 'md5':
+            try:
+                urlhaus_api_response = self.urlhaus_session.post(
+                    f'{urlhaus_base_url}/payload/',
+                    urlhaus_data,
+                    headers=self.urlhaus_session.headers
+                )
+            except requests.exceptions.ConnectionError:
+                self.create_urlhaus_session()
+                return
+
+            if urlhaus_api_response.status_code != 200:
+                return
+
+            response: dict = json.loads(urlhaus_api_response.text)
+
+            if(
+                response['query_status'] == 'no_results'
+                or response['query_status'] == 'invalid_url'
+            ):
+                # no response or empty response
+                return
+
+            info = parse_urlhaus_md5_response(response)
+
+            return info
+
+
+
 
     def set_evidence_malicious_hash(self,
                                     file_info: dict
