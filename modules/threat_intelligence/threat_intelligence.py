@@ -17,6 +17,8 @@ import requests
 import threading
 import time
 
+URLHAUS_BASE_URL = 'https://urlhaus-api.abuse.ch/v1'
+
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
     name = 'Threat Intelligence'
@@ -60,8 +62,6 @@ class Module(Module, multiprocessing.Process):
             while self.circllu_queue != [] and queries_done <= max_queries:
                 self.is_malicious_hash(flow_info)
                 queries_done += 1
-
-
 
     def create_urlhaus_session(self):
         self.urlhaus_session = requests.session()
@@ -609,155 +609,133 @@ class Module(Module, multiprocessing.Process):
                 return True
 
 
+    def make_urlhaus_request(self, to_lookup: dict):
+        """
+        :param to_lookup: dict with {ioc_type: ioc}
+        supported ioc types are md5_hash and url
+        """
+        ioc_type = next(iter(to_lookup))
+        uri = 'url' if ioc_type=='url' else 'payload'
+        try:
+            urlhaus_api_response = self.urlhaus_session.post(
+                f'{URLHAUS_BASE_URL}/{uri}/',
+                to_lookup,
+                headers=self.urlhaus_session.headers
+            )
+            return urlhaus_api_response
+        except requests.exceptions.ConnectionError:
+            self.create_urlhaus_session()
+
+
+    def parse_urlhaus_url_response(self, response, url):
+        threat = response['threat']
+        url_status = response['url_status']
+        description = f"Connecting to a malicious URL {url}. Detected by: URLhaus " \
+                      f"threat: {threat}, URL status: {url_status}"
+        try:
+            tags = " ".join(tag for tag in response['tags'])
+            description += f', tags: {tags}'
+        except TypeError:
+            # no tags available
+            tags = ''
+
+        try:
+            payloads: dict = response['payloads'][0]
+            file_type = payloads.get("file_type", "")
+            file_name = payloads.get("filename", "")
+            md5 = payloads.get("response_md5", "")
+            signature = payloads.get("signature", "")
+
+            description += f', the file hosted in this url is of type: {file_type},' \
+                           f' filename: {file_name} md5: {md5} signature: {signature}. '
+
+            # if we dont have a percentage repprted by vt, we will set out own
+            # tl in set_evidence_malicious_url() function
+            threat_level = False
+            virustotal_info = payloads.get("virustotal", "")
+            if virustotal_info:
+                virustotal_percent = virustotal_info.get("percent", "")
+                threat_level = virustotal_percent
+                # virustotal_result = virustotal_info.get("result", "")
+                # virustotal_result.replace('\',''')
+                description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
+
+        except (KeyError, IndexError):
+            # no payloads available
+            pass
+
+
+        info = {
+            # get all the blacklists where this ioc is listed
+            'source': 'URLhaus',
+            'url': url,
+            'description': description,
+            'threat_level': threat_level,
+            'tags': tags,
+        }
+        return info
+
+    def parse_urlhaus_md5_response(self, response, md5):
+        info = {}
+        file_type = response.get("file_type", "")
+        file_name = response.get("filename", "")
+        file_size = response.get("file_size", "")
+        tags = response.get("signature", "")
+        # urls is a list of urls hosting this file
+        # urls: list= response.get("urls")
+        virustotal_info: dict = response.get("virustotal", "")
+
+        threat_level = False
+        if virustotal_info:
+            virustotal_percent = virustotal_info.get("percent", "")
+            threat_level = virustotal_percent
+            # virustotal_result = virustotal_info.get("result", "")
+            # virustotal_result.replace('\',''')
+
+
+        info = {
+            # get all the blacklists where this ioc is listed
+            'blacklist': 'URLhaus',
+            'threat_level': threat_level,
+            'tags': tags,
+            'file_type': file_type,
+            'file_name': file_name,
+
+        }
+        return info
+
     def urlhaus(self, ioc, type_of_ioc: str):
         """
         Supports URL lookups only
         :param ioc: can be domain or ip
         :param type_of_ioc: can be md5_hash, or url
         """
-        def parse_urlhaus_url_response(response):
-            threat = response['threat']
-            url_status = response['url_status']
-            description = f"Connecting to a malicious URL {ioc}. Detected by: URLhaus " \
-                          f"threat: {threat}, URL status: {url_status}"
-            try:
-                tags = " ".join(tag for tag in response['tags'])
-                description += f', tags: {tags}'
-            except TypeError:
-                # no tags available
-                tags = ''
 
-
-            try:
-                payloads: dict = response['payloads'][0]
-                file_type = payloads.get("file_type", "")
-                file_name = payloads.get("filename", "")
-                md5 = payloads.get("response_md5", "")
-                signature = payloads.get("signature", "")
-
-                description += f', the file hosted in this url is of type: {file_type},' \
-                               f' filename: {file_name} md5: {md5} signature: {signature}. '
-
-                # if we dont have a percentage repprted by vt, we will set out own
-                # tl in set_evidence_malicious_url() function
-                threat_level = False
-                virustotal_info = payloads.get("virustotal", "")
-                if virustotal_info:
-                    virustotal_percent = virustotal_info.get("percent", "")
-                    threat_level = virustotal_percent
-                    # virustotal_result = virustotal_info.get("result", "")
-                    # virustotal_result.replace('\',''')
-                    description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
-
-            except (KeyError, IndexError):
-                # no payloads available
-                pass
-
-
-            info = {
-                # get all the blacklists where this ioc is listed
-                'source': 'URLhaus',
-                'url': ioc,
-                'description': description,
-                'threat_level': threat_level,
-                'tags': tags,
-            }
-            return info
-
-        def parse_urlhaus_md5_response(response):
-            file_type = response.get("file_type", "")
-            file_name = response.get("filename", "")
-            file_size = response.get("file_size", "")
-            tags = response.get("signature", "")
-            # urls is a list of urls hosting this file
-            # urls: list= response.get("urls")
-            virustotal_info: dict = response.get("virustotal", "")
-
-            description = f"Malicious downloaded file by URLhaus: {ioc}. file name: {file_name} " \
-                          f"type: {file_type} size: {file_size} tags: {tags}"
-
-            threat_level = False
-            if virustotal_info:
-                virustotal_percent = virustotal_info.get("percent", "")
-                threat_level = virustotal_percent
-                # virustotal_result = virustotal_info.get("result", "")
-                # virustotal_result.replace('\',''')
-                description += f" virustotal score: {virustotal_percent}% malicious"
-
-            info = {
-                # get all the blacklists where this ioc is listed
-                'source': 'URLhaus',
-                'md5': ioc,
-                'description': description,
-                'threat_level': threat_level,
-                'tags': tags,
-            }
-            # todo use this info
-            return info
-
-        urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
-
-        # available types at urlhaus are url, md5 or sha256
+        # available types at urlhaus are url, md5
         urlhaus_data = {
             type_of_ioc: ioc
         }
+        urlhaus_api_response = self.make_urlhaus_request(urlhaus_data)
+
+        if urlhaus_api_response.status_code != 200:
+            return
+
+        response: dict = json.loads(urlhaus_api_response.text)
+
+        if(
+            response['query_status'] == 'no_results'
+            or response['query_status'] == 'invalid_url'
+        ):
+            # no response or empty response
+            return
+
         if type_of_ioc == 'url':
-            try:
-                urlhaus_api_response = self.urlhaus_session.post(
-                    f'{urlhaus_base_url}/url/',
-                    urlhaus_data,
-                    headers=self.urlhaus_session.headers
-                )
-            except requests.exceptions.ConnectionError:
-                self.create_urlhaus_session()
-                return
-
-            if urlhaus_api_response.status_code != 200:
-                return
-
-            response: dict = json.loads(urlhaus_api_response.text)
-
-
-            if(
-                response['query_status'] == 'no_results'
-                or response['query_status'] == 'invalid_url'
-            ):
-                # no response or empty response
-                return
-
-            info = parse_urlhaus_url_response(response)
-
+            info = self.parse_urlhaus_url_response(response, ioc)
             return info
 
-        elif type_of_ioc == 'md5':
-            try:
-                urlhaus_api_response = self.urlhaus_session.post(
-                    f'{urlhaus_base_url}/payload/',
-                    urlhaus_data,
-                    headers=self.urlhaus_session.headers
-                )
-            except requests.exceptions.ConnectionError:
-                self.create_urlhaus_session()
-                return
-
-            if urlhaus_api_response.status_code != 200:
-                return
-
-            response: dict = json.loads(urlhaus_api_response.text)
-
-            if(
-                response['query_status'] == 'no_results'
-                or response['query_status'] == 'invalid_url'
-            ):
-                # no response or empty response
-                return
-
-            info = parse_urlhaus_md5_response(response)
-
+        elif type_of_ioc == 'md5_hash':
+            info = self.parse_urlhaus_md5_response(response, ioc)
             return info
-
-
-
 
     def set_evidence_malicious_hash(self,
                                     file_info: dict
@@ -765,23 +743,29 @@ class Module(Module, multiprocessing.Process):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-        type_detection = 'file'
+        type_detection = 'md5'
         category = 'Malware'
         type_evidence = 'MaliciousDownloadedFile'
-
         detection_info = file_info["md5"]
-        saddr = file_info["saddr"]
-        confidence = file_info["confidence"]
-        threat_level = utils.threat_level_to_string(file_info["threat_level"])
+        threat_level = file_info["threat_level"]
 
-        ip_identification = __database__.getIPIdentification(saddr)
-        description = (
-            f'Malicious downloaded file {detection_info}. '
-            f'size: {file_info["size"]} '
-            f'from IP: {saddr}. Detected by: {file_info["blacklist"]}, circl.lu. '
-            f'Score: {confidence}. {ip_identification}'
-        )
 
+        if 'circl.lu' in file_info["blacklist"]:
+            saddr = file_info["saddr"]
+            daddr = file_info["daddr"]
+            confidence = file_info["confidence"]
+            threat_level = utils.threat_level_to_string(threat_level)
+
+            ip_identification = __database__.getIPIdentification(saddr)
+            description = (
+                f'Malicious downloaded file {detection_info}. '
+                f'size: {file_info["size"]} '
+                f'from IP: {saddr}. Detected by: {file_info["blacklist"]}. '
+                f'Score: {confidence}. {ip_identification}'
+            )
+        elif 'URLhaus' in file_info["blacklist"]:
+            #todo
+            pass
 
         __database__.setEvidence(
             type_evidence,
@@ -895,7 +879,7 @@ class Module(Module, multiprocessing.Process):
         file_info = {
             'confidence': calculate_confidence(response["KnownMalicious"]),
             'threat_level': calculate_threat_level(response["hashlookup:trust"]),
-            'blacklist': response["KnownMalicious"]
+            'blacklist': f'{response["KnownMalicious"]}, circl.lu'
         }
         return file_info
 
