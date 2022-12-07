@@ -613,7 +613,7 @@ class Module(Module, multiprocessing.Process):
         """
         Supports URL lookups only
         :param ioc: can be domain or ip
-        :param type_of_ioc: can be md5, or url
+        :param type_of_ioc: can be md5_hash, or url
         """
         def parse_urlhaus_url_response(response):
             threat = response['threat']
@@ -664,7 +664,36 @@ class Module(Module, multiprocessing.Process):
             }
             return info
 
-        def parse_urlhaus_md5_response():
+        def parse_urlhaus_md5_response(response):
+            file_type = response.get("file_type", "")
+            file_name = response.get("filename", "")
+            file_size = response.get("file_size", "")
+            tags = response.get("signature", "")
+            # urls is a list of urls hosting this file
+            # urls: list= response.get("urls")
+            virustotal_info: dict = response.get("virustotal", "")
+
+            description = f"Malicious downloaded file by URLhaus: {ioc}. file name: {file_name} " \
+                          f"type: {file_type} size: {file_size} tags: {tags}"
+
+            threat_level = False
+            if virustotal_info:
+                virustotal_percent = virustotal_info.get("percent", "")
+                threat_level = virustotal_percent
+                # virustotal_result = virustotal_info.get("result", "")
+                # virustotal_result.replace('\',''')
+                description += f" virustotal score: {virustotal_percent}% malicious"
+
+            info = {
+                # get all the blacklists where this ioc is listed
+                'source': 'URLhaus',
+                'md5': ioc,
+                'description': description,
+                'threat_level': threat_level,
+                'tags': tags,
+            }
+            # todo use this info
+            return info
 
         urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
 
@@ -876,7 +905,13 @@ class Module(Module, multiprocessing.Process):
         returns a dict containing confidence, threat level and blacklist or the
         reporting website
         """
-        return self.circl_lu(flow_info)
+        circllu_info = self.circl_lu(flow_info)
+        if circllu_info:
+            return circllu_info
+
+        urlhaus_info = self.urlhaus(flow_info['md5'], 'md5_hash')
+        if urlhaus_info:
+            return urlhaus_info
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -936,7 +971,7 @@ class Module(Module, multiprocessing.Process):
         return False, False
 
     def search_online_for_url(self, url):
-        return self.urlhaus(url)
+        return self.urlhaus(url, 'url')
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
