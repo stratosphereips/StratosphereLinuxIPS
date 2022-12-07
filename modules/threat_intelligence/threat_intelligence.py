@@ -764,8 +764,24 @@ class Module(Module, multiprocessing.Process):
                 f'Score: {confidence}. {ip_identification}'
             )
         elif 'URLhaus' in file_info["blacklist"]:
-            #todo
-            pass
+            # we have more info about the downloaded file
+            # so we need a more detailed description
+            description = f"Malicious downloaded file " \
+                          f"by URLhaus: {file_info['md5']}. " \
+                          f"size: {file_info['size']}B" \
+                          f"from IP: {file_info['daddr']} " \
+                          f"file name: {file_info['file_name']} " \
+                          f"file type: {file_info['file_type']} " \
+                          f"tags: {file_info['tags']}"
+
+            if threat_level:
+                # threat level here is the vt percentage from urlhaus
+                description += f" virustotal score: {threat_level}% malicious"
+                threat_level = threat_level/100
+            else:
+                threat_level = 0.8
+
+            confidence = 0.7
 
         __database__.setEvidence(
             type_evidence,
