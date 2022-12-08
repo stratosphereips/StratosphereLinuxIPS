@@ -23,7 +23,7 @@ jobs:
         timeout-minutes: 7200
         # start a container using slips dependencies image
         container:
-            image: stratosphereips/slips_dependencies
+            image: stratosphereips/slips_dependencies:latest
 
         steps:
             - uses: actions/checkout@v2
