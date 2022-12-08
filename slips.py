@@ -21,6 +21,8 @@ from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from exclusiveprocess import Lock, CannotAcquireLock
+
 import signal
 import sys
 import redis
@@ -444,9 +446,16 @@ class Main:
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
-        update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
-        update_manager.update_ports_info()
-        update_manager.update_org_files()
+        try:
+            # only one instance of slips should be able to update ports and orgs at a time
+            # so this function will only be allowed to run from 1 slips instance.
+            with Lock(name="slips_ports_and_orgs"):
+                update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
+                update_manager.update_ports_info()
+                update_manager.update_org_files()
+        except CannotAcquireLock:
+            # another instance of slips is updating ports and orgs
+            return
 
 
     def add_metadata(self):
