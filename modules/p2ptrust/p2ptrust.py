@@ -407,7 +407,7 @@ class Trust(Module, multiprocessing.Process):
 
         ip = ip_info.get('ip')
         ip_state = ip_info.get('ip_state')
-        proto = ip_info.get('proto', '').upper()
+        # proto = ip_info.get('proto', '').upper()
         uid = ip_info.get('uid')
         profileid = ip_info.get('profileid')
         twid = ip_info.get('twid')
@@ -426,9 +426,13 @@ class Trust(Module, multiprocessing.Process):
         else:
             direction = 'to'
 
+        # we'll be using this to make the description more clear
+        other_direction = 'to' if 'from' in direction else 'from'
+
         ip_identification = __database__.getIPIdentification(ip)
         description = (
-            f'connection {direction} blacklisted IP {ip} {ip_identification}.'
+            f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
+            f'{other_direction} {profileid.split("_")[-1]}'
             f' Source: Slips P2P network.'
         )
 

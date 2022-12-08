@@ -149,7 +149,12 @@ class Module(Module, multiprocessing.Process):
                 f'for query: {self.dns_query} '
             )
         else:
-            description = f'connection {direction} blacklisted IP {ip} '
+            other_direction = 'to' if 'from' in direction else 'from'
+            # this will be 'blacklisted conn from x to y'
+            # or 'blacklisted conn tox from y'
+            description = f'connection {direction} blacklisted IP {ip} ' \
+                          f'{other_direction} {profileid.split("_")[-1]}'
+
 
         description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
