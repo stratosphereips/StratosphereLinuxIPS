@@ -44,4 +44,4 @@ jobs:
               run: ./slips.py -cc
 
             - name: Test dataset
-              run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
+              run: python3 -m pytest -s tests/test_dataset.py -n 3 -p no:warnings -vv
