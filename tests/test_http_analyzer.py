@@ -7,7 +7,11 @@ profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 uid = 'CAeDWs37BipkfP21u8'
 timestamp = 1635765895.037696
-
+SAFARI_UA = (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+        'Version/15.3 Safari/605.1.15'
+    )
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -60,12 +64,8 @@ def test_get_ua_info_online(outputQueue, database):
     tests get_user_agent_info and check_incompatible_user_agent
     """
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
-    ua_info = http_analyzer.get_ua_info_online(safari_ua)
+
+    ua_info = http_analyzer.get_ua_info_online(SAFARI_UA)
     assert ua_info != False, 'Connection error'
 
 
@@ -74,26 +74,18 @@ def test_get_user_agent_info(outputQueue, database):
     tests the parsing and processing the ua found by the online query
     """
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
+
     # add os_type , os_name and agent_name to the db
-    ua_info = http_analyzer.get_user_agent_info(safari_ua, profileid)
+    ua_info = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
     assert ua_info['os_type'] == 'Macintosh'
     assert ua_info['browser'] == 'Safari'
 
 
 def test_check_incompatible_user_agent(outputQueue, database):
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
-    # add os_type , os_name and agent_name to the db
-    http_analyzer.get_user_agent_info(safari_ua, profileid)
+    # get ua info online, and add os_type , os_name and agent_name to the db
+    assert http_analyzer.get_user_agent_info(SAFARI_UA, profileid) != None, 'Error getting UA info online'
+    assert http_analyzer.get_user_agent_info(SAFARI_UA, profileid) != False, 'We already  have UA info about this profile in the db'
 
     # set this profile's vendor to intel
     intel_oui = '00:13:20'
@@ -110,6 +102,7 @@ def test_check_incompatible_user_agent(outputQueue, database):
         == True
     )
 
+
 def test_extract_info_from_UA(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)
     # use another profile, because the default
@@ -124,13 +117,7 @@ def test_extract_info_from_UA(outputQueue):
 
 def test_check_multiple_UAs(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
     mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
-
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}
     # current ua
@@ -143,7 +130,7 @@ def test_check_multiple_UAs(outputQueue):
         == False
     )
     # in this case we should alert
-    user_agent = safari_ua
+    user_agent = SAFARI_UA
     assert (
         http_analyzer.check_multiple_UAs(
             cached_ua, user_agent, timestamp, profileid, twid, uid

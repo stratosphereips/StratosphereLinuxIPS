@@ -280,13 +280,14 @@ class Module(Module, multiprocessing.Process):
             return False
         return json_response
 
-    def get_user_agent_info(self, user_agent, profileid):
+    def get_user_agent_info(self, user_agent: str, profileid: str):
         """
-        Get OS and browser info about a user agent
+        Get OS and browser info about a user agent online
         """
         # some zeek http flows don't have a user agent field
         if not user_agent:
             return False
+
         # don't make a request again if we already have a user agent associated with this profile
         if __database__.get_user_agent_from_profile(profileid) != None:
             # this profile already has a user agent
