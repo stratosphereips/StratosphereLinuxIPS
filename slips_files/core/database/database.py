@@ -465,9 +465,10 @@ class Database(ProfilingFlowsDatabase, object):
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
         Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
+        :param ip: dst ip that should be associated with the given MAC info
         """
 
-        MAC = MAC_info.get('MAC','')
+        MAC = MAC_info.get('MAC', '')
         if not validators.mac_address(MAC):
             return False
 
@@ -491,7 +492,8 @@ class Database(ProfilingFlowsDatabase, object):
         # the dst MAC of all public IPs is the dst mac of the gw,
         # we shouldn't be assigning it to the public IPs
         ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private :
+        if not ip_obj.is_private:
+            # trying to associate a mac with a public ip!
             try:
                 self.seen_MACs[MAC] += 1
             except KeyError:
@@ -507,6 +509,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
+
         if '0.0.0.0' in profileid:
             return False
 
@@ -590,6 +593,7 @@ class Database(ProfilingFlowsDatabase, object):
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            return True
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
