@@ -82,16 +82,21 @@ def test_get_user_agent_info(outputQueue, database):
 
 
 def test_check_incompatible_user_agent(outputQueue, database):
+
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    # get ua info online, and add os_type , os_name and agent_name to the db
+    # use a different profile for this unit test to make sure we don't already have info about
+    # it in the db
+    profileid = 'profile_1.2.32.55'
+
+    # get ua info online, and add os_type , os_name and agent_name anout this profile
+    # to the db
     assert http_analyzer.get_user_agent_info(SAFARI_UA, profileid) != None, 'Error getting UA info online'
     assert http_analyzer.get_user_agent_info(SAFARI_UA, profileid) != False, 'We already  have UA info about this profile in the db'
 
     # set this profile's vendor to intel
-    intel_oui = '00:13:20'
     MAC_info = {
         'Vendor': 'Intel Corp',
-        'MAC': 'FF:FF:FF' + intel_oui
+        'MAC': 'FF:FF:FF:00:13:20'
     }
     database.add_mac_addr_to_profile(profileid, MAC_info)
 
