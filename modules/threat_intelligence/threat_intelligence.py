@@ -655,7 +655,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             benign_percentage = float(circl_trust)
             malicious_percentage = 100 - benign_percentage
             # scale the benign percentage from 0 to 1
-            threat_level = malicious_percentage/100
+            threat_level = float(malicious_percentage)/100
             return threat_level
 
         def calculate_confidence(blacklists):
