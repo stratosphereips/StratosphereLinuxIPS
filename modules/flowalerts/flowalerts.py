@@ -309,16 +309,30 @@ class Module(Module, multiprocessing.Process):
             time.sleep(wait_time)
 
     def check_pastebin_download(
-            self, daddr, server_name, uid, ts, profileid, twid
+            self, daddr, server_name, uid, ts, profileid, twid, flow
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
         This function waits for the ssl.log flow to appear in conn.log before alerting
         :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
                 every time the timer is over, we wait extra 2 min and call the function again
+        : param flow: this is the conn.log of the ssl flow we're currently checking
         """
 
         if 'pastebin' not in server_name:
+            return False
+
+        # orig_bytes is number of payload bytes downloaded
+        downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
+
+        if downloaded_bytes >= 700:
+            self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+            return True
+
+        else:
+            # reaching this point means that the conn to pastebin did appear
+            # in conn.log, but the downloaded bytes didnt reach the threshold.
+            # maybe an empty file is downloaded
             return False
 
 
