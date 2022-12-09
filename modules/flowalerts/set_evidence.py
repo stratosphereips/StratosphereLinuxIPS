@@ -75,7 +75,10 @@ class Helper:
         type_detection = 'dstip'
         type_evidence = 'Non-HTTP-Port-80-Connection'
         detection_info = daddr
-        description = f'non-HTTP established connection to port 80 to IP: {daddr}'
+        ip_identification = __database__.getIPIdentification(daddr)
+
+        description = f'non-HTTP established connection to port 80.' \
+                      f' destination IP: {daddr} {ip_identification}'
         __database__.setEvidence(
             type_evidence,
             type_detection,
@@ -89,6 +92,34 @@ class Helper:
             twid=twid,
             uid=uid,
         )
+
+    def set_evidence_non_ssl_port_443_conn(
+        self, daddr ,profileid,timestamp, twid, uid
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'dstip'
+        type_evidence = 'Non-SSL-Port-443-Connection'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'non-SSL established connection to port 443.' \
+                      f' destination IP: {daddr} {ip_identification}'
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
 
     def set_evidence_weird_http_method(
         self,
