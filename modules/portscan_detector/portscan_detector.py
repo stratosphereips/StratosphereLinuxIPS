@@ -188,7 +188,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                         else:
                             # we will be combining further alerts to avoid alerting many times every portscan
                             # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}_{twid}_{state}_{protocol}_{dport}'
+                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
                             try:
@@ -202,10 +202,10 @@ class PortScanProcess(Module, multiprocessing.Process):
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
 
-            for key, evidence_list in self.pending_vertical_ps_evidence:
-                # each key here is {profileid}_{twid}_{state}_{protocol}_{dport}
+            for key, evidence_list in self.pending_vertical_ps_evidence.items():
+                # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
                 # each value here is a list of evidence that should be combined
-                profileid, twid, state, protocol, dstip = key.split('_')
+                profileid, twid, state, protocol, dstip = key.split('-')
                 final_evidence_uids = []
                 final_pkts_sent = 0
 
@@ -242,10 +242,10 @@ class PortScanProcess(Module, multiprocessing.Process):
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
 
-            for key, evidence_list in self.pending_horizontal_ps_evidence:
-                # each key here is {profileid}_{twid}_{state}_{protocol}_{dport}
+            for key, evidence_list in self.pending_horizontal_ps_evidence.items():
+                # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
                 # each value here is a list of evidence that should be combined
-                profileid, twid, state, protocol, dport = key.split('_')
+                profileid, twid, state, protocol, dport = key.split('-')
                 final_evidence_uids = []
                 final_pkts_sent = 0
                 # combine all evidence that share the above key
@@ -439,7 +439,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                              # we will be combining further alerts to avoid alerting
                              # many times every portscan
                             # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}_{twid}_{state}_{protocol}_{dstip}'
+                            key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
 
                             evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
 
