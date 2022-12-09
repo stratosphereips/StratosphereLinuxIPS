@@ -130,6 +130,9 @@ class URLhaus():
         }
         urlhaus_api_response = self.make_urlhaus_request(urlhaus_data)
 
+        if not urlhaus_api_response:
+            return
+
         if urlhaus_api_response.status_code != 200:
             return
 
