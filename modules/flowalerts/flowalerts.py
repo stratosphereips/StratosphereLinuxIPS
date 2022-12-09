@@ -63,8 +63,6 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_conn_dns_timer_thread = []
         # Cache list of connections that we already checked in the timer thread for ssh check
         self.connections_checked_in_ssh_timer_thread = []
-        # Cache list of connections that we already checked in the timer thread for ssl check
-        self.ssl_checked_in_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In mins
@@ -95,47 +93,6 @@ class Module(Module, multiprocessing.Process):
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-
-
-    def wait_for_ssl_flows_to_appear_in_connlog(self):
-        """
-        thread that waits forever for ssl flows to appear in conn.log
-        whenever the conn.log of an ssl flow is found, thread calls check_pastebin_download
-        ssl flows to wait for are stored in pending_ssl_flows
-        """
-        wait_time = 60*2
-
-        while True:
-            try:
-                ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
-            except:
-                # nothing in queue
-                time.sleep(30)
-                continue
-
-            # unpack the flow
-            uid, profileid, twid = ssl_flow
-
-            # get the conn.log with the same uid,
-            # returns {uid: {actual flow..}}
-            # always returns a dict, never returns None
-            flow: dict = __database__.get_flow(profileid, twid, uid)
-            flow = flow.get(uid)
-            if flow:
-                flow = json.loads(flow)
-                if 'ts' in flow:
-                    # this means the flow is found
-                    #todo
-                else:
-                    # flow not found in conn.log yet, re-add it to the queue to check for it later
-                    self.pending_ssl_flows.put(ssl_flow)
-
-
-            # sleep 2 mins and check again if we have pending ssl flows
-            time.sleep(wait_time)
-
-
-
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -303,6 +260,53 @@ class Module(Module, multiprocessing.Process):
             )
             return True
 
+    def wait_for_ssl_flows_to_appear_in_connlog(self):
+        """
+        thread that waits forever for ssl flows to appear in conn.log
+        whenever the conn.log of an ssl flow is found, thread calls check_pastebin_download
+        ssl flows to wait for are stored in pending_ssl_flows
+        """
+        # this is the time we give ssl flows to appear in conn.log,
+        # when this time is over, we check, then wait again, etc.
+        wait_time = 60*2
+
+        # this thread shouldn't run on interface only because in zeek dirs we
+        # we should wait for the conn.log to be read too
+
+        while True:
+            size = self.pending_ssl_flows.qsize()
+            if size == 0:
+                # nothing in queue
+                time.sleep(30)
+                continue
+
+            # try to get the conn of each pending flow only once
+            # this is to ensure that re-added flows to the queue aren't checked twice
+            for ssl_flow in range(size):
+                try:
+                    ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
+                except:
+                    continue
+
+                # unpack the flow
+                daddr, server_name, uid, ts, profileid, twid = ssl_flow
+
+                # get the conn.log with the same uid,
+                # returns {uid: {actual flow..}}
+                # always returns a dict, never returns None
+                flow: dict = __database__.get_flow(profileid, twid, uid)
+                flow = flow.get(uid)
+                if flow:
+                    flow = json.loads(flow)
+                    if 'ts' in flow:
+                        # this means the flow is found in conn.log
+                        self.check_pastebin_download(*ssl_flow, flow)
+                else:
+                    # flow not found in conn.log yet, re-add it to the queue to check it later
+                    self.pending_ssl_flows.put(ssl_flow)
+
+            # give the ssl flows remaining in self.pending_ssl_flows 2 more mins to appear
+            time.sleep(wait_time)
 
     def check_pastebin_download(
             self, daddr, server_name, uid, ts, profileid, twid
@@ -316,54 +320,7 @@ class Module(Module, multiprocessing.Process):
 
         if 'pastebin' not in server_name:
             return False
-        #todo
-        # # get the conn.log with the same uid, returns {uid: {actual flow..}}
-        # # always returns a dict, never returns None
-        # flow: dict = __database__.get_flow(profileid, twid, uid)
-        # flow = flow.get(uid)
-        #
-        # if flow:
-        #     flow = json.loads(flow)
-        #     # orig_bytes is number of payload bytes downloaded
-        #     downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
-        #
-        #     if downloaded_bytes >= 12000:
-        #         self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
-        #
-        #         try:
-        #             self.ssl_checked_in_timer_thread.remove(uid)
-        #         except ValueError:
-        #             pass
-        #         return True
-        #
-        #     else:
-        #         # reaching this point means that the conn to pastebin did appear
-        #         # in conn.log, but the downloaded bytes didnt reach the threshold yet.
-        #         return False
-        #
-        # # # reaching this point means we didn't get the conn.log flow yet
-        # # if uid not in self.ssl_checked_in_timer_thread:
-        # #     # comes here if we haven't started the timer thread for this uid before
-        # #     # mark this ssl as checked
-        # #     self.ssl_checked_in_timer_thread.append(uid)
-        # #
-        # #
-        # # else:
-        # #     # It means we already waited enough for this ssl with the Timer
-        # #     # but still no connection for it.
-        # #     try:
-        # #         self.ssl_checked_in_timer_thread.remove(uid)
-        # #     except ValueError:
-        # #         pass
-        # #
-        # # # uid in the ssl checked list of not, we will keep waiting 2 mins until we find the conn.log flow
-        # # params = [daddr, server_name, uid, ts, profileid, twid]
-        # # # wait 2 min for the connection to appear in conn.log
-        # # # it appears in ssl.log as soon as it happens, and in conn.log as soon as it ends
-        # # timer = TimerThread(
-        # #     wait_time, self.check_pastebin_download, params
-        # # )
-        # # timer.start()
+
 
     def detect_data_upload_in_twid(self, profileid, twid):
         """
@@ -1604,7 +1561,11 @@ class Module(Module, multiprocessing.Process):
                         saddr = profileid.split('_')[1]
                         server_name = flow.get('server_name')
 
-                        self.check_pastebin_download(daddr, server_name, uid, timestamp, profileid, twid)
+                        # we'll be checking pastebin downloads of this ssl flow
+                        # later
+                        self.pending_ssl_flows.put(
+                            (daddr, server_name, uid, timestamp, profileid, twid)
+                        )
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
