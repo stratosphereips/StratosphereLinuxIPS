@@ -65,6 +65,31 @@ class Helper:
         )
 
 
+
+    def set_evidence_non_http_port_80_conn(
+        self, daddr ,profileid,timestamp, twid, uid
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'dstip'
+        type_evidence = 'Non-HTTP-Port-80-Connection'
+        detection_info = daddr
+        description = f'non-HTTP established connection to port 80 to IP: {daddr}'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
     def set_evidence_weird_http_method(
         self,
         profileid,
