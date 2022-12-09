@@ -245,7 +245,7 @@ class Main:
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
-        sys.exit(-1)
+        sys.exit(0)
 
 
     def get_modules(self, to_ignore):

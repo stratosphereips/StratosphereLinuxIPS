@@ -1,6 +1,9 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 from ..modules.flowalerts.flowalerts import Module
-import configparser
+import pytest
+import binascii
+import base64
+import os
 import json
 from numpy import arange
 
@@ -13,6 +16,8 @@ saddr = '192.168.1.1'
 daddr = '192.168.1.2'
 dst_profileid = f'profile_{daddr}'
 
+def get_random_uid():
+    return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -27,48 +32,31 @@ def create_flowalerts_instance(outputQueue):
     flowalerts.print = do_nothing
     return flowalerts
 
-
-def test_check_long_connection(database, outputQueue):
+@pytest.mark.parametrize('dur,expected_label', [
+    (1400, 'normal'),
+    (1600, 'malicious'),
+])
+def test_check_long_connection(database, outputQueue, dur, expected_label):
+    uid = get_random_uid()
     flowalerts = create_flowalerts_instance(outputQueue)
-    # less than the threshold
-    dur = '1400'  # in seconds
-    database.add_flow(
+    assert database.add_flow(
         profileid=profileid,
         twid=twid,
         stime=timestamp,
         dur=dur,
-        saddr=profileid.split('_'),
+        saddr=saddr,
         daddr=daddr,
         uid=uid,
         flow_type='conn',
-    )
-
+    ) == True
+    # sets the label to normal or malicious based on the flow durd
     flowalerts.check_long_connection(
         dur, daddr, saddr, profileid, twid, uid, timestamp
     )
     module_labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'flowalerts-long-connection' in module_labels
-    assert module_labels['flowalerts-long-connection'] == 'normal'
+    assert module_labels['flowalerts-long-connection'] == expected_label
 
-    # more than the threshold
-    dur = 1600  # in seconds
-    database.add_flow(
-        profileid=profileid,
-        twid=twid,
-        stime=timestamp,
-        dur=dur,
-        saddr=profileid.split('_'),
-        daddr=daddr,
-        uid=uid,
-        flow_type='conn',
-    )
-
-    flowalerts.check_long_connection(
-        dur, daddr, saddr, profileid, twid, uid, timestamp
-    )
-    module_labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert 'flowalerts-long-connection' in module_labels
-    assert module_labels['flowalerts-long-connection'] == 'malicious'
 
 
 def test_port_belongs_to_an_org(database, outputQueue):
