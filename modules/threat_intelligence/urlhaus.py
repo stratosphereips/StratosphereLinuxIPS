@@ -123,13 +123,15 @@ class URLhaus():
         :param ioc: can be domain or ip
         :param type_of_ioc: can be md5_hash, or url
         """
-        print(f"@@@@@@@@@@@@@@@@@@  urlhaus_lookup on {ioc}")
 
         # available types at urlhaus are url, md5
         urlhaus_data = {
             type_of_ioc: ioc
         }
         urlhaus_api_response = self.make_urlhaus_request(urlhaus_data)
+
+        if not urlhaus_api_response:
+            return
 
         if urlhaus_api_response.status_code != 200:
             return
@@ -152,7 +154,6 @@ class URLhaus():
             return info
 
     def set_evidence_malicious_hash(self, file_info: dict):
-        print(f"@@@@@@@@@@@@@@@@@@  set_evidence_malicious_hash")
         type_detection = 'md5'
         category = 'Malware'
         type_evidence = 'MaliciousDownloadedFile'
