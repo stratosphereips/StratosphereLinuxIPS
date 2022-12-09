@@ -41,6 +41,32 @@ By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minut
 
 This threshold can be changed ```config/slips.conf``` by changing the value of  ```long_connection_threshold```  
 
+
+## Weird HTTP methods
+
+Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
+
+When there's a weird HTTP method, slips detects it as well.
+
+
+
+##Non-SSL connections on port 443 
+
+Slips detects established connections on port 443 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 443 and the 'service' field 
+in conn.log isn't set to 'ssl', it alerts
+
+##Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field 
+in conn.log isn't set to 'http', it alerts
+
+
 ### Connections without DNS resolution
 This will detect connections done without a previous DNS resolution. The idea is that a connection without a DNS resolution is slightly suspicious.
 

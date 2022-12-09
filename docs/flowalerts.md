@@ -25,6 +25,8 @@ The detection techniques are:
 - Multiple SSH versions
 - Incompatible CN
 - Weird HTTP methods
+- Non-SSL connections on port 443
+- Non-HTTP connections on port 80
 
 The details of each detection follows.
 
@@ -272,3 +274,19 @@ Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
 
 When there's a weird HTTP method, slips detects it as well.
 
+
+##Non-SSL connections on port 443 
+
+Slips detects established connections on port 443 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 443 and the 'service' field 
+in conn.log isn't set to 'ssl', it alerts
+
+##Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field 
+in conn.log isn't set to 'http', it alerts
