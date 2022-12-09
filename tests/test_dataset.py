@@ -40,15 +40,16 @@ def create_output_dir(dirname):
 
 def has_errors(output_dir):
     """function to parse slips_output file and check for errors"""
-    error_files = [os.path.join(output_dir, 'slips_output.txt'),
-                          os.path.join(output_dir, 'errors.log')]
+    error_files = ('slips_output.txt', 'errors.log')
+    error_files = [os.path.join(output_dir, file) for file in error_files]
+
     # we can't redirect stderr to a file and check it because we catch all exceptions in slips
     for file in error_files:
         with open(file, 'r') as f:
             for line in f:
                 if '<class' in line or 'error' in line:
                     # connection errors shouldn't fail the integration tests
-                    if 'Connection error' in line:
+                    if 'Connection error' in line or 'while downloading' in line:
                         continue
                     return True
 

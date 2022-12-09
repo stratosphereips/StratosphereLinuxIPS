@@ -8,6 +8,7 @@ import sys
 
 # Your imports
 import asyncio
+from exclusiveprocess import Lock, CannotAcquireLock
 from modules.update_manager.timer_manager import InfiniteTimer
 from modules.update_manager.update_file_manager import UpdateFileManager
 
@@ -96,11 +97,17 @@ class UpdateManager(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         try:
-            asyncio.run(self.update_ti_files())
-            # Starting timer to update files
-            self.timer_manager.start()
-            self.mac_db_update_manager.start()
-            self.online_whitelist_update_timer.start()
+            # only one instance of slips should be able to update TI files at a time
+            # so this function will only be allowed to run from 1 slips instance.
+            with Lock(name="slips_macdb_and_whitelist_and_TI_files_update"):
+                asyncio.run(self.update_ti_files())
+                # Starting timer to update files
+                self.timer_manager.start()
+                self.mac_db_update_manager.start()
+                self.online_whitelist_update_timer.start()
+        except CannotAcquireLock:
+            # another instance of slips is updating TI files, tranco whitelists and mac db
+            return
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True

@@ -1,9 +1,10 @@
-import configparser
-import time
-import os
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.whitelist import Whitelist
+
+import time
+import os
 import json
 import ipaddress
 import validators
@@ -12,7 +13,9 @@ import requests
 import sys
 import asyncio
 import datetime
-from slips_files.core.whitelist import Whitelist
+
+
+
 
 class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):

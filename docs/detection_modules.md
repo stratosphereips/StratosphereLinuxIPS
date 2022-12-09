@@ -367,9 +367,11 @@ Update manager is responsible for updating all remote TI files (including SSL an
 
 By default, local slips files (organization_info, ports_info, etc.) are 
 cached to avoid loading and parsing
+
 them everytime we start slips. However, they are updated automatically by 
 the update manager if they were changed on disk.
 
+Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
 
 ## IP Info Module
 
