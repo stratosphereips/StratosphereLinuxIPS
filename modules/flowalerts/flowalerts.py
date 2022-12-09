@@ -1307,7 +1307,8 @@ class Module(Module, multiprocessing.Process):
         """
         alerts on established connections on port 80 that are not HTTP
         """
-        # if it was a valid http conn, the 'service' field aka appproto should be 'http'
+        # if it was a valid http conn, the 'service' field aka
+        # appproto should be 'http'
         if (
                 str(dport) == '80'
                 and proto.lower() == 'tcp'
@@ -1315,6 +1316,37 @@ class Module(Module, multiprocessing.Process):
                 and state == 'Established'
         ):
             self.helper.set_evidence_non_http_port_80_conn(
+                daddr,
+                profileid,
+                timestamp,
+                twid,
+                uid
+            )
+
+    def check_non_ssl_port_443_conns(
+            self,
+            state,
+            daddr,
+            dport,
+            proto,
+            appproto,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        alerts on established connections on port 443 that are not HTTPS (ssl)
+        """
+        # if it was a valid ssl conn, the 'service' field aka
+        # appproto should be 'ssl'
+        if (
+                str(dport) == '443'
+                and proto.lower() == 'tcp'
+                and appproto.lower() != 'ssl'
+                and state == 'Established'
+        ):
+            self.helper.set_evidence_non_ssl_port_443_conn(
                 daddr,
                 profileid,
                 timestamp,
@@ -1378,6 +1410,17 @@ class Module(Module, multiprocessing.Process):
 
 
                     self.check_non_http_port_80_conns(
+                        state,
+                        daddr,
+                        dport,
+                        proto,
+                        appproto,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+                    self.check_non_ssl_port_443_conns(
                         state,
                         daddr,
                         dport,
