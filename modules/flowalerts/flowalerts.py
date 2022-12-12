@@ -205,33 +205,36 @@ class Module(Module, multiprocessing.Process):
                 # it does, consider the port as known
                 return True
         except ValueError:
-            # not a range either since nothing is specified, e.g. ip is set to ""
-            # check the source and dst mac address vendors
-            src_mac_vendor = str(
-                __database__.get_mac_vendor_from_profile(profileid)
+            pass
+
+        # not a range either since nothing is specified, e.g. ip is set to ""
+        # check the source and dst mac address vendors
+        src_mac_vendor = str(
+            __database__.get_mac_vendor_from_profile(profileid)
+        )
+        dst_mac_vendor = str(
+            __database__.get_mac_vendor_from_profile(
+                f'profile_{daddr}'
             )
-            dst_mac_vendor = str(
-                __database__.get_mac_vendor_from_profile(
-                    f'profile_{daddr}'
-                )
-            )
+        )
 
-            org_name = organization_info['org_name'].lower()
-            if (
-                    org_name in src_mac_vendor.lower()
-                    or org_name in dst_mac_vendor.lower()
-            ):
-                return True
+        org_name = organization_info['org_name'].lower()
+        if (
+                org_name in src_mac_vendor.lower()
+                or org_name in dst_mac_vendor.lower()
+        ):
+            return True
 
-            # check if the SNI, hostname, rDNS of this ip belong to org_name
-            ip_identification = __database__.getIPIdentification(daddr)
-            if org_name in ip_identification.lower():
-                return True
+        # check if the SNI, hostname, rDNS of this ip belong to org_name
+        ip_identification = __database__.getIPIdentification(daddr)
+        if org_name in ip_identification.lower():
+            return True
 
-            # if it's an org that slips has info about (apple, fb, google,etc.),
-            # check if the daddr belongs to it
-            if self.whitelist.is_ip_in_org(daddr, org_name):
-                return True
+        # if it's an org that slips has info about (apple, fb, google,etc.),
+        # check if the daddr belongs to it
+        if self.whitelist.is_ip_in_org(daddr, org_name):
+            #self.print(f"ip {daddr} belongs to {org_name} so considering port {portproto} as known")
+            return True
 
         # consider this port as unknown
         return False
