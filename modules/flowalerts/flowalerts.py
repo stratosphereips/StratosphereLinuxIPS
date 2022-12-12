@@ -552,55 +552,20 @@ class Module(Module, multiprocessing.Process):
 
         flow_domain = rdns or SNI
         for org in utils.supported_orgs:
-            if ip_asn and ip_asn != 'Unknown':
-                org_asn = json.loads(__database__.get_org_info(org, 'asn'))
-                if org.lower() in ip_asn.lower() or ip_asn in org_asn:
-                    return True
-            # remove the asn from ram
-            org_asn = ''
+            if self.whitelist.is_ip_asn_in_org_asn(ip_asn, org):
+                return True
 
             if flow_domain:
                 # we have the rdns or sni of this flow , now check
-                if org in flow_domain:
-                    # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                if self.whitelist.is_domain_in_org(flow_domain, org):
                     return True
 
-                org_domains = json.loads(
-                    __database__.get_org_info(org, 'domains')
-                )
 
-                flow_TLD = flow_domain.split('.')[-1]
+            # check if the ip belongs to the range of a well known org
+            # (fb, twitter, microsoft, etc.)
+            if self.whitelist.is_ip_in_org(ip, org):
+                return True
 
-                for org_domain in org_domains:
-                    org_domain_TLD = org_domain.split('.')[-1]
-                    # make sure the 2 domains have the same same top level domain
-                    if flow_TLD != org_domain_TLD:
-                        continue
-
-                    # match subdomains too
-                    # return true if org has org.com, and the flow_domain is xyz.org.com
-                    # or if org has xyz.org.com, and the flow_domain is org.com return true
-                    if org_domain in flow_domain or flow_domain in org_domain:
-                        return True
-
-                # remove from ram
-                org_domains = ''
-
-            # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
-            org_ips = __database__.get_org_IPs(org)
-
-            if '.' in ip:
-                first_octet = ip.split('.')[0]
-                ip_obj = ipaddress.IPv4Address(ip)
-            elif ':' in ip:
-                first_octet = ip.split(':')[0]
-                ip_obj = ipaddress.IPv6Address(ip)
-            else:
-                return False
-            # organization IPs are sorted by first octet for faster search
-            for range in org_ips.get(first_octet, {}):
-                if ip_obj in ipaddress.ip_network(range):
-                    return True
 
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
