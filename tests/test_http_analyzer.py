@@ -92,14 +92,14 @@ def test_check_incompatible_user_agent(outputQueue, database):
 
     http_analyzer = create_http_analyzer_instance(outputQueue)
     # use a different profile for this unit test to make sure we don't already have info about
-    # it in the db
+    # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
     profileid = 'profile_192.168.77.254'
 
     # get ua info online, and add os_type , os_name and agent_name anout this profile
     # to the db
     ua_added_to_db = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
     assert ua_added_to_db != None, 'Error getting UA info online'
-    assert ua_added_to_db != False, 'We already  have UA info about this profile in the db'
+    assert ua_added_to_db != False, 'We already have UA info about this profile in the db'
 
     # set this profile's vendor to intel
     MAC_info = {

@@ -8,6 +8,7 @@ import sys
 
 # Your imports
 import json
+import urllib
 import requests
 
 
@@ -207,6 +208,7 @@ class Module(Module, multiprocessing.Process):
             self.set_evidence_incompatible_user_agent(
                 host, uri, vendor, user_agent, timestamp, profileid, twid, uid
             )
+            return True
 
         # make sure all of them are lowercase
         # no user agent should contain 2 keywords from different tuples
@@ -260,12 +262,17 @@ class Module(Module, multiprocessing.Process):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
         """
-        url = f'http://useragentstring.com/?uas={user_agent}&getJSON=all'
-
+        url = f'http://useragentstring.com/'
+        params = {
+            'uas': user_agent,
+            'getJSON':'all'
+        }
+        params = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
         try:
-            response = requests.get(url, timeout=5)
+
+            response = requests.get(url, params=params, timeout=5)
             if response.status_code != 200 or not response.text:
-               raise requests.exceptions.ConnectionError
+                raise requests.exceptions.ConnectionError
         except requests.exceptions.ConnectionError:
             return False
 
@@ -274,7 +281,9 @@ class Module(Module, multiprocessing.Process):
         # "os_type":"Windows","os_name":"Windows 7","os_versionName":"","os_versionNumber":"",
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
         try:
-            json_response = json.loads(response.text)
+            # responses from this domain are broken for now. so this is a temp fix until they fix it from their side
+            response = response.text.replace("<br />",'').replace("Connection could not be established !!",'')
+            json_response = json.loads(response)
         except json.decoder.JSONDecodeError:
             # unexpected server response
             return False
