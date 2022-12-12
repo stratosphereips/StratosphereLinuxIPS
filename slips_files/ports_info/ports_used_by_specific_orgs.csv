@@ -4,6 +4,8 @@
 "Organization","IP/IP range","port","protocol"
 MicrosoftTeams,13.107.64.0/18,3478-3481,udp
 MicrosoftTeams,52.112.0.0/14,3478-3481,udp
+Google,"",19305-19309,udp
+Google,"",19305-19309,tcp
 Viber,44.192.201.158,4244,udp
 Viber,44.192.201.158,443,udp
 Viber,44.192.201.158,5242,udp
