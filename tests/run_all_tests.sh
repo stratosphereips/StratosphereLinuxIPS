@@ -1,6 +1,9 @@
 #!/bin/bash
 # clear the cache database
 ./slips.py -cc
+# close all open redis servers
+printf "0" | ./slips.py -k
+
 
 
 # run all unit tests, -n *5 means distribute tests on 5 different process
@@ -19,6 +22,8 @@ python3 tests/destrctor.py
 # clear cache before running the integration tests
 ./slips.py -cc
 
+# close all open redis servers
+printf "0" | ./slips.py -k
 #
 # the command to run dataset tests is separated from the rest because it takes so much time,
 # so it's better to know and fix the failing unit tests from the above
