@@ -178,50 +178,65 @@ class Module(Module, multiprocessing.Process):
         organization or not, and returns true if the daddr belongs to the
         same org as the port
         """
-        if organization_info := __database__.get_organization_of_port(
+        organization_info = __database__.get_organization_of_port(
                 portproto
-        ):
-            # there's an organization that's known to use this port,
-            # check if the daddr belongs to the range of this org
-            organization_info = json.loads(organization_info)
-            # get the organization ip or range
-            org_ip = organization_info['ip']
-            # org_name = organization_info['org_name']
+        )
+        if not organization_info:
+            # consider this port as unknown, it doesn't belong to any org
+            return False
 
-            if daddr in org_ip:
-                # it's an ip and it belongs to this org, consider the port as known
+        # there's an organization that's known to use this port,
+        # check if the daddr belongs to the range of this org
+        organization_info = json.loads(organization_info)
+
+        # get the organization ip or range
+        org_ip = organization_info['ip']
+
+        # org_name = organization_info['org_name']
+
+        if daddr in org_ip:
+            # it's an ip and it belongs to this org, consider the port as known
+            return True
+
+        # is it a range?
+        try:
+            # we have the org range in our database, check if the daddr belongs to this range
+            if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
+                # it does, consider the port as known
+                return True
+        except ValueError:
+            # not a range either since nothing is specified, e.g. ip is set to ""
+            # check the source and dst mac address vendors
+            src_mac_vendor = str(
+                __database__.get_mac_vendor_from_profile(profileid)
+            )
+            dst_mac_vendor = str(
+                __database__.get_mac_vendor_from_profile(
+                    f'profile_{daddr}'
+                )
+            )
+
+            org_name = organization_info['org_name'].lower()
+            if (
+                    org_name in src_mac_vendor.lower()
+                    or org_name in dst_mac_vendor.lower()
+            ):
                 return True
 
-            # is it a range?
-            try:
-                # we have the org range in our database, check if the daddr belongs to this range
-                if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                    # it does, consider the port as known
-                    return True
-            except ValueError:
-                # not a range either since nothing is specified,
-                # check the source and dst mac address vendors
-                src_mac_vendor = str(
-                    __database__.get_mac_vendor_from_profile(profileid)
-                )
-                dst_mac_vendor = str(
-                    __database__.get_mac_vendor_from_profile(
-                        f'profile_{daddr}'
-                    )
-                )
-                org_name = organization_info['org_name'].lower()
-                if (
-                        org_name in src_mac_vendor.lower()
-                        or org_name in dst_mac_vendor.lower()
-                ):
-                    return True
-                # check if the SNI, hostname, rDNS of this ip belong to org_name
-                ip_identification = __database__.getIPIdentification(daddr)
-                if org_name in ip_identification.lower():
-                    return True
+            # check if the SNI, hostname, rDNS of this ip belong to org_name
+            ip_identification = __database__.getIPIdentification(daddr)
+            if org_name in ip_identification.lower():
+                return True
+
+            # if it's an org that slips has info about (apple, fb, google,etc.),
+            # check if the daddr belongs to it
+            if self.whitelist.is_ip_in_org(daddr, org_name):
+                return True
 
         # consider this port as unknown
         return False
+
+
 
     def is_ignored_ip_data_upload(self, ip):
         """
@@ -1615,10 +1630,9 @@ class Module(Module, multiprocessing.Process):
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
                             # Horizontal port scan
-                            scanned_port = flow.get('scanned_port', '')
+                            # scanned_port = flow.get('scanned_port', '')
                             self.helper.set_evidence_horizontal_portscan(
                                 msg,
-                                scanned_port,
                                 timestamp,
                                 profileid,
                                 twid,
