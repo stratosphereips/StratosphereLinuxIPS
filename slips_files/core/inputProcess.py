@@ -522,6 +522,10 @@ class InputProcess(multiprocessing.Process):
         self.event_observer.schedule(
             event_handler, self.zeek_folder, recursive=True
         )
+        # monitor changes to whitelist
+        self.event_observer.schedule(
+            event_handler, 'config/', recursive=True
+        )
         # Start the observer
         self.event_observer.start()
 
