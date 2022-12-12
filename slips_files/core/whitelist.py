@@ -53,7 +53,7 @@ class Whitelist:
                 and (org.lower() in ip_asn.lower() or ip_asn in org_asn)
             ):
                 # this ip belongs to a whitelisted org, ignore flow
-                # self.print(f"The ASN {ip_asn} of IP {column_values['daddr']} "
+                # self.print(f"The ASN {ip_asn} of IP {ip} "
                 #            f"is in the values of org {org}. Whitelisted.")
                 return True
         except (KeyError, TypeError):
@@ -119,7 +119,7 @@ class Whitelist:
             src_domains_of_flow,
         ) = self.get_domains_of_flow(saddr, daddr)
 
-        # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
+#         # self.print(f'Domains to check from flow: {domains_to_check}, {domains_to_check_dst} {domains_to_check_src}')
         # Go through each whitelisted domain and check if what arrived is there
         for whitelisted_domain in list(whitelisted_domains.keys()):
             what_to_ignore = whitelisted_domains[whitelisted_domain]['what_to_ignore']
@@ -133,18 +133,18 @@ class Whitelist:
                     ignore_type in what_to_ignore
                     or 'both' in what_to_ignore
                 ):
-                    # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain}')
+                    # self.print(f'Whitelisting the domain {domain_to_check} due to whitelist of {domain_to_check}')
                     return True
 
 
             if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'src', src_domains_of_flow, ignore_type):
                 # self.print(f"Whitelisting the domain {domain_to_check} because is related"
-                #            f" to domain {domain} of dst IP {column_values['daddr']}")
+                #            f" to domain {domain_to_check} of dst IP {daddr}")
                 return True
 
             if self.is_whitelisted_domain_in_flow(whitelisted_domain, 'dst', dst_domains_of_flow, ignore_type):
-                # self.print(f"Whitelisting the domain {domain_to_check} because is
-                # related to domain {domain} of src IP {column_values['saddr']}")
+                # self.print(f"Whitelisting the domain {domain_to_check} because is"
+                #            f"related to domain {domain_to_check} of src IP {saddr}")
                 return True
         return False
 
@@ -275,7 +275,7 @@ class Whitelist:
                         # Method 1 Check if src IP belongs to a whitelisted organization range
                         try:
                             if self.is_ip_in_org(saddr, org):
-                                #self.print(f"The src IP {saddr} is in the ranges of org {org}. Whitelisted.")
+                                # self.print(f"The src IP {saddr} is in the ranges of org {org}. Whitelisted.")
                                 return True
                         except ValueError:
                             # Some flows don't have IPs, but mac address or just - in some cases
@@ -292,7 +292,7 @@ class Whitelist:
                         try:
                             if self.is_ip_in_org(column_values['daddr'], org):
                                 # self.print(f"The dst IP {column_values['daddr']} "
-                                # f"is in the network range of org {org}. Whitelisted.")
+                                #            f"is in the network range of org {org}. Whitelisted.")
                                 return True
                         except ValueError:
                             # Some flows don't have IPs, but mac address or just - in some cases
@@ -321,7 +321,7 @@ class Whitelist:
                 __database__.get_org_info(org, 'domains')
             )
             if org in domain:
-                # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                # self.print(f"The domain of this flow ({domain}) belongs to the domains of {org}")
                 return True
 
             flow_TLD = domain.split('.')[-1]
@@ -334,13 +334,13 @@ class Whitelist:
                 # match subdomains too
                 # if org has org.com, and the flow_domain is xyz.org.com whitelist it
                 if org_domain in domain:
-                    # self.print(f"The src domain of this flow ({flow_domain}) is "
+                    # self.print(f"The src domain of this flow ({domain}) is "
                     #            f"a subdomain of {org} domain: {org_domain}")
                     return True
                 # if org has xyz.org.com, and the flow_domain is org.com whitelist it
                 if domain in org_domain:
                     # self.print(f"The domain of {org} ({org_domain}) is a subdomain of "
-                    #       f"this flow domain ({flow_domain})")
+                    #            f"this flow domain ({domain})")
                     return True
         except (KeyError, TypeError):
             # comes here if the whitelisted org doesn't have domains in slips/organizations_info (not a famous org)
@@ -697,7 +697,7 @@ class Whitelist:
                 # we tried 10 times to get the whitelist, it's probably empty.
                 return False
 
-            whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist()
+            whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
 
             # Set data type
             if 'domain' in type_detection:
@@ -823,8 +823,8 @@ class Whitelist:
                             # Method 2 using the organization's list of ips
                             # ip doesn't have asn info, search in the list of organization IPs
                             if self.is_ip_in_org(ip, org):
-                                # self.print(f'Whitelisting evidence sent by {srcip} about {ip},
-                                # due to {ip} being in the range of {org}. {data} in {description}')
+                                # self.print(f'Whitelisting evidence sent by {srcip} about {ip},'
+                                #            f'due to {ip} being in the range of {org}. {data} in {description}')
                                 return True
 
 
