@@ -259,6 +259,9 @@ class Trust(Module, multiprocessing.Process):
             executable.extend(gopy_channel_param)
             if self.create_p2p_logfile:
                 outfile = open(self.pigeon_logfile, '+w')
+            else:
+                outfile = open(os.devnull, "+w")
+
             self.pigeon = subprocess.Popen(
                 executable, cwd=self.data_dir, stdout=outfile
             )
