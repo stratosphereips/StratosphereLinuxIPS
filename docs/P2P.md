@@ -153,12 +153,15 @@ When asked about an ip, slips shares the score of it and the confidence with the
 
 ## Logs
 
-You can see what msgs are sent and received from the network as well
-as the pigeon logs (used IPs, ports, etc.) in the log file created by slips in 
-```output/p2p.log```
-
-Slips also contains a minimal log file for reports recieved by other peers only in
+Slips contains a minimal log file for reports recieved by other peers and peer updates in
 ```output/p2p_reports.log```
+
+For a more detailed p2p logs, for example (peer ping pongs, peer lists, errors, etc.)
+you can enable p2p.log in slips.conf by setting ```create_p2p_logfile``` to ```yes```
+and a ```p2p.log``` will be available in the output dir
+
+Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.
+
 
 ## Limitations
 
