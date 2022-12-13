@@ -124,8 +124,15 @@ class Trust(Module, multiprocessing.Process):
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-        # self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
-        self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+
+        self.read_configuration()
+        if self.create_p2p_logfile:
+            self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+            self.print(f"Storing p2p.log in {self.pigeon_logfile}")
+            # create the thread that rotates the p2p.log every 1d
+            self.rotator_thread = threading.Thread(
+                target=self.rotate_p2p_logfile, daemon=True
+            )
         self.pigeon_key_file = pigeon_key_file
         self.pigeon_binary = pigeon_binary
 
@@ -150,13 +157,16 @@ class Trust(Module, multiprocessing.Process):
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
-        self.rotator_thread = threading.Thread(
-            target=self.rotate_p2p_logfile, daemon=True
-        )
+
 
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
+
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.create_p2p_logfile: bool = conf.create_p2p_logfile()
 
     def get_used_interface(self):
         used_interface = sys.argv[sys.argv.index('-i') + 1]
@@ -247,10 +257,13 @@ class Trust(Module, multiprocessing.Process):
             # executable.extend(rename_with_port_param)
             executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
-            outfile = open(self.pigeon_logfile, '+w')
+            if self.create_p2p_logfile:
+                outfile = open(self.pigeon_logfile, '+w')
             self.pigeon = subprocess.Popen(
                 executable, cwd=self.data_dir, stdout=outfile
             )
+
+
             # print(f"[debugging] runnning pigeon: {executable}")
 
     def new_evidence_callback(self, msg: Dict):
@@ -603,14 +616,6 @@ class Trust(Module, multiprocessing.Process):
         # give the report to evidenceProcess to decide whether to block or not
         __database__.publish('new_blame', data)
 
-    def get_multiaddress(self):
-        """
-        Function to read multiaddress from p2p.log, because it's generated and logged by the pigeon
-        """
-        with open(self.pigeon_logfile, 'r') as f:
-            while line := f.readline():
-                if 'Your Multiaddress Is: ' in line:
-                    return line
 
     def shutdown_gracefully(self):
         if self.start_pigeon:
@@ -630,8 +635,10 @@ class Trust(Module, multiprocessing.Process):
                 )
                 return
 
-            # rotates p2p.log file every 1 day
-            self.rotator_thread.start()
+            # create_p2p_logfile is taken from slips.conf
+            if self.create_p2p_logfile:
+                # rotates p2p.log file every 1 day
+                self.rotator_thread.start()
 
             self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
             # channel to send msgs to whenever slips needs info from other peers about an ip
@@ -672,21 +679,21 @@ class Trust(Module, multiprocessing.Process):
                         f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
                     )
                     return
+
                 try:
                     if not self.mutliaddress_printed:
-                        multiaddr = self.get_multiaddress()
-                        self.print(multiaddr[3:])
-                        self.mutliaddress_printed  = True
+                        pass
+
                 except:
                     pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        # except Exception as inst:
-        #     exception_line = sys.exc_info()[2].tb_lineno
-        #     self.print(f'Problem with P2P. line {exception_line}', 0, 1)
-        #     self.print(str(type(inst)), 0, 1)
-        #     self.print(str(inst.args), 0, 1)
-        #     self.print(str(inst), 0, 1)
-        #     return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem with P2P. line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True
