@@ -167,6 +167,8 @@ class Trust(Module, multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
+        print(f"@@@@@@@@@@@@@@@@@@  create_p2p_logfile is {self.create_p2p_logfile}")
+
 
     def get_used_interface(self):
         used_interface = sys.argv[sys.argv.index('-i') + 1]
@@ -652,6 +654,7 @@ class Trust(Module, multiprocessing.Process):
             # self.c4 = __database__.subscribe(self.slips_update_channel)
             while True:
 
+
                 message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -685,7 +688,11 @@ class Trust(Module, multiprocessing.Process):
 
                 try:
                     if not self.mutliaddress_printed:
-                        pass
+                        # give the pigeon time to put the multiaddr in the db
+                        time.sleep(2)
+                        multiaddr = __database__.get_multiaddr()
+                        self.print(f"You Multiaddress is: {multiaddr}")
+                        self.mutliaddress_printed = True
 
                 except:
                     pass
