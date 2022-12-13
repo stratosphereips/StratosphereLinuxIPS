@@ -174,20 +174,15 @@ class Trust(Module, multiprocessing.Process):
         """
         Thread that rotates p2p.log file every 1 day
         """
-        # todo change this to 86400 #@@@@@@@@@@@@@@@@@@@@@@@@
-        # rotation_period = 86400    # 1d
-        rotation_period = 20    # 1d
+        rotation_period = 86400    # 1d
         while True:
-            print(f"@@@@@@@@@@@@@@@@@@  sleeping 20s")
             time.sleep(rotation_period)
             lock = threading.Lock()
             lock.acquire()
-            print(f"@@@@@@@@@@@@@@@@@@  cleared {self.pigeon_logfile}")
             # erase contents of file instead of deleting it
             # because the pigeon has an open handle of it
             open(self.pigeon_logfile, "w").close()
             lock.release()
-            print(f"@@@@@@@@@@@@@@@@@@  going back to sleep")
 
 
     def get_available_port(self):
