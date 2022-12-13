@@ -47,6 +47,7 @@ class ConfigParser(object):
         return parser
 
 
+
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
@@ -187,6 +188,14 @@ class ConfigParser(object):
         return self.read_configuration(
             'modes', 'stderr', 'errors.log'
         )
+
+
+    def create_p2p_logfile(self):
+        create_p2p_logfile = self.read_configuration(
+            'P2P', 'create_p2p_logfile', 'no'
+        )
+        return 'yes' in create_p2p_logfile.lower()
+
 
     def ts_format(self):
         return self.read_configuration(
