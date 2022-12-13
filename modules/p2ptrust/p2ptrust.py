@@ -19,6 +19,7 @@ from modules.p2ptrust.utils.go_director import GoDirector
 from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
+import threading
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -149,6 +150,10 @@ class Trust(Module, multiprocessing.Process):
         # all evidence slips detects has threat levels of strings
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
+        self.rotator_thread = threading.Thread(
+            target=self.rotate_p2p_logfile, daemon=True
+        )
+
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
@@ -163,6 +168,27 @@ class Trust(Module, multiprocessing.Process):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
+
+
+    def rotate_p2p_logfile(self):
+        """
+        Thread that rotates p2p.log file every 1 day
+        """
+        # todo change this to 86400 #@@@@@@@@@@@@@@@@@@@@@@@@
+        # rotation_period = 86400    # 1d
+        rotation_period = 20    # 1d
+        while True:
+            print(f"@@@@@@@@@@@@@@@@@@  sleeping 20s")
+            time.sleep(rotation_period)
+            lock = threading.Lock()
+            lock.acquire()
+            print(f"@@@@@@@@@@@@@@@@@@  cleared {self.pigeon_logfile}")
+            # erase contents of file instead of deleting it
+            # because the pigeon has an open handle of it
+            open(self.pigeon_logfile, "w").close()
+            lock.release()
+            print(f"@@@@@@@@@@@@@@@@@@  going back to sleep")
+
 
     def get_available_port(self):
         for port in range(32768, 65535):
@@ -608,6 +634,9 @@ class Trust(Module, multiprocessing.Process):
                     'Module was supposed to start up pigeon but it was not possible to start pigeon! Exiting...'
                 )
                 return
+
+            # rotates p2p.log file every 1 day
+            self.rotator_thread.start()
 
             self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
             # channel to send msgs to whenever slips needs info from other peers about an ip
