@@ -1,9 +1,0 @@
-digraph "Graphical Class Hierarchy"
-{
- // LATEX_PDF_SIZE
-  bgcolor="transparent";
-  edge [fontname="Helvetica",fontsize="10",labelfontname="Helvetica",labelfontsize="10"];
-  node [fontname="Helvetica",fontsize="10",shape=record];
-  rankdir="LR";
-  Node0 [label="slips.modules.p2ptrust.utils.printer.\lPrinter",height=0.2,width=0.4,color="black",URL="$d4/d0c/classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html",tooltip=" "];
-}
