@@ -127,12 +127,8 @@ $(document).ready(function(){initNavTree('classslips_1_1slips__files_1_1core_1_1
   <div class="headertitle"><div class="title">slips.slips_files.core.evidenceProcess.EvidenceProcess Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="dynheader">
-Inheritance diagram for slips.slips_files.core.evidenceProcess.EvidenceProcess:</div>
-<div class="dyncontent">
-<div class="center"><iframe scrolling="no" frameborder="0" src="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process__inherit__graph.svg" width="227" height="124"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe>
-</div>
-<center><span class="legend">[<a target="top" href="graph_legend.html">legend</a>]</span></center></div>
+
+<p>Inherits multiprocessing.Process.</p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
@@ -172,8 +168,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:acd9ce21209c28d475e2ea0039ba00020"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa73d5383329c4bbeb69c3f61b1db6c4d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#aa73d5383329c4bbeb69c3f61b1db6c4d">shutdown_gracefully</a> (self)</td></tr>
 <tr class="separator:aa73d5383329c4bbeb69c3f61b1db6c4d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a60ec6625a5e2d16e1ba239b7a690344b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a60ec6625a5e2d16e1ba239b7a690344b">delete_alerted_evidence</a> (self, proflied, twid, tw_evidence)</td></tr>
-<tr class="separator:a60ec6625a5e2d16e1ba239b7a690344b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0dffb2f7a9e45a16427118f12c8acc02"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a0dffb2f7a9e45a16427118f12c8acc02">delete_alerted_evidence</a> (self, profileid, twid, dict tw_evidence)</td></tr>
+<tr class="separator:a0dffb2f7a9e45a16427118f12c8acc02"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a39962ea5d7b1bebe2d69806cea969a98"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a39962ea5d7b1bebe2d69806cea969a98">delete_whitelisted_evidence</a> (self, evidence)</td></tr>
 <tr class="separator:a39962ea5d7b1bebe2d69806cea969a98"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afff58d61cea786b7259a9d26f5517092"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#afff58d61cea786b7259a9d26f5517092">delete_evidence_done_by_others</a> (self, tw_evidence)</td></tr>
@@ -470,8 +466,8 @@ This should be converted into a module
 </pre> 
 </div>
 </div>
-<a id="a60ec6625a5e2d16e1ba239b7a690344b" name="a60ec6625a5e2d16e1ba239b7a690344b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a60ec6625a5e2d16e1ba239b7a690344b">&#9670;&#160;</a></span>delete_alerted_evidence()</h2>
+<a id="a0dffb2f7a9e45a16427118f12c8acc02" name="a0dffb2f7a9e45a16427118f12c8acc02"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0dffb2f7a9e45a16427118f12c8acc02">&#9670;&#160;</a></span>delete_alerted_evidence()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -486,7 +482,7 @@ This should be converted into a module
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>proflied</em>, </td>
+          <td class="paramname"><em>profileid</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -497,7 +493,7 @@ This should be converted into a module
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">dict&#160;</td>
           <td class="paramname"><em>tw_evidence</em>&#160;</td>
         </tr>
         <tr>

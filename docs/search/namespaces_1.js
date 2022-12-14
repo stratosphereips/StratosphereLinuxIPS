@@ -49,8 +49,9 @@ var searchData=
   ['trustdb_46',['trustdb',['../namespaceslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb.html',1,'slips::modules::p2ptrust::trust']]],
   ['update_5ffile_5fmanager_47',['update_file_manager',['../namespaceslips_1_1modules_1_1update__manager_1_1update__file__manager.html',1,'slips::modules::update_manager']]],
   ['update_5fmanager_48',['update_manager',['../namespaceslips_1_1modules_1_1update__manager.html',1,'slips.modules.update_manager'],['../namespaceslips_1_1modules_1_1update__manager_1_1update__manager.html',1,'slips.modules.update_manager.update_manager']]],
-  ['utils_49',['utils',['../namespaceslips_1_1modules_1_1p2ptrust_1_1utils.html',1,'slips.modules.p2ptrust.utils'],['../namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1utils.html',1,'slips.modules.p2ptrust.utils.utils']]],
-  ['virustotal_50',['virustotal',['../namespaceslips_1_1modules_1_1virustotal.html',1,'slips.modules.virustotal'],['../namespaceslips_1_1modules_1_1virustotal_1_1virustotal.html',1,'slips.modules.virustotal.virustotal']]],
-  ['warden_5fclient_51',['warden_client',['../namespaceslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client.html',1,'slips::modules::CESNET']]],
-  ['whitelist_52',['whitelist',['../namespaceslips_1_1slips__files_1_1core_1_1whitelist.html',1,'slips::slips_files::core']]]
+  ['urlhaus_49',['urlhaus',['../namespaceslips_1_1modules_1_1threat__intelligence_1_1urlhaus.html',1,'slips::modules::threat_intelligence']]],
+  ['utils_50',['utils',['../namespaceslips_1_1modules_1_1p2ptrust_1_1utils.html',1,'slips.modules.p2ptrust.utils'],['../namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1utils.html',1,'slips.modules.p2ptrust.utils.utils']]],
+  ['virustotal_51',['virustotal',['../namespaceslips_1_1modules_1_1virustotal.html',1,'slips.modules.virustotal'],['../namespaceslips_1_1modules_1_1virustotal_1_1virustotal.html',1,'slips.modules.virustotal.virustotal']]],
+  ['warden_5fclient_52',['warden_client',['../namespaceslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client.html',1,'slips::modules::CESNET']]],
+  ['whitelist_53',['whitelist',['../namespaceslips_1_1slips__files_1_1core_1_1whitelist.html',1,'slips::slips_files::core']]]
 ];

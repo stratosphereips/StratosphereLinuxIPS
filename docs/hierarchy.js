@@ -55,6 +55,9 @@ var hierarchy =
     ] ],
     [ "slips.modules.p2ptrust.trust.trustdb.TrustDB", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html", null ],
     [ "slips.modules.update_manager.update_file_manager.UpdateFileManager", "classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html", null ],
+    [ "slips.modules.threat_intelligence.urlhaus.URLhaus", "classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html", [
+      [ "slips.modules.threat_intelligence.threat_intelligence.Module", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html", null ]
+    ] ],
     [ "slips.slips_files.core.whitelist.Whitelist", "classslips_1_1slips__files_1_1core_1_1whitelist_1_1_whitelist.html", null ],
     [ "Module", null, [
       [ "slips.modules.CESNET.CESNET.Module", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module.html", null ],

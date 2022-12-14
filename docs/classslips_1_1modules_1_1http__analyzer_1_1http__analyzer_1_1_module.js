@@ -9,7 +9,7 @@ var classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module =
     [ "detect_binary_downloads", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aa3740f24e192818428e6963658101cc0", null ],
     [ "extract_info_from_UA", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ae9f0e2d64682e626544ed3c576396044", null ],
     [ "get_ua_info_online", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#af1a20930183a77aa9c2da76c8e4ec3e0", null ],
-    [ "get_user_agent_info", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#af597dc96d600beac8fbd9930082745bd", null ],
+    [ "get_user_agent_info", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aac6bb378136555917b092262d092cf7a", null ],
     [ "print", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a18103be866c83f01b338b75ce8ed92b0", null ],
     [ "run", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a8a2e360efa306cd7388cb1fc1783c0f1", null ],
     [ "set_evidence_incompatible_user_agent", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a458a8c08236a3897a4a41ddf22713d8d", null ],

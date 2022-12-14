@@ -26,6 +26,7 @@ var classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profil
     [ "getFinalStateFromFlags", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a7034eae6faee64bd7b018a109c0a2e65", null ],
     [ "getIPData", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a339c1a0be94a317cd8e0bf913bfb1d25", null ],
     [ "getSlipsInternalTime", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#aa39b9385ba0b8cd69f85cd84c8c7c36a", null ],
+    [ "give_url_to_ti", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a875d84f22887831aa9da1d6d3f4c9c84", null ],
     [ "is_ip_resolved", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#afe55ca25a089414d5d3411b4c870577b", null ],
     [ "markProfileTWAsClosed", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a96b93f0b93bba096bea7e97805dde8cd", null ],
     [ "markProfileTWAsModified", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a782914f36a01da114fde575f69f09fec", null ],

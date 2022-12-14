@@ -127,12 +127,10 @@ $(document).ready(function(){initNavTree('classslips_1_1slips__files_1_1core_1_1
   <div class="headertitle"><div class="title">slips.slips_files.core.database._profile_flow.ProfilingFlowsDatabase Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="dynheader">
-Inheritance diagram for slips.slips_files.core.database._profile_flow.ProfilingFlowsDatabase:</div>
-<div class="dyncontent">
-<div class="center"><iframe scrolling="no" frameborder="0" src="classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database__inherit__graph.svg" width="296" height="212"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe>
-</div>
-<center><span class="legend">[<a target="top" href="graph_legend.html">legend</a>]</span></center></div>
+
+<p>Inherits object.</p>
+
+<p>Inherited by <a class="el" href="classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html">slips.slips_files.core.database.database.Database</a>.</p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
@@ -200,6 +198,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a4eb55d24a9f0eea031daefd3dd3fca92"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac9f3bccd17699070800abde8d427584d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#ac9f3bccd17699070800abde8d427584d">add_out_http</a> (self, daddr, profileid, twid, stime, flowtype, uid, method, host, uri, version, user_agent, request_body_len, response_body_len, status_code, status_msg, resp_mime_types, resp_fuids)</td></tr>
 <tr class="separator:ac9f3bccd17699070800abde8d427584d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a875d84f22887831aa9da1d6d3f4c9c84"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a875d84f22887831aa9da1d6d3f4c9c84">give_url_to_ti</a> (self, host, uri, http_flow, uid)</td></tr>
+<tr class="separator:a875d84f22887831aa9da1d6d3f4c9c84"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1c5b205769d0aba3b37b465074984261"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a1c5b205769d0aba3b37b465074984261">add_out_ssh</a> (self, profileid, twid, stime, flowtype, uid, ssh_version, auth_attempts, auth_success, client, server, cipher_alg, mac_alg, compression_alg, kex_alg, host_key_alg, host_key, daddr)</td></tr>
 <tr class="separator:a1c5b205769d0aba3b37b465074984261"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac26687ec1cd7e97f1a5bbe728d983635"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#ac26687ec1cd7e97f1a5bbe728d983635">add_out_notice</a> (self, profileid, twid, stime, daddr, sport, dport, note, msg, scanned_port, scanning_ip, uid)</td></tr>
@@ -1712,6 +1712,53 @@ We need to separate these three cases:
       </table>
 </div><div class="memdoc">
 
+</div>
+</div>
+<a id="a875d84f22887831aa9da1d6d3f4c9c84" name="a875d84f22887831aa9da1d6d3f4c9c84"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a875d84f22887831aa9da1d6d3f4c9c84">&#9670;&#160;</a></span>give_url_to_ti()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.database._profile_flow.ProfilingFlowsDatabase.give_url_to_ti </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uri</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>http_flow</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param host: can be an ip or a domain
+</pre> 
 </div>
 </div>
 <a id="afe55ca25a089414d5d3411b4c870577b" name="afe55ca25a089414d5d3411b4c870577b"></a>

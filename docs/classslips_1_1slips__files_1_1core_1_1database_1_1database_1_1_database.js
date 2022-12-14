@@ -68,6 +68,7 @@ var classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database =
     [ "get_malicious_ip_ranges", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#aebe2529d56f6932e1f8f0debb082e829", null ],
     [ "get_message", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a1337aad44c3b1d2afa13bb4f1673d7e2", null ],
     [ "get_module_labels_from_flow", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#aebe815b115eb2d3d5e40aabeded05dff", null ],
+    [ "get_multiaddr", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a3214ae431e90d760d53747ce40fc6bdb", null ],
     [ "get_org_info", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a779b2f26f3ea6614d2c561374ab190fc", null ],
     [ "get_org_IPs", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a3f201a5a3c7a2573d3978836bee7d786", null ],
     [ "get_organization_of_port", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#aef6628c4e9d1e9ff6124b3f51315384e", null ],

@@ -16,5 +16,5 @@ var searchData=
   ['update_5fti_5ffile_13',['update_TI_file',['../classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a56cbe23499ad2ba869b32a368da849d0',1,'slips::modules::update_manager::update_file_manager::UpdateFileManager']]],
   ['update_5fti_5ffiles_14',['update_ti_files',['../classslips_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager.html#a9fe6a3eaf4b61dd5485afc78c8f4c854',1,'slips::modules::update_manager::update_manager::UpdateManager']]],
   ['update_5ftimes_5fcontacted_15',['update_times_contacted',['../classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a194df0d2f5caf64670aa19ce2b70aa9c',1,'slips::slips_files::core::database::_profile_flow::ProfilingFlowsDatabase']]],
-  ['urlhaus_16',['urlhaus',['../classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a11d2799328e26645eb86d379046e7659',1,'slips::modules::threat_intelligence::threat_intelligence::Module']]]
+  ['urlhaus_5flookup_16',['urlhaus_lookup',['../classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html#ac0377b721b867bbaae67da70de3278fd',1,'slips::modules::threat_intelligence::urlhaus::URLhaus']]]
 ];
