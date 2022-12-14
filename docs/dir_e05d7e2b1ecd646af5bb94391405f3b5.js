@@ -19,5 +19,5 @@ var dir_e05d7e2b1ecd646af5bb94391405f3b5 =
     [ "timeline", "dir_65728b8b4ff93d37820fac1b1ad72d30.html", "dir_65728b8b4ff93d37820fac1b1ad72d30" ],
     [ "update_manager", "dir_f32679d5471da62e11016d8f26784230.html", "dir_f32679d5471da62e11016d8f26784230" ],
     [ "virustotal", "dir_0ae5276ed2f1ce63de1c27b033213a11.html", "dir_0ae5276ed2f1ce63de1c27b033213a11" ],
-    [ "__init__.py", "d6/d0d/modules_2____init_____8py.html", null ]
+    [ "__init__.py", "modules_2____init_____8py.html", null ]
 ];
