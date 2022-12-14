@@ -1728,6 +1728,12 @@ class Database(ProfilingFlowsDatabase, object):
         identification = identification[:-2]
         return identification
 
+    def get_multiaddr(self):
+        """
+        this is can only be called when p2p is enabled, this value is set by p2p pigeon
+        """
+        return self.r.get('multiAddress')
+
     def getURLData(self, url):
         """
         Return information about this URL

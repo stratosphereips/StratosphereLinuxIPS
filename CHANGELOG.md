@@ -141,6 +141,9 @@
  - Fix home_network parameter
  - Fix portscans detections
  - Fix DGA detections 
+ - Reduce p2p.log file size
+ - Rotate p2p.log every 1 day and keep only the last day by default
+ - Don't create p2p.log by default, unless create_p2p_log is set to yes in slips.conf
 -0.8.5
 * Slips
   - Detect young domains that was registered less than 60 days ago.
