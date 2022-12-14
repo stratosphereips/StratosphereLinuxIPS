@@ -16,20 +16,15 @@ export {
         const detect_scans = T &redef;
         #const scan_threshold = 25 &redef;
 
-	    global scan_summary: function(t: table[addr] of set[addr], orig: addr): interval;
+	    # global scan_summary: function(t: table[addr] of set[addr], orig: addr): interval;
 
-        global distinct_peers_AddressScan: table[addr] of set[addr]
-        &read_expire = 1 days  &expire_func=scan_summary &redef;
+        global distinct_peers_AddressScan: table[addr] of set[addr];
 
-        global distinct_peers_AddressMaskScan: table[addr] of set[addr]
-        &read_expire = 1 days  &expire_func=scan_summary &redef;
+        # &read_expire = 1 days  &expire_func=scan_summary &redef;
 
-        global distinct_peers_TimestampScan: table[addr] of set[addr]
-        &read_expire = 1 days  &expire_func=scan_summary &redef;
-
-        global distinct_peers: table[addr] of set[addr]
-        &read_expire = 1 days  &expire_func=scan_summary &redef;
-
+        global distinct_peers_AddressMaskScan: table[addr] of set[addr];
+        global distinct_peers_TimestampScan: table[addr] of set[addr];
+        global distinct_peers: table[addr] of set[addr];
 
         global shut_down_thresh_reached: table[addr] of bool &default=F;
 

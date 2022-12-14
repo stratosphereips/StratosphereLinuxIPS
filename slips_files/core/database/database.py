@@ -50,6 +50,7 @@ class Database(ProfilingFlowsDatabase, object):
         'new_blame',
         'new_alert',
         'new_dhcp',
+        'new_weird',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
@@ -464,9 +465,10 @@ class Database(ProfilingFlowsDatabase, object):
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
         Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
+        :param ip: dst ip that should be associated with the given MAC info
         """
 
-        MAC = MAC_info.get('MAC','')
+        MAC = MAC_info.get('MAC', '')
         if not validators.mac_address(MAC):
             return False
 
@@ -490,7 +492,8 @@ class Database(ProfilingFlowsDatabase, object):
         # the dst MAC of all public IPs is the dst mac of the gw,
         # we shouldn't be assigning it to the public IPs
         ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private :
+        if not ip_obj.is_private:
+            # trying to associate a mac with a public ip!
             try:
                 self.seen_MACs[MAC] += 1
             except KeyError:
@@ -506,6 +509,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
+
         if '0.0.0.0' in profileid:
             return False
 
@@ -589,6 +593,7 @@ class Database(ProfilingFlowsDatabase, object):
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            return True
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -1039,17 +1044,24 @@ class Database(ProfilingFlowsDatabase, object):
 
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
-        When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
-         database
+        When we have a bunch of evidence causing an alert,
+        we associate all evidence IDs with the alert ID in our database
         stores in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
+        old_profileid_twid_alerts: dict = self.get_profileid_twid_alerts(profileid, twid)
+
         alert = {
             alert_ID: json.dumps(evidence_IDs)
         }
-        alert = json.dumps(alert)
-        self.r.hset(profileid + self.separator + twid, 'alerts', alert)
+
+        # add the alert we have to the old alerts of this profileid_twid
+        profileid_twid_alerts: dict = old_profileid_twid_alerts | alert
+
+
+        profileid_twid_alerts = json.dumps(profileid_twid_alerts)
+        self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
 
         # the structure of alerts key is
         # alerts {
@@ -1232,7 +1244,7 @@ class Database(ProfilingFlowsDatabase, object):
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if not alerts:
             return {}
         alerts = json.loads(alerts)
@@ -1244,7 +1256,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if alerts:
             alerts = json.loads(alerts)
             evidence = alerts.get(alert_ID, False)
@@ -1716,6 +1728,12 @@ class Database(ProfilingFlowsDatabase, object):
         identification = identification[:-2]
         return identification
 
+    def get_multiaddr(self):
+        """
+        this is can only be called when p2p is enabled, this value is set by p2p pigeon
+        """
+        return self.r.get('multiAddress')
+
     def getURLData(self, url):
         """
         Return information about this URL
@@ -1922,7 +1940,7 @@ class Database(ProfilingFlowsDatabase, object):
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
-        """Given a uid, get the alternative flow realted to it"""
+        """ Given a uid, get the alternative flow realted to it """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given

@@ -8,11 +8,13 @@ from .TimerThread import TimerThread
 
 # Your imports
 import json
-import configparser
+import threading
 import ipaddress
 import datetime
 import sys
 import validators
+import time
+from multiprocessing import Queue
 from .set_evidence import Helper
 from slips_files.core.whitelist import Whitelist
 
@@ -46,6 +48,7 @@ class Module(Module, multiprocessing.Process):
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
+        self.c10 = __database__.subscribe('new_weird')
         self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
@@ -60,8 +63,6 @@ class Module(Module, multiprocessing.Process):
         self.connections_checked_in_conn_dns_timer_thread = []
         # Cache list of connections that we already checked in the timer thread for ssh check
         self.connections_checked_in_ssh_timer_thread = []
-        # Cache list of connections that we already checked in the timer thread for ssl check
-        self.ssl_checked_in_timer_thread = []
         # Threshold how much time to wait when capturing in an interface, to start reporting connections without DNS
         # Usually the computer resolved DNS already, so we need to wait a little to report
         # In mins
@@ -85,7 +86,13 @@ class Module(Module, multiprocessing.Process):
         # after this number of failed ssh logins, we alert pw guessing
         self.pw_guessing_threshold = 20
         self.password_guessing_cache = {}
-
+        # in pastebin download detection, we wait for each conn.log flow of the seen ssl flow to appear
+        # this is the dict of ssl flows we're waiting for
+        self.pending_ssl_flows = Queue()
+        # thread that waits for ssl flows to appear in conn.log
+        self.ssl_waiting_thread = threading.Thread(
+            target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -132,7 +139,7 @@ class Module(Module, multiprocessing.Process):
 
             module_label = self.malicious_label
             self.helper.set_evidence_long_connection(
-                daddr, dur, profileid, twid, uid, timestamp, ip_state='ip'
+                daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
             )
         else:
             # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
@@ -171,50 +178,68 @@ class Module(Module, multiprocessing.Process):
         organization or not, and returns true if the daddr belongs to the
         same org as the port
         """
-        if organization_info := __database__.get_organization_of_port(
+        organization_info = __database__.get_organization_of_port(
                 portproto
-        ):
-            # there's an organization that's known to use this port,
-            # check if the daddr belongs to the range of this org
-            organization_info = json.loads(organization_info)
-            # get the organization ip or range
-            org_ip = organization_info['ip']
-            # org_name = organization_info['org_name']
+        )
+        if not organization_info:
+            # consider this port as unknown, it doesn't belong to any org
+            return False
 
-            if daddr in org_ip:
-                # it's an ip and it belongs to this org, consider the port as known
+        # there's an organization that's known to use this port,
+        # check if the daddr belongs to the range of this org
+        organization_info = json.loads(organization_info)
+
+        # get the organization ip or range
+        org_ip = organization_info['ip']
+
+        # org_name = organization_info['org_name']
+
+        if daddr in org_ip:
+            # it's an ip and it belongs to this org, consider the port as known
+            return True
+
+        # is it a range?
+        try:
+            # we have the org range in our database, check if the daddr belongs to this range
+            if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
+                # it does, consider the port as known
                 return True
+        except ValueError:
+            pass
 
-            # is it a range?
-            try:
-                # we have the org range in our database, check if the daddr belongs to this range
-                if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
-                    # it does, consider the port as known
-                    return True
-            except ValueError:
-                # not a range either since nothing is specified,
-                # check the source and dst mac address vendors
-                src_mac_vendor = str(
-                    __database__.get_mac_vendor_from_profile(profileid)
-                )
-                dst_mac_vendor = str(
-                    __database__.get_mac_vendor_from_profile(
-                        f'profile_{daddr}'
-                    )
-                )
-                org_name = organization_info['org_name'].lower()
-                if (
-                        org_name in src_mac_vendor.lower()
-                        or org_name in dst_mac_vendor.lower()
-                ):
-                    return True
-                # check if the SNI, hostname, rDNS of this ip belong to org_name
-                ip_identification = __database__.getIPIdentification(daddr)
-                if org_name in ip_identification.lower():
-                    return True
+        # not a range either since nothing is specified, e.g. ip is set to ""
+        # check the source and dst mac address vendors
+        src_mac_vendor = str(
+            __database__.get_mac_vendor_from_profile(profileid)
+        )
+        dst_mac_vendor = str(
+            __database__.get_mac_vendor_from_profile(
+                f'profile_{daddr}'
+            )
+        )
+
+        org_name = organization_info['org_name'].lower()
+        if (
+                org_name in src_mac_vendor.lower()
+                or org_name in dst_mac_vendor.lower()
+        ):
+            return True
+
+        # check if the SNI, hostname, rDNS of this ip belong to org_name
+        ip_identification = __database__.getIPIdentification(daddr)
+        if org_name in ip_identification.lower():
+            return True
+
+        # if it's an org that slips has info about (apple, fb, google,etc.),
+        # check if the daddr belongs to it
+        if self.whitelist.is_ip_in_org(daddr, org_name):
+            #self.print(f"ip {daddr} belongs to {org_name} so considering port {portproto} as known")
+            return True
 
         # consider this port as unknown
         return False
+
+
 
     def is_ignored_ip_data_upload(self, ip):
         """
@@ -253,66 +278,81 @@ class Module(Module, multiprocessing.Process):
             )
             return True
 
+    def wait_for_ssl_flows_to_appear_in_connlog(self):
+        """
+        thread that waits forever for ssl flows to appear in conn.log
+        whenever the conn.log of an ssl flow is found, thread calls check_pastebin_download
+        ssl flows to wait for are stored in pending_ssl_flows
+        """
+        # this is the time we give ssl flows to appear in conn.log,
+        # when this time is over, we check, then wait again, etc.
+        wait_time = 60*2
+
+        # this thread shouldn't run on interface only because in zeek dirs we
+        # we should wait for the conn.log to be read too
+
+        while True:
+            size = self.pending_ssl_flows.qsize()
+            if size == 0:
+                # nothing in queue
+                time.sleep(30)
+                continue
+
+            # try to get the conn of each pending flow only once
+            # this is to ensure that re-added flows to the queue aren't checked twice
+            for ssl_flow in range(size):
+                try:
+                    ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
+                except:
+                    continue
+
+                # unpack the flow
+                daddr, server_name, uid, ts, profileid, twid = ssl_flow
+
+                # get the conn.log with the same uid,
+                # returns {uid: {actual flow..}}
+                # always returns a dict, never returns None
+                flow: dict = __database__.get_flow(profileid, twid, uid)
+                flow = flow.get(uid)
+                if flow:
+                    flow = json.loads(flow)
+                    if 'ts' in flow:
+                        # this means the flow is found in conn.log
+                        self.check_pastebin_download(*ssl_flow, flow)
+                else:
+                    # flow not found in conn.log yet, re-add it to the queue to check it later
+                    self.pending_ssl_flows.put(ssl_flow)
+
+            # give the ssl flows remaining in self.pending_ssl_flows 2 more mins to appear
+            time.sleep(wait_time)
 
     def check_pastebin_download(
-            self, daddr, server_name, uid, ts, profileid, twid, wait_time=10
+            self, daddr, server_name, uid, ts, profileid, twid, flow
     ):
         """
         Alerts on downloads from pastebin.com with more than 12000 bytes
+        This function waits for the ssl.log flow to appear in conn.log before alerting
         :param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
                 every time the timer is over, we wait extra 2 min and call the function again
+        : param flow: this is the conn.log of the ssl flow we're currently checking
         """
 
         if 'pastebin' not in server_name:
             return False
 
-        # get the conn.log with the same uid, returns {uid: {actual flow..}}
-        # always returns a dict, neever returns None
-        flow: dict = __database__.get_flow(profileid, twid, uid)
-        flow = flow.get(uid)
+        # orig_bytes is number of payload bytes downloaded
+        downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
 
-        if flow:
-            flow = json.loads(flow)
-            # orig_bytes is number of payload bytes downloaded
-            downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
-
-            if downloaded_bytes >= 12000:
-                self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
-
-                try:
-                    self.ssl_checked_in_timer_thread.remove(uid)
-                except ValueError:
-                    pass
-                return True
-
-            else:
-                # reaching this point means that the conn to pastebin did appear
-                # in conn.log, but the downloaded bytes didnt reach the threshold yet.
-                return False
-
-        # reaching this point means we didn't get the conn.log flow yet
-        if uid not in self.ssl_checked_in_timer_thread:
-            # comes here if we haven't started the timer thread for this uid before
-            # mark this ssl as checked
-            self.ssl_checked_in_timer_thread.append(uid)
-
+        if downloaded_bytes >= 700:
+            self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
+            return True
 
         else:
-            # It means we already waited enough for this ssl with the Timer
-            # but still no connection for it.
-            try:
-                self.ssl_checked_in_timer_thread.remove(uid)
-            except ValueError:
-                pass
+            # reaching this point means that the conn to pastebin did appear
+            # in conn.log, but the downloaded bytes didnt reach the threshold.
+            # maybe an empty file is downloaded
+            return False
 
-        # uid in the ssl checked list of not, we will keep waiting 2 mins until we find the conn.log flow
-        params = [daddr, server_name, uid, ts, profileid, twid]
-        # wait 2 min for the connection to appear in conn.log
-        # it appears in ssl.log as soon as it happens, and in conn.log as soon as it ends
-        timer = TimerThread(
-            wait_time, self.check_pastebin_download, params
-        )
-        timer.start()
 
     def detect_data_upload_in_twid(self, profileid, twid):
         """
@@ -515,55 +555,20 @@ class Module(Module, multiprocessing.Process):
 
         flow_domain = rdns or SNI
         for org in utils.supported_orgs:
-            if ip_asn and ip_asn != 'Unknown':
-                org_asn = json.loads(__database__.get_org_info(org, 'asn'))
-                if org.lower() in ip_asn.lower() or ip_asn in org_asn:
-                    return True
-            # remove the asn from ram
-            org_asn = ''
+            if self.whitelist.is_ip_asn_in_org_asn(ip_asn, org):
+                return True
 
             if flow_domain:
                 # we have the rdns or sni of this flow , now check
-                if org in flow_domain:
-                    # self.print(f"The domain of this flow ({flow_domain}) belongs to the domains of {org}")
+                if self.whitelist.is_domain_in_org(flow_domain, org):
                     return True
 
-                org_domains = json.loads(
-                    __database__.get_org_info(org, 'domains')
-                )
 
-                flow_TLD = flow_domain.split('.')[-1]
+            # check if the ip belongs to the range of a well known org
+            # (fb, twitter, microsoft, etc.)
+            if self.whitelist.is_ip_in_org(ip, org):
+                return True
 
-                for org_domain in org_domains:
-                    org_domain_TLD = org_domain.split('.')[-1]
-                    # make sure the 2 domains have the same same top level domain
-                    if flow_TLD != org_domain_TLD:
-                        continue
-
-                    # match subdomains too
-                    # return true if org has org.com, and the flow_domain is xyz.org.com
-                    # or if org has xyz.org.com, and the flow_domain is org.com return true
-                    if org_domain in flow_domain or flow_domain in org_domain:
-                        return True
-
-                # remove from ram
-                org_domains = ''
-
-            # check if the ip belongs to the range of a well known org (fb, twitter, microsoft, etc.)
-            org_ips = __database__.get_org_IPs(org)
-
-            if '.' in ip:
-                first_octet = ip.split('.')[0]
-                ip_obj = ipaddress.IPv4Address(ip)
-            elif ':' in ip:
-                first_octet = ip.split(':')[0]
-                ip_obj = ipaddress.IPv6Address(ip)
-            else:
-                return False
-            # organization IPs are sorted by first octet for faster search
-            for range in org_ips.get(first_octet, {}):
-                if ip_obj in ipaddress.ip_network(range):
-                    return True
 
     def check_connection_without_dns_resolution(
         self, daddr, twid, profileid, timestamp, uid
@@ -1264,9 +1269,99 @@ class Module(Module, multiprocessing.Process):
             ssl_info, ssl_info_from_db
         )
 
+    def check_weird_http_method(self, msg):
+        """
+        detect weird http methods in zeek's weird.log
+        """
+
+        # what's the weird.log about
+        name = msg['name']
+
+        if 'unknown_HTTP_method' not in name:
+            return False
+
+        addl = msg['addl']
+        uid = msg['uid']
+        profileid = msg['profileid']
+        twid = msg['twid']
+        daddr = msg['daddr']
+        ts = msg['ts']
+
+        self.helper.set_evidence_weird_http_method(
+            profileid,
+            twid,
+            daddr,
+            addl,
+            uid,
+            ts
+        )
+
+    def check_non_http_port_80_conns(
+            self,
+            state,
+            daddr,
+            dport,
+            proto,
+            appproto,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        alerts on established connections on port 80 that are not HTTP
+        """
+        # if it was a valid http conn, the 'service' field aka
+        # appproto should be 'http'
+        if (
+                str(dport) == '80'
+                and proto.lower() == 'tcp'
+                and appproto.lower() != 'http'
+                and state == 'Established'
+        ):
+            self.helper.set_evidence_non_http_port_80_conn(
+                daddr,
+                profileid,
+                timestamp,
+                twid,
+                uid
+            )
+
+    def check_non_ssl_port_443_conns(
+            self,
+            state,
+            daddr,
+            dport,
+            proto,
+            appproto,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        alerts on established connections on port 443 that are not HTTPS (ssl)
+        """
+        # if it was a valid ssl conn, the 'service' field aka
+        # appproto should be 'ssl'
+        if (
+                str(dport) == '443'
+                and proto.lower() == 'tcp'
+                and appproto.lower() != 'ssl'
+                and state == 'Established'
+        ):
+            self.helper.set_evidence_non_ssl_port_443_conn(
+                daddr,
+                profileid,
+                timestamp,
+                twid,
+                uid
+            )
+
 
     def run(self):
         utils.drop_root_privs()
+        self.ssl_waiting_thread.start()
         while True:
             try:
                 # ---------------------------- new_flow channel
@@ -1285,8 +1380,6 @@ class Module(Module, multiprocessing.Process):
                     flow = data['flow']
                     # Convert flow to a dict
                     flow = json.loads(flow)
-                    # Convert the common fields to something that can
-                    # be interpreted
                     uid = next(iter(flow))
                     flow_dict = json.loads(flow[uid])
                     # Flow type is 'conn' or 'dns', etc.
@@ -1319,6 +1412,30 @@ class Module(Module, multiprocessing.Process):
                         self.check_long_connection(
                             dur, daddr, saddr, profileid, twid, uid, timestamp
                         )
+
+
+                    self.check_non_http_port_80_conns(
+                        state,
+                        daddr,
+                        dport,
+                        proto,
+                        appproto,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+                    self.check_non_ssl_port_443_conns(
+                        state,
+                        daddr,
+                        dport,
+                        proto,
+                        appproto,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
 
                     # --- Detect unknown destination ports ---
                     if dport:
@@ -1464,29 +1581,6 @@ class Module(Module, multiprocessing.Process):
                         msg = flow['msg']
                         note = flow['note']
 
-                        # --- Self signed CERTS ---
-                        # We're looking for self signed certs in notice.log in the 'msg' field
-                        # The self-signed certs apear in both ssl and notice log. But if we check both
-                        # we are going to have repeated evidences. So we only check the ssl log for those
-                        """
-                        if 'self signed' in msg or 'self-signed' in msg:
-                            profileid = data['profileid']
-                            twid = data['twid']
-                            ip = flow['daddr']
-                            ip_identification = __database__.getIPIdentification(ip)
-                            description = f'Self-signed certificate. Destination IP {ip}. {ip_identification}'
-                            confidence = 0.5
-                            threat_level = 'low'
-                            category = "Anomaly.Behaviour"
-                            type_detection = 'dstip'
-                            type_evidence = 'SelfSignedCertificate'
-                            detection_info = ip
-                            __database__.setEvidence(type_evidence, type_detection, detection_info,
-                                                     threat_level, confidence, description,
-                                                     timestamp, category, profileid=profileid,
-                                                     twid=twid, uid=uid)
-                        """
-
                         # --- Detect port scans from Zeek logs ---
                         # We're looking for port scans in notice.log in the note field
                         if 'Port_Scan' in note:
@@ -1501,38 +1595,12 @@ class Module(Module, multiprocessing.Process):
                                 uid,
                             )
 
-                        # --- Detect SSL cert validation failed ---
-                        # if (
-                        #     'SSL certificate validation failed' in msg
-                        #     and 'unable to get local issuer certificate'
-                        #     not in msg
-                        # ):
-                        #     ip = flow['daddr']
-                        #     # get the description inside parenthesis
-                        #     ip_identification = (
-                        #         __database__.getIPIdentification(ip)
-                        #     )
-                        #     description = (
-                        #         msg
-                        #         + f' Destination IP: {ip}. {ip_identification}'
-                        #     )
-                        #     self.helper.set_evidence_for_invalid_certificates(
-                        #         profileid,
-                        #         twid,
-                        #         ip,
-                        #         description,
-                        #         uid,
-                        #         timestamp,
-                        #     )
-                        #     # self.print(description, 3, 0)
-
                         # --- Detect horizontal portscan by zeek ---
                         if 'Address_Scan' in note:
                             # Horizontal port scan
-                            scanned_port = flow.get('scanned_port', '')
+                            # scanned_port = flow.get('scanned_port', '')
                             self.helper.set_evidence_horizontal_portscan(
                                 msg,
-                                scanned_port,
                                 timestamp,
                                 profileid,
                                 twid,
@@ -1573,7 +1641,11 @@ class Module(Module, multiprocessing.Process):
                         saddr = profileid.split('_')[1]
                         server_name = flow.get('server_name')
 
-                        self.check_pastebin_download(daddr, server_name, uid, timestamp, profileid, twid)
+                        # we'll be checking pastebin downloads of this ssl flow
+                        # later
+                        self.pending_ssl_flows.put(
+                            (daddr, server_name, uid, timestamp, profileid, twid)
+                        )
 
                         if 'self signed' in flow['validation_status']:
                             ip = flow['daddr']
@@ -1737,13 +1809,23 @@ class Module(Module, multiprocessing.Process):
                         uid,
                     )
 
+                message = __database__.get_message(self.c10)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_weird'):
+                    msg = json.loads(message['data'])
+                    self.check_weird_http_method(msg)
+
+
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            # except Exception as inst:
-            #     exception_line = sys.exc_info()[2].tb_lineno
-            #     self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            #     self.print(str(type(inst)), 0, 1)
-            #     self.print(str(inst.args), 0, 1)
-            #     self.print(str(inst), 0, 1)
-            #     return True
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(str(type(inst)), 0, 1)
+                self.print(str(inst.args), 0, 1)
+                self.print(str(inst), 0, 1)
+                return True

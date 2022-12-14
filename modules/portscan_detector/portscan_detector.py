@@ -44,7 +44,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.malicious_label = __database__.malicious_label
         self.separator = '_'
         # The minimum amount of ips to scan horizontal scan
-        self.port_scan_minimum_dips = 6
+        self.port_scan_minimum_dips = 5
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         self.pingscan_minimum_flows = 5
@@ -52,8 +52,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         # time in seconds to wait before alerting port scan
         self.time_to_wait_before_generating_new_alert = 25
         # list of tuples, each tuple is the args to setevidence
-        self.pending_vertical_ps_evidence = Queue()
-        self.pending_horizontal_ps_evidence = Queue()
+        self.pending_vertical_ps_evidence = {}
+        self.pending_horizontal_ps_evidence = {}
         # this flag will be true after the first portscan alert
         self.alerted_once_vertical_ps = False
         self.alerted_once_horizontal_ps = False
@@ -148,7 +148,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     cache_key = f'{profileid}:{twid}:dstip:{dport}:HorizontalPortscan'
                     prev_amount_dips = self.cache_det_thresholds.get(cache_key, 0)
 
-                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key, prev_amount_dips, amount_of_dips))
+                    # self.print('Key: {}. Prev dips: {}, Current: {}'.format(cache_key,
+                    # prev_amount_dips, amount_of_dips))
 
                     # We detect a scan every Threshold. So, if threshold is 3,
                     # we detect when there are 3, 6, 9, 12, etc. dips per port.
@@ -185,196 +186,91 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 amount_of_dips
                             )
                         else:
-                            # after alerting once, wait 10s to see if more packets/flows are coming
-                            self.pending_horizontal_ps_evidence.put(
-                                (
-                                    timestamp,
-                                    pkts_sent,
-                                    protocol,
-                                    profileid,
-                                    twid,
-                                    uids,
-                                    dport,
-                                    amount_of_dips
-                                )
-                            )
+                            # we will be combining further alerts to avoid alerting many times every portscan
+                            # for all the combined alerts, the following params should be equal
+                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
+                            evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
+                            try:
+                                self.pending_horizontal_ps_evidence[key].append(evidence_details)
+                            except KeyError:
+                                # first time seeing this key
+                                self.pending_horizontal_ps_evidence[key] = [evidence_details]
 
     def wait_for_vertical_scans(self):
-        """
-        This thread waits for 10s then checks if more vertical scans happened to modify the alert
-        """
-        # after 5 dips that aren't the same as the first one, we alert the first one
-        dips_counter = 1
-
         while True:
-            # this evidence is the one that triggered this thread
-            try:
-                evidence: dict = self.pending_vertical_ps_evidence.get(timeout=0.5)
-            except:
-                # nothing in queue
-                time.sleep(5)
-                continue
-
-            # unpack the old evidence (the one triggered the thread)
-            timestamp, \
-                pkts_sent, \
-                protocol, \
-                profileid, \
-                twid, \
-                uid, \
-                amount_of_dports, \
-                dstip = evidence
-
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
-            combined_evidence = 0
 
-            while True:
-                try:
-                    new_evidence = self.pending_vertical_ps_evidence.get(timeout=0.5)
-                except:
-                    # queue is empty
-                    break
+            for key, evidence_list in self.pending_vertical_ps_evidence.items():
+                # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
+                # each value here is a list of evidence that should be combined
+                profileid, twid, state, protocol, dstip = key.split('-')
+                final_evidence_uids = []
+                final_pkts_sent = 0
 
-                # These are the variables of the combined evidence we are generating
+                # combine all evidence that share the above key
+                for evidence in evidence_list:
+                    # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
+                    # in the final evidence, we'll be using the ts of the last evidence
+                    timestamp, pkts_sent, evidence_uids, amount_of_dports = evidence
+                    # since we're combining evidence, we want the uids of the final evidence
+                    # to be the sum of all the evidence we combined
+                    final_evidence_uids += evidence_uids
+                    final_pkts_sent += pkts_sent
 
-                timestamp, \
-                    pkts_sent2, \
-                    protocol2, \
-                    profileid2, \
-                    twid, \
-                    uid, \
-                    amount_of_dports2, \
-                    dstip2 = new_evidence
+                self.set_evidence_vertical_portscan(
+                    timestamp,
+                    final_pkts_sent,
+                    protocol,
+                    profileid,
+                    twid,
+                    final_evidence_uids,
+                    amount_of_dports,
+                    dstip
+                )
+            # reset the dict sinse we already combiner
+            self.pending_vertical_ps_evidence = {}
 
-                if (
-                        dstip == dstip2
-                        and profileid == profileid2
-                        and protocol == protocol2
-                ):
-
-                    # the last evidence contains the sum of all the dports and pkts sent found so far,
-                    # we shouldn't accumulate
-                    amount_of_dports = amount_of_dports2
-                    pkts_sent = pkts_sent2
-
-                    # set evidence if there's no more evidence to combine
-                    if self.pending_vertical_ps_evidence.empty():
-                        break
-                    # max evidence to combine before calling setevidence is 5
-                    # if we don't set a max evidence,
-                    # this loop will keep going forever for the same dstip without setting evidence
-                    combined_evidence += 1
-                    if combined_evidence == 5:
-                        break
-                else:
-                    # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
-                    # store it back in the queue until we're done with the current one
-                    dips_counter += 1
-                    self.pending_vertical_ps_evidence.put(new_evidence)
-                    if dips_counter == 5:
-                        dips_counter = 0
-                        break
-
-            self.set_evidence_vertical_portscan(
-                timestamp,
-                pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                uid,
-                amount_of_dports,
-                dstip
-            )
-        # todo we are not detecting second port scans
 
     def wait_for_horizontal_scans(self):
         """
-        This thread waits for 10s then checks if more horizontal scans happened to modify the alert
+        This thread waits for 10s then checks if more horizontal scans happened
+         to combine evidence
         """
-        # after 5 ports that aren't the same as the first one, we alert the first one
-        ports_counter = 1
         while True:
-            try:
-                # this evidence is the one that triggered this thread
-                evidence: dict = self.pending_horizontal_ps_evidence.get(timeout=0.5)
-            except:
-                # nothing in queue
-                time.sleep(5)
-                continue
-
-            # unpack the old evidence (the one triggered the thread)
-            timestamp, \
-                pkts_sent, \
-                protocol, \
-                profileid, \
-                twid, \
-                uids, \
-                dport, \
-                amount_of_dips = evidence
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
-            combined_evidence = 0
 
-            while True:
-                try:
-                    new_evidence = self.pending_horizontal_ps_evidence.get(timeout=0.5)
-                except:
-                    # queue is empty
-                    break
+            for key, evidence_list in self.pending_horizontal_ps_evidence.items():
+                # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
+                # each value here is a list of evidence that should be combined
+                profileid, twid, state, protocol, dport = key.split('-')
+                final_evidence_uids = []
+                final_pkts_sent = 0
+                # combine all evidence that share the above key
+                for evidence in evidence_list:
+                    # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
+                    # in the final evidence, we'll be using the ts of the last evidence
+                    timestamp, pkts_sent, evidence_uids, amount_of_dips = evidence
+                    # since we're combining evidence, we want the uids of the final evidence
+                    # to be the sum of all the evidence we combined
+                    final_evidence_uids += evidence_uids
+                    final_pkts_sent += pkts_sent
 
-                # These are the variables of the evidence that we should combine
-                # if they match the variable of the evidence above
-                timestamp, \
-                    pkts_sent2, \
-                    protocol2, \
-                    profileid2, \
-                    twid, \
-                    uids2, \
-                    dport2, \
-                    amount_of_dips2 = new_evidence
-                if (
-                        dport == dport2
-                        and profileid == profileid2
-                        and protocol == protocol2
-                ):
+                self.set_evidence_horizontal_portscan(
+                    timestamp,
+                    final_pkts_sent,
+                    protocol,
+                    profileid,
+                    twid,
+                    final_evidence_uids,
+                    dport,
+                    amount_of_dips
+                )
+            # reset the dict sinse we already combiner
+            self.pending_horizontal_ps_evidence = {}
 
-                    # the last evidence contains the sum of all the dips and pkts sent found so far,
-                    # we shouldn't accumulate
-                    amount_of_dips = amount_of_dips2
-                    pkts_sent = pkts_sent2
-                    uids += uids2
-                    # set evidence if there's no more evidence to combine
-                    if self.pending_horizontal_ps_evidence.empty():
-                        break
-                    # max evidence to combine before calling setevidence is 5
-                    # if we don't set a max evidence,
-                    # this loop will keep going forever for the same dport without setting evidence
-                    combined_evidence += 1
-                    if combined_evidence == 5:
-                        break
-                else:
-                    # this is a separate ip performing a portscan, we shouldn't accumulate its evidence
-                    # store it back in the queue until we're done with the current one
-                    ports_counter += 1
-                    self.pending_horizontal_ps_evidence.put(new_evidence)
-                    # after 5 evidence that are not detecting the same port, we alert the ones we already accumulated,
-                    # and start accumulating again
-                    if ports_counter == 5:
-                        ports_counter = 0
-                        break
-
-            self.set_evidence_horizontal_portscan(
-                timestamp,
-                pkts_sent,
-                protocol,
-                profileid,
-                twid,
-                uids,
-                dport,
-                amount_of_dips
-            )
 
     def set_evidence_horizontal_portscan(
             self,
@@ -429,9 +325,6 @@ class PortScanProcess(Module, multiprocessing.Process):
             profileid, type_evidence, self.malicious_label
         )
         self.print(description, 3, 0)
-
-
-
 
     def set_evidence_vertical_portscan(
             self,
@@ -504,7 +397,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 dstips = __database__.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
-
                 # For each dstip, see if the amount of ports connections is over the threshold
                 for dstip in dstips.keys():
                     ### PortScan Type 1. Direction OUT
@@ -544,19 +436,19 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 dstip
                             )
                         else:
-                            # after alerting once, wait 10s to see if more packets/flows are coming
-                            self.pending_vertical_ps_evidence.put(
-                                (
-                                    timestamp,
-                                    pkts_sent,
-                                    protocol,
-                                    profileid,
-                                    twid,
-                                    uid,
-                                    amount_of_dports,
-                                    dstip
-                                )
-                            )
+                             # we will be combining further alerts to avoid alerting
+                             # many times every portscan
+                            # for all the combined alerts, the following params should be equal
+                            key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
+
+                            evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
+
+                            try:
+                                self.pending_vertical_ps_evidence[key].append(evidence_details)
+                            except KeyError:
+                                # first time seeing this key
+                                self.pending_vertical_ps_evidence[key] = [evidence_details]
+
 
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):

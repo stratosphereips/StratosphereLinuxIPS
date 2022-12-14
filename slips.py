@@ -21,6 +21,8 @@ from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from exclusiveprocess import Lock, CannotAcquireLock
+
 import signal
 import sys
 import redis
@@ -44,7 +46,7 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '0.9.6'
+version = '1.0.0'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -243,7 +245,7 @@ class Main:
         """
         if self.mode == 'daemonized':
             self.daemon.stop()
-        sys.exit(-1)
+        sys.exit(0)
 
 
     def get_modules(self, to_ignore):
@@ -444,9 +446,16 @@ class Main:
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
-        update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
-        update_manager.update_ports_info()
-        update_manager.update_org_files()
+        try:
+            # only one instance of slips should be able to update ports and orgs at a time
+            # so this function will only be allowed to run from 1 slips instance.
+            with Lock(name="slips_ports_and_orgs"):
+                update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
+                update_manager.update_ports_info()
+                update_manager.update_org_files()
+        except CannotAcquireLock:
+            # another instance of slips is updating ports and orgs
+            return
 
 
     def add_metadata(self):
@@ -1519,6 +1528,21 @@ class Main:
         print(slips_version)
 
 
+    def check_if_port_is_in_use(self):
+        if self.redis_port == 6379:
+            # even if it's already in use, slips will override it
+            return
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("localhost", self.redis_port))
+        except OSError:
+            print(f"[Main] Port {self.redis_port} already is use by another process. "
+                       f"Choose another port using -P <portnumber> \n"
+                       f"Or kill your open redis ports using: ./slips.py -k ")
+            self.terminate_slips()
+
+
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1557,6 +1581,8 @@ class Main:
                     self.terminate_slips()
             else:
                 self.redis_port = 6379
+
+            self.check_if_port_is_in_use()
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.

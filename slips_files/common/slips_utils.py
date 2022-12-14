@@ -107,12 +107,17 @@ class Utils(object):
 
         if domain.startswith('http://'):
             data = data[7:]
-
-        if domain.startswith('https://'):
+        elif domain.startswith('https://'):
             data = data[8:]
 
         if validators.domain(data):
             return 'domain'
+        elif '/' in data:
+            return 'url'
+
+        if validators.sha256(data):
+            return 'sha256'
+
 
 
     def drop_root_privs(self):

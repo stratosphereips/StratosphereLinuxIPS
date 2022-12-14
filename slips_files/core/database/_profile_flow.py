@@ -99,7 +99,7 @@ class ProfilingFlowsDatabase(object):
         """
 
         # Get the hash of the timewindow
-        profileid_twid = profileid + self.separator + twid
+        profileid_twid = f'{profileid}{self.separator}{twid}'
 
         # Get the DstIPs data for this tw in this profile
         # The format is {'1.1.1.1' :  3}
@@ -301,7 +301,7 @@ class ProfilingFlowsDatabase(object):
         try:
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
-            data = self.r.hget(profileid + self.separator + twid, key)
+            data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
             value = {}
             if data:
                 portdata = json.loads(data)
@@ -345,6 +345,7 @@ class ProfilingFlowsDatabase(object):
         dport = columns['dport']
         totbytes = columns['bytes']
         pkts = columns['pkts']
+        spkts = columns['spkts']
         dpkts = columns.get('dpkts', 0)
         state = columns['state']
         proto = columns['proto'].upper()
@@ -353,7 +354,6 @@ class ProfilingFlowsDatabase(object):
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
-        spkts = columns['spkts']
         # sport = columns['sport']
         # sbytes = columns['sbytes']
 
@@ -418,7 +418,7 @@ class ProfilingFlowsDatabase(object):
         )
         # Store this data in the profile hash
         self.r.hset(
-            profileid + self.separator + twid,
+            f'{profileid}{self.separator}{twid}',
             key_name,
             json.dumps(profileid_twid_data)
         )
@@ -441,7 +441,6 @@ class ProfilingFlowsDatabase(object):
         the total packets sent by this ip,
         total bytes sent by this ip
         """
-
         dport = str(dport)
         spkts = int(spkts)
         pkts = int(pkts)
@@ -722,10 +721,23 @@ class ProfilingFlowsDatabase(object):
         uid = columns['uid']
         ip = str(ip_address)
         spkts = columns['spkts']
+        state_hist = columns.get('state_hist','')
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
         # sbytes = columns['sbytes']
+
+        if '^' in state_hist:
+            # The majority of the FP with horizontal port scan detection happen because a
+            # benign computer changes wifi, and many not established conns are redone,
+            # which look like a port scan to 10 webpages. To avoid this, we IGNORE all
+            # the flows that have in the history of flags (field history in zeek), the ^,
+            # that means that the flow was swapped.
+            # The below key_name is only used by the portscan module to check for horizontal
+            # portscan, which means we can safely ignore it here and it won't affect the rest
+            # of slips
+            return False
+
 
         # Choose which port to use based if we were asked Dst or Src
         port = str(sport) if port_type == 'Src' else str(dport)
@@ -785,7 +797,7 @@ class ProfilingFlowsDatabase(object):
 
         old_profileid_twid_data[port] = port_data
         data = json.dumps(old_profileid_twid_data)
-        hash_key = profileid + self.separator + twid
+        hash_key = f'{profileid}{self.separator}{twid}'
         key_name = f'{port_type}Ports{role}{proto}{summaryState}'
         self.r.hset(hash_key, key_name, str(data))
         self.markProfileTWAsModified(profileid, twid, starttime)
@@ -917,7 +929,7 @@ class ProfilingFlowsDatabase(object):
             return {}
         data = {}
         temp = self.r.hget(
-            profileid + self.separator + twid + self.separator + 'flows', uid
+            f'{profileid}{self.separator}{twid}{self.separator}flows', uid
         )
         data[uid] = temp
         # Get the dictionary format
@@ -1162,17 +1174,26 @@ class ProfilingFlowsDatabase(object):
             uid,
             data,
         )
-        to_send = {
+
+        http_flow = {
             'profileid': profileid,
             'twid': twid,
             'flow': data,
             'stime': stime,
         }
-        to_send = json.dumps(to_send)
+        to_send = json.dumps(http_flow)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
 
         self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
+
+        http_flow.pop('flow', None)
+        http_flow.update(
+            {
+                'uid': uid,
+            }
+        )
+
         # Check if the host domain is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
         if len(host) > 2:
@@ -1186,6 +1207,25 @@ class ProfilingFlowsDatabase(object):
             }
             data_to_send = json.dumps(data_to_send)
             self.publish('give_threat_intelligence', data_to_send)
+
+            self.give_url_to_ti(host, uri, http_flow, uid)
+        else:
+            # use the daddr since there's no host
+            self.give_url_to_ti(daddr, uri, http_flow, uid)
+
+    def give_url_to_ti(self, host, uri, http_flow, uid):
+        """
+        :param host: can be an ip or a domain
+        """
+        # give the url to ti module
+        http_flow.update(
+            {
+                'to_lookup': f'http://{host}{uri}'
+            }
+        )
+        to_send = json.dumps(http_flow)
+        self.publish('give_threat_intelligence', to_send)
+
 
     def add_out_ssh(
         self,

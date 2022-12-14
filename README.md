@@ -1,6 +1,6 @@
 <h1 align="center"> 
 
-Slips v0.9.6
+Slips v1.0.0
 
 
 <h3 align="center"> 
@@ -8,9 +8,6 @@ Slips v0.9.6
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
 </h3>
 
-##### Repo Stars Over Time
-
-[![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
 [![GitHub version](https://img.shields.io/github/v/tag/stratosphereips/StratosphereLinuxIPS?label=version)](https://github.com/stratosphereips/StratosphereLinuxIPS)
@@ -418,3 +415,7 @@ Slips was funded by the following organizations.
 - AIC Group, Czech Technical University in Prague, https://www.aic.fel.cvut.cz/
 - Avast Software, https://www.avast.com/
 - CESNET, https://www.cesnet.cz/
+
+# Repo Stars Over Time
+
+[![Stargazers over time](https://starchart.cc/stratosphereips/StratosphereLinuxIPS.svg)](https://starchart.cc/stratosphereips/StratosphereLinuxIPS)

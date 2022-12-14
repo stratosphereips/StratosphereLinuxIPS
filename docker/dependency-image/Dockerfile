@@ -5,7 +5,7 @@
 # because it's only used for unit testing,
 # and we don't have unit tests for kalipso yet
 
-FROM ubuntu
+FROM ubuntu:20.04
 
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive

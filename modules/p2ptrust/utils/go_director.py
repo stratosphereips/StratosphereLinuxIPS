@@ -429,7 +429,6 @@ class GoDirector:
         # with the width from slips.conf and the starttime as the report time
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
-            # print(f"@@@@@@@@@@@@@@@@@@ created profile for {key} reported by {report_time} .. {report_time} .. {self.width}")
             __database__.addProfile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 

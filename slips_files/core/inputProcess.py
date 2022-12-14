@@ -82,7 +82,6 @@ class InputProcess(multiprocessing.Process):
             'packet_filter',
             'stats',
             'ocsp',
-            'weird',
             'reporter',
             'x509',
         }
@@ -523,6 +522,10 @@ class InputProcess(multiprocessing.Process):
         self.event_observer.schedule(
             event_handler, self.zeek_folder, recursive=True
         )
+        # monitor changes to whitelist
+        self.event_observer.schedule(
+            event_handler, 'config/', recursive=True
+        )
         # Start the observer
         self.event_observer.start()
 
@@ -680,7 +683,7 @@ class InputProcess(multiprocessing.Process):
         ]
         command += rotation
         command += packet_filter
-        self.print(f'Zeek command: {command}', 3, 0)
+        self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
         zeek = subprocess.Popen(
             command,

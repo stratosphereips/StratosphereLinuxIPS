@@ -1,9 +1,10 @@
-import configparser
-import time
-import os
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.whitelist import Whitelist
+
+import time
+import os
 import json
 import ipaddress
 import validators
@@ -12,7 +13,9 @@ import requests
 import sys
 import asyncio
 import datetime
-from slips_files.core.whitelist import Whitelist
+
+
+
 
 class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):
@@ -174,7 +177,6 @@ class UpdateFileManager:
         # there are ports that are by default considered unknown to slips,
         # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
         with open(ports_info_filepath, 'r') as f:
             line_number = 0
             while True:
@@ -186,13 +188,31 @@ class UpdateFileManager:
                 # skip the header and the comments at the begining
                 if line.startswith('#') or line.startswith('"Organization"'):
                     continue
+
                 line = line.split(',')
                 try:
                     organization, ip = line[0], line[1]
-                    portproto = f'{line[2]}/{line[3].lower().strip()}'
-                    __database__.set_organization_of_port(
-                        organization, ip, portproto
-                    )
+                    ports_range = line[2]
+                    proto = line[3].lower().strip()
+
+                    # is it a range of ports or a single port
+                    if '-' in ports_range:
+                        # it's a range of ports
+                        first_port, last_port = ports_range.split('-')
+                        first_port = int(first_port)
+                        last_port = int(last_port)
+
+                        for port in range(first_port, last_port+1):
+                            portproto = f'{port}/{proto}'
+                            __database__.set_organization_of_port(
+                                organization, ip, portproto
+                            )
+                    else:
+                        # it's a single port
+                        portproto = f'{ports_range}/{proto}'
+                        __database__.set_organization_of_port(
+                            organization, ip, portproto
+                        )
 
                 except IndexError:
                     self.print(
@@ -526,7 +546,7 @@ class UpdateFileManager:
                     )
                 else:
                     self.log(
-                        f'The data {data} is not valid. It was found in {filename}.', 3, 0,
+                        f'The data {data} is not valid. It was found in {filename}.'
                     )
                     continue
         # Add all loaded malicious sha1 to the database
@@ -626,7 +646,7 @@ class UpdateFileManager:
             }
             # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
-            response = requests.get(url, auth=auth, json=data).json()
+            response = requests.get(url, timeout=5, auth=auth, json=data).json()
             # extract domains only from the response
             try:
                 response = response['indicators']
@@ -1038,7 +1058,7 @@ class UpdateFileManager:
             try:
                 filesize = os.path.getsize(ti_file_path)
             except FileNotFoundError:
-                # happens inntegration tests, another instance of slips deleted the file
+                # happens in integration tests, another instance of slips deleted the file
                 return False
 
             if filesize == 0:
@@ -1084,7 +1104,7 @@ class UpdateFileManager:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
                 data_column = self.get_data_column(amount_of_columns, line_fields, ti_file_path)
-                if data_column == 'False':  # don't use if not becayuse it may be 0
+                if data_column == 'False':  # don't use if not because it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it
@@ -1411,7 +1431,7 @@ class UpdateFileManager:
 
     def update_mac_db(self, response):
         if response.status_code != 200:
-            return
+            return False
         self.log(f'Updating the MAC database.')
         path_to_mac_db = 'databases/macaddress-db.json'
 
@@ -1421,7 +1441,7 @@ class UpdateFileManager:
             mac_db.write(mac_info)
 
         __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
-
+        return True
 
     def update_online_whitelist(self, response):
         """
