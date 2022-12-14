@@ -27,9 +27,9 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, redis_port, monitored_zeek_files, input_type):
+    def __init__(self, redis_port, dir_to_monitor, input_type):
         super().__init__(self.REGEX)
-        self.monitored_zeek_files = monitored_zeek_files
+        self.dir_to_monitor = dir_to_monitor
         __database__.start(redis_port)
         utils.drop_root_privs()
         self.input_type = input_type
@@ -55,14 +55,13 @@ class FileEventHandler(RegexMatchingEventHandler):
         # so if zeek recieves a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
-
         if 'reporter' in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
-            for file in os.listdir(self.monitored_zeek_files):
+            for file in os.listdir(self.dir_to_monitor):
                 if 'reporter' not in file:
                     continue
-                with open(os.path.join(self.monitored_zeek_files, file), 'r') as f:
+                with open(os.path.join(self.dir_to_monitor, file), 'r') as f:
                     while line := f.readline():
                         if 'termination' in line:
                             __database__.publish('finished_modules', 'stop_slips')

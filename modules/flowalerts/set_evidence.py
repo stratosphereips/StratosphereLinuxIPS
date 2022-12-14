@@ -390,16 +390,16 @@ class Helper:
         )
 
     def set_evidence_horizontal_portscan(
-        self, msg, scanned_port, timestamp, profileid, twid, uid
+        self, msg, timestamp, profileid, twid, uid
     ):
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
         threat_level = 'medium'
         description = f'horizontal port scan by Zeek engine. {msg}'
         type_evidence = 'HorizontalPortscan'
-        type_detection = 'dport'
+        type_detection = 'srcip'
         source_target_tag = 'Recon'
-        detection_info = scanned_port
+        detection_info = profileid.split('_')[-1]
         category = 'Recon.Scanning'
         # get the number of unique hosts scanned on a specific port
         conn_count = int(msg.split('least')[1].split('unique')[0])
