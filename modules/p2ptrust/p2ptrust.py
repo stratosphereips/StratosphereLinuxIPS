@@ -167,7 +167,6 @@ class Trust(Module, multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
-        print(f"@@@@@@@@@@@@@@@@@@  create_p2p_logfile is {self.create_p2p_logfile}")
 
 
     def get_used_interface(self):
