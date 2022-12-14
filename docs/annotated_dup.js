@@ -115,6 +115,9 @@ var annotated_dup =
         [ "threat_intelligence", "namespaceslips_1_1modules_1_1threat__intelligence.html", [
           [ "threat_intelligence", "namespaceslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence.html", [
             [ "Module", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module" ]
+          ] ],
+          [ "urlhaus", "namespaceslips_1_1modules_1_1threat__intelligence_1_1urlhaus.html", [
+            [ "URLhaus", "classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html", "classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus" ]
           ] ]
         ] ],
         [ "timeline", "namespaceslips_1_1modules_1_1timeline.html", [

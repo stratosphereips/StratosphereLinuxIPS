@@ -128,12 +128,8 @@ $(document).ready(function(){initNavTree('classslips_1_1modules_1_1http__analyze
   <div class="headertitle"><div class="title">slips.modules.http_analyzer.http_analyzer.Module Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="dynheader">
-Inheritance diagram for slips.modules.http_analyzer.http_analyzer.Module:</div>
-<div class="dyncontent">
-<div class="center"><iframe scrolling="no" frameborder="0" src="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module__inherit__graph.svg" width="291" height="124"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe>
-</div>
-<center><span class="legend">[<a target="top" href="graph_legend.html">legend</a>]</span></center></div>
+
+<p>Inherits Module, and multiprocessing.Process.</p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
@@ -151,8 +147,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a11a445fb5421c9b97a449e1063260ff1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af1a20930183a77aa9c2da76c8e4ec3e0"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#af1a20930183a77aa9c2da76c8e4ec3e0">get_ua_info_online</a> (self, user_agent)</td></tr>
 <tr class="separator:af1a20930183a77aa9c2da76c8e4ec3e0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af597dc96d600beac8fbd9930082745bd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#af597dc96d600beac8fbd9930082745bd">get_user_agent_info</a> (self, user_agent, profileid)</td></tr>
-<tr class="separator:af597dc96d600beac8fbd9930082745bd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aac6bb378136555917b092262d092cf7a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aac6bb378136555917b092262d092cf7a">get_user_agent_info</a> (self, str user_agent, str profileid)</td></tr>
+<tr class="separator:aac6bb378136555917b092262d092cf7a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae9f0e2d64682e626544ed3c576396044"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ae9f0e2d64682e626544ed3c576396044">extract_info_from_UA</a> (self, user_agent, profileid)</td></tr>
 <tr class="separator:ae9f0e2d64682e626544ed3c576396044"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a145f88d3bbc68ca285fea22229daed8e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a145f88d3bbc68ca285fea22229daed8e">check_multiple_UAs</a> (self, dict cached_ua, dict user_agent, timestamp, profileid, twid, uid)</td></tr>
@@ -667,8 +663,8 @@ Doesn't check multiple ssh clients
 </pre> 
 </div>
 </div>
-<a id="af597dc96d600beac8fbd9930082745bd" name="af597dc96d600beac8fbd9930082745bd"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af597dc96d600beac8fbd9930082745bd">&#9670;&#160;</a></span>get_user_agent_info()</h2>
+<a id="aac6bb378136555917b092262d092cf7a" name="aac6bb378136555917b092262d092cf7a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac6bb378136555917b092262d092cf7a">&#9670;&#160;</a></span>get_user_agent_info()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -682,13 +678,13 @@ Doesn't check multiple ssh clients
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">str&#160;</td>
           <td class="paramname"><em>user_agent</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
+          <td class="paramtype">str&#160;</td>
           <td class="paramname"><em>profileid</em>&#160;</td>
         </tr>
         <tr>
@@ -698,7 +694,7 @@ Doesn't check multiple ssh clients
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment">Get OS and browser info about a user agent
+<pre class="fragment">Get OS and browser info about a user agent online
 </pre> 
 </div>
 </div>

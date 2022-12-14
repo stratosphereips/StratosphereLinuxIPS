@@ -26,10 +26,14 @@ var searchData=
   ['updatemanager_23',['UpdateManager',['../classslips_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager.html',1,'slips::modules::update_manager::update_manager']]],
   ['url_24',['url',['../classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#a4a4c68091650984fecb617fed19ee16f',1,'slips.modules.CESNET.warden_client.Client.url()'],['../classslips_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a4fc353b9b55f48e1dbe251d942dd441d',1,'slips.modules.virustotal.virustotal.Module.url()']]],
   ['url_5ffeeds_25',['url_feeds',['../classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5cdf0a6a96ada112e171a1a282eabecf',1,'slips::modules::update_manager::update_file_manager::UpdateFileManager']]],
-  ['urlhaus_26',['urlhaus',['../classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a11d2799328e26645eb86d379046e7659',1,'slips::modules::threat_intelligence::threat_intelligence::Module']]],
-  ['urlhaus_5fsession_27',['urlhaus_session',['../classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#ad20486f7256e4d94468fe56332b95b18',1,'slips::modules::threat_intelligence::threat_intelligence::Module']]],
-  ['use_5fhttps_28',['use_https',['../classslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module.html#a48c13271b0ab8950e6621c5aeaba044a',1,'slips::modules::exporting_alerts::exporting_alerts::Module']]],
-  ['utils_29',['Utils',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html',1,'slips::slips_files::common::slips_utils']]],
-  ['utils_30',['utils',['../namespaceslips_1_1slips__files_1_1common_1_1slips__utils.html#ab3513d167bbf99474ecdf25533f46664',1,'slips::slips_files::common::slips_utils']]],
-  ['utils_2epy_31',['utils.py',['../utils_8py.html',1,'']]]
+  ['urlhaus_26',['URLhaus',['../classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html',1,'slips::modules::threat_intelligence::urlhaus']]],
+  ['urlhaus_27',['urlhaus',['../classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a24a7db4dd9b6592cbe087df979c45ef1',1,'slips::modules::threat_intelligence::threat_intelligence::Module']]],
+  ['urlhaus_2epy_28',['urlhaus.py',['../urlhaus_8py.html',1,'']]],
+  ['urlhaus_5fbase_5furl_29',['URLHAUS_BASE_URL',['../namespaceslips_1_1modules_1_1threat__intelligence_1_1urlhaus.html#a1342e33d45c97552573d4d889b278a19',1,'slips::modules::threat_intelligence::urlhaus']]],
+  ['urlhaus_5flookup_30',['urlhaus_lookup',['../classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html#ac0377b721b867bbaae67da70de3278fd',1,'slips::modules::threat_intelligence::urlhaus::URLhaus']]],
+  ['urlhaus_5fsession_31',['urlhaus_session',['../classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html#aa360ca3f8cc858974ec2aa59ac730438',1,'slips::modules::threat_intelligence::urlhaus::URLhaus']]],
+  ['use_5fhttps_32',['use_https',['../classslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module.html#a48c13271b0ab8950e6621c5aeaba044a',1,'slips::modules::exporting_alerts::exporting_alerts::Module']]],
+  ['utils_33',['Utils',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html',1,'slips::slips_files::common::slips_utils']]],
+  ['utils_34',['utils',['../namespaceslips_1_1slips__files_1_1common_1_1slips__utils.html#ab3513d167bbf99474ecdf25533f46664',1,'slips::slips_files::common::slips_utils']]],
+  ['utils_2epy_35',['utils.py',['../utils_8py.html',1,'']]]
 ];

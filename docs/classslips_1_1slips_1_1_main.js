@@ -3,6 +3,7 @@ var classslips_1_1slips_1_1_main =
     [ "__init__", "classslips_1_1slips_1_1_main.html#a9cf741273a68d22c9b01c86be60a018a", null ],
     [ "add_metadata", "classslips_1_1slips_1_1_main.html#ad8c1a571d02f225e6749a9e4166f6547", null ],
     [ "check_given_flags", "classslips_1_1slips_1_1_main.html#add5992988743687b77e539838afae6bf", null ],
+    [ "check_if_port_is_in_use", "classslips_1_1slips_1_1_main.html#a3a686449dcc62ac0a8a7c211fe4c1c0a", null ],
     [ "check_input_type", "classslips_1_1slips_1_1_main.html#a503c711a909c6bfbbc35231127b8e3e1", null ],
     [ "check_output_redirection", "classslips_1_1slips_1_1_main.html#a1e6e4038d01ddddfee9042ece54bfee8", null ],
     [ "check_redis_database", "classslips_1_1slips_1_1_main.html#abfbe5800b301fdf3c745469125ad4bed", null ],

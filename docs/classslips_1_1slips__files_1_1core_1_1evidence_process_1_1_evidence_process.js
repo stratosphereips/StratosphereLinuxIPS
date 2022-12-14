@@ -7,7 +7,7 @@ var classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process 
     [ "clean_file", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a8ecf2b82c36cba3cc4345b1a444fda28", null ],
     [ "clear_logs_dir", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a53816c6c46801d9cc98fc389749fcf7d", null ],
     [ "decide_blocking", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a0e76dd6e20d67510a08ea450d875450c", null ],
-    [ "delete_alerted_evidence", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a60ec6625a5e2d16e1ba239b7a690344b", null ],
+    [ "delete_alerted_evidence", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a0dffb2f7a9e45a16427118f12c8acc02", null ],
     [ "delete_evidence_done_by_others", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#afff58d61cea786b7259a9d26f5517092", null ],
     [ "delete_whitelisted_evidence", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a39962ea5d7b1bebe2d69806cea969a98", null ],
     [ "format_blocked_srcip_evidence", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a30463c2d8ab8f2735fea4c09bb4aa76b", null ],

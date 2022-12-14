@@ -127,12 +127,8 @@ $(document).ready(function(){initNavTree('classslips_1_1slips__files_1_1core_1_1
   <div class="headertitle"><div class="title">slips.slips_files.core.profilerProcess.ProfilerProcess Class Reference</div></div>
 </div><!--header-->
 <div class="contents">
-<div class="dynheader">
-Inheritance diagram for slips.slips_files.core.profilerProcess.ProfilerProcess:</div>
-<div class="dyncontent">
-<div class="center"><iframe scrolling="no" frameborder="0" src="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process__inherit__graph.svg" width="215" height="124"><p><b>This browser is not able to show SVG: try Firefox, Chrome, Safari, or Opera instead.</b></p></iframe>
-</div>
-<center><span class="legend">[<a target="top" href="graph_legend.html">legend</a>]</span></center></div>
+
+<p>Inherits multiprocessing.Process.</p>
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
@@ -198,6 +194,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a4554e909d80c17bc7ac29e6745b7588d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ade1d2bfa21be42ba6185923a7d62298f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ade1d2bfa21be42ba6185923a7d62298f">handle_arp</a> (self)</td></tr>
 <tr class="separator:ade1d2bfa21be42ba6185923a7d62298f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab06d9c81e0d7bbd7fae6a5c3a0d9e70f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ab06d9c81e0d7bbd7fae6a5c3a0d9e70f">handle_weird</a> (self)</td></tr>
+<tr class="separator:ab06d9c81e0d7bbd7fae6a5c3a0d9e70f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6aa20af717bbdd1b3239787ca7148b42"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a6aa20af717bbdd1b3239787ca7148b42">store_features_going_out</a> (self)</td></tr>
 <tr class="separator:a6aa20af717bbdd1b3239787ca7148b42"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae8e3d02b7dd80bb943ceb20c99091da9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae8e3d02b7dd80bb943ceb20c99091da9">store_features_going_in</a> (self, <a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a33c8c3d1dcc0c96af6c5b7d9e28842fb">profileid</a>, <a class="el" href="classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aa13182964b639ac3c228f3bf1ee8a3da">twid</a>)</td></tr>
@@ -590,7 +588,7 @@ Outputs can be: zeek, suricata, argus, zeek-tabs
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment"> " Send files.log data to new_downloaded_file channel in vt module to see if it's malicious</pre> 
+<pre class="fragment"> Send files.log data to new_downloaded_file channel in vt module to see if it's malicious</pre> 
 </div>
 </div>
 <a id="a87b61aeb0956ea4e8a59eac4c4cf8362" name="a87b61aeb0956ea4e8a59eac4c4cf8362"></a>
@@ -735,6 +733,25 @@ Outputs can be: zeek, suricata, argus, zeek-tabs
       </table>
 </div><div class="memdoc">
 
+</div>
+</div>
+<a id="ab06d9c81e0d7bbd7fae6a5c3a0d9e70f" name="ab06d9c81e0d7bbd7fae6a5c3a0d9e70f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab06d9c81e0d7bbd7fae6a5c3a0d9e70f">&#9670;&#160;</a></span>handle_weird()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips_files.core.profilerProcess.ProfilerProcess.handle_weird </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">handles weird.log zeek flows
+</pre> 
 </div>
 </div>
 <a id="ae08d7808b9fa75f810cd1dc28af442f8" name="ae08d7808b9fa75f810cd1dc28af442f8"></a>
