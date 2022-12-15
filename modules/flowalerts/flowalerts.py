@@ -555,7 +555,7 @@ class Module(Module, multiprocessing.Process):
 
         flow_domain = rdns or SNI
         for org in utils.supported_orgs:
-            if self.whitelist.is_ip_asn_in_org_asn(ip_asn, org):
+            if self.whitelist.is_ip_asn_in_org_asn(ip, org):
                 return True
 
             if flow_domain:
@@ -618,7 +618,7 @@ class Module(Module, multiprocessing.Process):
         # don't alert a Connection Without DNS until 5 seconds has passed
         # in real time from the time of this checking.
 
-        # Create a timer thread that will wait 5 seconds for the dns to arrive and then check again
+        # Create a timer thread that will wait 15 seconds for the dns to arrive and then check again
         # self.print(f'Cache of conns not to check: {self.conn_checked_dns}')
         if uid not in self.connections_checked_in_conn_dns_timer_thread:
             # comes here if we haven't started the timer thread for this connection before
@@ -641,7 +641,6 @@ class Module(Module, multiprocessing.Process):
                     profileid, daddr
             ):
                 return False
-
             if self.is_well_known_org(daddr):
                 # if the SNI or rDNS of the IP matches a well-known org, then this is a FP
                 return False
