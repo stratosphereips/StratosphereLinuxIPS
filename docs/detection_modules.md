@@ -225,7 +225,7 @@ File hashes and URLs aren't supported in TI feeds.
 
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-URLhaus: for domains and hashes lookups (for each downloaded file)
+URLhaus: for each url seen in http.log and downloaded file seen in files.log
 Spamhaus: for IP lookups
 Circl.lu: for hash lookups (for each downloaded file)
 
@@ -367,9 +367,11 @@ Update manager is responsible for updating all remote TI files (including SSL an
 
 By default, local slips files (organization_info, ports_info, etc.) are 
 cached to avoid loading and parsing
+
 them everytime we start slips. However, they are updated automatically by 
 the update manager if they were changed on disk.
 
+Only one slips instance is allowed to be using the update manager at a time to avoid race conditions.
 
 ## IP Info Module
 
@@ -494,7 +496,7 @@ Available detection are:
 Due to the usage of empty connections to popular site by malware to check for internet connectivity,
 We consider this type of behaviour suspicious activity that shouldn't happen
 
-We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' etc.
+We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' , 'duckduckgo.com' etc.
 
 ### Suspicious user agents
 
@@ -648,7 +650,7 @@ maclookup.app -> For getting MAC vendor info if no info was found in the local m
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
 virustotal.com -> For getting scores about domains, IPs and URLs 
-urlhaus-api.abuse.ch -> For getting info about contacted domains and downloaded files 
+urlhaus-api.abuse.ch -> For getting info about URLs and downloaded files
 check.torproject.org -> For getting info about tor exist nodes.
 cert.pl -> Used in our list of TI files.
 abuse.ch -> Used by urlhaus for getting info about contacted domains and downloaded files.

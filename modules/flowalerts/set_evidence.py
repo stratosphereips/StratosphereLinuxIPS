@@ -64,6 +64,95 @@ class Helper:
             uid=uid,
         )
 
+
+
+    def set_evidence_non_http_port_80_conn(
+        self, daddr ,profileid,timestamp, twid, uid
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'dstip'
+        type_evidence = 'Non-HTTP-Port-80-Connection'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+
+        description = f'non-HTTP established connection to port 80.' \
+                      f' destination IP: {daddr} {ip_identification}'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+    def set_evidence_non_ssl_port_443_conn(
+        self, daddr ,profileid,timestamp, twid, uid
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'dstip'
+        type_evidence = 'Non-SSL-Port-443-Connection'
+        detection_info = daddr
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'non-SSL established connection to port 443.' \
+                      f' destination IP: {daddr} {ip_identification}'
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
+    def set_evidence_weird_http_method(
+        self,
+        profileid,
+        twid,
+        daddr,
+        weird_method,
+        uid,
+        timestamp,
+    ):
+        confidence = 0.9
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_detection = 'srcip'
+        type_evidence = 'WeirdHTTPMethod'
+        detection_info = profileid.split("_")[-1]
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_incompatible_CN(
         self, org, timestamp, daddr, profileid, twid, uid
     ):
@@ -301,16 +390,16 @@ class Helper:
         )
 
     def set_evidence_horizontal_portscan(
-        self, msg, scanned_port, timestamp, profileid, twid, uid
+        self, msg, timestamp, profileid, twid, uid
     ):
         # 10.0.2.15 scanned at least 25 unique hosts on port 80/tcp in 0m33s
         confidence = 1
         threat_level = 'medium'
         description = f'horizontal port scan by Zeek engine. {msg}'
         type_evidence = 'HorizontalPortscan'
-        type_detection = 'dport'
+        type_detection = 'srcip'
         source_target_tag = 'Recon'
-        detection_info = scanned_port
+        detection_info = profileid.split('_')[-1]
         category = 'Recon.Scanning'
         # get the number of unique hosts scanned on a specific port
         conn_count = int(msg.split('least')[1].split('unique')[0])

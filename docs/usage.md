@@ -381,7 +381,9 @@ Slips uses Tranco whitelist which contains a research-oriented top sites
 ranking hardened against manipulation here https://tranco-list.eu/
 
 Slips download the top 10k domains from this list and by default and 
-whitelists all evidence from and to these domains.
+whitelists all evidence and alerts from and to these domains. Slips still shows the flows to and from these IoC.
+
+
 The tranco list is updated daily by default in Slips, but you can change how often to update it using the
 ```online_whitelist_update_period``` key in config/slips.conf.
 
@@ -485,6 +487,9 @@ The ```home_network``` parameter also supports one host as an argument,
 which is written like this ```[192.168.2.16/32]```.
 When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.16```
 
+By default, the home_network parameter is not set, which means slips will
+create profiles for every IP it sees in the network
+
 **Analysis Direction**
 
 
@@ -498,6 +503,8 @@ When 1 host is set, slips will only create profiles for this 1 IP ```192.168.2.1
 ### Disabling a module
 
 You can disable modules easily by appending the module name to the ```disable``` list.
+
+The module name to disable should be the same as the name of it's directory name inside modules/ directory
 
 ### ML Detection
 

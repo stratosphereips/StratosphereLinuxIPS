@@ -128,7 +128,14 @@ If slips finds that an IP is malicious given enough evidence, it blocks it and t
 
 ### Receiving Blames
 
-When slips receives a blame report from the network, which means some other slips instance in th network blocked an IP and is letting other peers know about it, the blame report iss sent to the blocking module to determine wheteher to block it or not.
+When slips receives a blame report from the network, 
+which means some other slips instance in th network set an evidence about
+an IP and is letting other peers know about it.
+
+Slips then generates an evidence about the reported IP and takes the report into consideration
+when deciding to block the attacker's IP.
+
+
 
 ### Asking the network about an IP
 
@@ -136,7 +143,8 @@ Whenever slips sees a new IP, it asks other peers about it, and waits 3 seconds 
 
 The network then replies with a score and confidence for the IP. The higher the score the more malicious this IP is. 
 
-Once we get the score of the IP, we store it in the database, and we alert if the score of this IP is more than 0 (threat level=info).
+Once we get the score of the IP, we store it in the database,
+and we alert if the score of this IP is more than 0 (threat level=info).
 
 
 ### Answering the network's request about an IP
@@ -145,7 +153,15 @@ When asked about an ip, slips shares the score of it and the confidence with the
 
 ## Logs
 
-You can see what msgs are sent and received from the network as well as the pigeon logs (used IPs, ports, etc.) in the log file created by slips in ```output/p2p.log```
+Slips contains a minimal log file for reports recieved by other peers and peer updates in
+```output/p2p_reports.log```
+
+For a more detailed p2p logs, for example (peer ping pongs, peer lists, errors, etc.)
+you can enable p2p.log in slips.conf by setting ```create_p2p_logfile``` to ```yes```
+and a ```p2p.log``` will be available in the output dir
+
+Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.
+
 
 ## Limitations
 

@@ -4,6 +4,7 @@ from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from modules.threat_intelligence.urlhaus import URLhaus
 import sys
 
 # Your imports
@@ -17,11 +18,11 @@ import requests
 import threading
 import time
 
-class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
+
+class Module(Module, multiprocessing.Process, URLhaus):
     name = 'Threat Intelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
-    authors = ['Frantisek Strasak, Sebastian Garcia']
+    authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
@@ -33,13 +34,13 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_downloaded_file')
         self.__read_configuration()
         self.get_malicious_ip_ranges()
-        self.create_urlhaus_session()
         self.create_circl_lu_session()
         self.circllu_queue = multiprocessing.Queue()
         self.circllu_calls_thread = threading.Thread(
             target=self.make_pending_query, daemon=True
         )
         self.should_shutdown = False
+        self.urlhaus = URLhaus()
 
     def make_pending_query(self):
         """
@@ -60,12 +61,6 @@ class Module(Module, multiprocessing.Process):
             while self.circllu_queue != [] and queries_done <= max_queries:
                 self.is_malicious_hash(flow_info)
                 queries_done += 1
-
-
-
-    def create_urlhaus_session(self):
-        self.urlhaus_session = requests.session()
-        self.urlhaus_session.verify = True
 
     def create_circl_lu_session(self):
         self.circl_session = requests.session()
@@ -149,7 +144,12 @@ class Module(Module, multiprocessing.Process):
                 f'for query: {self.dns_query} '
             )
         else:
-            description = f'connection {direction} blacklisted IP {ip} '
+            other_direction = 'to' if 'from' in direction else 'from'
+            # this will be 'blacklisted conn from x to y'
+            # or 'blacklisted conn tox from y'
+            description = f'connection {direction} blacklisted IP {ip} ' \
+                          f'{other_direction} {profileid.split("_")[-1]}'
+
 
         description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
@@ -213,11 +213,6 @@ class Module(Module, multiprocessing.Process):
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
         confidence = 0.7 if is_subdomain else 1
-
-        if 'URLhaus' in domain_info["source"]:
-            # this is because URLhause detects google drive and github as malicious
-            # because we're only checking domains not URLS
-            confidence = 0.1
 
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
@@ -601,8 +596,6 @@ class Module(Module, multiprocessing.Process):
     def is_ignored_domain(self, domain):
         if not domain:
             return True
-        # to reduce the number of requests sent, don't send google domains
-        # requests to spamhaus and urlhaus domains are done by slips
         ignored_TLDs = ('.arpa',
                         '.local')
 
@@ -611,86 +604,6 @@ class Module(Module, multiprocessing.Process):
                 return True
 
 
-    def urlhaus(self, ioc):
-        """
-        Supports IPs, domains, and hashes (MD5, sha256) lookups
-        :param ioc: can be domain or ip
-        """
-        def get_description(url: dict):
-            """
-            returns a meaningful description from the given list of urls
-            """
-
-            description = f"{url['threat']}, url status: {url['url_status']}"
-            return description
-
-        urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
-
-        # available types at urlhaus are host, md5 or sha256
-        types = {
-            'ip': 'host',
-            'domain': 'host',
-            'md5': 'md5',
-        }
-        ioc_type = utils.detect_data_type(ioc)
-        # urlhaus doesn't support ipv6
-        if not ioc_type or validators.ipv6(ioc):
-            # not a valid ip, domain or hash
-            return
-
-        # get the urlhause supported type
-        indicator_type = types[ioc_type]
-        urlhaus_data = {
-            indicator_type: ioc
-        }
-        try:
-
-            if indicator_type == 'host':
-                urlhaus_api_response = self.urlhaus_session.post(
-                    f'{urlhaus_base_url}/host/',
-                    urlhaus_data,
-                    headers=self.urlhaus_session.headers
-                )
-            else:
-                # md5
-                urlhaus_api_response = self.urlhaus_session.post(
-                    f'{urlhaus_base_url}/payload/',
-                    urlhaus_data,
-                    headers=self.urlhaus_session.headers
-                )
-        except requests.exceptions.ConnectionError:
-            self.create_urlhaus_session()
-            return
-
-        if urlhaus_api_response.status_code != 200:
-            return
-
-        response = json.loads(urlhaus_api_response.text)
-        if (
-                response['query_status'] == 'no_results'
-                or 'urls' not in response
-                or response['urls'] == []
-        ):
-            # no response or empty response
-            return
-
-        # get the first description available
-        url = response['urls'][0]
-        description = get_description(url)
-        try:
-            tags = " ".join(tag for tag in url['tags'])
-        except TypeError:
-            # no tags available
-            tags = ''
-
-        info = {
-            # get all the blacklists where this ioc is listed
-            'source': 'URLhaus',
-            'description': description,
-            'therat_level': 'medium',
-            'tags': tags
-        }
-        return info
 
     def set_evidence_malicious_hash(self,
                                     file_info: dict
@@ -698,23 +611,22 @@ class Module(Module, multiprocessing.Process):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-        type_detection = 'file'
+        type_detection = 'md5'
         category = 'Malware'
         type_evidence = 'MaliciousDownloadedFile'
-
         detection_info = file_info["md5"]
-        saddr = file_info["saddr"]
+        threat_level = file_info["threat_level"]
+        daddr = file_info["daddr"]
+        ip_identification = __database__.getIPIdentification(daddr)
         confidence = file_info["confidence"]
-        threat_level = utils.threat_level_to_string(file_info["threat_level"])
+        threat_level = utils.threat_level_to_string(threat_level)
 
-        ip_identification = __database__.getIPIdentification(saddr)
         description = (
             f'Malicious downloaded file {detection_info}. '
             f'size: {file_info["size"]} '
-            f'from IP: {saddr}. Detected by: {file_info["blacklist"]}, circl.lu. '
+            f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
-
 
         __database__.setEvidence(
             type_evidence,
@@ -730,8 +642,6 @@ class Module(Module, multiprocessing.Process):
             uid=file_info["uid"],
         )
 
-
-
     def circl_lu(self, flow_info):
         """
         Supports lookup of MD5 hashes on Circl.lu
@@ -745,7 +655,7 @@ class Module(Module, multiprocessing.Process):
             benign_percentage = float(circl_trust)
             malicious_percentage = 100 - benign_percentage
             # scale the benign percentage from 0 to 1
-            threat_level = malicious_percentage/100
+            threat_level = float(malicious_percentage)/100
             return threat_level
 
         def calculate_confidence(blacklists):
@@ -783,12 +693,23 @@ class Module(Module, multiprocessing.Process):
         file_info = {
             'confidence': calculate_confidence(response["KnownMalicious"]),
             'threat_level': calculate_threat_level(response["hashlookup:trust"]),
-            'blacklist': response["KnownMalicious"]
+            'blacklist': f'{response["KnownMalicious"]}, circl.lu'
         }
         return file_info
 
-    def search_online_for_hash(self, flow_info):
-        return self.circl_lu(flow_info)
+    def search_online_for_hash(self, flow_info: dict):
+        """
+        :param flow_info: dict with 'uid','daddr', 'saddr','size','md5','profileid','twid','ts', etc
+        returns a dict containing confidence, threat level and blacklist or the
+        reporting website
+        """
+        circllu_info = self.circl_lu(flow_info)
+        if circllu_info:
+            return circllu_info
+
+        urlhaus_info = self.urlhaus.urlhaus_lookup(flow_info['md5'], 'md5_hash')
+        if urlhaus_info:
+            return urlhaus_info
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -847,8 +768,8 @@ class Module(Module, multiprocessing.Process):
             return domain_info, is_subdomain
         return False, False
 
-    def search_online_for_domain(self, domain):
-        return self.urlhaus(domain)
+    def search_online_for_url(self, url):
+        return self.urlhaus.urlhaus_lookup(url, 'url')
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
@@ -882,9 +803,32 @@ class Module(Module, multiprocessing.Process):
             # is malicious.
             # update the file_info dict with uid, twid, ts etc.
             file_info.update(flow_info)
-            self.set_evidence_malicious_hash(
-                file_info
-            )
+            # is the detection done by urlhaus or circllu?
+            if 'URLhaus' in file_info['blacklist']:
+                self.urlhaus.set_evidence_malicious_hash(file_info)
+            else:
+                self.set_evidence_malicious_hash(file_info)
+
+    def is_malicious_url(
+            self,
+            url,
+            uid,
+            timestamp,
+            profileid,
+            twid
+    ):
+
+        url_info = self.search_online_for_url(url)
+        if not url_info:
+            # not malicious
+            return False
+        self.set_evidence_malicious_url(
+            url_info,
+            uid,
+            timestamp,
+            profileid,
+            twid
+        )
 
 
     def is_malicious_domain(
@@ -900,11 +844,7 @@ class Module(Module, multiprocessing.Process):
 
         domain_info, is_subdomain = self.search_offline_for_domain(domain)
         if not domain_info:
-            is_subdomain = False
-            domain_info = self.search_online_for_domain(domain)
-            if not domain_info:
-                # not malicious
-                return False
+            return False
 
         self.set_evidence_malicious_domain(
                 domain,
@@ -996,6 +936,14 @@ class Module(Module, multiprocessing.Process):
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(
+                            to_lookup,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid
+                        )
+                    elif type_ == 'url':
+                        self.is_malicious_url(
                             to_lookup,
                             uid,
                             timestamp,

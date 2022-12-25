@@ -89,7 +89,8 @@ if __name__ == '__main__':
         if not redis_pid:
             # server isn't started yet
             continue
-        print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
+
+        # print(f'Redis port: {redis_port} is found using PID {redis_pid} ')
         try:
             flush_redis_server(str(redis_port))
             print(f'Flushed redis-server opened on port: {redis_port}')

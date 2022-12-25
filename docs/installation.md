@@ -88,9 +88,10 @@ Update the repository of packages so you see the latest versions:
 	
 Install the required packages (-y to install without asking for approval):
 
-    apt-get -y install tshark iproute2 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek
+    apt-get -y installtshark iproute2 python3.8 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
+    apt install -y --no-install-recommends nodejs
 	
-Even though we just installed pip3, the package installer for Python (3.7), we need to upgrade it to its latest version:
+Even though we just installed pip3, the package installer for Python (3.8), we need to upgrade it to its latest version:
 
 	python3 -m pip install --upgrade pip
 
@@ -102,7 +103,7 @@ _Note: for those using a different base image, you need to also install tensorfl
 
 As we mentioned before, the GUI of Slips known as Kalipso relies on NodeJs. Make sure to use NodeJs greater than version 12. For Kalipso to work, we will install the following npm packages:
 
-	npm install blessed blessed-contrib redis async chalk strip-ansi@6.0.0 clipboardy fs sorted-array-async yargs
+    npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
 
 ###  Installing Zeek
 
@@ -130,7 +131,7 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/
-	./slips.py -c config/slips.conf -r datasets/hide-and-seek-short.pcap
+	./slips.py -c config/slips.conf -f dataset/hide-and-seek-short.pcap
 
 Run slips with sudo to enable blocking (Optional) 
 

@@ -5,7 +5,8 @@
 @load ./icmp-scans.zeek
 @load ./detect_DoH.zeek
 @load protocols/conn/mac-logging.zeek
-
+# Add SHA256 hash for files
+@load ./hash_sha256
 
 ########################################
 ##! Local site policy. Customize as appropriate.
@@ -97,7 +98,7 @@ redef digest_salt = "Please change this value.";
 @load frameworks/files/hash-all-files
 
 # Detect SHA1 sums in Team Cymru's Malware Hash Registry.
-@load frameworks/files/detect-MHR
+#@load frameworks/files/detect-MHR
 
 # Extend email alerting to include hostnames
 # don't load extend-email/hostnames as we're not using it, it's used for notices that are being sent to email.

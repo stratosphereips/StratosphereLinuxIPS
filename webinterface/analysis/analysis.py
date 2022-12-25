@@ -96,7 +96,7 @@ def set_profile_tws():
         profiles_dict[profile_ip] = False
 
     # Fetch blocked profiles
-    blockedProfileTWs = __database__.db.hgetall('BlockedProfTW')
+    blockedProfileTWs = __database__.db.hgetall('alerts')
     if blockedProfileTWs:
         for blocked in blockedProfileTWs.keys():
             profile_word, blocked_ip = blocked.split("_")
@@ -140,11 +140,11 @@ def set_tws(profileid):
     tws = get_all_tw_with_ts("profile_" + profileid)
 
     # Fetch blocked tws
-    blockedTWs = __database__.db.hget('BlockedProfTW', "profile_" + profileid)
+    blockedTWs = __database__.db.hget('alerts', "profile_" + profileid)
     if blockedTWs:
         blockedTWs = json.loads(blockedTWs)
 
-        for tw in blockedTWs:
+        for tw in blockedTWs.keys():
             tws[tw]['blocked'] = True
 
     for tw_key, tw_value in tws.items():

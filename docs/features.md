@@ -41,6 +41,32 @@ By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minut
 
 This threshold can be changed ```config/slips.conf``` by changing the value of  ```long_connection_threshold```  
 
+
+## Weird HTTP methods
+
+Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
+
+When there's a weird HTTP method, slips detects it as well.
+
+
+
+##Non-SSL connections on port 443 
+
+Slips detects established connections on port 443 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 443 and the 'service' field 
+in conn.log isn't set to 'ssl', it alerts
+
+##Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field 
+in conn.log isn't set to 'http', it alerts
+
+
 ### Connections without DNS resolution
 This will detect connections done without a previous DNS resolution. The idea is that a connection without a DNS resolution is slightly suspicious.
 
@@ -63,6 +89,9 @@ so we simply ignore alerts of this time about well known org such as (facebook, 
 
 Slips uses it's own lists of organizations info (IPs, IP ranges, domains, and ASNs) stored in ```slips_files/organizations_info``` to check
 whether the IP/domain of each flow belong to a known org or not.
+
+Slips doesn't detect 'connection without DNS' when running
+on an interface except for when it's done by this instance's own IP.
 
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
 of the docs for info on how slips detects DoH.
@@ -714,7 +743,7 @@ Available detection are:
 Due to the usage of empty connections to popular site by malware to check for internet connectivity,
 We consider this type of behaviour suspicious activity that shouldn't happen
 
-We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com' etc.
+We detect empty connection to 'bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com' etc.
 
 #### Suspicious user agents
 

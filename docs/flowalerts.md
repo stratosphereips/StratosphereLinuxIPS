@@ -17,12 +17,16 @@ The detection techniques are:
 - DGA
 - Connection to multiple ports
 - Malicious SSL certificates
+- Pastebin downloads
 - Young domains
 - Bad SMTP logins
 - SMTP login bruteforce
 - DNS ARPA Scans
 - Multiple SSH versions
 - Incompatible CN
+- Weird HTTP methods
+- Non-SSL connections on port 443
+- Non-HTTP connections on port 80
 
 The details of each detection follows.
 
@@ -55,6 +59,9 @@ doesn't know about the DNS resolution because the resolved domain won't be in dn
 so we simply ignore alerts of this type when connected to well known organizations. In particular Facebook, Apple, Google, Twitter, and Microsoft.
 
 Slips uses it's own lists of organizations and information about them (IPs, IP ranges, domains, and ASNs). They are stored in ```slips_files/organizations_info``` and they are used to check whether the IP/domain of each flow belong to a known org or not.
+
+Slips doesn't detect 'connection without DNS' when running
+on an interface except for when it's done by this instance's own IP.
 
 check [DoH section](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#detect-doh) 
 of the docs for info on how slips detects DoH.
@@ -175,6 +182,15 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default. 
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
 
+
+## Pastebin downloads
+
+Slips detects downloads from pastebin using SSL and HTTP
+
+It alerts when a downloaded file from pastebin exceeds 12000 bytes 
+
+Slips detects the pastebin download once the SSL connection is over , which may take hours.  
+
 ## Young Domains
 
 Slips uses whois python library to get the creation date of every domain met in the dns flows.
@@ -251,3 +267,26 @@ When slips enccounters a cn that claims to belong to any of Slips supported orgs
 Slips checks if the destination address or the destination server name belongs to these org. 
 
 If not, slips generates an alert.
+
+## Weird HTTP methods
+
+Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
+
+When there's a weird HTTP method, slips detects it as well.
+
+
+##Non-SSL connections on port 443 
+
+Slips detects established connections on port 443 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 443 and the 'service' field 
+in conn.log isn't set to 'ssl', it alerts
+
+##Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field 
+in conn.log isn't set to 'http', it alerts

@@ -19,6 +19,7 @@ from modules.p2ptrust.utils.go_director import GoDirector
 from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
+import threading
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -123,8 +124,15 @@ class Trust(Module, multiprocessing.Process):
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
-        # self.pigeon_logfile = data_dir + self.pigeon_logfile_raw + str_port
-        self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+
+        self.read_configuration()
+        if self.create_p2p_logfile:
+            self.pigeon_logfile = self.pigeon_logfile_raw + str_port
+            self.print(f"Storing p2p.log in {self.pigeon_logfile}")
+            # create the thread that rotates the p2p.log every 1d
+            self.rotator_thread = threading.Thread(
+                target=self.rotate_p2p_logfile, daemon=True
+            )
         self.pigeon_key_file = pigeon_key_file
         self.pigeon_binary = pigeon_binary
 
@@ -150,8 +158,16 @@ class Trust(Module, multiprocessing.Process):
         # each string should have a corresponding int value to be able to calculate
         # the accumulated threat level and alert
 
+
+
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(text, verbose, debug)
+
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.create_p2p_logfile: bool = conf.create_p2p_logfile()
+
 
     def get_used_interface(self):
         used_interface = sys.argv[sys.argv.index('-i') + 1]
@@ -163,6 +179,22 @@ class Trust(Module, multiprocessing.Process):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
+
+
+    def rotate_p2p_logfile(self):
+        """
+        Thread that rotates p2p.log file every 1 day
+        """
+        rotation_period = 86400    # 1d
+        while True:
+            time.sleep(rotation_period)
+            lock = threading.Lock()
+            lock.acquire()
+            # erase contents of file instead of deleting it
+            # because the pigeon has an open handle of it
+            open(self.pigeon_logfile, "w").close()
+            lock.release()
+
 
     def get_available_port(self):
         for port in range(32768, 65535):
@@ -226,10 +258,16 @@ class Trust(Module, multiprocessing.Process):
             # executable.extend(rename_with_port_param)
             executable.extend(pygo_channel_param)
             executable.extend(gopy_channel_param)
-            outfile = open(self.pigeon_logfile, '+w')
+            if self.create_p2p_logfile:
+                outfile = open(self.pigeon_logfile, '+w')
+            else:
+                outfile = open(os.devnull, "+w")
+
             self.pigeon = subprocess.Popen(
                 executable, cwd=self.data_dir, stdout=outfile
             )
+
+
             # print(f"[debugging] runnning pigeon: {executable}")
 
     def new_evidence_callback(self, msg: Dict):
@@ -244,13 +282,18 @@ class Trust(Module, multiprocessing.Process):
             # not a valid json dict
             return
 
-        type_detection = data.get(
-            'type_detection'
-        )   # example: dstip srcip dport sport dstdomain
+        # example: dstip srcip dport sport dstdomain
+        type_detection = data.get('type_detection')
         if not 'ip' in type_detection:   # and not 'domain' in type_detection:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
+
+        type_evidence = data.get('type_evidence')
+        if 'P2PReport' in type_evidence:
+            # we shouldn't re-share evidence reported by other peers
+            return
+
 
         detection_info = data.get('detection_info')
         confidence = data.get('confidence', False)
@@ -270,7 +313,7 @@ class Trust(Module, multiprocessing.Process):
         score = self.threat_levels[threat_level]
         # todo what we're currently sharing is the threat level(int) of the evidence caused by this ip
 
-        # todo when we genarate a new evidence,
+        # todo when we generate a new evidence,
         #  we give it a score and a tl, but we don't update the IP_Info and give this ip a score in th db!
 
         # TODO: discuss - only share score if confidence is high enough?
@@ -402,7 +445,7 @@ class Trust(Module, multiprocessing.Process):
 
         ip = ip_info.get('ip')
         ip_state = ip_info.get('ip_state')
-        proto = ip_info.get('proto', '').upper()
+        # proto = ip_info.get('proto', '').upper()
         uid = ip_info.get('uid')
         profileid = ip_info.get('profileid')
         twid = ip_info.get('twid')
@@ -421,9 +464,13 @@ class Trust(Module, multiprocessing.Process):
         else:
             direction = 'to'
 
+        # we'll be using this to make the description more clear
+        other_direction = 'to' if 'from' in direction else 'from'
+
         ip_identification = __database__.getIPIdentification(ip)
         description = (
-            f'connection {direction} blacklisted IP {ip} {ip_identification}.'
+            f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
+            f'{other_direction} {profileid.split("_")[-1]}'
             f' Source: Slips P2P network.'
         )
 
@@ -573,14 +620,6 @@ class Trust(Module, multiprocessing.Process):
         # give the report to evidenceProcess to decide whether to block or not
         __database__.publish('new_blame', data)
 
-    def get_multiaddress(self):
-        """
-        Function to read multiaddress from p2p.log, because it's generated and logged by the pigeon
-        """
-        with open(self.pigeon_logfile, 'r') as f:
-            while line := f.readline():
-                if 'Your Multiaddress Is: ' in line:
-                    return line
 
     def shutdown_gracefully(self):
         if self.start_pigeon:
@@ -600,6 +639,11 @@ class Trust(Module, multiprocessing.Process):
                 )
                 return
 
+            # create_p2p_logfile is taken from slips.conf
+            if self.create_p2p_logfile:
+                # rotates p2p.log file every 1 day
+                self.rotator_thread.start()
+
             self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
             # channel to send msgs to whenever slips needs info from other peers about an ip
             self.c2 = __database__.subscribe(self.p2p_data_request_channel, ignore_subscribe_messages=True)
@@ -608,6 +652,7 @@ class Trust(Module, multiprocessing.Process):
             # should call self.update_callback
             # self.c4 = __database__.subscribe(self.slips_update_channel)
             while True:
+
 
                 message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
@@ -639,21 +684,25 @@ class Trust(Module, multiprocessing.Process):
                         f'Pigeon process suddenly terminated with return code {ret_code}. Stopping module.'
                     )
                     return
+
                 try:
                     if not self.mutliaddress_printed:
-                        multiaddr = self.get_multiaddress()
-                        self.print(multiaddr[3:])
-                        self.mutliaddress_printed  = True
+                        # give the pigeon time to put the multiaddr in the db
+                        time.sleep(2)
+                        multiaddr = __database__.get_multiaddr()
+                        self.print(f"You Multiaddress is: {multiaddr}")
+                        self.mutliaddress_printed = True
+
                 except:
                     pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        # except Exception as inst:
-        #     exception_line = sys.exc_info()[2].tb_lineno
-        #     self.print(f'Problem with P2P. line {exception_line}', 0, 1)
-        #     self.print(str(type(inst)), 0, 1)
-        #     self.print(str(inst.args), 0, 1)
-        #     self.print(str(inst), 0, 1)
-        #     return True
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem with P2P. line {exception_line}', 0, 1)
+            self.print(str(type(inst)), 0, 1)
+            self.print(str(inst.args), 0, 1)
+            self.print(str(inst), 0, 1)
+            return True

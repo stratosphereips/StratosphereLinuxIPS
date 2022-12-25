@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:20.04
 
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
@@ -48,8 +48,10 @@ RUN git clone --recurse-submodules --remote-submodules https://github.com/strato
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
 RUN chmod 774 slips.py &&  git submodule init && git submodule update
-# so we can set use_p2p to yes
-COPY config/slips.conf ${SLIPS_DIR}/config/slips.conf
+
+# set use_p2p to yes in the config file
+RUN sed -i 's/use_p2p = no/use_p2p = yes/g' config/slips.conf
+
 
 # build the pigeon and Add pigeon to path
 SHELL ["/bin/bash", "-c"]

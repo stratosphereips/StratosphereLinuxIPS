@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:20.04
 
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
