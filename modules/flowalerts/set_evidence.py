@@ -362,7 +362,7 @@ class Helper:
             uid=uid,
         )
 
-    def set_evidence_pw_guessing(self, description, timestamp, profileid, twid, uid, conn_count, scanning_ip, by=''):
+    def set_evidence_pw_guessing(self, msg, timestamp, profileid, twid, uid, by=''):
         # 222.186.30.112 appears to be guessing SSH passwords (seen in 30 connections)
         # confidence = 1 because this detection is comming from a zeek file so we're sure it's accurate
         confidence = 1
@@ -371,7 +371,9 @@ class Helper:
         type_evidence = 'Password_Guessing'
         type_detection = 'srcip'
         source_target_tag = 'Malware'
-        description += f'. by {by}.'
+        description = f'password guessing. {msg}. by {by}.'
+        scanning_ip = msg.split(' appears')[0]
+        conn_count = int(msg.split('in ')[1].split('connections')[0])
 
         __database__.setEvidence(
             type_evidence,

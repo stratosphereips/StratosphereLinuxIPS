@@ -127,9 +127,17 @@ class Module(Module, multiprocessing.Process):
     ):
         """
         Check if a duration of the connection is
-        above the threshold (more than 25 minutess by default).
+        above the threshold (more than 25 minutes by default).
         :param dur: duration of the flow in seconds
         """
+
+        if (
+                ipaddress.ip_address(daddr).is_multicast
+                or ipaddress.ip_address(saddr).is_multicast
+        ):
+            # Do not check the duration of the flow
+            return
+
         if type(dur) == str:
             dur = float(dur)
         module_name = 'flowalerts-long-connection'
@@ -413,6 +421,8 @@ class Module(Module, multiprocessing.Process):
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if not dport:
+            return
         if state != 'Established':
             # detect unknown ports on established conns only
             return False
@@ -571,11 +581,21 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_connection_without_dns_resolution(
-        self, daddr, twid, profileid, timestamp, uid
+        self, flow_type, appproto, daddr, twid, profileid, timestamp, uid
     ):
         """
         Checks if there's a flow to a dstip that has no cached DNS answer
         """
+        # The exceptions are:
+        # 1- Do not check for DNS requests
+        # 2- Ignore some IPs like private IPs, multicast, and broadcast
+
+        if (
+                flow_type != 'conn'
+                or appproto == 'dns'
+                or utils.is_ignored_ip(daddr)
+        ):
+            return
 
         # disable this alert when running on a zeek conn.log file
         # because there's no dns.log to know if the dns was made
@@ -624,7 +644,7 @@ class Module(Module, multiprocessing.Process):
             # comes here if we haven't started the timer thread for this connection before
             # mark this connection as checked
             self.connections_checked_in_conn_dns_timer_thread.append(uid)
-            params = [daddr, twid, profileid, timestamp, uid]
+            params = [flow_type, appproto, daddr, twid, profileid, timestamp, uid]
             # self.print(f'Starting the timer to check on {daddr}, uid {uid}.
 
             # time {datetime.datetime.now()}')
@@ -985,6 +1005,9 @@ class Module(Module, multiprocessing.Process):
         alerts when 10 15 20 etc. nxdomains are found
         Ignore queries done to *.in-addr.arpa domains and to *.local domains
         """
+        if not rcode_name:
+            return
+
         saddr = profileid.split('_')[-1]
         # check whitelisted queries because we
         # don't want to count nxdomains to cymru.com or spamhaus as DGA as they're made
@@ -1026,6 +1049,99 @@ class Module(Module, multiprocessing.Process):
             # clear the list of alerted queries and uids
             self.nxdomains[profileid_twid] = ([],[])
             return True
+
+    def check_conn_to_port_0(
+            self,
+            sport,
+            dport,
+            proto,
+            saddr,
+            daddr,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        Alerts on connections to or from port 0 using protocols other than
+        igmp, icmp
+        """
+        if proto in ('igmp', 'icmp', 'ipv6-icmp'):
+            return
+
+        if not (sport == 0 or dport == 0):
+            return
+
+        direction = 'source' if sport == 0 else 'destination'
+        self.helper.set_evidence_for_port_0_connection(
+            saddr,
+            daddr,
+            sport,
+            dport,
+            direction,
+            profileid,
+            twid,
+            uid,
+            timestamp,
+        )
+
+    def check_multiple_reconnection_attempts(
+            self,
+            origstate,
+            saddr,
+            daddr,
+            dport,
+            uid,
+            profileid,
+            twid,
+            timestamp
+    ):
+        """
+        Alerts when 5+ reconnection attempts from the same source IP to
+        the same destination IP occurs
+        """
+        if origstate != 'REJ':
+            return
+
+        key = f'{saddr}-{daddr}-{dport}'
+
+        # add this conn to the stored number of reconnections
+        current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
+
+        try:
+            reconnections, uids = current_reconnections[key]
+            reconnections += 1
+            uids.append(uid)
+            current_reconnections[key] = (reconnections, uids)
+        except KeyError:
+            current_reconnections[key] = (1, [uid])
+            reconnections = 1
+
+        if reconnections < 5:
+            return
+
+        ip_identification = (
+            __database__.getIPIdentification(daddr)
+        )
+        description = (
+            f'Multiple reconnection attempts to Destination IP:'
+            f' {daddr} {ip_identification} '
+            f'from IP: {saddr} reconnections: {reconnections}'
+        )
+        self.helper.set_evidence_for_multiple_reconnection_attempts(
+            profileid,
+            twid,
+            daddr,
+            description,
+            uids,
+            timestamp,
+        )
+        # reset the reconnection attempts of this src->dst
+        current_reconnections[key] = (0, [])
+
+        __database__.setReconnections(
+            profileid, twid, current_reconnections
+        )
 
     def detect_young_domains(self, domain, stime, profileid, twid, uid):
         """
@@ -1226,11 +1342,94 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
             )
 
+    def detect_malicious_ja3(
+            self,
+            saddr,
+            daddr,
+            ja3,
+            ja3s,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        if not (ja3 or ja3s):
+            # we don't have info about this flow's ja3 or ja3s fingerprint
+            return
+
+        # get the dict of malicious ja3 stored in our db
+        malicious_ja3_dict = __database__.get_ja3_in_IoC()
+
+        if ja3 in malicious_ja3_dict:
+            self.helper.set_evidence_malicious_JA3(
+                malicious_ja3_dict,
+                saddr,
+                profileid,
+                twid,
+                uid,
+                timestamp,
+                type_='ja3',
+                ioc=ja3,
+            )
+
+        if ja3s in malicious_ja3_dict:
+            self.helper.set_evidence_malicious_JA3(
+                malicious_ja3_dict,
+                daddr,
+                profileid,
+                twid,
+                uid,
+                timestamp,
+                type_='ja3s',
+                ioc=ja3s,
+            )
+
+    def check_self_signed_certs(
+            self,
+            validation_status,
+            daddr,
+            server_name,
+            profileid,
+            twid,
+            timestamp,
+            uid
+    ):
+        """
+        checks the validation status of every azeek ssl flow for self signed certs
+        """
+        if 'self signed' not in validation_status:
+            return
+
+
+        ip_identification = (
+            __database__.getIPIdentification(daddr)
+        )
+        description = f'Self-signed certificate. Destination IP: {daddr}.' \
+                      f' {ip_identification}'
+
+        if server_name:
+            description += f' SNI: {server_name}.'
+
+        self.helper.set_evidence_self_signed_certificates(
+            profileid,
+            twid,
+            daddr,
+            description,
+            uid,
+            timestamp,
+        )
+
+
+
     def check_ssh_password_guessing(self, daddr, uid, timestamp, profileid, twid, auth_success):
         """
-        This is only called when there's a failed ssh attempt
-        alerts ssh pw bruteforce when there's more than 20 failed attempts by the same ip to the same IP
+        This detection is only done when there's a failed ssh attempt
+        alerts ssh pw bruteforce when there's more than
+        20 failed attempts by the same ip to the same IP
         """
+        if auth_success in ('true', 'T'):
+            return False
+
         cache_key = f'{profileid}-{twid}-{daddr}'
         # update the number of times this ip performed a failed ssh login
         if cache_key in self.password_guessing_cache:
@@ -1401,17 +1600,65 @@ class Module(Module, multiprocessing.Process):
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-                    # --- Detect long Connections ---
-                    # Do not check the duration of the flow if the daddr or
-                    # saddr is multicast.
-                    if (
-                        not ipaddress.ip_address(daddr).is_multicast
-                        and not ipaddress.ip_address(saddr).is_multicast
-                    ):
-                        self.check_long_connection(
-                            dur, daddr, saddr, profileid, twid, uid, timestamp
-                        )
 
+                    # --- Detect long Connections ---
+                    self.check_long_connection(
+                        dur, daddr, saddr, profileid, twid, uid, timestamp
+                    )
+                    self.check_unknown_port(
+                        dport,
+                        proto.lower(),
+                        daddr,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp,
+                        state
+                    )
+                    self.check_multiple_reconnection_attempts(
+                            origstate,
+                            saddr,
+                            daddr,
+                            dport,
+                            uid,
+                            profileid,
+                            twid,
+                            timestamp
+                    )
+                    self.check_conn_to_port_0(
+                        sport,
+                        dport,
+                        proto,
+                        saddr,
+                        daddr,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+
+                    self.check_connection_without_dns_resolution(
+                        flow_type, appproto, daddr, twid, profileid, timestamp, uid
+                    )
+
+                    self.detect_connection_to_multiple_ports(
+                        saddr,
+                        daddr,
+                        proto,
+                        state,
+                        appproto,
+                        dport,
+                        timestamp,
+                        profileid,
+                        twid
+                    )
+                    self.check_data_upload(
+                        sbytes,
+                        daddr,
+                        uid,
+                        profileid,
+                        twid
+                    )
 
                     self.check_non_http_port_80_conns(
                         state,
@@ -1436,106 +1683,6 @@ class Module(Module, multiprocessing.Process):
                         timestamp
                     )
 
-                    # --- Detect unknown destination ports ---
-                    if dport:
-                        self.check_unknown_port(
-                            dport,
-                            proto.lower(),
-                            daddr,
-                            profileid,
-                            twid,
-                            uid,
-                            timestamp,
-                            state
-                        )
-
-                    # --- Detect Multiple Reconnection attempts ---
-                    key = f'{saddr}-{daddr}-{dport}'
-                    if origstate == 'REJ':
-                        # add this conn to the stored number of reconnections
-                        current_reconnections = __database__.getReconnectionsForTW(profileid, twid)
-
-                        try:
-                            reconnections, uids = current_reconnections[key]
-                            reconnections += 1
-                            uids.append(uid)
-                            current_reconnections[key] = (reconnections, uids)
-                        except KeyError:
-                            current_reconnections[key] = (1, [uid])
-                            reconnections = 1
-
-                        if reconnections >= 5:
-                            ip_identification = (
-                                __database__.getIPIdentification(daddr)
-                            )
-                            description = (
-                                f'Multiple reconnection attempts to Destination IP: {daddr} {ip_identification} '
-                                f'from IP: {saddr} reconnections: {reconnections}'
-                            )
-                            self.helper.set_evidence_for_multiple_reconnection_attempts(
-                                profileid,
-                                twid,
-                                daddr,
-                                description,
-                                uids,
-                                timestamp,
-                            )
-                            # reset the reconnection attempts of this src->dst
-                            current_reconnections[key] = (0, [])
-
-                        __database__.setReconnections(
-                            profileid, twid, current_reconnections
-                        )
-
-
-                    # --- Detect Connection to port 0 ---
-                    if proto not in ('igmp', 'icmp', 'ipv6-icmp') and (
-                        sport == 0 or dport == 0
-                    ):
-                        direction = 'source' if sport == 0 else 'destination'
-                        self.helper.set_evidence_for_port_0_connection(
-                            saddr,
-                            daddr,
-                            sport,
-                            dport,
-                            direction,
-                            profileid,
-                            twid,
-                            uid,
-                            timestamp,
-                        )
-
-                    # --- Detect if this is a connection without a DNS resolution ---
-                    # The exceptions are:
-                    # 1- Do not check for DNS requests
-                    # 2- Ignore some IPs like private IPs, multicast, and broadcast
-                    if (
-                        flow_type == 'conn'
-                        and appproto != 'dns'
-                        and not utils.is_ignored_ip(daddr)
-                    ):
-
-                        self.check_connection_without_dns_resolution(
-                            daddr, twid, profileid, timestamp, uid
-                        )
-
-
-                    # --- Detect Connection to multiple ports (for RAT) ---
-                    self.detect_connection_to_multiple_ports(
-                        saddr,
-                        daddr,
-                        proto,
-                        state,
-                        appproto,
-                        dport,
-                        timestamp,
-                        profileid,
-                        twid
-                    )
-
-                    # --- Detect Data exfiltration ---
-                    self.check_data_upload(sbytes, daddr, uid, profileid, twid)
-
                 # --- Detect successful SSH connections ---
                 message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
@@ -1555,9 +1702,22 @@ class Module(Module, multiprocessing.Process):
                     # it's set to true in zeek json files, T in zeke tab files
                     auth_success = flow['auth_success']
 
-                    self.check_successful_ssh(uid, timestamp, profileid, twid, auth_success)
-                    if auth_success not in ('true', 'T'):
-                        self.check_ssh_password_guessing(daddr, uid, timestamp, profileid, twid, auth_success)
+                    self.check_successful_ssh(
+                        uid,
+                        timestamp,
+                        profileid,
+                        twid,
+                        auth_success
+                    )
+
+                    self.check_ssh_password_guessing(
+                        daddr,
+                        uid,
+                        timestamp,
+                        profileid,
+                        twid,
+                        auth_success
+                    )
 
                 # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
                 message = __database__.get_message(self.c3)
@@ -1566,53 +1726,54 @@ class Module(Module, multiprocessing.Process):
                     return True
                 if utils.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow = json.loads(flow)
-                        timestamp = flow['stime']
-                        uid = data['uid']
-                        msg = flow['msg']
-                        note = flow['note']
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    timestamp = flow['stime']
+                    uid = data['uid']
+                    msg = flow['msg']
+                    note = flow['note']
 
-                        # --- Detect port scans from Zeek logs ---
-                        # We're looking for port scans in notice.log in the note field
-                        if 'Port_Scan' in note:
-                            # Vertical port scan
-                            scanning_ip = flow.get('scanning_ip', '')
-                            self.helper.set_evidence_vertical_portscan(
-                                msg,
-                                scanning_ip,
-                                timestamp,
-                                profileid,
-                                twid,
-                                uid,
-                            )
+                    # --- Detect port scans from Zeek logs ---
+                    # We're looking for port scans in notice.log in the note field
+                    if 'Port_Scan' in note:
+                        # Vertical port scan
+                        scanning_ip = flow.get('scanning_ip', '')
+                        self.helper.set_evidence_vertical_portscan(
+                            msg,
+                            scanning_ip,
+                            timestamp,
+                            profileid,
+                            twid,
+                            uid,
+                        )
 
-                        # --- Detect horizontal portscan by zeek ---
-                        if 'Address_Scan' in note:
-                            # Horizontal port scan
-                            # scanned_port = flow.get('scanned_port', '')
-                            self.helper.set_evidence_horizontal_portscan(
-                                msg,
-                                timestamp,
-                                profileid,
-                                twid,
-                                uid,
-                            )
-                        # --- Detect password guessing by zeek ---
-                        if 'Password_Guessing' in note:
-                            scanning_ip = msg.split(' appears')[0]
-                            conn_count = int(msg.split('in ')[1].split('connections')[0])
-                            description = f'password guessing. {msg}'
-                            self.helper.set_evidence_pw_guessing(
-                                description, timestamp, profileid, twid, uid, conn_count, scanning_ip, by='Zeek'
-                            )
+                    # --- Detect horizontal portscan by zeek ---
+                    if 'Address_Scan' in note:
+                        # Horizontal port scan
+                        # scanned_port = flow.get('scanned_port', '')
+                        self.helper.set_evidence_horizontal_portscan(
+                            msg,
+                            timestamp,
+                            profileid,
+                            twid,
+                            uid,
+                        )
+                    # --- Detect password guessing by zeek ---
+                    if 'Password_Guessing' in note:
+                        self.helper.set_evidence_pw_guessing(
+                            msg,
+                            timestamp,
+                            profileid,
+                            twid,
+                            uid,
+                            by='Zeek'
+                        )
 
                 # --- Detect maliciuos JA3 TLS servers ---
                 message = __database__.get_message(self.c4)
@@ -1622,85 +1783,57 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        data = json.loads(data)
-                        # Get flow as a json
-                        flow = data['flow']
-                        # Convert flow to a dict
-                        flow = json.loads(flow)
-                        uid = flow['uid']
-                        timestamp = flow['stime']
-                        ja3 = flow.get('ja3', False)
-                        ja3s = flow.get('ja3s', False)
-                        issuer = flow.get('issuer', False)
-                        profileid = data['profileid']
-                        twid = data['twid']
-                        daddr = flow['daddr']
-                        saddr = profileid.split('_')[1]
-                        server_name = flow.get('server_name')
+                    # Convert from json to dict
+                    data = json.loads(data)
+                    # Get flow as a json
+                    flow = data['flow']
+                    # Convert flow to a dict
+                    flow = json.loads(flow)
+                    uid = flow['uid']
+                    timestamp = flow['stime']
+                    ja3 = flow.get('ja3', False)
+                    ja3s = flow.get('ja3s', False)
+                    issuer = flow.get('issuer', False)
+                    profileid = data['profileid']
+                    twid = data['twid']
+                    daddr = flow['daddr']
+                    saddr = profileid.split('_')[1]
+                    server_name = flow.get('server_name')
 
-                        # we'll be checking pastebin downloads of this ssl flow
-                        # later
-                        self.pending_ssl_flows.put(
-                            (daddr, server_name, uid, timestamp, profileid, twid)
-                        )
+                    # we'll be checking pastebin downloads of this ssl flow
+                    # later
+                    self.pending_ssl_flows.put((daddr, server_name, uid, timestamp, profileid, twid))
 
-                        if 'self signed' in flow['validation_status']:
-                            ip = flow['daddr']
-                            ip_identification = (
-                                __database__.getIPIdentification(ip)
-                            )
-                            if not server_name:
-                                description = f'Self-signed certificate. Destination IP: {ip}. {ip_identification}'
-                            else:
-                                description = f'Self-signed certificate. Destination IP: {ip}, SNI: {server_name}. {ip_identification}'
-                            self.helper.set_evidence_self_signed_certificates(
-                                profileid,
-                                twid,
-                                ip,
-                                description,
-                                uid,
-                                timestamp,
-                            )
-                            self.print(description, 3, 0)
+                    self.check_self_signed_certs(
+                        flow['validation_status'],
+                        daddr,
+                        server_name,
+                        profileid,
+                        twid,
+                        timestamp,
+                        uid
+                    )
 
-                        if ja3 or ja3s:
-                            # get the dict of malicious ja3 stored in our db
-                            malicious_ja3_dict = __database__.get_ja3_in_IoC()
+                    self.detect_malicious_ja3(
+                        saddr,
+                        daddr,
+                        ja3,
+                        ja3s,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
 
-                            if ja3 in malicious_ja3_dict:
-                                self.helper.set_evidence_malicious_JA3(
-                                    malicious_ja3_dict,
-                                    saddr,
-                                    profileid,
-                                    twid,
-                                    uid,
-                                    timestamp,
-                                    type_='ja3',
-                                    ioc=ja3,
-                                )
-
-                            if ja3s in malicious_ja3_dict:
-                                self.helper.set_evidence_malicious_JA3(
-                                    malicious_ja3_dict,
-                                    daddr,
-                                    profileid,
-                                    twid,
-                                    uid,
-                                    timestamp,
-                                    type_='ja3s',
-                                    ioc=ja3s,
-                                )
-                        self.detect_incompatible_CN(
-                            daddr,
-                            server_name,
-                            issuer,
-                            profileid,
-                            twid,
-                            uid,
-                            timestamp
-                        )
+                    self.detect_incompatible_CN(
+                        daddr,
+                        server_name,
+                        issuer,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
 
 
                 message = __database__.get_message(self.c5)
@@ -1740,10 +1873,10 @@ class Module(Module, multiprocessing.Process):
                         self.check_dns_without_connection(
                             domain, answers, rcode_name, stime, profileid, twid, uid
                         )
-                    if rcode_name:
-                        self.detect_DGA(
-                            rcode_name, domain, stime, daddr, profileid, twid, uid
-                        )
+
+                    self.detect_DGA(
+                        rcode_name, domain, stime, daddr, profileid, twid, uid
+                    )
 
                     if domain:
                         # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
