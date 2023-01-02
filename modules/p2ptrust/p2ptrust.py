@@ -76,7 +76,7 @@ class Trust(Module, multiprocessing.Process):
         gopy_channel='p2p_gopy',
         pygo_channel='p2p_pygo',
         start_pigeon=True,
-        pigeon_binary='/StratosphereLinuxIPS/p2p4slips/p2p4slips',  # make sure the binary is in $PATH or put there full path
+        pigeon_binary= os.path.join(os.getcwd(),'p2p4slips/p2p4slips'),  # or make sure the binary is in $PATH
         pigeon_key_file='pigeon.keys',
         rename_redis_ip_info=False,
         rename_sql_db_file=False,
