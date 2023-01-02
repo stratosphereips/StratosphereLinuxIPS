@@ -421,6 +421,33 @@ class Helper:
             uid=uid,
         )
 
+    def set_evidence_conn_to_private_ip(
+            self, daddr, dport, saddr, profileid, twid, uid, timestamp
+    ):
+        confidence = 1
+        threat_level = 'info'
+        description = f'Connecting to private IP: {daddr} on destination port: {dport}'
+        type_evidence = 'ConnectionToPrivateIP'
+        category = 'Recon.Scanning'
+        type_detection = 'srcip'
+        source_target_tag = 'Info'
+        detection_info = saddr
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
+
     def set_evidence_vertical_portscan(
         self, msg, scanning_ip, timestamp, profileid, twid, uid
     ):

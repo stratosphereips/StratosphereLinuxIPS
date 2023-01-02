@@ -122,6 +122,38 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
+    def check_connection_to_local_ip(
+            self,
+            daddr,
+            dport,
+            saddr,
+            profileid,
+            twid,
+            uid,
+            timestamp,
+    ):
+        """
+        Alerts when there's a connection from a local IP to another local IP
+        """
+        # make sure the 2 ips are private
+        if not (
+                ipaddress.ip_address(saddr).is_private
+                and ipaddress.ip_address(daddr).is_private
+        ):
+            return
+
+        self.helper.set_evidence_conn_to_private_ip(
+            daddr,
+            dport,
+            saddr,
+            profileid,
+            twid,
+            uid,
+            timestamp,
+        )
+
+
+
     def check_long_connection(
         self, dur, daddr, saddr, profileid, twid, uid, timestamp
     ):
@@ -1691,6 +1723,15 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid,
                         timestamp
+                    )
+                    self.check_connection_to_local_ip(
+                        daddr,
+                        dport,
+                        saddr,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp,
                     )
 
                 # --- Detect successful SSH connections ---
