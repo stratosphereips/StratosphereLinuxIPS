@@ -495,6 +495,8 @@ class Module(Module, multiprocessing.Process):
         """
         Detect and ARPA scan if an ip performed 10(arpa_scan_threshold) or more arpa queries within 2 seconds
         """
+        if not domain:
+            return False
         if not domain.endswith('.in-addr.arpa'):
             return False
 
@@ -969,8 +971,12 @@ class Module(Module, multiprocessing.Process):
         uid,
     ):
         """
-        function to check if this srcip was detected using a different ssh client versions before
+        function to check if this srcip was detected using a different
+         ssh client versions before
         """
+        if 'ssh' not in used_software.lower():
+            return
+
         profileid = f'profile_{saddr}'
         # returns a dict with software, 'version-major', 'version-minor'
         cached_ssh_versions: dict = __database__.get_software_from_profile(
@@ -1148,6 +1154,8 @@ class Module(Module, multiprocessing.Process):
         Detect domains that are too young.
         The threshold is 60 days
         """
+        if not domain:
+            return False
 
         age_threshold = 60
 
@@ -1176,7 +1184,9 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
-    def check_smtp_bruteforce(self, stime, saddr, daddr, profileid, twid, uid):
+    def check_smtp_bruteforce(self,last_reply, stime, saddr, daddr, profileid, twid, uid):
+        if 'bad smtp-auth user' not in last_reply:
+            return False
 
         try:
             timestamps, uids = self.smtp_bruteforce_cache[profileid]
@@ -1719,7 +1729,8 @@ class Module(Module, multiprocessing.Process):
                         auth_success
                     )
 
-                # --- Detect alerts from Zeek: Self-signed certs, invalid certs, port-scans and address scans, and password guessing ---
+                # --- Detect alerts from Zeek: Self-signed certs,
+                # invalid certs, port-scans and address scans, and password guessing ---
                 message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
@@ -1802,7 +1813,9 @@ class Module(Module, multiprocessing.Process):
 
                     # we'll be checking pastebin downloads of this ssl flow
                     # later
-                    self.pending_ssl_flows.put((daddr, server_name, uid, timestamp, profileid, twid))
+                    self.pending_ssl_flows.put(
+                        (daddr, server_name, uid, timestamp, profileid, twid)
+                    )
 
                     self.check_self_signed_certs(
                         flow['validation_status'],
@@ -1878,14 +1891,13 @@ class Module(Module, multiprocessing.Process):
                         rcode_name, domain, stime, daddr, profileid, twid, uid
                     )
 
-                    if domain:
-                        # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
-                        self.detect_young_domains(
-                            domain, stime, profileid, twid, uid
-                        )
-                        self.check_dns_arpa_scan(
-                            domain, stime, profileid, twid, uid
-                        )
+                    # TODO: not sure how to make sure IP_info is done adding domain age to the db or not
+                    self.detect_young_domains(
+                        domain, stime, profileid, twid, uid
+                    )
+                    self.check_dns_arpa_scan(
+                        domain, stime, profileid, twid, uid
+                    )
 
                 # --- Detect malicious SSL certificates ---
                 message = __database__.get_message(self.c7)
@@ -1910,9 +1922,15 @@ class Module(Module, multiprocessing.Process):
                     saddr = data['saddr']
                     stime = data.get('ts', False)
                     last_reply = data.get('last_reply', False)
-
-                    if 'bad smtp-auth user' in last_reply:
-                      self.check_smtp_bruteforce( stime, saddr, daddr, profileid, twid, uid )
+                    self.check_smtp_bruteforce(
+                        last_reply,
+                        stime,
+                        saddr,
+                        daddr,
+                        profileid,
+                        twid,
+                        uid
+                    )
 
 
                 # --- Detect multiple used SSH versions ---
@@ -1927,10 +1945,9 @@ class Module(Module, multiprocessing.Process):
                     uid = flow.get('uid', '')
                     twid = flow.get('twid', '')
                     software_type = flow.get('software_type', '')
-                    if 'ssh' not in software_type.lower():
-                        continue
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
+
                     self.check_multiple_ssh_clients(
                         starttime,
                         saddr,
