@@ -9,6 +9,7 @@
 - Fix having multiple port scan alerts with the same timestamp
 - Add detection for non-SSL connections on port 443
 - Add detection for non-HTTP connections on port 80
+- P2P can now work without adding the p2p4slips binary to PATH
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
