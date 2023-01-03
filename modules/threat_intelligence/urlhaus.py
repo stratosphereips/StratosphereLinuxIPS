@@ -173,7 +173,7 @@ class URLhaus():
         if threat_level:
             # threat level here is the vt percentage from urlhaus
             description += f" virustotal score: {threat_level}% malicious"
-            threat_level = threat_level/100
+            threat_level = float(threat_level)/100
         else:
             threat_level = 0.8
 
