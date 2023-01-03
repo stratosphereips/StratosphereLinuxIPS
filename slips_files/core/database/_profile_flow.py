@@ -1435,9 +1435,9 @@ class ProfilingFlowsDatabase(object):
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
-                    # now this is not an ip, it's a CNAME or a TXT
                     if 'TXT' in answer:
                         continue
+                    # now this is not an ip, it's a CNAME or a TXT
                     # it's a CNAME
                     CNAMEs.append(answer)
                     continue
@@ -1673,7 +1673,8 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
             'uid': uid,
             'rcode_name': rcode_name,
-            'daddr': daddr
+            'daddr': daddr,
+            'answers': answers
         }
 
         to_send = json.dumps(to_send)
