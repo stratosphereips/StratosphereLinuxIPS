@@ -27,7 +27,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         # this module is only loaded when a pcap is given get the pcap path
         try:
-            self.pcap = sys.argv[sys.argv.index('-f') + 1]
+            self.pcap = utils.sanitize(sys.argv[sys.argv.index('-f') + 1])
         except ValueError:
             # this error is raised when we start this module in the unit tests so there's no argv
             # ignore it
@@ -125,13 +125,21 @@ class Module(Module, multiprocessing.Process):
                 if offset <= end_offset and offset >= start_offset:
                     # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
                     # use tshark to get packet info
-                    command = f'tshark -r {self.pcap} -T json -Y frame.number=={packet_number}'
-                    result = subprocess.run(
-                        command.split(),
+                    cmd = f'tshark -r "{self.pcap}" -T json -Y frame.number=={packet_number}'
+                    tshark_proc = subprocess.Popen(
+                        cmd,
                         stdout=subprocess.PIPE,
-                        stderr=open('/dev/null', 'w'),
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.PIPE,
+                        shell=True
                     )
-                    json_packet = result.stdout.decode('utf-8')
+
+                    result, error = tshark_proc.communicate()
+                    if error:
+                        self.print (f"tshark error {tshark_proc.returncode}: {error.strip()}")
+                        return
+
+                    json_packet = result.decode()
 
                     try:
                         json_packet = json.loads(json_packet)
@@ -211,6 +219,7 @@ class Module(Module, multiprocessing.Process):
                     f'{rule} to destination address: {dstip} {ip_identification} '
                     f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
                 )
+
             elif __database__.hasProfile(dst_profileid):
                 type_detection = 'srcip'
                 profileid = dst_profileid
@@ -291,15 +300,27 @@ class Module(Module, multiprocessing.Process):
             # -p 7 means use 7 threads for faster analysis
             # -f to stop searching for strings when they were already found
             # -s prints the found string
-            cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
-            lines = check_output(cmd.split()).decode().splitlines()
+            cmd = f'yara -C {compiled_rule_path} "{self.pcap}" -p 7 -f -s '
+            yara_proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                shell=True
+            )
 
+            lines, error = yara_proc.communicate()
+            lines = lines.decode()
+            if error:
+                self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
+                return
             if not lines:
                 # no match
                 return
 
+            lines = lines.splitlines()
             matching_rule = lines[0].split()[0]
-            # each match (line) should be a separate detection
+            # each match (line) should be a separate detection(yara match)
             for line in lines[1:]:
                 # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
                 line = line.split(':')
