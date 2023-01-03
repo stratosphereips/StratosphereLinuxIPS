@@ -654,7 +654,7 @@ class InputProcess(multiprocessing.Process):
             if self.enable_rotation:
                 # how often to rotate zeek files? taken from slips.conf
                 rotation = ['-e', f"redef Log::default_rotation_interval = {self.rotation_period} ;"]
-            bro_parameter = f'-i {self.given_path}'
+            bro_parameter = ['-i', self.given_path]
 
         elif self.input_type == 'pcap':
             # Find if the pcap file name was absolute or relative
@@ -662,7 +662,9 @@ class InputProcess(multiprocessing.Process):
             if not os.path.isabs(self.given_path):
                 # move 1 dir back since we will move into zeek_Files dir
                 given_path = os.path.join('..', self.given_path)
-            bro_parameter = f'-r {given_path}'
+            # using a list of params instead of a str for storing the cmd
+            # becaus ethe given path may contain spaces
+            bro_parameter = ['-r', given_path]
 
 
         # Run zeek on the pcap or interface. The redef is to have json files
@@ -675,7 +677,7 @@ class InputProcess(multiprocessing.Process):
         # zeek-scripts/expiring-certs and validate-certs
         # we have our own copy pf local.zeek in __load__.zeek
         command = [self.zeek_or_bro, '-C']
-        command += bro_parameter.split()
+        command += bro_parameter
         command += [
             f'tcp_inactivity_timeout={self.tcp_inactivity_timeout}mins',
             'tcp_attempt_delay=1min',
@@ -701,7 +703,7 @@ class InputProcess(multiprocessing.Process):
         if out:
             print(f"Zeek: {out}")
         if error:
-            self.print (f"Zeek error {zeek.returncode}: {error.strip()}")
+            self.print (f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
 
 
     def run(self):

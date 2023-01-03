@@ -1528,19 +1528,19 @@ class Main:
         print(slips_version)
 
 
-    def check_if_port_is_in_use(self):
-        if self.redis_port == 6379:
+    def check_if_port_is_in_use(self, port):
+        if port == 6379:
             # even if it's already in use, slips will override it
-            return
+            return False
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("localhost", self.redis_port))
+            sock.bind(("localhost", port))
+            return False
         except OSError:
-            print(f"[Main] Port {self.redis_port} already is use by another process. "
-                       f"Choose another port using -P <portnumber> \n"
-                       f"Or kill your open redis ports using: ./slips.py -k ")
+            print(f"[Main] Port {port} already is use by another process."
+                  f" Choose another port using -P <portnumber> \n"
+                  f"Or kill your open redis ports using: ./slips.py -k ")
             self.terminate_slips()
-
 
 
     def start(self):
@@ -1571,6 +1571,8 @@ class Main:
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
+                # close slips if port is in use
+                self.check_if_port_is_in_use(self.redis_port)
             elif self.args.multiinstance:
                 self.redis_port = self.get_random_redis_port()
                 if not self.redis_port:
@@ -1580,9 +1582,11 @@ class Main:
                         self.close_all_ports()
                     self.terminate_slips()
             else:
+                # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
+                # self.check_if_port_is_in_use(self.redis_port)
 
-            self.check_if_port_is_in_use()
+
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
