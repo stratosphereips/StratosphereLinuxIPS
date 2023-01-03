@@ -11,7 +11,8 @@
 - Add detection for non-HTTP connections on port 80
 - P2P can now work without adding the p2p4slips binary to PATH
 - Add detection for connections to private IPs from private IPs
--1.0.0
+- Add detection of high entropy DNS TXT answers 
+- -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
 - Add a new log file p2p_reports.log, for logging peer reports only  

@@ -28,6 +28,7 @@ The detection techniques are:
 - Non-SSL connections on port 443
 - Non-HTTP connections on port 80
 - Connection to private IPs
+- High entropy DNS TXT answers 
 
 The details of each detection follows.
 
@@ -295,3 +296,9 @@ in conn.log isn't set to 'http', it alerts
 ## Connection to private IPs
 
 Slips detects when a private IP is connected to another private IP with threat level info.
+
+## High entropy DNS TXT answers 
+
+Slips check every DNS answer with TXT record for high entropy
+strings. Encoded or encrypted strings will then be detcted using shannon entropy
+and alerted by slips.
