@@ -68,6 +68,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 target=self.wait_for_horizontal_scans,
                                 daemon=True
         )
+        # when a client is seen requesting this minimum addresses in 1 tw,
+        # slips sets dhcp scan evidence
+        self.minimum_requested_addrs = 4
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -673,8 +676,45 @@ class PortScanProcess(Module, multiprocessing.Process):
         )
 
 
-    def check_dhcp_scan(self):
+    def set_evidence_dhcp_scan(self):
         pass
+
+    def check_dhcp_scan(self, flow):
+        """
+        Detects DHCP scans, when a client requests 4+ different IPs in the same tw
+        """
+
+        requested_addr = flow['requested_addr']
+        if not requested_addr:
+            # we are only interested in DHCPREQUEST flows, where a client is requesting an IP
+            return
+
+        uid = flow['uid']
+        server_addr = flow['server_addr']
+        client_addr = flow['client_addr']
+        profileid = flow['profileid']
+        twid = flow['twid']
+        ts = flow['ts']
+
+        key = f'{profileid}_{twid}_{client_addr}'
+
+        if key in self.dhcp_scan_cache:
+            # client was seen requesting an addr before in this tw
+            self.dhcp_scan_cache[key].append(requested_addr)
+        else:
+            # first time for this client to make a dhcp request in this tw
+            self.dhcp_scan_cache.update({
+                key: [requested_addr],
+            })
+            return
+
+        # we alert every 4 requested ips
+        # so we alerts on 4,8,12, etc. requested IPs
+        if self.dhcp_scan_cache[key] % self.minimum_requested_addrs == 0:
+            self.set_evidence_dhcp_scan()
+
+
+
 
 
     def run(self):
@@ -752,14 +792,8 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                 if utils.is_msg_intended_for(message, 'new_dhcp'):
                     flow = json.loads(message['data'])
-                    uid = flow['uid']
-                    server_addr = flow['server_addr']
-                    client_addr = flow['client_addr']
-                    requested_addr = flow['requested_addr']
-                    profileid = flow['profileid']
-                    twid = flow['twid']
-                    ts = flow['ts']
-                    #self.check_dhcp_scan()
+
+                    self.check_dhcp_scan(flow)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
