@@ -1012,7 +1012,7 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
-    def update_threat_level(self, profileid, threat_level: str):
+    def update_threat_level(self, profileid, threat_level: str, confidence):
         """
         Update the threat level of a certain profile
         :param threat_level: available options are 'low', 'medium' 'critical' etc
@@ -1022,20 +1022,27 @@ class Database(ProfilingFlowsDatabase, object):
         now = time.time()
         now = utils.convert_format(now, utils.alerts_format)
         # keep track of old threat levels
+        confidence = f'confidence: {confidence}'
         past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
+        # this is what we'll be storing in the db, tl, ts, and confidence
+        threat_level_data = (threat_level, now, confidence)
         if past_threat_levels:
             # get the lists of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
-            latest_threat_level = past_threat_levels[-1][0]
-            if latest_threat_level == threat_level:
-                # if the past threat level is the same as this one, replace the timestamp only
-                past_threat_levels[-1] = (threat_level, now)
+            latest_threat_level, latest_ts, latest_confidence = past_threat_levels[-1]
+            if (
+                    latest_threat_level == threat_level
+                    and latest_confidence == confidence
+            ):
+                # if the past threat level and confidence are the same as the ones we wanna store,
+                # replace the timestamp only
+                past_threat_levels[-1] = threat_level_data
             else:
                 # add this threat level to the list of past threat levels
-                past_threat_levels.append((threat_level, now))
+                past_threat_levels.append(threat_level_data)
         else:
             # first time setting a threat level for this profile
-            past_threat_levels = [(threat_level, now)]
+            past_threat_levels = [threat_level_data]
             # threat_levels_update_time = [now]
 
         past_threat_levels = json.dumps(past_threat_levels)
@@ -1432,19 +1439,18 @@ class Database(ProfilingFlowsDatabase, object):
         # note that publishing HAS TO be done after updating the 'Evidence' keys
         if should_publish:
             self.publish('evidence_added', evidence_to_send)
-        # an alert is generated for this profile,
-        # change the score to = 1, and confidence = 1
-        confidence = 1
+
+        # an evidence is generated for this profile, update the
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            self.set_score_confidence(srcip, 'critical', confidence)
+            self.set_score_confidence(srcip, threat_level, confidence)
             # update the threat level of this profile
-            self.update_threat_level(profileid, threat_level)
+            self.update_threat_level(profileid, threat_level, confidence)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.set_score_confidence(detection_info, 'critical', confidence)
+            self.set_score_confidence(detection_info, threat_level, confidence)
             # update the threat level of this profile
-            self.update_threat_level(f'profile_{detection_info}', threat_level)
+            self.update_threat_level(f'profile_{detection_info}', threat_level, confidence)
 
 
         return True
@@ -2740,11 +2746,14 @@ class Database(ProfilingFlowsDatabase, object):
         Function to set the score and confidence of the given ip in the db when it causes an evidence
         These 2 values will be needed when sharing with peers
         :param threat_level: low, medium, high, etc.
-        :apram confidence: from 0 to 1 how sure are we of the score?
+        :param confidence: from 0 to 1 how sure are we of the score?
         """
         # get the numerical value of this threat level
         score = utils.threat_levels[threat_level.lower()]
-        score_confidence = {'score': score, 'confidence': confidence}
+        score_confidence = {
+            'score': score,
+            'confidence': confidence
+        }
         cached_ip_data = self.getIPData(ip)
         if not cached_ip_data:
             self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
