@@ -1366,7 +1366,9 @@ class Database(ProfilingFlowsDatabase, object):
 
         srcip = profileid.split('_')[1]
 
-
+        if type(threat_level) != str:
+            # make sure we always store str threat levels in the db
+            threat_level = utils.threat_level_to_string(threat_level)
 
         if timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
