@@ -35,8 +35,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_modified')
         self.c2 = __database__.subscribe('new_notice')
         self.c3 = __database__.subscribe('new_dhcp')
-        self.c3 = __database__.subscribe('tw_closed')
-
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
@@ -72,8 +70,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
-        # to keep track of clients and their requested addrs sorted by profileid_twid
-        self.dhcp_scan_cache = {}
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -733,50 +729,42 @@ class PortScanProcess(Module, multiprocessing.Process):
             return
 
         uid = flow['uid']
-        server_addr = flow['server_addr']
-        client_addr = flow['client_addr']
         profileid = flow['profileid']
         twid = flow['twid']
         ts = flow['ts']
 
-        key = f'{profileid}_{twid}'
-        # dhcp_scan_cache format is
-        # {
-        #   profile_xyz :
-        #       { requested_addr: uid, requested_addr2: uid2... }
-        # }
-        if key in self.dhcp_scan_cache:
+        # dhcp_flows format is
+        #       { requested_addr: uid,
+        #         requested_addr2: uid2... }
+
+        dhcp_flows: dict = __database__.get_dhcp_flows(profileid, twid)
+
+        if dhcp_flows:
             # client was seen requesting an addr before in this tw
             # was it requesting the same addr?
-            if requested_addr in self.dhcp_scan_cache[key]:
-                # requesting the same addr twice isn't a scan
+            if requested_addr in dhcp_flows:
+                # a client requesting the same addr twice isn't a scan
                 return
+
             # it was requesting a different addr, keep track of it and its uid
-            self.dhcp_scan_cache[key].update(
-                {
-                    requested_addr: uid
-                }
-            )
+            __database__.set_dhcp_flow(profileid, twid, requested_addr, uid)
         else:
             # first time for this client to make a dhcp request in this tw
-            self.dhcp_scan_cache.update({
-                key: {
-                    requested_addr: uid
-                }
-            })
+            __database__.set_dhcp_flow(profileid, twid, requested_addr, uid)
             return
 
 
         # TODO if we are not going to use the requested addr, no need to store it
         # TODO just store the uids
+        dhcp_flows: dict = __database__.get_dhcp_flows(profileid, twid)
 
         # we alert every 4,8,12, etc. requested IPs
-        number_of_requested_addrs = len(self.dhcp_scan_cache[key])
-        if len(self.dhcp_scan_cache[key]) % self.minimum_requested_addrs == 0:
+        number_of_requested_addrs = len(dhcp_flows)
+        if number_of_requested_addrs % self.minimum_requested_addrs == 0:
 
             # get the uids of all the flows where this client was requesting an addr in this tw
             uids = []
-            for requested_addr, uid in self.dhcp_scan_cache[key].items():
+            for requested_addr, uid in dhcp_flows.items():
                 uids.append(uid)
 
             self.set_evidence_dhcp_scan(
@@ -865,15 +853,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     flow = json.loads(message['data'])
                     self.check_dhcp_scan(flow)
 
-                message = __database__.get_message(self.c4)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
 
-                if utils.is_msg_intended_for(message, 'tw_closed'):
-                    profileid_tw = message['data'].split('_')
-                    # no need to track clients' requested addrs if the tw is closed
-                    self.dhcp_scan_cache.pop(profileid_tw, None)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
