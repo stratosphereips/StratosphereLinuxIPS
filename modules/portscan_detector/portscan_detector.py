@@ -35,6 +35,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_modified')
         self.c2 = __database__.subscribe('new_notice')
         self.c3 = __database__.subscribe('new_dhcp')
+        self.c3 = __database__.subscribe('tw_closed')
 
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
@@ -863,6 +864,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_dhcp'):
                     flow = json.loads(message['data'])
                     self.check_dhcp_scan(flow)
+
+                message = __database__.get_message(self.c4)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'tw_closed'):
+                    profileid_tw = message['data'].split('_')
+                    # no need to track clients' requested addrs if the tw is closed
+                    self.dhcp_scan_cache.pop(profileid_tw, None)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
