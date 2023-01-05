@@ -614,6 +614,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['server_addr'] = line[3]
             self.column_values['mac'] = line[4]   # this is the client mac
             self.column_values['host_name'] = line[5]
+            self.column_values['requested_addr'] = line[8]
             self.column_values['saddr'] = self.column_values['client_addr']
             self.column_values['daddr'] = self.column_values['server_addr']
 
@@ -881,6 +882,7 @@ class ProfilerProcess(multiprocessing.Process):
                     'mac': line.get('mac', ''),  # this is the client mac
                     'saddr': line.get('client_addr', ''),
                     'daddr': line.get('server_addr', ''),
+                    'requested_addr': line.get('requested_addr', ''),
                 }
             )
 
@@ -1637,6 +1639,7 @@ class ProfilerProcess(multiprocessing.Process):
             'uid': self.uid,
             'server_addr': self.column_values.get('server_addr', False),
             'client_addr': self.column_values.get('client_addr', False),
+            'requested_addr': self.column_values.get('requested_addr', False),
             'profileid': self.profileid,
             'twid': __database__.get_timewindow(epoch_time, self.profileid),
             'ts': epoch_time
