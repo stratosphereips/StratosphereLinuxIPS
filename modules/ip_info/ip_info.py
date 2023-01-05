@@ -44,6 +44,8 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_dhcp')
         # update asn every 1 month
         self.update_period = 2592000
+        # if we found the gw ip using dhcp, this will be set to true
+        self.gw_set = False
         # we can only getthe age of these tlds
         self.valid_tlds = [
             '.ac_uk',
@@ -491,6 +493,22 @@ class Module(Module, multiprocessing.Process):
         loop.run_until_complete(self.open_dbs())
 
 
+    def set_gw_ip(self, dhcp_flow):
+        """
+        Sets the IP of the gateway as the IP of the dhcp server
+        """
+        server_addr = dhcp_flow.get('server_addr', False)
+        if not server_addr:
+            # no gw IP to set
+            return
+        if self.gw_set:
+            return
+        self.gw_set = True
+        # override the gw in the db since we have a dhcp
+        __database__.set_default_gateway("IP", server_addr)
+        self.get_gateway_MAC(server_addr)
+
+
     def run(self):
         utils.drop_root_privs()
 
@@ -584,17 +602,9 @@ class Module(Module, multiprocessing.Process):
 
                 if utils.is_msg_intended_for(message, 'new_dhcp'):
                     # this channel will only get 1 msg if we have dhcp.log
-                    message = json.loads(message['data'])
-                    server_addr = message.get('server_addr', False)
-                    # uid = message.get('uid', False)
-                    # client_addr = message.get('client_addr', False)
-                    # profileid = message.get('profileid', False)
-                    # twid = message.get('twid', False)
-                    # ts = message.get('ts', False)
-                    # override the gw in the db since we have an dhcp
+                    dhcp_flow = json.loads(message['data'])
+                    self.set_gw_ip(dhcp_flow)
 
-                    __database__.set_default_gateway("IP", server_addr)
-                    self.get_gateway_MAC(server_addr)
 
 
             except KeyboardInterrupt:
