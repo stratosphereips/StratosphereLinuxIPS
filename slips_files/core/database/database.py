@@ -1048,6 +1048,22 @@ class Database(ProfilingFlowsDatabase, object):
         past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
+        # set the score and confidence of the given ip in the db when it causes an evidence
+        # these 2 values will be needed when sharing with peers
+        ip = profileid.split('_')[-1]
+        # get the numerical value of this threat level
+        score = utils.threat_levels[threat_level.lower()]
+        score_confidence = {
+            'score': score,
+            'confidence': confidence
+        }
+        cached_ip_data = self.getIPData(ip)
+        if not cached_ip_data:
+            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
+        else:
+            # append the score and conf. to the already existing data
+            cached_ip_data.update(score_confidence)
+            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
 
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
@@ -1440,16 +1456,13 @@ class Database(ProfilingFlowsDatabase, object):
         if should_publish:
             self.publish('evidence_added', evidence_to_send)
 
-        # an evidence is generated for this profile, update the
+        # an evidence is generated for this profile
+        # update the threat level of this profile
         if type_detection in ('sip', 'srcip'):
             # the srcip is the malicious one
-            self.set_score_confidence(srcip, threat_level, confidence)
-            # update the threat level of this profile
             self.update_threat_level(profileid, threat_level, confidence)
         elif type_detection in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.set_score_confidence(detection_info, threat_level, confidence)
-            # update the threat level of this profile
             self.update_threat_level(f'profile_{detection_info}', threat_level, confidence)
 
 
@@ -2740,27 +2753,6 @@ class Database(ProfilingFlowsDatabase, object):
         :param network_evaluation: a dict with {'score': ..,'confidence': .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
-
-    def set_score_confidence(self, ip: str, threat_level: str, confidence):
-        """
-        Function to set the score and confidence of the given ip in the db when it causes an evidence
-        These 2 values will be needed when sharing with peers
-        :param threat_level: low, medium, high, etc.
-        :param confidence: from 0 to 1 how sure are we of the score?
-        """
-        # get the numerical value of this threat level
-        score = utils.threat_levels[threat_level.lower()]
-        score_confidence = {
-            'score': score,
-            'confidence': confidence
-        }
-        cached_ip_data = self.getIPData(ip)
-        if not cached_ip_data:
-            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
-        else:
-            # append the score and conf. to the already existing data
-            cached_ip_data.update(score_confidence)
-            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
 
     def store_zeek_path(self, path):
         """used to store the path of zeek log files slips is currently using"""

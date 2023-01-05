@@ -1267,10 +1267,11 @@ class UpdateFileManager:
                                     ],
                                 }
                             )
-                            # set the score and confidence of this ip = the same as the ones given in slips.conf
+                            # set the score and confidence of this ip in ipsinfo
+                            # and the profile of this ip to the same as the ones given in slips.conf
                             # todo for now the confidence is 1
-                            __database__.set_score_confidence(
-                                data, threat_level, 1
+                            __database__.update_threat_level(
+                                f'profile_{data}', threat_level, 1
                             )
                     elif data_type == 'ip_range':
                         # make sure we're not blacklisting a private or multicast ip range
