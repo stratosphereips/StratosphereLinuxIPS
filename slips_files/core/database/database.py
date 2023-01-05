@@ -1012,6 +1012,29 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
+    def get_dhcp_flows(self, profileid, twid) -> dict:
+        """
+        returns a dict of dhcp flows that happaened in this profileid and twid
+        """
+        flows = self.r.hget('DHCP_flows', f'{profileid}_{twid}')
+        if flows:
+            return json.loads(flows)
+
+
+    def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
+        """
+        Stores all dhcp flows sorted by profileid_twid
+        """
+        flow = {requested_addr: uid}
+        cached_flows: dict = self.get_dhcp_flows(profileid, twid)
+        if cached_flows:
+            # we already have flows in this twid, update them
+            cached_flows.update(flow)
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
+        else:
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
+
+
     def update_threat_level(self, profileid, threat_level: str):
         """
         Update the threat level of a certain profile
