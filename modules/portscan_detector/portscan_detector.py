@@ -71,6 +71,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
+        # to keep track of clients and their requested addrs sorted by profileid_twid
+        self.dhcp_scan_cache = {}
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -676,8 +678,48 @@ class PortScanProcess(Module, multiprocessing.Process):
         )
 
 
-    def set_evidence_dhcp_scan(self):
-        pass
+    def set_evidence_dhcp_scan(
+            self,
+            timestamp,
+            profileid,
+            twid,
+            uids,
+            number_of_requested_addrs
+    ):
+        type_evidence = 'DHCPScan'
+        type_detection = 'srcip'
+        source_target_tag = 'Recon'
+        srcip = profileid.split('_')[-1]
+        detection_info = srcip
+        threat_level = 'medium'
+        category = 'Recon.Scanning'
+        confidence = 0.8
+        description = (
+            f'Performing a DHCP scan by requesting {number_of_requested_addrs} different IP addresses. '
+            f'Threat Level: {threat_level}. '
+            f'Confidence: {confidence}. by Slips'
+        )
+
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            conn_count=number_of_requested_addrs,
+            source_target_tag=source_target_tag,
+            profileid=profileid,
+            twid=twid,
+            uid=uids,
+        )
+
+        # Set 'malicious' label in the detected profile
+        __database__.set_profile_module_label(
+            profileid, type_evidence, self.malicious_label
+        )
 
     def check_dhcp_scan(self, flow):
         """
@@ -709,18 +751,40 @@ class PortScanProcess(Module, multiprocessing.Process):
                 # requesting the same addr twice isn't a scan
                 return
             # it was requesting a different addr, keep track of it and its uid
-            self.dhcp_scan_cache[key].update({requested_addr: uid})
+            self.dhcp_scan_cache[key].update(
+                {
+                    requested_addr: uid
+                }
+            )
         else:
             # first time for this client to make a dhcp request in this tw
             self.dhcp_scan_cache.update({
-                key: [requested_addr]
+                key: {
+                    requested_addr: uid
+                }
             })
             return
 
-        # we alert every 4 requested ips
-        # so we alerts on 4,8,12, etc. requested IPs
-        if self.dhcp_scan_cache[key] % self.minimum_requested_addrs == 0:
-            self.set_evidence_dhcp_scan()
+
+        # TODO if we are not going to use the requested addr, no need to store it
+        # TODO just store the uids
+
+        # we alert every 4,8,12, etc. requested IPs
+        number_of_requested_addrs = len(self.dhcp_scan_cache[key])
+        if len(self.dhcp_scan_cache[key]) % self.minimum_requested_addrs == 0:
+
+            # get the uids of all the flows where this client was requesting an addr in this tw
+            uids = []
+            for requested_addr, uid in self.dhcp_scan_cache[key].items():
+                uids.append(uid)
+
+            self.set_evidence_dhcp_scan(
+                ts,
+                profileid,
+                twid,
+                uids,
+                number_of_requested_addrs
+            )
 
 
 
