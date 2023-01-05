@@ -696,15 +696,24 @@ class PortScanProcess(Module, multiprocessing.Process):
         twid = flow['twid']
         ts = flow['ts']
 
-        key = f'{profileid}_{twid}_{client_addr}'
-
+        key = f'{profileid}_{twid}'
+        # dhcp_scan_cache format is
+        # {
+        #   profile_xyz :
+        #       { requested_addr: uid, requested_addr2: uid2... }
+        # }
         if key in self.dhcp_scan_cache:
             # client was seen requesting an addr before in this tw
-            self.dhcp_scan_cache[key].append(requested_addr)
+            # was it requesting the same addr?
+            if requested_addr in self.dhcp_scan_cache[key]:
+                # requesting the same addr twice isn't a scan
+                return
+            # it was requesting a different addr, keep track of it and its uid
+            self.dhcp_scan_cache[key].update({requested_addr: uid})
         else:
             # first time for this client to make a dhcp request in this tw
             self.dhcp_scan_cache.update({
-                key: [requested_addr],
+                key: [requested_addr]
             })
             return
 
