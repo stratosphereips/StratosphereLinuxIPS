@@ -58,7 +58,6 @@ class ProfilerProcess(multiprocessing.Process):
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
-        self.gw_set = False
         self.separators = {
             'zeek': '',
             'suricata': '',
@@ -1645,7 +1644,6 @@ class ProfilerProcess(multiprocessing.Process):
             'ts': epoch_time
         }
         __database__.publish('new_dhcp', json.dumps(to_send))
-        self.gw_set = True
 
     def publish_to_new_software(self):
         """
@@ -1942,8 +1940,7 @@ class ProfilerProcess(multiprocessing.Process):
             __database__.store_dhcp_server(self.column_values.get('server_addr', False))
             __database__.mark_profile_as_dhcp(self.profileid)
 
-            if not self.gw_set and self.column_values.get('client_addr', False):
-                self.publish_to_new_dhcp()
+        self.publish_to_new_dhcp()
 
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""

@@ -787,9 +787,6 @@ class PortScanProcess(Module, multiprocessing.Process):
             )
 
 
-
-
-
     def run(self):
         utils.drop_root_privs()
         self.timer_thread_vertical_ps.start()
@@ -858,14 +855,13 @@ class PortScanProcess(Module, multiprocessing.Process):
                         msg, note, profileid, uid, twid, timestamp
                     )
 
-
+                message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_dhcp'):
                     flow = json.loads(message['data'])
-
                     self.check_dhcp_scan(flow)
 
             except KeyboardInterrupt:
