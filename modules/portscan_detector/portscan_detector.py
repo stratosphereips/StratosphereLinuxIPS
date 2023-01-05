@@ -34,6 +34,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('tw_modified')
         self.c2 = __database__.subscribe('new_notice')
+        self.c3 = __database__.subscribe('new_dhcp')
 
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
@@ -67,7 +68,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 target=self.wait_for_horizontal_scans,
                                 daemon=True
         )
-
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -231,7 +231,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                 )
             # reset the dict sinse we already combiner
             self.pending_vertical_ps_evidence = {}
-
 
     def wait_for_horizontal_scans(self):
         """
@@ -449,8 +448,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                                 # first time seeing this key
                                 self.pending_vertical_ps_evidence[key] = [evidence_details]
 
-
-
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
         Use our own Zeek scripts to detect ICMP scans. 
@@ -620,7 +617,6 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.cache_det_thresholds[cache_key] = amount_of_scanned_ips
 
 
-
     def set_evidence_icmpscan(
             self,
             number_of_scanned_ips,
@@ -675,6 +671,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         __database__.set_profile_module_label(
             profileid, type_evidence, self.malicious_label
         )
+
+
+    def check_dhcp_scan(self):
+        pass
 
 
     def run(self):
@@ -744,6 +744,22 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.check_icmp_sweep(
                         msg, note, profileid, uid, twid, timestamp
                     )
+
+
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'new_dhcp'):
+                    flow = json.loads(message['data'])
+                    uid = flow['uid']
+                    server_addr = flow['server_addr']
+                    client_addr = flow['client_addr']
+                    requested_addr = flow['requested_addr']
+                    profileid = flow['profileid']
+                    twid = flow['twid']
+                    ts = flow['ts']
+                    #self.check_dhcp_scan()
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
