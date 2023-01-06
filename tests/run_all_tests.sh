@@ -31,5 +31,5 @@ printf "0" | ./slips.py -k
 # distribute on 3 workers only because every worker will be spawning 10+ processes
 
 python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
-./slips.py --killall
+printf "0" | ./slips.py -k
 ./slips.py -cc
