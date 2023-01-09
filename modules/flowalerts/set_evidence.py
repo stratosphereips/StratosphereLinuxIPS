@@ -774,7 +774,7 @@ class Helper:
         ip_identification = __database__.getIPIdentification(
             daddr
         )
-        description = f'possible data upload. {src_mbs} MBs sent to {daddr} '
+        description = f'Large data upload. {src_mbs} MBs sent to {daddr} '
         description += f'{ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
         __database__.setEvidence(
