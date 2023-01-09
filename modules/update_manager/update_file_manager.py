@@ -1312,7 +1312,7 @@ class UpdateFileManager:
                                     ),
                                 )
                             )
-                            malicious_ips_dict[str(data)] = json.dumps(
+                            malicious_ip_ranges[str(data)] = json.dumps(
                                 {
                                     'description': old_range_info[
                                         'description'
