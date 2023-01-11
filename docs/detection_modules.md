@@ -282,7 +282,7 @@ Slips has a local file for adding IoCs of your own,
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
-The format of the file is "IP address","Threat level", "Description"
+The format of the file is "IP address/IP Range/domain","Threat level", "Description"
 
 Threat level available options: info, low, medium, high, critical
 

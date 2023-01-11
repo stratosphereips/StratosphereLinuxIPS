@@ -285,8 +285,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
         :param ti_file_path: full path_to local threat intel file
         """
         data_file_name = ti_file_path.split('/')[-1]
-        malicious_ips_dict = {}
-        malicious_domains_dict = {}
+        malicious_ips = {}
+        malicious_domains = {}
+        malicious_ip_ranges = {}
         # used for debugging
         line_number = 0
         with open(ti_file_path) as local_ti_file:
@@ -325,7 +326,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
                     if ip_address.is_global:
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps(
+                        malicious_ips[str(ip_address)] = json.dumps(
                             {
                                 'description': description,
                                 'source': data_file_name,
@@ -334,7 +335,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             }
                         )
                 elif data_type == 'domain':
-                    malicious_domains_dict[ioc] = json.dumps(
+                    malicious_domains[ioc] = json.dumps(
                         {
                             'description': description,
                             'source': data_file_name,
@@ -342,6 +343,25 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             'tags': 'local TI file',
                         }
                     )
+                elif data_type == 'ip_range':
+                    net_addr = ioc[: ioc.index('/')]
+                    ip_obj = ipaddress.ip_address(net_addr)
+                    if (
+                        ip_obj.is_multicast
+                        or ip_obj.is_private
+                        or ip_obj.is_link_local
+                        or net_addr in utils.home_networks
+                    ):
+                        continue
+                    malicious_ip_ranges[ioc] = json.dumps(
+                        {
+                            'description': description,
+                            'source': data_file_name,
+                            'threat_level': threat_level,
+                            'tags': 'local TI file',
+                        }
+                    )
+
                 else:
                     # invalid ioc, skip it
                     self.print(
@@ -351,9 +371,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     )
 
         # Add all loaded malicious ips to the database
-        __database__.add_ips_to_IoC(malicious_ips_dict)
+        __database__.add_ips_to_IoC(malicious_ips)
         # Add all loaded malicious domains to the database
-        __database__.add_domains_to_IoC(malicious_domains_dict)
+        __database__.add_domains_to_IoC(malicious_domains)
+        __database__.add_ip_range_to_IoC(malicious_ip_ranges)
         return True
 
     def __delete_old_source_IPs(self, file):
@@ -726,9 +747,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
             return spamhaus_res
 
 
-    def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
+    def ip_belongs_to_blacklisted_range(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
         """ check if this ip belongs to any of our blacklisted ranges"""
         ip_obj = ipaddress.ip_address(ip)
+        # Malicious IP ranges are stored in slips sorted by the first octet
+        # so get the ranges that match the fist octet of the given IP
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
             ranges_starting_with_octet = self.cached_ipv4_ranges.get(first_octet, [])
@@ -737,7 +762,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
             ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
         else:
             return False
-
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges

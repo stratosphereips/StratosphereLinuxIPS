@@ -1004,7 +1004,7 @@ class Module(Module, multiprocessing.Process):
         uid,
     ):
         """
-        function to check if this srcip was detected using a different
+        checks if this srcip was detected using a different
          ssh client versions before
         """
         if 'ssh' not in used_software.lower():
