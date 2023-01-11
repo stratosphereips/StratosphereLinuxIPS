@@ -79,11 +79,11 @@ def create_Main_instance(input_information):
         (
             'dataset/test7-malicious.pcap',
             15,
-            'pcap/',
+            'test7/',
             'horizontal port scan to port  23',
             6666,
         ),
-        ('dataset/test8-malicious.pcap', 3, 'pcap2/', 'performing an arp scan', 6665),
+        ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
     ],
 )
 def test_pcap(
@@ -246,14 +246,14 @@ def test_zeek_dir(
             'dataset/test9-mixed-zeek-dir/conn.log',
             4,
             'horizontal port scan',
-            'conn_log/',
+            'test9-conn_log_only/',
             6659,
         ),
         (
             'dataset/test10-mixed-zeek-dir/conn.log',
             5,
             'horizontal port scan',
-            'conn_log-2/',
+            'test10-conn_log_only/',
             6658,
         ),
     ],
@@ -285,7 +285,7 @@ def test_zeek_conn_log(
 
 @pytest.mark.parametrize(
     'suricata_path,  output_dir, redis_port',
-    [('dataset/test6-malicious.suricata.json', 'suricata/', 6657)],
+    [('dataset/test6-malicious.suricata.json', 'test6/', 6657)],
 )
 def test_suricata(database, suricata_path, output_dir, redis_port):
     output_dir = create_output_dir(output_dir)
@@ -320,7 +320,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
 )
 @pytest.mark.parametrize(
     'nfdump_path,  output_dir, redis_port',
-    [('dataset/test1-normal.nfdump', 'nfdump/', 6656)],
+    [('dataset/test1-normal.nfdump', 'test1/', 6656)],
 )
 def test_nfdump(database, nfdump_path, output_dir, redis_port):
     """

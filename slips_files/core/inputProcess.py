@@ -691,8 +691,6 @@ class InputProcess(multiprocessing.Process):
         ]
         command += rotation
         command += packet_filter
-        self.print(f"@@@@@@@@@@@@@@@@@@  cwd: {os.getcwd()}")
-        self.print(f"@@@@@@@@@@@@@@@@@@ {' '.join(command)} ")
 
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
@@ -704,7 +702,6 @@ class InputProcess(multiprocessing.Process):
             cwd=self.zeek_folder,
             preexec_fn=detach_child
         )
-        self.print(f"@@@@@@@@@@@@@@@@@@  cwd: {os.getcwd()}")
         # you have to get the pid before communicate()
         self.zeek_pid = zeek.pid
 
