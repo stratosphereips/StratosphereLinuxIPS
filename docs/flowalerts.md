@@ -189,7 +189,9 @@ And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
 
 Slips detects downloads from pastebin using SSL and HTTP
 
-It alerts when a downloaded file from pastebin exceeds 12000 bytes 
+It alerts when a downloaded file from pastebin exceeds 700 bytes 
+
+This value can be customized in slips.conf by changing ```pastebin_download_threshold```
 
 Slips detects the pastebin download once the SSL connection is over , which may take hours.  
 
@@ -300,5 +302,9 @@ Slips detects when a private IP is connected to another private IP with threat l
 ## High entropy DNS TXT answers 
 
 Slips check every DNS answer with TXT record for high entropy
-strings. Encoded or encrypted strings will then be detcted using shannon entropy
+strings. 
+Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
 and alerted by slips.
+
+the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
+
