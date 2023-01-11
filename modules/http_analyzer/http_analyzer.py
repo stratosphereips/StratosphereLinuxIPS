@@ -29,6 +29,7 @@ class Module(Module, multiprocessing.Process):
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
         self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
+        self.read_configuration()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -49,6 +50,10 @@ class Module(Module, multiprocessing.Process):
 
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
 
     def check_suspicious_user_agents(
         self, uid, host, uri, timestamp, user_agent, profileid, twid
@@ -441,7 +446,7 @@ class Module(Module, multiprocessing.Process):
 
         ip_identification = __database__.getIPIdentification(daddr)
         if ('pastebin' in ip_identification
-            and response_body_len > 12000
+            and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):
             type_detection = 'dstip'
             source_target_tag = 'Malware'
