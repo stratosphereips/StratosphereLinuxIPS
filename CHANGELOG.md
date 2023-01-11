@@ -11,6 +11,7 @@
 - Add detection for non-HTTP connections on port 80
 - P2P can now work without adding the p2p4slips binary to PATH
 - Add detection for connections to private IPs from private IPs
+- Add detection of high entropy DNS TXT answers 
 - Add detection for DHCP scans
 - Support having IP ranges in your own local TI file own_malicious_iocs.csv
 -1.0.0

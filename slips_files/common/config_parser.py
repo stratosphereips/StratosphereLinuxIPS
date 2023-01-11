@@ -72,6 +72,20 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
+    def get_entropy_threshold(self):
+        """
+        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
+        """
+        threshold = self.read_configuration(
+            'flowalerts', 'entropy_threshold', 5
+        )
+
+        try:
+            return float(threshold)
+        except:
+            return 5
+
+
     def get_pastebin_download_threshold(self):
 
         threshold = self.read_configuration(

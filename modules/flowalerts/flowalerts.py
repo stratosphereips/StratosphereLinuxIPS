@@ -13,6 +13,8 @@ import ipaddress
 import datetime
 import sys
 import validators
+import collections
+import math
 import time
 from multiprocessing import Queue
 from .set_evidence import Helper
@@ -94,6 +96,7 @@ class Module(Module, multiprocessing.Process):
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
 
+
     def read_configuration(self):
         conf = ConfigParser()
         self.long_connection_threshold = conf.long_connection_threshold()
@@ -101,6 +104,7 @@ class Module(Module, multiprocessing.Process):
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
         self.our_ips = utils.get_own_IPs()
+        self.shannon_entropy_threshold = conf.get_entropy_threshold()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -1038,6 +1042,43 @@ class Module(Module, multiprocessing.Process):
         )
         return True
 
+    def estimate_shannon_entropy(self, string):
+        m = len(string)
+        bases = collections.Counter([tmp_base for tmp_base in string])
+        shannon_entropy_value = 0
+        for base in bases:
+            # number of residues
+            n_i = bases[base]
+            # n_i (# residues type i) / M (# residues in column)
+            p_i = n_i / float(m)
+            entropy_i = p_i * (math.log(p_i, 2))
+            shannon_entropy_value += entropy_i
+
+        return shannon_entropy_value * -1
+
+    def check_suspicious_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
+        """
+        Uses shannon entropy to detect DNS TXT answers with encoded/encrypted strings
+        """
+        if not answers:
+            return
+
+        for answer in answers:
+            if 'TXT' in answer:
+                # TXT record
+                entropy = self.estimate_shannon_entropy(answer)
+                if entropy >= self.shannon_entropy_threshold:
+                    self.helper.set_evidence_suspicious_dns_answer(
+                        domain,
+                        answer,
+                        entropy,
+                        daddr,
+                        profileid,
+                        twid,
+                        stime,
+                        uid
+                    )
+
     def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
@@ -1929,6 +1970,9 @@ class Module(Module, multiprocessing.Process):
                             domain, answers, rcode_name, stime, profileid, twid, uid
                         )
 
+                    self.check_suspicious_dns_answers(
+                        domain, answers, daddr, profileid, twid, stime, uid
+                    )
                     self.detect_DGA(
                         rcode_name, domain, stime, daddr, profileid, twid, uid
                     )

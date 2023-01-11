@@ -668,6 +668,29 @@ class Helper:
             uid=uid,
         )
 
+    def set_evidence_suspicious_dns_answer(self, query, answer, entropy, daddr, profileid, twid, stime, uid):
+        confidence = 0.6
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        type_evidence = 'HighEntropyDNSanswer'
+        type_detection = 'dstip'
+        detection_info = daddr
+        description = f'A DNS TXT answer with high entropy. ' \
+                      f'query: {query} answer: "{answer}" entropy: {round(entropy, 2)} '
+        __database__.setEvidence(
+            type_evidence,
+            type_detection,
+            detection_info,
+            threat_level,
+            confidence,
+            description,
+            stime,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid,
+        )
+
     def set_evidence_for_port_0_connection(
         self, saddr, daddr, sport, dport, direction, profileid, twid, uid, timestamp
     ):
