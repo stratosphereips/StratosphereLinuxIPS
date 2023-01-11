@@ -312,7 +312,8 @@ class UpdateFileManager:
             try:
                 response = requests.get(file_to_download, timeout=10)
                 if response.status_code != 200:
-                    error = f'An error occurred while downloading the file {file_to_download}. Aborting'
+                    error = f'An error occurred while downloading the file {file_to_download}.' \
+                            f'status code: {response.status_code}. Aborting'
                 else:
                     return response
             except requests.exceptions.ReadTimeout:
