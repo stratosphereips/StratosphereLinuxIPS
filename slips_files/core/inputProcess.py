@@ -108,6 +108,7 @@ class InputProcess(multiprocessing.Process):
         self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
+        self.store_zeek_files_in_output_dir = conf.store_zeek_files_in_the_output_dir()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -660,8 +661,18 @@ class InputProcess(multiprocessing.Process):
             # Find if the pcap file name was absolute or relative
             given_path = self.given_path
             if not os.path.isabs(self.given_path):
-                # move 1 dir back since we will move into zeek_Files dir
-                given_path = os.path.join('..', self.given_path)
+                # now the given pcap is relative to slips main dir
+                # slips can store the zeek dir to store logs either in the
+                # output dir, or in any dir specified with -o
+                if self.store_zeek_files_in_output_dir:
+                    # in this case the zeek logs file can be literally anywhere
+                    # construct an abs path from the given path so slips can find the given pcap
+                    given_path = os.path.join(os.getcwd(), self.given_path)
+                else:
+                    # the zeek logs dir will be placed by default in Slips/output/<filename>_<date>/zeek_files/
+                    # so move 2 dirs back
+                    given_path = os.path.join('../../', self.given_path)
+
             # using a list of params instead of a str for storing the cmd
             # becaus ethe given path may contain spaces
             bro_parameter = ['-r', given_path]
@@ -685,6 +696,9 @@ class InputProcess(multiprocessing.Process):
         ]
         command += rotation
         command += packet_filter
+        self.print(f"@@@@@@@@@@@@@@@@@@  cwd: {os.getcwd()}")
+        self.print(f"@@@@@@@@@@@@@@@@@@ {' '.join(command)} ")
+
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
         zeek = subprocess.Popen(
@@ -695,7 +709,7 @@ class InputProcess(multiprocessing.Process):
             cwd=self.zeek_folder,
             preexec_fn=detach_child
         )
-
+        self.print(f"@@@@@@@@@@@@@@@@@@  cwd: {os.getcwd()}")
         # you have to get the pid before communicate()
         self.zeek_pid = zeek.pid
 
