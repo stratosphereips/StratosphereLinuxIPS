@@ -1066,16 +1066,19 @@ class Main:
         # default output/
         if '-o' in sys.argv:
             # -o is given
-            # Create output folder for alerts.log and
-            # alerts.json if it doesn't  exist
-            files_to_clear = ('alerts.json', 'alerts.log', 'errors.log', 'slips.log')
-            for file in files_to_clear:
-                try:
-                    file = os.path.join(self.args.output, file)
-                    os.remove(file)
-                except OSError:
-                    # they weren't created in the first place
-                    pass
+            # delet all old files in the output dir
+            if os.path.exists(self.args.output):
+                for file in os.listdir(self.args.output):
+                    file_path = os.path.join(self.args.output, file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except:
+                        pass
+            else:
+                os.makedirs(self.args.output)
             return
 
         # self.args.output is the same as self.alerts_default_path
@@ -1092,8 +1095,7 @@ class Main:
         ts = utils.convert_format(datetime.now(), '%Y-%m-%d_%H:%M:%S')
         self.args.output += f'_{ts}/'
 
-        if not os.path.exists(self.args.output):
-            os.makedirs(self.args.output)
+        os.makedirs(self.args.output)
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
 
