@@ -72,6 +72,17 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
+    def get_pastebin_download_threshold(self):
+
+        threshold = self.read_configuration(
+            'flowalerts', 'pastebin_download_threshold', 700
+        )
+
+        try:
+            return int(threshold)
+        except:
+            return 700
+
 
     def get_all_homenet_ranges(self):
         return self.home_network_ranges

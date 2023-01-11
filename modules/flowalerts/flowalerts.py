@@ -99,6 +99,7 @@ class Module(Module, multiprocessing.Process):
         self.long_connection_threshold = conf.long_connection_threshold()
         self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
+        self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
         self.our_ips = utils.get_own_IPs()
 
 
@@ -383,7 +384,7 @@ class Module(Module, multiprocessing.Process):
         # orig_bytes is number of payload bytes downloaded
         downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
 
-        if downloaded_bytes >= 700:
+        if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
             return True
 
