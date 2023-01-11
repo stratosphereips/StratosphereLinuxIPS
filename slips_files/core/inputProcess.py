@@ -180,8 +180,10 @@ class InputProcess(multiprocessing.Process):
 
         now = float(utils.convert_format(datetime.now(), 'unixtimestamp'))
         time_to_delete = now >= self.time_rotated + self.keep_rotated_files_for
-
         if time_to_delete:
+            # getting here means that the rotated
+            # files are kept enough ( keep_rotated_files_for seconds)
+            # and it's time to delete them
             for file in self.to_be_deleted:
                 try:
                     os.remove(file)
@@ -580,7 +582,7 @@ class InputProcess(multiprocessing.Process):
 
     def remove_old_zeek_files(self):
         """
-        This thread waits for filemonitor.py to tell it that zeek changed the files,
+        This thread waits for filemonitor.py to tell it that zeek changed the log files,
         it deletes old zeek-date.log files and clears slips' open handles and sleeps again
         """
         while True:
@@ -589,8 +591,6 @@ class InputProcess(multiprocessing.Process):
             if msg and msg['data'] == 'stop_process':
                 return True
             if utils.is_msg_intended_for(msg, 'remove_old_files'):
-
-
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
                 changed_files = json.loads(msg['data'])
 
