@@ -95,7 +95,7 @@ class Module(Module, multiprocessing.Process):
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-        self.shannon_entropy_threshold = 5
+
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -103,6 +103,7 @@ class Module(Module, multiprocessing.Process):
         self.ssh_succesful_detection_threshold = conf.ssh_succesful_detection_threshold()
         self.data_exfiltration_threshold = conf.data_exfiltration_threshold()
         self.our_ips = utils.get_own_IPs()
+        self.shannon_entropy_threshold = conf.get_entropy_threshold()
 
 
     def print(self, text, verbose=1, debug=0):

@@ -24,6 +24,7 @@ class ConfigParser(object):
             ipaddress.ip_network, self.home_network_ranges
         ))
 
+
     def read_config_file(self):
         """
         reads slips configuration file, slips.conf is the default file
@@ -71,6 +72,20 @@ class ConfigParser(object):
             # There is a conf, but there is no option,
             # or no section or no configuration file specified
             return default_value
+
+    def get_entropy_threshold(self):
+        """
+        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
+        """
+        threshold = self.read_configuration(
+            'flowalerts', 'entropy_threshold', 5
+        )
+
+        try:
+            return float(threshold)
+        except:
+            return 5
+
 
 
     def get_all_homenet_ranges(self):
