@@ -3,14 +3,13 @@ from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
 import socket
-import subprocess
+import requests
 import json
 import time
 import platform
 import os
 import sys
 import ipaddress
-import configparser
 
 
 class Utils(object):
@@ -250,13 +249,28 @@ class Utils(object):
             s.close()
 
         # get public ip
-        command = f'curl -m 5 -s http://ipinfo.io/json'
-        result = subprocess.run(command.split(), capture_output=True)
-        text_output = result.stdout.decode('utf-8').replace('\n', '')
-        if not text_output or 'Connection timed out' in text_output:
+
+        try:
+            response = requests.get(
+                f'http://ipinfo.io/json',
+                timeout=5,
+            )
+        except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.ReadTimeout
+        ):
             return IPs
 
-        public_ip = json.loads(text_output)['ip']
+        if response.status_code != 200:
+            return IPs
+        if 'Connection timed out' in response.text:
+            return IPs
+        try:
+            response = json.loads(response.text)
+        except json.decoder.JSONDecodeError:
+            return IPs
+        public_ip = response['ip']
         IPs.append(public_ip)
         return IPs
 
