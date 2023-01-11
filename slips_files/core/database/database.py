@@ -2360,14 +2360,13 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_passive_dns(self, ip):
         """
-        Get passive DNS from virus total
+        Gets passive DNS from the db
         """
         data = self.rcache.hget('passiveDNS', ip)
         if data:
-            data = json.loads(data)
-            return data
+            return json.loads(data)
         else:
-            return ''
+            return False
 
     def get_IPs_in_IoC(self):
         """
