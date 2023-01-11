@@ -108,7 +108,6 @@ class InputProcess(multiprocessing.Process):
         self.enable_rotation = conf.rotation()
         self.rotation_period = conf.rotation_period()
         self.keep_rotated_files_for = conf.keep_rotated_files_for()
-        self.store_zeek_files_in_output_dir = conf.store_zeek_files_in_the_output_dir()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -662,16 +661,12 @@ class InputProcess(multiprocessing.Process):
             given_path = self.given_path
             if not os.path.isabs(self.given_path):
                 # now the given pcap is relative to slips main dir
-                # slips can store the zeek dir to store logs either in the
-                # output dir, or in any dir specified with -o
-                if self.store_zeek_files_in_output_dir:
-                    # in this case the zeek logs file can be literally anywhere
-                    # construct an abs path from the given path so slips can find the given pcap
-                    given_path = os.path.join(os.getcwd(), self.given_path)
-                else:
-                    # the zeek logs dir will be placed by default in Slips/output/<filename>_<date>/zeek_files/
-                    # so move 2 dirs back
-                    given_path = os.path.join('../../', self.given_path)
+                # slips can store the zeek logs dir either in the
+                # output dir (by default in Slips/output/<filename>_<date>/zeek_files/),
+                # or in any dir specified with -o
+                # construct an abs path from the given path so slips can find the given pcap
+                # no matter where the zeek dir is placed
+                given_path = os.path.join(os.getcwd(), self.given_path)
 
             # using a list of params instead of a str for storing the cmd
             # becaus ethe given path may contain spaces
