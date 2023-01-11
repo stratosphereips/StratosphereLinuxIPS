@@ -108,8 +108,6 @@ def test_pcap(
 
     slips = create_Main_instance(pcap_path)
     slips.prepare_zeek_output_dir()
-    # remove the generated zeek files
-    shutil.rmtree(f"{slips.zeek_folder}")
 
 @pytest.mark.parametrize(
     'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
@@ -451,6 +449,4 @@ def test_conf_file2(
     shutil.rmtree(output_dir)
     slips = create_Main_instance(pcap_path)
     slips.prepare_zeek_output_dir()
-    # remove the generated zeek files
-    shutil.rmtree(f"{slips.zeek_folder}")
 
