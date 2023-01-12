@@ -605,12 +605,13 @@ The rules will be automatically detected, compiled and run on the given PCAP.
 If you want to contribute, improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
-## Portscan Detector Module
+## Network Service Discovery Module
 
-This module is responsibe for detecting scans such as:
+This module is responsible for detecting scans such as:
 - Vertical port scans
 - Horizontal port scans
 - PING sweeps
+- DHCP Scans
 
 
 ### Vertical port scans

@@ -18,6 +18,7 @@
 - Add the option to change pastebin download detection threshold in slips.conf
 - Add the option to change shannon entropy threshold detection threshold in slips.conf
 - Store zeek files in the output directory by default
+- Portscan detector is now called network service discovery
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip

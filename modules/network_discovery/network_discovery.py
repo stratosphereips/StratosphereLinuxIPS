@@ -19,7 +19,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = 'Port Scan Detector'
+    name = 'Network Service Discovery'
     description = 'Detect Horizonal, Vertical and ICMP scans'
     authors = ['Sebastian Garcia', 'Alya Gomaa']
 
