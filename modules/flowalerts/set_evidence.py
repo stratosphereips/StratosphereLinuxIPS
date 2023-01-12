@@ -265,9 +265,14 @@ class Helper:
     def set_evidence_conn_to_private_ip(
             self, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
+
         confidence = 1
         threat_level = 'info'
-        description = f'Connecting to private IP: {daddr} on destination port: {dport}'
+        description = f'Connecting to private IP: {daddr} '
+        if dport != '':
+            # arp flows dont have dport
+            description += f'on destination port: {dport}'
+
         evidence_type = 'ConnectionToPrivateIP'
         category = 'Recon.Scanning'
         attacker_direction = 'srcip'

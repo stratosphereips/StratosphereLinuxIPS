@@ -854,7 +854,8 @@ class ProfilingFlowsDatabase(object):
         # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby('labels', 1, label)
-        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
+        # We can publish the flow directly without asking for it, but
+        # its good to maintain the format given by the get_flow() function.
         flow = self.get_flow(profileid, twid, uid)
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
