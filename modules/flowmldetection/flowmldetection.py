@@ -103,7 +103,7 @@ class Module(Module, multiprocessing.Process):
                 self.clf.partial_fit(
                     X_flow, y_flow, classes=['Malware', 'Normal']
                 )
-            except:
+            except Exception as ex:
                 self.print('Error while calling clf.train()')
                 self.print(traceback.print_exc())
 
@@ -225,7 +225,7 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
             return dataset
-        except:
+        except Exception as ex:
             # Stop the timer
             self.print('Error in process_features()')
             self.print(traceback.print_exc(),0,1)
@@ -304,7 +304,7 @@ class Module(Module, multiprocessing.Process):
 
             # Update the flow to the processed version
             self.flows = df_flows
-        except:
+        except Exception as ex:
             # Stop the timer
             self.print('Error in process_flows()')
             self.print(traceback.print_exc(),0,1)

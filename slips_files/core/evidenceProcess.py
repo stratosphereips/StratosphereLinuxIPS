@@ -141,7 +141,7 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             return
 
-        except:
+        except Exception as ex:
             self.print('Error in print_alert()')
             self.print(traceback.print_exc(),0,1)
 
@@ -236,7 +236,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
-        except:
+        except Exception as ex:
             self.print('Error in addDataToJSONFile()')
             self.print(traceback.print_exc(),0,1)
 
@@ -258,7 +258,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except:
+        except Exception as ex:
             self.print('Error in addDataToLogFile()')
             self.print(traceback.print_exc(),0,1)
 
@@ -371,7 +371,7 @@ class EvidenceProcess(multiprocessing.Process):
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
                 f'given the following evidence:{Style.RESET_ALL}\n'
             )
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,

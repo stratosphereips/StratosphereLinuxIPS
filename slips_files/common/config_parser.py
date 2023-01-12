@@ -82,7 +82,7 @@ class ConfigParser(object):
 
         try:
             return float(threshold)
-        except:
+        except Exception as ex:
             return 5
 
 
@@ -94,7 +94,7 @@ class ConfigParser(object):
 
         try:
             return int(threshold)
-        except:
+        except Exception as ex:
             return 700
 
 

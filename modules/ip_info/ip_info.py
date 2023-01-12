@@ -381,7 +381,7 @@ class Module(Module, multiprocessing.Process):
                 # get registration date
                 try:
                     creation_date = whois.query(domain).creation_date
-                except:
+                except Exception as ex:
                     return False
 
         if not creation_date:
@@ -476,7 +476,7 @@ class Module(Module, multiprocessing.Process):
                     mac, host_name, profileid = self.pending_mac_queries.get(timeout=0.5)
                     self.get_vendor(mac, host_name, profileid)
 
-                except:
+                except Exception as ex:
                     # queue is empty
                     return
 

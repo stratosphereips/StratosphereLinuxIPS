@@ -66,7 +66,7 @@ class GuiProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             self.print('Stoppting the GUI Process')
             return True
-        except:
+        except Exception as ex:
             self.print('Error in the GUI Process')
             self.print(traceback.print_exc(),0,1)
             return True

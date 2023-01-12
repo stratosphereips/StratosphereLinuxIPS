@@ -627,7 +627,7 @@ class UpdateFileManager:
 
             return True
 
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on update_TI_file() line {exception_line}', 0, 1

@@ -380,7 +380,7 @@ class Module(Module, multiprocessing.Process):
             )
 
 
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on process_flow() line {exception_line}', 0, 1

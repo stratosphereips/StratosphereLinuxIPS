@@ -1080,7 +1080,7 @@ class Main:
                             os.remove(file_path)
                         elif os.path.isdir(file_path):
                             shutil.rmtree(file_path)
-                    except:
+                    except Exception as ex:
                         pass
             else:
                 os.makedirs(self.args.output)

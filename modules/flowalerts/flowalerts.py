@@ -345,7 +345,7 @@ class Module(Module, multiprocessing.Process):
             for ssl_flow in range(size):
                 try:
                     ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
-                except:
+                except Exception as ex:
                     continue
 
                 # unpack the flow

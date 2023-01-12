@@ -88,7 +88,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
-            except:
+            except Exception as ex:
                 # nothing in queue
                 time.sleep(5)
                 continue
@@ -101,7 +101,7 @@ class Module(Module, multiprocessing.Process):
             while True:
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
-                except:
+                except Exception as ex:
                     # queue is empty
                     break
 
@@ -490,7 +490,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except:
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

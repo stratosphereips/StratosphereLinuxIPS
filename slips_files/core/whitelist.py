@@ -471,7 +471,7 @@ class Whitelist:
 
                         else:
                             self.print(f'{data} is not a valid {type_}.', 1, 0)
-                    except:
+                    except Exception as ex:
                         self.print(
                             f'Line {line_number} in whitelist.conf is invalid. Skipping. '
                         )

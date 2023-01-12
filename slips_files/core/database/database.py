@@ -2428,7 +2428,7 @@ class Database(ProfilingFlowsDatabase, object):
                 )
                 flow_information = json.loads(flow_information)
                 timestamp = flow_information.get('ts')
-            except:
+            except Exception as ex:
                 pass
         return timestamp
 
