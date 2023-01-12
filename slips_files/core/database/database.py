@@ -1751,16 +1751,10 @@ class Database(ProfilingFlowsDatabase, object):
                     + ', '
                 )
 
-                tags = current_data['threatintelligence'].get('tags','[]')
+                tags: list = current_data['threatintelligence'].get('tags', False)
                 # remove brackets
-                tags = tags.replace(']','').replace('[','').replace("'",'')
-                tags = tags.split(',')
-
-                identification += (
-                    'tags='
-                    + ", ".join(tags)
-                    + ', '
-                )
+                if tags:
+                    identification += f'tags= {tags} '
 
         identification = identification[:-2]
         return identification

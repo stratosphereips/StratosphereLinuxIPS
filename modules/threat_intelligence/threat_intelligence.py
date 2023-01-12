@@ -153,14 +153,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
-        tags = ''
-        if tags_temp := ip_info.get('tags', False):
-            # We need tags_temp so we avoid doing a replace on a bool.
-            tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
-
-        if tags != '':
-            # description += f' tags={tags}'
-            source_target_tag = tags.capitalize()
+        if tags := ip_info.get('tags', False):
+            source_target_tag = tags[0].capitalize()
         else:
             source_target_tag = 'BlacklistedIP'
 
@@ -206,13 +200,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
-        tags = (
-            domain_info.get('tags', '')
-                .replace('[', '')
-                .replace(']', '')
-                .replace("'", '')
-        )
-        source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
+        tags = domain_info.get('tags', False)
+        source_target_tag = tags[0].capitalize() if tags else 'BlacklistedDomain'
 
         if self.is_dns_response:
             description = f'DNS answer with a blacklisted CNAME: {domain} ' \
@@ -222,8 +211,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'Description: {domain_info.get("description", "")}, '\
                        f'Found in feed: {domain_info["source"]}, '\
-                       f'with tags: {tags}. '\
                        f'Confidence: {confidence}.'
+        if tags:
+            description += f'with tags: {tags}. '
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,

@@ -389,7 +389,8 @@ class Module(Module, multiprocessing.Process):
         # saddr is the IP in the headers of the ARP packet
         # daddr is the IP in the headers of the ARP packet
 
-        # Gratuitous ARP can be used for (1) Updating ARP Mapping, (2) Announcing a Node’s Existence, (3) Redundancy, (4) MITM. Which is similar to an 'unrequested' load balancing
+        # Gratuitous ARP can be used for (1) Updating ARP Mapping, (2) Announcing a Node’s Existence,
+        (3) Redundancy, (4) MITM. Which is similar to an 'unrequested' load balancing
         # The saddr and daddr are the ones being avertised. The supposed purpose of the Gratuitous ARP
         """
 
@@ -489,7 +490,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
