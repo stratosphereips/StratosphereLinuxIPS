@@ -1069,6 +1069,11 @@ class Main:
             # delet all old files in the output dir
             if os.path.exists(self.args.output):
                 for file in os.listdir(self.args.output):
+                    # in integration tests, slips redirct its' output to slips_output.txt,
+                    # don't delete that file
+                    if self.args.testing and 'slips_output.txt' in file:
+                        continue
+
                     file_path = os.path.join(self.args.output, file)
                     try:
                         if os.path.isfile(file_path):
