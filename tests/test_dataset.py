@@ -2,10 +2,11 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
+import os
 import pytest
 from ..slips import *
 from pathlib import Path
-
+import shutil
 
 alerts_file = 'alerts.log'
 
@@ -35,7 +36,12 @@ def create_output_dir(dirname):
     """
 
     path = Path(os.path.join('output/integration_tests/', dirname))
+    # clear output dir before running the test
+    if os.path.exists(path):
+        shutil.rmtree(path)
+
     path.mkdir(parents=True, exist_ok=True)
+
     return path
 
 def has_errors(output_dir):
