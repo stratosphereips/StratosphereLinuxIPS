@@ -15,8 +15,6 @@ import asyncio
 import datetime
 
 
-
-
 class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):
         self.outputqueue = outputqueue
@@ -79,7 +77,6 @@ class UpdateFileManager:
         if not os.path.exists(self.path_to_remote_ti_files):
             os.mkdir(self.path_to_remote_ti_files)
 
-        # self.ti_feed_tuples = conf.ti_files()
         self.ti_feeds_path = conf.ti_files()
         self.url_feeds = self.get_feed_details(self.ti_feeds_path)
 
