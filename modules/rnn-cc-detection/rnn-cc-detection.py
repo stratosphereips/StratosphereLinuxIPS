@@ -65,10 +65,10 @@ class Module(Module, multiprocessing.Process):
         Set an evidence for malicious Tuple
         """
 
-        type_detection = 'outTuple'
-        detection_info = tupleid
+        attacker_direction = 'outTuple'
+        attacker = tupleid
         source_target_tag = 'Botnet'
-        type_evidence = 'Command-and-Control-channels-detection'
+        evidence_type = 'Command-and-Control-channels-detection'
         threat_level = 'high'
         categroy = 'Intrusion.Botnet'
         tupleid = tupleid.split('-')
@@ -81,22 +81,9 @@ class Module(Module, multiprocessing.Process):
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            categroy,
-            source_target_tag=source_target_tag,
-            port=port,
-            proto=proto,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def convert_input_for_module(self, pre_behavioral_model):
         """

@@ -283,29 +283,29 @@ class Trust(Module, multiprocessing.Process):
             return
 
         # example: dstip srcip dport sport dstdomain
-        type_detection = data.get('type_detection')
-        if not 'ip' in type_detection:   # and not 'domain' in type_detection:
+        attacker_direction = data.get('attacker_direction')
+        if not 'ip' in attacker_direction:   # and not 'domain' in attacker_direction:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
 
-        type_evidence = data.get('type_evidence')
-        if 'P2PReport' in type_evidence:
+        evidence_type = data.get('evidence_type')
+        if 'P2PReport' in evidence_type:
             # we shouldn't re-share evidence reported by other peers
             return
 
 
-        detection_info = data.get('detection_info')
+        attacker = data.get('attacker')
         confidence = data.get('confidence', False)
         threat_level = data.get('threat_level', False)
         if not threat_level:
             self.print(
-                f"IP {detection_info} doesn't have a threat_level. not sharing to the network.", 0,2,
+                f"IP {attacker} doesn't have a threat_level. not sharing to the network.", 0,2,
             )
             return
         if not confidence:
             self.print(
-                f"IP {detection_info} doesn't have a confidence. not sharing to the network.", 0, 2,
+                f"IP {attacker} doesn't have a confidence. not sharing to the network.", 0, 2,
             )
             return
 
@@ -321,7 +321,7 @@ class Trust(Module, multiprocessing.Process):
         data_already_reported = True
         try:
             cached_opinion = self.trust_db.get_cached_network_opinion(
-                'ip', detection_info
+                'ip', attacker
             )
             (
                 cached_score,
@@ -342,7 +342,7 @@ class Trust(Module, multiprocessing.Process):
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
-                detection_info, score, confidence, '*', self.pygo_channel
+                attacker, score, confidence, '*', self.pygo_channel
             )
 
     def gopy_callback(self, msg: Dict):
@@ -451,9 +451,9 @@ class Trust(Module, multiprocessing.Process):
         twid = ip_info.get('twid')
         timestamp = str(ip_info.get('stime'))
 
-        type_detection = ip_state
-        detection_info = ip
-        type_evidence = 'Malicious-IP-from-P2P-network'
+        attacker_direction = ip_state
+        attacker = ip
+        evidence_type = 'Malicious-IP-from-P2P-network'
 
         category = 'Anomaly.Traffic'
         # dns_resolution = __database__.get_dns_resolution(ip)
@@ -474,19 +474,8 @@ class Trust(Module, multiprocessing.Process):
             f' Source: Slips P2P network.'
         )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
         # add this ip to our MaliciousIPs hash in the database
         __database__.set_malicious_ip(ip, profileid, twid)

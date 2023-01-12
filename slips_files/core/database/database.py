@@ -1351,29 +1351,29 @@ class Database(ProfilingFlowsDatabase, object):
             return json.loads(uids)
 
     def setEvidence(
-        self,
-        type_evidence,
-        type_detection,
-        detection_info,
-        threat_level,
-        confidence,
-        description,
-        timestamp,
-        category,
-        source_target_tag=False,
-        conn_count=False,
-        port=False,
-        proto=False,
-        profileid='',
-        twid='',
-        uid='',
+            self,
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=False,
+            conn_count=False,
+            port=False,
+            proto=False,
+            profileid='',
+            twid='',
+            uid=''
     ):
         """
         Set the evidence for this Profile and Timewindow.
 
-        type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
-        type_detection: the type of value causing the detection e.g. dport, dip, flow
-        detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
+        evidence_type: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
+        attacker_direction: the type of value causing the detection e.g. dstip, srcip, dstdomain, md5, url
+        attacker: the actual srcip or dstdomain. e.g. 1.1.1.1 or abc.com
         threat_level: determine the importance of the evidence, available options are:
                         info, low, medium, high, critical
         confidence: determine the confidence of the detection on a scale from 0 to 1.
@@ -1385,15 +1385,15 @@ class Database(ProfilingFlowsDatabase, object):
 
         source_target_tag:
             this is the IDEA category of the source and dst ip used in the evidence
-            if the type_detection is srcip this describes the source ip,
-            if the type_detection is dstip this describes the dst ip.
+            if the attacker_direction is srcip this describes the source ip,
+            if the attacker_direction is dstip this describes the dst ip.
             supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
-            this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
+            this is a keyword/optional argument because it shouldn't be used with dports and sports attacker_direction
         """
 
 
         # Ignore evidence if it's disabled in the configuration file
-        if self.is_detection_disabled(type_evidence):
+        if self.is_detection_disabled(evidence_type):
             return False
 
         if not twid:
@@ -1408,8 +1408,6 @@ class Database(ProfilingFlowsDatabase, object):
         if type(uid) == list:
             uid = uid[-1]
 
-        srcip = profileid.split('_')[1]
-
         if type(threat_level) != str:
             # make sure we always store str threat levels in the db
             threat_level = utils.threat_level_to_string(threat_level)
@@ -1420,9 +1418,9 @@ class Database(ProfilingFlowsDatabase, object):
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),
-            'type_detection': type_detection,
-            'detection_info': detection_info,
-            'type_evidence': type_evidence,
+            'attacker_direction': attacker_direction,
+            'attacker': attacker,
+            'evidence_type': evidence_type,
             'description': description,
             'stime': timestamp,
             'uid': uid,
@@ -1435,7 +1433,7 @@ class Database(ProfilingFlowsDatabase, object):
         if conn_count:
             evidence_to_send.update({'conn_count': conn_count})
 
-        # source_target_tag is defined only if type_detection is srcip or dstip
+        # source_target_tag is defined only if attacker_direction is srcip or dstip
         if source_target_tag:
             evidence_to_send.update({'source_target_tag': source_target_tag})
 
@@ -1479,12 +1477,12 @@ class Database(ProfilingFlowsDatabase, object):
 
         # an evidence is generated for this profile
         # update the threat level of this profile
-        if type_detection in ('sip', 'srcip'):
+        if attacker_direction in ('sip', 'srcip'):
             # the srcip is the malicious one
             self.update_threat_level(profileid, threat_level, confidence)
-        elif type_detection in ('dip', 'dstip'):
+        elif attacker_direction in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.update_threat_level(f'profile_{detection_info}', threat_level, confidence)
+            self.update_threat_level(f'profile_{attacker}', threat_level, confidence)
 
 
         return True
@@ -1532,7 +1530,7 @@ class Database(ProfilingFlowsDatabase, object):
         # loop through each evidence in this tw
         for description, evidence_details in evidence.items():
             evidence_details = json.loads(evidence_details)
-            if evidence_type in evidence_details['type_evidence']:
+            if evidence_type in evidence_details['evidence_type']:
                 count += 1
         return count
 

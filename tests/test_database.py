@@ -179,28 +179,17 @@ def test_add_port(outputQueue):
 
 def test_setEvidence(outputQueue):
     database = create_db_instace(outputQueue)
-    type_detection = 'ip'
-    detection_info = test_ip
-    type_evidence = f'SSHSuccessful-by-{detection_info}'
+    attacker_direction = 'ip'
+    attacker = test_ip
+    evidence_type = f'SSHSuccessful-by-{attacker}'
     threat_level = 0.01
     confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
     timestamp = time.time()
     category = 'Infomation'
     uid = '123'
-    database.setEvidence(
-        type_evidence,
-        type_detection,
-        detection_info,
-        threat_level,
-        confidence,
-        description,
-        timestamp,
-        category,
-        profileid=profileid,
-        twid=twid,
-        uid=uid,
-    )
+    database.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                         timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     added_evidence = database.r.hget('evidence' + profileid, twid)
     added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')

@@ -617,7 +617,7 @@ class LogsProcess(multiprocessing.Process):
                     for key, evidence_details in evidence.items():
                         evidence_details = json.loads(evidence_details)
                         # example of a key  'dport:32432:PortScanType1'
-                        key = f'{evidence_details["type_detection"]}:{evidence_details["detection_info"]}:{evidence_details["type_evidence"]}'
+                        key = f'{evidence_details["attacker_direction"]}:{evidence_details["attacker"]}:{evidence_details["evidence_type"]}'
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
                             '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(

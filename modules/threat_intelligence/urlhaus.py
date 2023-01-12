@@ -154,10 +154,10 @@ class URLhaus():
             return info
 
     def set_evidence_malicious_hash(self, file_info: dict):
-        type_detection = 'md5'
+        attacker_direction = 'md5'
         category = 'Malware'
-        type_evidence = 'MaliciousDownloadedFile'
-        detection_info = file_info["md5"]
+        evidence_type = 'MaliciousDownloadedFile'
+        attacker = file_info["md5"]
         threat_level = file_info["threat_level"]
         daddr = file_info["daddr"]
         ip_identification = __database__.getIPIdentification(daddr)
@@ -179,19 +179,9 @@ class URLhaus():
 
         confidence = 0.7
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            file_info["ts"],
-            category,
-            profileid=file_info["profileid"],
-            twid=file_info["twid"],
-            uid=file_info["uid"],
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
+                                 uid=file_info["uid"])
 
     def set_evidence_malicious_url(
             self,
@@ -205,7 +195,7 @@ class URLhaus():
         :param url_info: dict with source, description, therat_level, and tags of url
         """
         threat_level = url_info['threat_level']
-        detection_info = url_info['url']
+        attacker = url_info['url']
         description = url_info['description']
 
         confidence = 0.7
@@ -222,20 +212,9 @@ class URLhaus():
                 threat_level = 'medium'
 
 
-        type_detection = 'url'
+        attacker_direction = 'url'
         category = 'Malware'
-        type_evidence = 'MaliciousURL'
+        evidence_type = 'MaliciousURL'
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)

@@ -386,9 +386,9 @@ class Utils(object):
     def IDEA_format(
         self,
         srcip,
-        type_evidence,
-        type_detection,
-        detection_info,
+        evidence_type,
+        attacker_direction,
+        attacker,
         description,
         confidence,
         category,
@@ -429,7 +429,7 @@ class Utils(object):
 
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
-        if type_evidence == 'Command-and-Control-channels-detection':
+        if evidence_type == 'Command-and-Control-channels-detection':
             # get the destination IP
             dstip = description.split('destination IP: ')[1].split(' ')[0]
 
@@ -441,14 +441,14 @@ class Utils(object):
             IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
 
         # some evidence have a dst ip
-        if 'dstip' in type_detection or 'dip' in type_detection:
+        if 'dstip' in attacker_direction or 'dip' in attacker_direction:
             # is the dstip ipv4/ipv6 or mac?
-            if validators.ipv4(detection_info):
-                IDEA_dict['Target'] = [{'IP4': [detection_info]}]
-            elif validators.ipv6(detection_info):
-                IDEA_dict['Target'] = [{'IP6': [detection_info]}]
-            elif validators.mac_address(detection_info):
-                IDEA_dict['Target'] = [{'MAC': [detection_info]}]
+            if validators.ipv4(attacker):
+                IDEA_dict['Target'] = [{'IP4': [attacker]}]
+            elif validators.ipv6(attacker):
+                IDEA_dict['Target'] = [{'IP6': [attacker]}]
+            elif validators.mac_address(attacker):
+                IDEA_dict['Target'] = [{'MAC': [attacker]}]
 
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
@@ -466,9 +466,9 @@ class Utils(object):
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
-        elif 'domain' in type_detection:
+        elif 'domain' in attacker_direction:
             # the ioc is a domain
-            target_info = {'Hostname': [detection_info]}
+            target_info = {'Hostname': [attacker]}
             IDEA_dict['Target'] = [target_info]
 
             # update the dstdomain description if specified in the evidence
@@ -487,7 +487,7 @@ class Utils(object):
             idx = 0
 
         # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip and IDEA_dict['Source'][1] is the C&C aka dstip
-        if type_evidence == 'Command-and-Control-channels-detection':
+        if evidence_type == 'Command-and-Control-channels-detection':
             # idx of the dict containing the dstip, we'll use this to add the port and proto to this dict
             key = 'Source'
             idx = 1
@@ -512,13 +512,13 @@ class Utils(object):
         if conn_count:
             IDEA_dict.update({'ConnCount': conn_count})
 
-        if 'MaliciousDownloadedFile' in type_evidence:
+        if 'MaliciousDownloadedFile' in evidence_type:
             IDEA_dict.update(
                 {
                     'Attach': [
                         {
                             'Type': ['Malware'],
-                            'Hash': [f'md5:{detection_info}'],
+                            'Hash': [f'md5:{attacker}'],
                             'Size': int(
                                 description.split('size:')[1].split('from')[0]
                             ),
