@@ -205,49 +205,49 @@ class Module(Module, multiprocessing.Process):
         Function to export evidence to a STIX_data.json file in the cwd.
         It keeps appending the given indicator to STIX_data.json until they're sent to the
         taxii server
-        msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
-            type_evidence: e.g PortScan, ThreatIntelligence etc
-            type_detection: e.g dip sip dport sport
-            detection_info: ip or port  OR ip:port:proto
+        msg_to_send is a tuple: (evidence_type, attacker_direction,attacker, description)
+            evidence_type: e.g PortScan, ThreatIntelligence etc
+            attacker_direction: e.g dip sip dport sport
+            attacker: ip or port  OR ip:port:proto
             description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
         """
         # self.print(f"Exporting STIX data to {self.TAXII_server} every {self.push_delay} seconds.")
         # ---------------- set name attribute ----------------
-        type_evidence, type_detection, detection_info, description = (
+        evidence_type, attacker_direction, attacker, description = (
             msg_to_send[0],
             msg_to_send[1],
             msg_to_send[2],
             msg_to_send[3],
         )
-        # In case of ssh connection, type_evidence is set to SSHSuccessful-by-ip (special case) , ip here is variable
+        # In case of ssh connection, evidence_type is set to SSHSuccessful-by-ip (special case) , ip here is variable
         # So we change that to be able to access it in the below dict
-        if 'SSHSuccessful' in type_evidence:
-            type_evidence = 'SSHSuccessful'
+        if 'SSHSuccessful' in evidence_type:
+            evidence_type = 'SSHSuccessful'
         # This dict contains each type and the way we should describe it in STIX name attribute
 
         # Get the right description to use in stix
-        name = type_evidence
+        name = evidence_type
 
         # ---------------- set pattern attribute ----------------
-        if 'port' in type_detection:
-            # detection_info is a port probably coming from a portscan we need the ip instead
-            detection_info = description[
+        if 'port' in attacker_direction:
+            # attacker is a port probably coming from a portscan we need the ip instead
+            attacker = description[
                 description.index('IP: ') + 4 : description.index(' Tot') - 1
             ]
-        elif 'tcp' in detection_info:
+        elif 'tcp' in attacker:
             # for example 127.0.0.1:443:tcp
             # Get the ip
-            detection_info = detection_info.split(':')[0]
-        ioc_type = utils.detect_data_type(detection_info)
+            attacker = attacker.split(':')[0]
+        ioc_type = utils.detect_data_type(attacker)
         if ioc_type is 'ip':
-            pattern = "[ip-addr:value = '{}']".format(detection_info)
+            pattern = "[ip-addr:value = '{}']".format(attacker)
         elif ioc_type is 'domain':
-            pattern = "[domain-name:value = '{}']".format(detection_info)
+            pattern = "[domain-name:value = '{}']".format(attacker)
         elif ioc_type is 'url':
-            pattern = "[url:value = '{}']".format(detection_info)
+            pattern = "[url:value = '{}']".format(attacker)
         else:
             self.print(
-                "Can't set pattern for STIX. {}".format(detection_info), 0, 3
+                "Can't set pattern for STIX. {}".format(attacker), 0, 3
             )
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
@@ -267,7 +267,7 @@ class Module(Module, multiprocessing.Process):
             with open('STIX_data.json', 'w') as stix_file:
                 stix_file.write(str(bundle))
             self.is_bundle_created = True
-        elif not self.ip_exists_in_stix_file(detection_info):
+        elif not self.ip_exists_in_stix_file(attacker):
             # Bundle is already created just append to it
             # r+ to delete last 4 chars
             with open('STIX_data.json', 'r+') as stix_file:
@@ -282,7 +282,7 @@ class Module(Module, multiprocessing.Process):
                 stix_file.write(',' + str(indicator) + ']\n}\n')
 
         # Set of unique ips added to stix_data.json to avoid duplicates
-        self.added_ips.add(detection_info)
+        self.added_ips.add(attacker)
         self.print('Indicator added to STIX_data.json', 2, 0)
         return True
 
@@ -358,9 +358,9 @@ class Module(Module, multiprocessing.Process):
 
                     if 'stix' in self.export_to:
                         msg_to_send = (
-                            evidence['type_evidence'],
-                            evidence['type_detection'],
-                            evidence['detection_info'],
+                            evidence['evidence_type'],
+                            evidence['attacker_direction'],
+                            evidence['attacker'],
                             description,
                         )
                         exported_to_stix = self.export_to_STIX(msg_to_send)

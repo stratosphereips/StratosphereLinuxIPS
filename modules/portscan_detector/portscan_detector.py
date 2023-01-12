@@ -284,14 +284,13 @@ class PortScanProcess(Module, multiprocessing.Process):
             dport,
             amount_of_dips
     ):
-        type_evidence = 'HorizontalPortscan'
-        type_detection = 'srcip'
+        evidence_type = 'HorizontalPortscan'
+        attacker_direction = 'srcip'
         source_target_tag = 'Recon'
         srcip = profileid.split('_')[-1]
-        detection_info = srcip
+        attacker = srcip
         threat_level = 'medium'
         category = 'Recon.Scanning'
-        cache_key = f'{profileid}:{twid}:dstip:{dport}:{type_evidence}'
         portproto = f'{dport}/{protocol}'
         port_info = __database__.get_port_info(portproto)
         port_info = port_info if port_info else ""
@@ -304,26 +303,12 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'Confidence: {confidence}. by Slips'
         )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            conn_count=pkts_sent,
-            source_target_tag=source_target_tag,
-            port=dport,
-            proto=protocol,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
+                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
         # Set 'malicious' label in the detected profile
         __database__.set_profile_module_label(
-            profileid, type_evidence, self.malicious_label
+            profileid, evidence_type, self.malicious_label
         )
         self.print(description, 3, 0)
 
@@ -338,13 +323,13 @@ class PortScanProcess(Module, multiprocessing.Process):
             amount_of_dports,
             dstip
     ):
-        type_detection = 'srcip'
-        type_evidence = 'VerticalPortscan'
+        attacker_direction = 'srcip'
+        evidence_type = 'VerticalPortscan'
         source_target_tag = 'Recon'
         threat_level = 'medium'
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
-        detection_info = srcip
+        attacker = srcip
         confidence = self.calculate_confidence(pkts_sent)
         description = (
                         f'new vertical port scan to IP {dstip} from {srcip}. '
@@ -352,25 +337,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                         f'Tot pkts sent to all ports: {pkts_sent}. '
                         f'Confidence: {confidence}. by Slips'
                     )
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            conn_count=pkts_sent,
-            source_target_tag=source_target_tag,
-            proto=protocol,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
+                                 proto=protocol, profileid=profileid, twid=twid, uid=uid)
         # Set 'malicious' label in the detected profile
         __database__.set_profile_module_label(
-            profileid, type_evidence, self.malicious_label
+            profileid, evidence_type, self.malicious_label
         )
 
 
@@ -392,7 +364,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         type_data = 'IPs'
         # self.print('Vertical Portscan check. Amount of dports: {}.
         # Threshold=3'.format(amount_of_dports), 3, 0)
-        type_evidence = 'VerticalPortscan'
+        evidence_type = 'VerticalPortscan'
         for state in ('Not Established', 'Established'):
             for protocol in ('TCP', 'UDP'):
                 dstips = __database__.getDataFromProfileTW(
@@ -403,7 +375,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     ### PortScan Type 1. Direction OUT
                     dstports: dict = dstips[dstip]['dstports']
                     amount_of_dports = len(dstports)
-                    cache_key = f'{profileid}:{twid}:dstip:{dstip}:{type_evidence}'
+                    cache_key = f'{profileid}:{twid}:dstip:{dstip}:{evidence_type}'
                     prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
                     # self.print('Key: {}, Prev dports: {}, Current: {}'.format(cache_key,
                     # prev_amount_dports, amount_of_dports))
@@ -457,11 +429,11 @@ class PortScanProcess(Module, multiprocessing.Process):
         """
 
         if 'TimestampScan' in note:
-            type_evidence = 'ICMP-Timestamp-Scan'
+            evidence_type = 'ICMP-Timestamp-Scan'
         elif 'ICMPAddressScan' in note:
-            type_evidence = 'ICMP-AddressScan'
+            evidence_type = 'ICMP-AddressScan'
         elif 'AddressMaskScan' in note:
-            type_evidence = 'ICMP-AddressMaskScan'
+            evidence_type = 'ICMP-AddressMaskScan'
         else:
             # unsupported notice type
             return False
@@ -471,30 +443,18 @@ class PortScanProcess(Module, multiprocessing.Process):
         confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
         threat_level = 'medium'
         category = 'Recon.Scanning'
-        # type_detection is set to dstip even though the srcip is the one performing the scan
+        # attacker_direction is set to dstip even though the srcip is the one performing the scan
         # because setEvidence doesn't alert on the same key twice, so we have to send different keys to be able
         # to generate an alert every 5,10,15,.. scans #todo test this
-        type_detection = 'srcip'
+        attacker_direction = 'srcip'
         # this is the last dip scanned
-        detection_info = profileid.split('_')[1]
+        attacker = profileid.split('_')[1]
         source_target_tag = 'Recon'
         description = msg
         # this one is detected by zeek so we can't track the uids causing it
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            conn_count=hosts_scanned,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, conn_count=hosts_scanned,
+                                 profileid=profileid, twid=twid, uid=uid)
 
     def check_portscan_type3(self):
         """
@@ -505,9 +465,9 @@ class PortScanProcess(Module, multiprocessing.Process):
         # If for each port, more than X amount of packets were sent, report an evidence
         if totalpkts > 3:
             # Type of evidence
-            type_evidence = 'PortScanType3'
+            evidence_type = 'PortScanType3'
             # Key
-            key = 'dport' + ':' + dport + ':' + type_evidence
+            key = 'dport' + ':' + dport + ':' + evidence_type
             # Description
             description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
             # Threat level
@@ -519,7 +479,7 @@ class PortScanProcess(Module, multiprocessing.Process):
             else:
                 # Between 3 and 10 pkts compute a kind of linear grow
                 confidence = totalpkts / 10.0
-            __database__.setEvidence(profileid, twid, type_evidence, threat_level, confidence)
+            __database__.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
             self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
         """
 
@@ -632,13 +592,13 @@ class PortScanProcess(Module, multiprocessing.Process):
             scanned_ip=False
     ):
         confidence = self.calculate_confidence(pkts_sent)
-        type_detection = 'srcip'
-        type_evidence = attack
+        attacker_direction = 'srcip'
+        evidence_type = attack
         source_target_tag = 'Recon'
         threat_level = 'medium'
         category = 'Recon.Scanning'
         srcip = profileid.split('_')[-1]
-        detection_info = srcip
+        attacker = srcip
 
         if number_of_scanned_ips == 1:
             description = (
@@ -653,25 +613,12 @@ class PortScanProcess(Module, multiprocessing.Process):
                 f'Confidence: {confidence}. by Slips'
             )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            conn_count=pkts_sent,
-            source_target_tag=source_target_tag,
-            proto=protocol,
-            profileid=profileid,
-            twid=twid,
-            uid=icmp_flows_uids,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
+                                 proto=protocol, profileid=profileid, twid=twid, uid=icmp_flows_uids)
         # Set 'malicious' label in the detected profile
         __database__.set_profile_module_label(
-            profileid, type_evidence, self.malicious_label
+            profileid, evidence_type, self.malicious_label
         )
 
 
@@ -683,11 +630,11 @@ class PortScanProcess(Module, multiprocessing.Process):
             uids,
             number_of_requested_addrs
     ):
-        type_evidence = 'DHCPScan'
-        type_detection = 'srcip'
+        evidence_type = 'DHCPScan'
+        attacker_direction = 'srcip'
         source_target_tag = 'Recon'
         srcip = profileid.split('_')[-1]
-        detection_info = srcip
+        attacker = srcip
         threat_level = 'medium'
         category = 'Recon.Scanning'
         confidence = 0.8
@@ -697,25 +644,13 @@ class PortScanProcess(Module, multiprocessing.Process):
             f'Confidence: {confidence}. by Slips'
         )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            conn_count=number_of_requested_addrs,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uids,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 conn_count=number_of_requested_addrs, profileid=profileid, twid=twid, uid=uids)
 
         # Set 'malicious' label in the detected profile
         __database__.set_profile_module_label(
-            profileid, type_evidence, self.malicious_label
+            profileid, evidence_type, self.malicious_label
         )
 
     def check_dhcp_scan(self, flow):

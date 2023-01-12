@@ -616,11 +616,11 @@ class Whitelist:
                 # related to {org}. {data} in {description}')
                 return True
 
-    def is_srcip(self, type_detection):
-        return type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+    def is_srcip(self, attacker_direction):
+        return attacker_direction in ('sip', 'srcip', 'sport', 'inTuple')
 
-    def is_dstip(self, type_detection):
-        return type_detection in ('dip', 'dstip', 'dport', 'outTuple')
+    def is_dstip(self, attacker_direction):
+        return attacker_direction in ('dip', 'dstip', 'dport', 'outTuple')
 
     def should_ignore_from(self, direction) -> bool:
         """
@@ -671,17 +671,17 @@ class Whitelist:
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs
 
     def is_whitelisted_evidence(
-            self, srcip, data, type_detection, description
+            self, srcip, data, attacker_direction, description
         ) -> bool:
             """
             Checks if IP is whitelisted
             :param srcip: Src IP that generated the evidence
-            :param data: This is what was detected in the evidence. (detection_info) can be ip, domain, tuple(ip:port:proto).
-            :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+            :param data: This is what was detected in the evidence. (attacker) can be ip, domain, tuple(ip:port:proto).
+            :param attacker_direction: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
             :param description: may contain IPs if the evidence is coming from portscan module
             """
 
-            # self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
+            # self.print(f'Checking the whitelist of {srcip}: {data} {attacker_direction} {description} ')
 
             whitelist = __database__.get_all_whitelist()
             max_tries = 10
@@ -700,9 +700,9 @@ class Whitelist:
             whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
 
             # Set data type
-            if 'domain' in type_detection:
+            if 'domain' in attacker_direction:
                 data_type = 'domain'
-            elif 'outTuple' in type_detection:
+            elif 'outTuple' in attacker_direction:
                 # for example: ip:port:proto
                 data = data.split('-')[0]
                 data_type = 'ip'
@@ -715,8 +715,8 @@ class Whitelist:
                 # Check that the IP in the content of the alert is whitelisted
                 # Was the evidence coming as a src or dst?
                 ip = data
-                is_srcip = self.is_srcip(type_detection)
-                is_dstip = self.is_dstip(type_detection)
+                is_srcip = self.is_srcip(attacker_direction)
+                is_dstip = self.is_dstip(attacker_direction)
                 if ip in whitelisted_IPs:
                     # Check if we should ignore src or dst alerts from this ip
                     # from_ can be: src, dst, both
@@ -755,8 +755,8 @@ class Whitelist:
                         
             # Check domains
             if data_type == 'domain':
-                is_srcdomain = type_detection in ('srcdomain')
-                is_dstdomain = type_detection in ('dstdomain')
+                is_srcdomain = attacker_direction in ('srcdomain')
+                is_dstdomain = attacker_direction in ('dstdomain')
                 domain = data
                 # is domain in whitelisted domains?
                 for domain_in_whitelist in whitelisted_domains:
@@ -795,8 +795,8 @@ class Whitelist:
 
             # Check orgs
             if whitelisted_orgs:
-                is_src = self.is_srcip(type_detection) or type_detection in 'srcdomain'
-                is_dst = self.is_dstip(type_detection) or type_detection in 'dstdomain'
+                is_src = self.is_srcip(attacker_direction) or attacker_direction in 'srcdomain'
+                is_dst = self.is_dstip(attacker_direction) or attacker_direction in 'dstdomain'
 
                 for org in whitelisted_orgs:
                     from_ = whitelisted_orgs[org]['from']

@@ -211,9 +211,9 @@ class Module(Module, multiprocessing.Process):
             time.sleep(4)
             # make sure we have a profile for any of the above IPs
             if __database__.hasProfile(src_profileid):
-                type_detection = 'dstip'
+                attacker_direction = 'dstip'
                 profileid = src_profileid
-                detection_info = dstip
+                attacker = dstip
                 ip_identification = __database__.getIPIdentification(dstip)
                 description = (
                     f'{rule} to destination address: {dstip} {ip_identification} '
@@ -221,9 +221,9 @@ class Module(Module, multiprocessing.Process):
                 )
 
             elif __database__.hasProfile(dst_profileid):
-                type_detection = 'srcip'
+                attacker_direction = 'srcip'
                 profileid = dst_profileid
-                detection_info = srcip
+                attacker = srcip
                 ip_identification = __database__.getIPIdentification(srcip)
                 description = (
                     f'{rule} to destination address: {srcip} {ip_identification} '
@@ -242,26 +242,13 @@ class Module(Module, multiprocessing.Process):
                 twid = twid[0]
                 source_target_tag = 'CC'
                 # TODO: this needs to be changed if add more rules to the rules/dir
-                type_evidence = 'NETWORK_gps_location_leaked'
+                evidence_type = 'NETWORK_gps_location_leaked'
                 category = 'Malware'
                 confidence = 0.9
                 threat_level = 'high'
-                __database__.setEvidence(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    ts,
-                    category,
-                    source_target_tag=source_target_tag,
-                    port=dport,
-                    proto=proto,
-                    profileid=profileid,
-                    twid=twid,
-                    uid=uid,
-                )
+                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                         description, ts, category, source_target_tag=source_target_tag, port=dport,
+                                         proto=proto, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """

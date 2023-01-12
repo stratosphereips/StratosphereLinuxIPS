@@ -404,27 +404,17 @@ class Module(Module, multiprocessing.Process):
         """
         confidence = 0.1
         threat_level = 'low'
-        type_detection = 'flow'
+        attacker_direction = 'flow'
         category = 'Anomaly.Traffic'
-        detection_info = (
+        attacker = (
             str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         )
-        type_evidence = 'MaliciousFlow'
+        evidence_type = 'MaliciousFlow'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing

@@ -118,17 +118,17 @@ class Module(Module, multiprocessing.Process, URLhaus):
         :param ip_state: can be 'srcip' or 'dstip'
         """
 
-        type_detection = ip_state
-        detection_info = ip
-        type_evidence = 'ThreatIntelligenceBlacklistIP'
+        attacker_direction = ip_state
+        attacker = ip
+        evidence_type = 'ThreatIntelligenceBlacklistIP'
 
         threat_level = ip_info.get('threat_level', 'medium')
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        if 'src' in type_detection:
+        if 'src' in attacker_direction:
             direction = 'from'
-        elif 'dst' in type_detection:
+        elif 'dst' in attacker_direction:
             direction = 'to'
 
         # getting the ip identification adds ti description and tags to the returned str
@@ -164,20 +164,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
         else:
             source_target_tag = 'BlacklistedIP'
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -205,10 +194,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not domain_info:
             return
 
-        type_detection = 'dstdomain'
-        detection_info = domain
+        attacker_direction = 'dstdomain'
+        attacker = domain
         category = 'Anomaly.Traffic'
-        type_evidence = 'ThreatIntelligenceBlacklistDomain'
+        evidence_type = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
@@ -236,21 +225,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
                        f'with tags: {tags}. '\
                        f'Confidence: {confidence}.'
 
-
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -632,10 +609,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-        type_detection = 'md5'
+        attacker_direction = 'md5'
         category = 'Malware'
-        type_evidence = 'MaliciousDownloadedFile'
-        detection_info = file_info["md5"]
+        evidence_type = 'MaliciousDownloadedFile'
+        attacker = file_info["md5"]
         threat_level = file_info["threat_level"]
         daddr = file_info["daddr"]
         ip_identification = __database__.getIPIdentification(daddr)
@@ -643,25 +620,15 @@ class Module(Module, multiprocessing.Process, URLhaus):
         threat_level = utils.threat_level_to_string(threat_level)
 
         description = (
-            f'Malicious downloaded file {detection_info}. '
+            f'Malicious downloaded file {attacker}. '
             f'size: {file_info["size"]} '
             f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            file_info["ts"],
-            category,
-            profileid=file_info["profileid"],
-            twid=file_info["twid"],
-            uid=file_info["uid"],
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
+                                 uid=file_info["uid"])
 
     def circl_lu(self, flow_info):
         """

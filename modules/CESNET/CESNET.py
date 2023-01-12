@@ -131,9 +131,9 @@ class Module(Module, multiprocessing.Process):
         profileid = evidence['profileid']
         twid = evidence['twid']
         srcip = profileid.split('_')[1]
-        type_evidence = evidence['type_evidence']
-        type_detection = evidence['type_detection']
-        detection_info = evidence['detection_info']
+        evidence_type = evidence['evidence_type']
+        attacker_direction = evidence['attacker_direction']
+        attacker = evidence['attacker']
         ID = evidence['ID']
         confidence = evidence.get('confidence')
         category = evidence.get('category')
@@ -144,9 +144,9 @@ class Module(Module, multiprocessing.Process):
 
         evidence_in_IDEA = utils.IDEA_format(
             srcip,
-            type_evidence,
-            type_detection,
-            detection_info,
+            evidence_type,
+            attacker_direction,
+            attacker,
             description,
             confidence,
             category,

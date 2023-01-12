@@ -174,13 +174,13 @@ confidence = 0.8
 threat_level = 'high'
 
 # the name of your evidence, you can put any descriptive string here
-type_evidence = 'ConnectionToLocalDevice'
+evidence_type = 'ConnectionToLocalDevice'
 # what is this evidence category according to IDEA categories 
 category = 'Anomaly.Connection'
 # which ip is the attacker here? the src or the dst?
-type_detection = 'srcip'
+attacker_direction = 'srcip'
 # what is the ip of the attacker?
-detection_info = saddr
+attacker = saddr
 # describe the evidence
 description = f'Detected a connection to a local device {daddr}'
 timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
@@ -191,18 +191,8 @@ profileid = message['profileid']
 # this comes in the msg received in the channel
 twid = message['twid']
 
-__database__.setEvidence(
-    type_evidence,
-    type_detection,
-    detection_info,
-    threat_level,
-    confidence,
-    description,
-    timestamp,
-    category,
-    profileid=profileid,
-    twid=twid,
-)
+__database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                         timestamp, category, profileid=profileid, twid=twid)
 ```
 
 
@@ -311,7 +301,6 @@ class Module(Module, multiprocessing.Process):
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_flow')
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
@@ -362,13 +351,13 @@ class Module(Module, multiprocessing.Process):
                         # how dangerous is this evidence? info, low, medium, high, critical?
                         threat_level = 'high'
                         # the name of your evidence, you can put any descriptive string here
-                        type_evidence = 'ConnectionToLocalDevice'
+                        evidence_type = 'ConnectionToLocalDevice'
                         # what is this evidence category according to IDEA categories
                         category = 'Anomaly.Connection'
                         # which ip is the attacker here? the src or the dst?
-                        type_detection = 'srcip'
+                        attacker_direction = 'srcip'
                         # what is the ip of the attacker?
-                        detection_info = saddr
+                        attacker = saddr
                         # describe the evidence
                         description = f'Detected a connection to a local device {daddr}'
                         timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
@@ -377,18 +366,9 @@ class Module(Module, multiprocessing.Process):
                         # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
                         twid = message['twid']
 
-                        __database__.setEvidence(
-                            type_evidence,
-                            type_detection,
-                            detection_info,
-                            threat_level,
-                            confidence,
-                            description,
-                            timestamp,
-                            category,
-                            profileid=profileid,
-                            twid=twid,
-                        )
+                        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level,
+                                                 confidence, description, timestamp, category, profileid=profileid,
+                                                 twid=twid)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
