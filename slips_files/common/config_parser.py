@@ -561,14 +561,11 @@ class ConfigParser(object):
         return utils.sanitize(path)
 
     def ti_files(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ti_files',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
 
     def ja3_feeds(self):
         feeds = self.read_configuration(
