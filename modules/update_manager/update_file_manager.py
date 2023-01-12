@@ -83,11 +83,11 @@ class UpdateFileManager:
         self.ti_feeds_path = conf.ti_files()
         self.url_feeds = self.get_feed_details(self.ti_feeds_path)
 
-        self.ja3_feed_tuples = conf.ja3_feeds()
-        self.ja3_feeds = self.get_feed_details(self.ja3_feed_tuples)
+        self.ja3_feeds_path = conf.ja3_feeds()
+        self.ja3_feeds = self.get_feed_details(self.ja3_feeds_path)
 
-        self.ssl_feed_tuples = conf.ssl_feeds()
-        self.ssl_feeds = self.get_feed_details(self.ssl_feed_tuples)
+        self.ssl_feeds_path = conf.ssl_feeds()
+        self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
 
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
@@ -104,11 +104,15 @@ class UpdateFileManager:
         """
         Parse links, threat level and tags from the feeds_path file and return a dict with feed info
         """
-        with open(feeds_path, 'r') as feeds_file:
-            feeds = feeds_file.read()
+        try:
+            with open(feeds_path, 'r') as feeds_file:
+                feeds = feeds_file.read()
+        except FileNotFoundError:
+            self.print(f"Error finding {feeds_path}. Feeds won't be added to slips.")
+            return {}
 
         # this dict will contain every link and its threat_level
-        url_feeds = {}
+        parsed_feeds = {}
 
         for line in feeds.splitlines():
             if line.startswith("#"):
@@ -141,11 +145,11 @@ class UpdateFileManager:
                 )
                 threat_level = 'low'
 
-            url_feeds[url] = {
+            parsed_feeds[url] = {
                 'threat_level': threat_level,
                 'tags': tags
             }
-        return url_feeds
+        return parsed_feeds
 
 
 

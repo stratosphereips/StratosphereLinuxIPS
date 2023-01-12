@@ -568,24 +568,19 @@ class ConfigParser(object):
         )
 
     def ja3_feeds(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ja3_feeds',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
+
 
     def ssl_feeds(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ssl_feeds',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
 
     def timeline_human_timestamp(self):
         return self.read_configuration(
