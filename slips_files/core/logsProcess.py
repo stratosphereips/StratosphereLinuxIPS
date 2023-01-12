@@ -152,8 +152,7 @@ class LogsProcess(multiprocessing.Process):
                 # The timer variable didn't exist, so just end
                 pass
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(traceback.print_exc()))
             sys.exit(1)
             return True
 
@@ -278,8 +277,7 @@ class LogsProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             self.print('Error in addDataToFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(), 0, 1)
             sys.exit(1)
 
     def create_all_flow_possibilities(self) -> dict:

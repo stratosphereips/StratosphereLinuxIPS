@@ -109,12 +109,10 @@ class UpdateManager(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback, 0, 1)
             return True
 
         # Main loop function
@@ -132,8 +130,5 @@ class UpdateManager(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                self.print(traceback, 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

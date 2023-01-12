@@ -990,10 +990,7 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] {}'.format(traceback.print_exc()))
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""

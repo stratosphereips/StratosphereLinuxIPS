@@ -139,18 +139,16 @@ class Module(Module, multiprocessing.Process):
         try:
             # Download lstm model
             tcpmodel = load_model(model_file)
-        except Exception as inst:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            return True
         except AttributeError as e:
             self.print('Error loading the model.')
             self.print(e)
         except KeyboardInterrupt:
             self.shutdown_gracefully()
+            return True
+        except:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on the run() line {exception_line}', 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return True
 
         # Main loop function
@@ -234,11 +232,8 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
+            except:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                self.print(traceback, 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

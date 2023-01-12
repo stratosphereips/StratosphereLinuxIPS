@@ -261,16 +261,12 @@ class ProfilingFlowsDatabase(object):
                     """
                     return 'Not Established'
             return None
-        except Exception as inst:
+        except:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.print(traceback.format_exc())
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
 
     def getDataFromProfileTW(
         self,
@@ -318,10 +314,7 @@ class ProfilingFlowsDatabase(object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -588,10 +581,6 @@ class ProfilingFlowsDatabase(object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put(
                 '01|database|[DB] {}'.format(traceback.format_exc())
             )

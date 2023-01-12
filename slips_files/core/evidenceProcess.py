@@ -141,10 +141,9 @@ class EvidenceProcess(multiprocessing.Process):
         try:
             return
 
-        except Exception as inst:
+        except:
             self.print('Error in print_alert()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
 
     def format_evidence_string(self, ip, detection_module, attacker, description):
@@ -237,10 +236,9 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
+        except:
             self.print('Error in addDataToJSONFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def addDataToLogFile(self, data):
         """
@@ -260,10 +258,9 @@ class EvidenceProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
+        except:
             self.print('Error in addDataToLogFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
         """Returns the domains of each ip (src and dst) that appeared in this flow"""
@@ -374,14 +371,12 @@ class EvidenceProcess(multiprocessing.Process):
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
                 f'given the following evidence:{Style.RESET_ALL}\n'
             )
-        except Exception as inst:
+        except:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return True
 
         for evidence in all_evidence.values():
@@ -842,7 +837,5 @@ class EvidenceProcess(multiprocessing.Process):
                 self.outputqueue.put(
                     f'01|[Evidence] Error in the Evidence Process line {exception_line}'
                 )
-                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|[Evidence] {}'.format(inst))
-                self.outputqueue.put('01|[Evidence] {}'.format(traceback))
+                self.outputqueue.put('01|[Evidence] {}'.format(traceback.print_exc()))
                 return True

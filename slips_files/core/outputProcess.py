@@ -181,15 +181,13 @@ class OutputProcess(multiprocessing.Process):
                 sys.exit(-1)
             return (level, sender, msg)
 
-        except Exception as inst:
+        except:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
                 f'{exception_line}'
             )
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.print(traceback.print_exc(), 0, 1)
             sys.exit(1)
 
     def log_error(self, sender, msg):
@@ -269,13 +267,10 @@ class OutputProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except:
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',
                 )
-                print(type(inst))
-                print(inst.args)
-                print(inst)
-                print(traceback)
+                self.print(traceback.print_exc(), 0, 1)
                 return True

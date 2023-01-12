@@ -103,10 +103,9 @@ class Module(Module, multiprocessing.Process):
                 self.clf.partial_fit(
                     X_flow, y_flow, classes=['Malware', 'Normal']
                 )
-            except Exception as inst:
+            except:
                 self.print('Error while calling clf.train()')
-                self.print(type(inst))
-                self.print(inst)
+                self.print(traceback.print_exc())
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -125,9 +124,9 @@ class Module(Module, multiprocessing.Process):
             self.store_model()
 
         except Exception as inst:
-            self.print('Error in train()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print('Error in train()', 0 , 1)
+            self.print(traceback.print_exc(), 0, 1)
+
 
     def process_features(self, dataset):
         """
@@ -226,11 +225,10 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
             return dataset
-        except Exception as inst:
+        except:
             # Stop the timer
             self.print('Error in process_features()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def process_flows(self):
         """
@@ -306,11 +304,10 @@ class Module(Module, multiprocessing.Process):
 
             # Update the flow to the processed version
             self.flows = df_flows
-        except Exception as inst:
+        except:
             # Stop the timer
             self.print('Error in process_flows()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def process_flow(self):
         """
@@ -327,8 +324,7 @@ class Module(Module, multiprocessing.Process):
         except Exception as inst:
             # Stop the timer
             self.print('Error in process_flow()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def detect(self):
         """
@@ -349,8 +345,7 @@ class Module(Module, multiprocessing.Process):
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def store_model(self):
         """
@@ -515,9 +510,6 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
             except Exception as inst:
-                # Stop the timer
                 self.print('Error in run()')
-                self.print(type(inst), 0, 1)
-                self.print(inst, 0, 1)
-                self.print(traceback, 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

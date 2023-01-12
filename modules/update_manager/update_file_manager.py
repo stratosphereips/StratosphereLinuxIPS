@@ -2,8 +2,6 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.whitelist import Whitelist
-import traceback
-
 import time
 import os
 import json
@@ -424,10 +422,7 @@ class UpdateFileManager:
                 self.print(
                     f'Problem on update_TI_file() line {exception_line}', 0, 1
                 )
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-                self.print(traceback, 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
         else:
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1
@@ -632,14 +627,12 @@ class UpdateFileManager:
 
             return True
 
-        except Exception as inst:
+        except:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on update_TI_file() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return False
 
     def update_riskiq_feed(self):
@@ -864,9 +857,6 @@ class UpdateFileManager:
 
         except Exception as inst:
             self.print('Problem in parse_ja3_feed()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
             print(traceback.format_exc())
             return False
 
@@ -1363,9 +1353,6 @@ class UpdateFileManager:
                 f'Problem while updating {link_to_download} line '
                 f'{exception_line}', 0, 1,
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
             self.print(traceback.format_exc(), 0, 1)
             return False
 
