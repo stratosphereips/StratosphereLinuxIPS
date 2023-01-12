@@ -1,22 +1,18 @@
-# Must imports
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-
-# Your imports
 import multiprocessing
 from slack import WebClient
 from slack.errors import SlackApiError
 import os
 import json
 from stix2 import Indicator, Bundle
-import ipaddress
 from cabby import create_client
 import time
 import threading
 import sys
-import validators
+import traceback
 import datetime
 
 class Module(Module, multiprocessing.Process):
@@ -377,4 +373,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
                 return True

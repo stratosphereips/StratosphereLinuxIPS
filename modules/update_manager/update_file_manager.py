@@ -2,6 +2,7 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.whitelist import Whitelist
+import traceback
 
 import time
 import os
@@ -426,6 +427,7 @@ class UpdateFileManager:
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
         else:
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1

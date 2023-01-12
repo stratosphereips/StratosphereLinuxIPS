@@ -1,12 +1,9 @@
-# Must imports
 from slips_files.common.abstracts import Module
 from slips_files.common.config_parser import ConfigParser
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
-
-# Your imports
 from ..CESNET.warden_client import Client, read_cfg
 import os
 import json
@@ -15,6 +12,7 @@ import threading
 import queue
 import ipaddress
 import validators
+import traceback
 
 
 class Module(Module, multiprocessing.Process):
@@ -353,4 +351,6 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
+
                 return True

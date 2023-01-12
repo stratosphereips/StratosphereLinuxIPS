@@ -16,15 +16,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
-import multiprocessing
-import sys
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database.database import __database__
+import multiprocessing
+import sys
 import os
 import threading
 import time
-from slips_files.core.database.database import __database__
 import json
+import traceback
 
 
 def timing(f):
@@ -814,6 +815,7 @@ class TimerThread(threading.Thread):
             )
             self.outputqueue.put(f'01|[Logs] {type(inst)}')
             self.outputqueue.put('01|[Logs] {}'.format(inst))
+            self.outputqueue.put('01|[Logs] {}'.format(traceback))
             sys.exit(1)
             return True
 

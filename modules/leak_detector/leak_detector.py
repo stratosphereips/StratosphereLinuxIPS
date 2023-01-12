@@ -1,18 +1,15 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
-
-# Your imports
-from subprocess import check_output
 import base64
 import time
 import binascii
 import os
 import subprocess
 import json
+import traceback
 
 
 class Module(Module, multiprocessing.Process):
@@ -344,4 +341,5 @@ class Module(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            self.print(traceback, 0, 1)
             return True

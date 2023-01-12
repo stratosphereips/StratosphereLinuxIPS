@@ -1,4 +1,3 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
@@ -10,7 +9,7 @@ import pickle
 import pandas as pd
 import json
 import datetime
-
+import traceback
 # Only for debbuging
 # from matplotlib import pyplot as plt
 
@@ -520,4 +519,5 @@ class Module(Module, multiprocessing.Process):
                 self.print('Error in run()')
                 self.print(type(inst), 0, 1)
                 self.print(inst, 0, 1)
+                self.print(traceback, 0, 1)
                 return True

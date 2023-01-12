@@ -6,6 +6,7 @@ from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import warnings
 import json
+import traceback
 
 # Your imports
 import numpy as np
@@ -239,4 +240,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
                 return True

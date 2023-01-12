@@ -29,6 +29,7 @@ import os
 from .whitelist import Whitelist
 import time
 import platform
+import traceback
 
 
 # Evidence Process
@@ -843,4 +844,5 @@ class EvidenceProcess(multiprocessing.Process):
                 )
                 self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
                 self.outputqueue.put('01|[Evidence] {}'.format(inst))
+                self.outputqueue.put('01|[Evidence] {}'.format(traceback))
                 return True

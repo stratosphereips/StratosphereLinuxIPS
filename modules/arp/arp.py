@@ -1,11 +1,9 @@
-# Must imports
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-
-# Your imports
+import multiprocessing
+import traceback
 import json
 import sys
 import ipaddress
@@ -405,8 +403,6 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         self.timer_thread_arp_scan.start()
-
-        # Main loop function
         while True:
             try:
                 if (
@@ -499,4 +495,6 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
+
                 return True

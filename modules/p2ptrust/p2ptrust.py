@@ -20,6 +20,7 @@ from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 import threading
+import traceback
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -694,4 +695,5 @@ class Trust(Module, multiprocessing.Process):
             self.print(str(type(inst)), 0, 1)
             self.print(str(inst.args), 0, 1)
             self.print(str(inst), 0, 1)
+            self.print(traceback, 0, 1)
             return True

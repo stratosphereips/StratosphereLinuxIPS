@@ -1,16 +1,13 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
-
-# Your imports
+import traceback
 import time
 import ipaddress
 import json
 import threading
-from multiprocessing import Queue
 
 
 class PortScanProcess(Module, multiprocessing.Process):
@@ -19,8 +16,8 @@ class PortScanProcess(Module, multiprocessing.Process):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = 'Network Service Discovery'
-    description = 'Detect Horizonal, Vertical and ICMP scans'
+    name = 'Network Discovery'
+    description = 'Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans'
     authors = ['Sebastian Garcia', 'Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
@@ -799,4 +796,5 @@ class PortScanProcess(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
                 return True

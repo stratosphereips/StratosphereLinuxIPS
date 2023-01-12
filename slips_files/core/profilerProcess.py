@@ -15,20 +15,20 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-import multiprocessing
-import json
-from datetime import datetime, timedelta
-import sys
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from datetime import datetime, timedelta
+from .whitelist import Whitelist
+import multiprocessing
+import json
+import sys
 import ipaddress
 import traceback
 import os
 import binascii
 import base64
 from re import split
-from .whitelist import Whitelist
 
 
 # Profiler Process

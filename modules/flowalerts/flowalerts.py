@@ -1,12 +1,11 @@
-# Must imports
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 from .TimerThread import TimerThread
-
-# Your imports
+from .set_evidence import Helper
+from slips_files.core.whitelist import Whitelist
+import multiprocessing
 import json
 import threading
 import ipaddress
@@ -14,11 +13,9 @@ import datetime
 import sys
 import validators
 import collections
+import traceback
 import math
 import time
-from multiprocessing import Queue
-from .set_evidence import Helper
-from slips_files.core.whitelist import Whitelist
 
 
 
@@ -90,7 +87,7 @@ class Module(Module, multiprocessing.Process):
         self.password_guessing_cache = {}
         # in pastebin download detection, we wait for each conn.log flow of the seen ssl flow to appear
         # this is the dict of ssl flows we're waiting for
-        self.pending_ssl_flows = Queue()
+        self.pending_ssl_flows = multiprocessing.Queue()
         # thread that waits for ssl flows to appear in conn.log
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
@@ -2063,4 +2060,6 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
+
                 return True

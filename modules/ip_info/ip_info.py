@@ -1,4 +1,3 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
@@ -6,8 +5,7 @@ from slips_files.common.slips_utils import utils
 from .asn_info import ASN
 import platform
 import sys
-
-# Your imports
+import traceback
 import datetime
 import maxminddb
 import ipaddress
@@ -617,5 +615,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
-                self.shutdown_gracefully()
+                self.print(traceback, 0, 1)
                 return True

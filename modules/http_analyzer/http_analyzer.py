@@ -1,12 +1,11 @@
-# Must imports
+
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import sys
-
-# Your imports
+import traceback
 import json
 import urllib
 import requests
@@ -557,4 +556,5 @@ class Module(Module, multiprocessing.Process):
                 self.print(str(type(inst)), 0, 1)
                 self.print(str(inst.args), 0, 1)
                 self.print(str(inst), 0, 1)
+                self.print(traceback, 0, 1)
                 return True
