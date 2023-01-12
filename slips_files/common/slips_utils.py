@@ -63,7 +63,8 @@ class Utils(object):
             if float(threat_level) <= int_value:
                 return str_lvl
 
-
+    def is_valid_threat_level(self, threat_level):
+        return threat_level in self.threat_levels
 
     def sanitize(self, string):
         """
