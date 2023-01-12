@@ -363,7 +363,7 @@ class Client(object):
                 data = ''
             else:
                 data = json.dumps(payload)
-        except:
+        except Exception as ex:
             return Error(
                 message='Serialization to JSON failed',
                 exc=exc_info(),
@@ -385,7 +385,7 @@ class Client(object):
         loc = '%s/%s%s' % (self.url.path, func, argurl)
         try:
             conn.request('POST', loc, data, self.headers)
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 message='Sending of request to server failed',
@@ -398,7 +398,7 @@ class Client(object):
 
         try:
             res = conn.getresponse()
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 method=func,
@@ -411,7 +411,7 @@ class Client(object):
 
         try:
             response_data = res.read()
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 method=func,
@@ -427,7 +427,7 @@ class Client(object):
         if res.status == http.client.OK:
             try:
                 data = json.loads(response_data)
-            except:
+            except Exception as ex:
                 data = Error(
                     method=func,
                     message='JSON message parsing failed',
@@ -440,7 +440,7 @@ class Client(object):
                 data[
                     'errors'
                 ]   # trigger exception if not dict or no error key
-            except:
+            except Exception as ex:
                 data = Error(
                     method=func,
                     message='Generic server HTTP error',

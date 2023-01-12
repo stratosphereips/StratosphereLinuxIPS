@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             time.sleep(120)
             try:
                 flow_info = self.circllu_queue.get(timeout=0.5)
-            except:
+            except Exception as ex:
                 # queue is empty wait extra 2 min
                 continue
 
@@ -549,7 +549,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         try:
             spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
-        except:
+        except Exception as ex:
             spamhaus_result = 0
 
         if not spamhaus_result:
@@ -656,7 +656,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 f"{circl_base_url}/md5/{md5}",
                headers=self.circl_session.headers
             )
-        except:
+        except Exception as ex:
             # add the hash to the cirllu queue and ask for it later
             self.circllu_queue.put(flow_info)
             return
@@ -864,7 +864,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     f'Could not load the local TI files {self.path_to_local_ti_files}'
                 )
             self.circllu_calls_thread.start()
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)

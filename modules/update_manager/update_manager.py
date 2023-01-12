@@ -109,7 +109,7 @@ class UpdateManager(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback, 0, 1)

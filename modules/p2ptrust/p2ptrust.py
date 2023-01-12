@@ -204,7 +204,7 @@ class Trust(Module, multiprocessing.Process):
                 sock.bind(('0.0.0.0', port))
                 sock.close()
                 return port
-            except:
+            except Exception as ex:
                 # port is in use
                 continue
 
@@ -683,7 +683,7 @@ class Trust(Module, multiprocessing.Process):
                         self.print(f"You Multiaddress is: {multiaddr}")
                         self.mutliaddress_printed = True
 
-                except:
+                except Exception as ex:
                     pass
 
         except KeyboardInterrupt:

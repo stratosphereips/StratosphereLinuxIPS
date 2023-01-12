@@ -261,7 +261,7 @@ class ProfilingFlowsDatabase(object):
                     """
                     return 'Not Established'
             return None
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'

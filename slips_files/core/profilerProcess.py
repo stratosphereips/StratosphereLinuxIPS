@@ -172,7 +172,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.separator = self.separators[self.input_type]
             return self.input_type
 
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_type() line {exception_line}', 0, 1
@@ -251,7 +251,7 @@ class ProfilerProcess(multiprocessing.Process):
                 temp_dict[k] = e
             self.column_idx = temp_dict
             return self.column_idx
-        except:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_columns() line {exception_line}', 0, 1
@@ -1721,7 +1721,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # No home. Store all
                     self.handle_in_flows()
             return True
-        except:
+        except Exception as ex:
             # For some reason we can not use the output queue here.. check
             self.print(
                 f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
@@ -2352,7 +2352,7 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
-        except:
+        except Exception as ex:
             # For some reason we can not use the output queue here.. check
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
@@ -2465,7 +2465,7 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except :
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(
                     f'Error. Stopped Profiler Process. Received {rec_lines} '
