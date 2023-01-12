@@ -248,7 +248,9 @@ The domains are currently taken from:
 - HTTP host names
 - TLS SNI
 
-Once a domain is found, it is verified against the downloaded list of domains from the blacklists defined in ```ti_files``` in the configuration file ```config/slips.conf```. 
+Once a domain is found, it is verified against the downloaded list of domains 
+from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```. 
+which is ```config/TI_feeds.csv``` by default.
 If an exact match is found, then an evidence is generated. 
 
 If an exact match is not found, then Slips verifies if the verified domain is a
@@ -314,21 +316,21 @@ Example:
 ### Adding your own remote feed
 
 
-We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in config/slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
+We update the remote ones regularly. The list of remote threat intelligence 
+files is set in the path of ```ti_files``` variable in ```config/slips.conf```.
+The path of all the TI feeds is in ```config/TI_feeds.csv``` by default.
+
+You can add your own remote threat intelligence feeds in this variable.
+Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
 Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
 
 tag is which category is this feed e.g. phishing, adtrackers, etc..
 
-
 Threat level available options: info, low, medium, high, critical
 
 Refer to the [architecture section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html) for detailed explanation of Slips threat levels.
 
-
-Be sure the format is:
-
-link, threat_level=0-1, tags=['tag1','tag2']
 
 TI files commented using # may be processed as they're still in our database. 
 
@@ -338,21 +340,21 @@ Commented TI files (lines starting with ;) will be completely removed from our d
 
 
 The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. 
-By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` and deleted after slips
-is done reading them
+By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
+are deleted after slips is done reading them.
 
 
 ### Commenting a remote TI feed
 
 If you have a remote file link that you wish to comment and remove from the database
-you can do so by adding ';' to the line that contains the feed link in ```config/slips.conf```, don't use the '#'
+you can do so by adding ';' to the line that contains the feed link in ```config/TI_feeds.csv```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
     
-    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, medium,['honeypot']
 
 instead of:
 
-    #https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    #https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 ## Update Manager Module
 
@@ -360,7 +362,7 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by 
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```config/slips.conf```
+The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 

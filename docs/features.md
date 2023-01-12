@@ -522,7 +522,8 @@ Every time Slips encounters an TLS flow,
 it compares each JA3 and JA3s with the feeds of malicious JA3 and alerts when
 there’s a match.
 Slips is shipped with the Abuse.ch JA3 feed by default
-You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf```
+You can add your own SSL feed by appending to the file defined by the ```ja3_feeds``` key in
+```config/slips.conf```, which is by default ```config/JA3_feeds.csv```
 
 #### Matching of SSL SHA1 Hashes
 
@@ -531,7 +532,8 @@ then it compares the hash with our list of blacklisted SSL certificates
 
 Slips is shipped with the Abuse.ch SSL feed by default,
 
-You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf```
+You can add your own SSL feed by appending to the file defined by the ```ssl_feeds``` key in ```config/slips.conf```, which is by default 
+```config/SSL_feeds.csv```
 
 #### Local Threat Intelligence files
 
@@ -582,11 +584,6 @@ Threat level available options: info, low, medium, high, critical
 
 Refer to the [architecture section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html) for detailed explanation of Slips threat levels.
 
-
-Be sure the format is:
-
-link, threat_level=0-1, tags=['tag1','tag2']
-
 TI files commented using # may be processed as they're still in our database. 
 
 Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```.
@@ -603,11 +600,11 @@ If you have a remote file link that you wish to comment and remove from the data
 you can do so by adding ';' to the line that contains the feed link in ```config/slips.conf```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
     
-    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    ;https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 instead of:
 
-    #https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    #https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 ### Update Manager Module
 
@@ -615,7 +612,7 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by 
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```config/slips.conf```
+The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
