@@ -79,14 +79,15 @@ class UpdateFileManager:
         if not os.path.exists(self.path_to_remote_ti_files):
             os.mkdir(self.path_to_remote_ti_files)
 
-        self.ti_feed_tuples = conf.ti_files()
-        self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
+        # self.ti_feed_tuples = conf.ti_files()
+        self.ti_feeds_path = conf.ti_files()
+        self.url_feeds = self.get_feed_details(self.ti_feeds_path)
 
         self.ja3_feed_tuples = conf.ja3_feeds()
-        self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
+        self.ja3_feeds = self.get_feed_details(self.ja3_feed_tuples)
 
         self.ssl_feed_tuples = conf.ssl_feeds()
-        self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+        self.ssl_feeds = self.get_feed_details(self.ssl_feed_tuples)
 
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
@@ -99,22 +100,29 @@ class UpdateFileManager:
         self.online_whitelist = conf.online_whitelist()
 
 
-    def get_feed_properties(self, feeds):
+    def get_feed_details(self, feeds_path):
         """
-        Parse links, threat level and tags from slips.conf
+        Parse links, threat level and tags from the feeds_path file and return a dict with feed info
         """
+        with open(feeds_path, 'r') as feeds_file:
+            feeds = feeds_file.read()
+
         # this dict will contain every link and its threat_level
         url_feeds = {}
-        # Each tuple_ is in turn a url, threat_level and tags
-        for line in feeds:
-            line = line.replace('\n', '')
-            if line == '':
+
+        for line in feeds.splitlines():
+            if line.startswith("#"):
                 continue
+            # remove all spaces
+            line = line.strip().replace(" ",'')
+            # each line is https://abc.d/e,medium,['tag1','tag2']
+            line = line.split(',')
+            url, threat_level = line[0], line[1]
+            tags: str = " ".join(line[2:])
+            tags = tags.replace('[','').replace(']','').replace('\'',"").replace('\"',"").split(',')
 
-            url, threat_level, tags = line.split(', ')
-            tags = tags.replace('tags=', '')
-            threat_level = threat_level.replace('threat_level=', '').strip()
 
+            threat_level = threat_level.lower()
             # remove commented lines from the cache db
             if url.startswith(';'):
                 feed = url.split('/')[-1]
@@ -124,23 +132,23 @@ class UpdateFileManager:
                     __database__.delete_file_info(feed)
                 continue
 
-            # make sure threat level is a valid value
-            if threat_level.lower() not in (
-                'info',
-                'low',
-                'medium',
-                'high',
-                'critical',
-            ):
+            # make sure the given tl is valid
+            if not utils.is_valid_threat_level(threat_level):
                 # not a valid threat_level
                 self.print(
-                    f'Invalid threat level found in slips.conf: {threat_level} '
-                    f"for TI feed: {url}. Using 'low' instead.", 0, 1,
+                            f'Invalid threat level found in slips.conf: {threat_level} '
+                            f"for TI feed: {url}. Using 'low' instead.", 0, 1
                 )
                 threat_level = 'low'
 
-            url_feeds[url] = {'threat_level': threat_level, 'tags': tags[:30]}
+            url_feeds[url] = {
+                'threat_level': threat_level,
+                'tags': tags
+            }
         return url_feeds
+
+
+
 
     def print(self, text, verbose=1, debug=0):
         """
