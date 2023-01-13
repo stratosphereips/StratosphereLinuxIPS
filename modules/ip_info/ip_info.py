@@ -414,17 +414,19 @@ class Module(Module, multiprocessing.Process):
         """
         Slips tries different ways to get the ip of the default gateway
         this method tries to get the default gateway IP address using ip route
+        only works when running on an interface
         """
-        if '-i' not in sys.argv:
+        if not ('-i' in sys.argv or __database__.is_growing_zeek_dir()):
+            # only works if running on an interface
             return False
 
-        gateway = False
+        gw_ip = False
         if platform.system() == 'Darwin':
             route_default_result = subprocess.check_output(
                 ['route', 'get', 'default']
             ).decode()
             try:
-                gateway = re.search(
+                gw_ip = re.search(
                     r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
                     route_default_result,
                 ).group(0)
@@ -436,8 +438,8 @@ class Module(Module, multiprocessing.Process):
                 r"([\w.][\w.]*'?\w?)",
                 subprocess.check_output(['ip', 'route']).decode(),
             )
-            gateway = route_default_result[2]
-        return gateway
+            gw_ip = route_default_result[2]
+        return gw_ip
 
     def get_gateway_MAC(self, gw_ip: str):
         """
@@ -501,8 +503,9 @@ class Module(Module, multiprocessing.Process):
     def set_gw_ip(self, dhcp_flow):
         """
         Sets the IP of the gateway as the IP of the dhcp server.
-        If no dhcp flows are found, the gw ip won't be set using this function
         """
+        # If no dhcp flows are found, the gw ip won't be set using this function
+        # it may be set using  self.get_gateway_ip()
         if self.gw_set:
             return
 
@@ -525,6 +528,9 @@ class Module(Module, multiprocessing.Process):
 
         if ip := self.get_gateway_ip():
             __database__.set_default_gateway('IP', ip)
+            # now that we know the GW IP address, try to get the MAC of this IP (of the gw)
+            self.get_gateway_MAC(ip)
+
 
         # Main loop function
         while True:
