@@ -69,7 +69,7 @@ class Helper:
             rev_direction = 'from'
 
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'high'
         category = 'Anomaly.Traffic'
         attacker_direction = ip_outside_localnet
         evidence_type = 'DifferentLocalnet'
