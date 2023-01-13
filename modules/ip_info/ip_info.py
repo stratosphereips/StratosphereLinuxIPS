@@ -439,21 +439,28 @@ class Module(Module, multiprocessing.Process):
             gateway = route_default_result[2]
         return gateway
 
-    def get_gateway_MAC(self, gw_ip):
+    def get_gateway_MAC(self, gw_ip: str):
         """
-        Gets MAC from arp.log or from arp tables
+        Given the gw_ip found in dhcp.log, this function tries to get the MAC
+         from arp.log or from arp tables
+        this function is only called when there's a flow coming from dhcp.log
+        if no dhcp flow was encountered, the gw mac will be determined by
+         db.is_gw_mac() function
         """
+        # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
-        # check if we saved the mac of this gw_ip. whenever we see an arp.log we save the ip and the mac
-        MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
-        if MAC:
-            __database__.set_default_gateway('MAC', MAC)
-            return MAC
+        # check if we have the mac of this ip already saved in the db.
+        gw_MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
+        if gw_MAC:
+            __database__.set_default_gateway('MAC', gw_MAC)
+            return gw_MAC
 
-        # we don't have it in arp.log
+        # we don't have it in arp.log(in the db)
         running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         if not running_on_interface:
-            # no mac in arp.log and can't use arp table, so no way to get the gateway MAC
+            # no MAC in arp.log (in the db) and can't use arp tables,
+            # so it's up to the db.is_gw_mac() function to determine the gw mac
+            # if it's seen associated with a public IP
             return
 
         # get it using arp table
@@ -461,9 +468,9 @@ class Module(Module, multiprocessing.Process):
         output = subprocess.check_output(cmd.split()).decode()
         for line in output:
             if gw_ip in line:
-                MAC = line.split()[-4]
-                __database__.set_default_gateway('MAC', MAC)
-                return MAC
+                gw_MAC = line.split()[-4]
+                __database__.set_default_gateway('MAC', gw_MAC)
+                return gw_MAC
 
     def check_if_we_have_pending_mac_queries(self):
         """
@@ -493,17 +500,21 @@ class Module(Module, multiprocessing.Process):
 
     def set_gw_ip(self, dhcp_flow):
         """
-        Sets the IP of the gateway as the IP of the dhcp server
+        Sets the IP of the gateway as the IP of the dhcp server.
+        If no dhcp flows are found, the gw ip won't be set using this function
         """
+        if self.gw_set:
+            return
+
         server_addr = dhcp_flow.get('server_addr', False)
         if not server_addr:
             # no gw IP to set
             return
-        if self.gw_set:
-            return
+
         self.gw_set = True
-        # override the gw in the db since we have a dhcp
+        # override the gw IP in the db since we have a dhcp
         __database__.set_default_gateway("IP", server_addr)
+        # now that we know the GW IP address, try to get the MAC of this IP (of the gw)
         self.get_gateway_MAC(server_addr)
 
 
