@@ -1932,9 +1932,11 @@ class ProfilerProcess(multiprocessing.Process):
                 self.saddr,
                 host_name=(self.column_values.get('host_name', False))
             )
-
-        if self.column_values.get('server_addr', False):
-            __database__.store_dhcp_server(self.column_values.get('server_addr', False))
+        server_addr = self.column_values.get('server_addr', False)
+        if server_addr:
+            __database__.store_dhcp_server(server_addr)
+            # override the gw IP in the db since we have a dhcp
+            __database__.set_default_gateway("IP", server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
         self.publish_to_new_dhcp()
