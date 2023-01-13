@@ -1782,6 +1782,8 @@ class ProfilerProcess(multiprocessing.Process):
             spkts=self.column_values['spkts'],
             sbytes=self.column_values['sbytes'],
             appproto=self.column_values['appproto'],
+            smac=self.column_values['smac'],
+            dmac=self.column_values['dmac'],
             uid=self.uid,
             label=self.label,
             flow_type=self.flow_type,

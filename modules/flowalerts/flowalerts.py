@@ -1722,13 +1722,17 @@ class Module(Module, multiprocessing.Process):
                     proto = flow_dict.get('proto')
                     sbytes = flow_dict.get('sbytes', 0)
                     appproto = flow_dict.get('appproto', '')
+                    smac = flow_dict.get('smac', '')
+                    dmac = flow_dict.get('dmac', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
                     # stime = flow_dict['ts']
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
+                    self.check_device_changing_ips(
+                        smac, profileid, twid, uid, timestamp
+                    )
                     self.check_long_connection(
                         dur, daddr, saddr, profileid, twid, uid, timestamp
                     )
@@ -1840,7 +1844,6 @@ class Module(Module, multiprocessing.Process):
                         uid,
                         timestamp,
                     )
-
                 # --- Detect successful SSH connections ---
                 message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':

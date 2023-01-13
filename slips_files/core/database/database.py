@@ -342,7 +342,7 @@ class Database(ProfilingFlowsDatabase, object):
             if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
-
+            # execlude ips outside of local network is it's set in slips.conf 
             if not self.should_add(profileid):
                 return False
 
@@ -584,7 +584,6 @@ class Database(ProfilingFlowsDatabase, object):
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
-
 
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
