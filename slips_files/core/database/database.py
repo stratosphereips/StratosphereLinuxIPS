@@ -2100,7 +2100,11 @@ class Database(ProfilingFlowsDatabase, object):
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac
         """
-        if not self.get_gateway_ip():
+        # make sure the IP or mac aren't already set before re-setting
+        if (
+                address_type == 'IP' and not self.get_gateway_ip()
+                or address_type == 'MAC' and not self.get_gateway_MAC()
+        ):
             self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
