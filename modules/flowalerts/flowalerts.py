@@ -70,7 +70,8 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
-        # when the ctr reaches the threshold in 10 seconds, we detect an smtp bruteforce
+        # when the ctr reaches the threshold in 10 seconds,
+        # we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
         # dict to keep track of bad smtp logins to check for bruteforce later
         # format {profileid: [ts,ts,...]}
@@ -1291,7 +1292,7 @@ class Module(Module, multiprocessing.Process):
             timestamps[-1]
         )
 
-        if diff > 10:
+        if diff <= 10:
             # remove the first login from cache so we can check the next 3 logins
             self.smtp_bruteforce_cache[profileid][0].pop(0)
             self.smtp_bruteforce_cache[profileid][1].pop(0)
