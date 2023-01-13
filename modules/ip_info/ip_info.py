@@ -315,7 +315,6 @@ class Module(Module, multiprocessing.Process):
                 return vendor
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
-        # sourcery skip: remove-redundant-pass
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
@@ -539,9 +538,9 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message['data']
                     data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
+                    # profileid = data['profileid']
+                    # twid = data['twid']
+                    # uid = data['uid']
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}

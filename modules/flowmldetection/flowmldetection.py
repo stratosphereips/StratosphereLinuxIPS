@@ -134,37 +134,18 @@ class Module(Module, multiprocessing.Process):
         Clean the dataset
         """
         try:
-            # Discard some type of flows that they dont have ports
-            dataset = dataset[dataset.proto != 'arp']
-            dataset = dataset[dataset.proto != 'ARP']
-            dataset = dataset[dataset.proto != 'icmp']
-            dataset = dataset[dataset.proto != 'igmp']
-            dataset = dataset[dataset.proto != 'ipv6-icmp']
+            # Discard some type of flows that dont have ports
+            to_discard = ['arp', 'ARP', 'icmp', 'igmp', 'ipv6-icmp']
+            for proto in to_discard:
+                dataset = dataset[dataset.proto != proto]
+
             # For now, discard the ports
-            try:
-                dataset = dataset.drop('appproto', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('daddr', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('saddr', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('ts', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('origstate', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('flow_type', axis=1)
-            except ValueError:
-                pass
+            to_drop = ['appproto' , 'daddr', 'saddr', 'ts', 'origstate', 'flow_type' , 'smac', 'dmac']
+            for field in to_drop:
+                try:
+                    dataset = dataset.drop(field, axis=1)
+                except ValueError:
+                    pass
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(
@@ -485,7 +466,9 @@ class Module(Module, multiprocessing.Process):
                                 # If the user specified a label in test mode, and the label
                                 # is diff from the prediction, print in debug mode
                                 self.print(
-                                    f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                                    f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
                                     0,
                                     3,
                                 )
@@ -501,7 +484,9 @@ class Module(Module, multiprocessing.Process):
                                     uid,
                                 )
                                 self.print(
-                                    f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                                    f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
                                     0,
                                     2,
                                 )
