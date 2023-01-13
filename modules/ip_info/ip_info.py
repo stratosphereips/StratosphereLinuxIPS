@@ -42,8 +42,7 @@ class Module(Module, multiprocessing.Process):
         self.c4 = __database__.subscribe('new_dhcp')
         # update asn every 1 month
         self.update_period = 2592000
-        # if we found the gw ip using dhcp, this will be set to true
-        self.gw_set = False
+        self.is_gw_mac_set = False
         # we can only getthe age of these tlds
         self.valid_tlds = [
             '.ac_uk',
@@ -443,11 +442,8 @@ class Module(Module, multiprocessing.Process):
 
     def get_gateway_MAC(self, gw_ip: str):
         """
-        Given the gw_ip found in dhcp.log, this function tries to get the MAC
+        Given the gw_ip, this function tries to get the MAC
          from arp.log or from arp tables
-        this function is only called when there's a flow coming from dhcp.log
-        if no dhcp flow was encountered, the gw mac will be determined by
-         db.is_gw_mac() function
         """
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
@@ -500,25 +496,6 @@ class Module(Module, multiprocessing.Process):
         loop.run_until_complete(self.open_dbs())
 
 
-    def set_gw_ip(self, dhcp_flow):
-        """
-        Sets the IP of the gateway as the IP of the dhcp server.
-        """
-        # If no dhcp flows are found, the gw ip won't be set using this function
-        # it may be set using  self.get_gateway_ip()
-        if self.gw_set:
-            return
-
-        server_addr = dhcp_flow.get('server_addr', False)
-        if not server_addr:
-            # no gw IP to set
-            return
-
-        self.gw_set = True
-        # override the gw IP in the db since we have a dhcp
-        __database__.set_default_gateway("IP", server_addr)
-        # now that we know the GW IP address, try to get the MAC of this IP (of the gw)
-        self.get_gateway_MAC(server_addr)
 
 
     def run(self):
@@ -526,11 +503,9 @@ class Module(Module, multiprocessing.Process):
 
         self.wait_for_dbs()
 
+        # the following method only works when running on an interface
         if ip := self.get_gateway_ip():
             __database__.set_default_gateway('IP', ip)
-            # now that we know the GW IP address, try to get the MAC of this IP (of the gw)
-            self.get_gateway_MAC(ip)
-
 
         # Main loop function
         while True:
@@ -546,6 +521,16 @@ class Module(Module, multiprocessing.Process):
                     profileid = data['profileid']
                     self.get_vendor(mac_addr, host_name, profileid)
                     self.check_if_we_have_pending_mac_queries()
+                    # set the gw mac and ip if they're not set yet
+                    if not self.is_gw_mac_set:
+                        # whether we found the gw ip using dhcp in profileprocess
+                        # or using ip route using self.get_gateway_ip()
+                        # now that it's found, get and store the mac addr of it
+                        if ip:= __database__.get_gateway_ip():
+                            # now that we know the GW IP address,
+                            # try to get the MAC of this IP (of the gw)
+                            self.get_gateway_MAC(ip)
+                            self.is_gw_mac_set = True
 
                 message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
