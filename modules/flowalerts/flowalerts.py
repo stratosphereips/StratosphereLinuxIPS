@@ -1642,6 +1642,7 @@ class Module(Module, multiprocessing.Process):
             saddr,
             daddr,
             dport,
+            proto,
             profileid,
             timestamp,
             twid,
@@ -1652,24 +1653,35 @@ class Module(Module, multiprocessing.Process):
         alerts when a connection to a private ip that doesn't belong to our local network is found
         for example:
         If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
-        :param what_to_check: can be 'saddr' or 'daddr'
+        :param what_to_check: can be 'srcip' or 'dstip'
         """
-        saddr_obj = ipaddress.ip_address(saddr)
-        daddr_obj = ipaddress.ip_address(daddr)
+        ip_to_check = saddr if what_to_check == 'srcip' else daddr
+        ip_obj = ipaddress.ip_address(ip_to_check)
         own_local_network = __database__.get_local_network()
 
+        if not own_local_network:
+            # the current local network wasn't set in the db yet
+            # it's impossible to get here becaus ethe localnet is set before
+            # any msg is published in the new_flow channel
+            return
 
-        if validators.ipv4(daddr) and daddr_obj.is_private:
-            # if it's a private ipv4 addr, it should belong to our local network
-            if not daddr in ipaddress.IPv4Network(own_local_network):
-                self.helper.set_evidence_different_localnet_usage(
-                    daddr,
-                    dport,
-                    profileid,
-                    timestamp,
-                    twid,
-                    uid
-                )
+        if not (validators.ipv4(ip_to_check) and ip_obj.is_private):
+            return
+
+        # if it's a private ipv4 addr, it should belong to our local network
+        if ip_obj in ipaddress.IPv4Network(own_local_network):
+            return
+
+        self.helper.set_evidence_different_localnet_usage(
+            daddr,
+            f'{dport}/{proto}',
+            profileid,
+            timestamp,
+            twid,
+            uid,
+            ip_outside_localnet=what_to_check
+        )
+
 
 
     def run(self):
@@ -1716,7 +1728,6 @@ class Module(Module, multiprocessing.Process):
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
-                    # --- Detect long Connections ---
                     self.check_long_connection(
                         dur, daddr, saddr, profileid, twid, uid, timestamp
                     )
@@ -1750,6 +1761,28 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid,
                         timestamp
+                    )
+                    self.check_different_localnet_usage(
+                        saddr,
+                        daddr,
+                        dport,
+                        proto,
+                        profileid,
+                        timestamp,
+                        twid,
+                        uid,
+                        what_to_check='srcip'
+                    )
+                    self.check_different_localnet_usage(
+                        saddr,
+                        daddr,
+                        dport,
+                        proto,
+                        profileid,
+                        timestamp,
+                        twid,
+                        uid,
+                        what_to_check='dstip'
                     )
 
                     self.check_connection_without_dns_resolution(
