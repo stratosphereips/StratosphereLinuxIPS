@@ -64,7 +64,6 @@ class Utils(object):
         returns the cidr/range of the given private ip
         :param ip: should be  a private ips
         """
-        # todo support ipv6
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
             # see if the first octet of the given ip matches any of the

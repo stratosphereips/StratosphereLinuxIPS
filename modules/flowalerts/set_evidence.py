@@ -42,6 +42,29 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_different_localnet_usage(
+            self,
+            daddr,
+            dport,
+            profileid,
+            timestamp,
+            twid,
+            uid
+    ):
+        confidence = 1
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        attacker_direction = 'dstip'
+        evidence_type = 'DifferentLocalnet'
+        attacker = daddr
+        localnet = __database__.get_local_network()
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'Connecting to a private destination IP outside of the used local network. ' \
+                      f'current local network: {localnet} ' \
+                      f'destination IP: {daddr}:{dport} ' \
+                      f'{ip_identification}'
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
 
     def set_evidence_non_http_port_80_conn(
