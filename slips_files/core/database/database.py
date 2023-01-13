@@ -75,7 +75,6 @@ class Database(ProfilingFlowsDatabase, object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
-        self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
@@ -466,7 +465,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
-        Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
+        Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
         :param ip: dst ip that should be associated with the given MAC info
         """
 
@@ -475,31 +474,22 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         if self.gateway_MAC_found:
-            # gateway ip already set using this function
+            # gateway MAC already set using this function
             return True if __database__.get_gateway_MAC() == MAC else False
 
-        # if we saw the same mac assigned to 3+ IPs, we know this is the gw mac
-        if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
-            # we are sure this is the gw mac,
-            # set it if we don't already have it in the db
-            if not self.get_gateway_MAC():
-                for field, mac_info in MAC_info.items():
-                    self.set_default_gateway(field, mac_info)
-
-                # mark the gw mac as found so we don't look for it again
-                self.gateway_MAC_found = True
-                delattr(self, 'seen_MACs')
-                return True
-
-        # the dst MAC of all public IPs is the dst mac of the gw,
-        # we shouldn't be assigning it to the public IPs
+        # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
         if not ip_obj.is_private:
-            # trying to associate a mac with a public ip!
-            try:
-                self.seen_MACs[MAC] += 1
-            except KeyError:
-                self.seen_MACs[MAC] = 1
+            # now we're given a public ip and a MAC that's supposedly belongs to it
+            # we are sure this is the gw mac
+            # set it if we don't already have it in the db
+            # set the ip of the gw, and the mac of the gw
+            for address_type, address in MAC_info.items():
+                # address_type can be 'IP' or 'MAC' or 'Vendor'
+                self.set_default_gateway(address_type, address)
+
+            # mark the gw mac as found so we don't look for it again
+            self.gateway_MAC_found = True
             return True
 
     def add_mac_addr_to_profile(self, profileid, MAC_info):
