@@ -39,7 +39,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
-        self.c4 = __database__.subscribe('new_dhcp')
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -591,20 +590,6 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
-
-
-                message = __database__.get_message(self.c4)
-                # if timewindows are not updated for a long time (see at logsProcess.py),
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_dhcp'):
-                    # this channel will only get 1 msg if we have dhcp.log
-                    dhcp_flow = json.loads(message['data'])
-                    self.set_gw_ip(dhcp_flow)
-
 
 
             except KeyboardInterrupt:
