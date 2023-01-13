@@ -75,14 +75,16 @@ class Database(ProfilingFlowsDatabase, object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
         self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
         self.set_redis_options()
         self.our_ips = utils.get_own_IPs()
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
+        # to make sure we only detect and store the user's localnet once
+        self.is_localnet_set = False
 
 
     def set_redis_options(self):

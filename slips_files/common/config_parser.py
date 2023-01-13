@@ -115,7 +115,7 @@ class ConfigParser(object):
             home_nets = [network.strip() for network in home_nets]
             return list(map(ipaddress.ip_network, home_nets))
         else:
-            # return self.home_network_ranges
+            # return self.home_network_ranges_str
             return False
 
 

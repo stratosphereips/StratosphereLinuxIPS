@@ -11,8 +11,6 @@ class ProfilingFlowsDatabase(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
         self.seen_MACs = {}
 
 
@@ -866,10 +864,23 @@ class ProfilingFlowsDatabase(object):
         to_send['flow'] = flow
         to_send['stime'] = stime
         to_send = json.dumps(to_send)
+
         # set the pcap/file stime in the analysis key
         if self.first_flow:
             self.first_flow = False
             self.set_input_metadata({'file_start': stime})
+
+        # set the local network used in the db
+        if not self.is_localnet_set:
+            if (
+                    validators.ipv4(saddr)
+                    and ipaddress.ip_address(saddr).is_private
+            ):
+                # get the local network of this saddr
+                if range := utils.get_cidr_of_ip(saddr):
+                    self.is_localnet_set = True
+                    self.r.set("local_network", range)
+
         self.publish('new_flow', to_send)
         return True
 
