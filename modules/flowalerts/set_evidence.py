@@ -49,22 +49,51 @@ class Helper:
             profileid,
             timestamp,
             twid,
-            uid
+            uid,
+            ip_outside_localnet: str=''
     ):
+        """
+        :param ip_outside_localnet: was the 'srcip' outside the localnet or the 'dstip'?
+        """
+        srcip = profileid.split('_')[-1]
+        # the attacker here is the IP found to be private and outside th localnet
+        if ip_outside_localnet == 'srcip':
+            attacker = srcip
+            victim = daddr
+            direction = 'from'
+            rev_direction = 'to'
+        else:
+            attacker = daddr
+            victim = srcip
+            direction = 'to'
+            rev_direction = 'from'
+
         confidence = 1
         threat_level = 'medium'
         category = 'Anomaly.Traffic'
-        attacker_direction = 'dstip'
+        attacker_direction = ip_outside_localnet
         evidence_type = 'DifferentLocalnet'
-        attacker = daddr
         localnet = __database__.get_local_network()
-        ip_identification = __database__.getIPIdentification(daddr)
-        description = f'Connecting to a private destination IP outside of the used local network. ' \
-                      f'current local network: {localnet} ' \
-                      f'destination IP: {daddr}:{dport} ' \
-                      f'{ip_identification}'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        description = f'A connection {direction} a private IP ({attacker}) ' \
+                      f'outside of the used local network {localnet}.' \
+                      f' {rev_direction} IP: {victim} '\
+
+        if ip_outside_localnet == 'dstip':
+            description += f'on port: {dport}'
+
+        __database__.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid
+        )
 
 
     def set_evidence_non_http_port_80_conn(
