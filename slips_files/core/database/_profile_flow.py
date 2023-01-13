@@ -877,12 +877,15 @@ class ProfilingFlowsDatabase(object):
                     and ipaddress.ip_address(saddr).is_private
             ):
                 # get the local network of this saddr
-                if range := utils.get_cidr_of_ip(saddr):
+                if network_range := utils.get_cidr_of_ip(saddr):
                     self.is_localnet_set = True
-                    self.r.set("local_network", range)
+                    self.r.set("local_network", network_range)
 
         self.publish('new_flow', to_send)
         return True
+
+    def get_local_network(self):
+         return self.r.get("local_network")
 
     def get_label_count(self, label):
         """

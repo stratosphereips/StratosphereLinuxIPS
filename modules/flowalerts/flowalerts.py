@@ -1637,6 +1637,40 @@ class Module(Module, multiprocessing.Process):
                 uid
             )
 
+    def check_different_localnet_usage(
+            self,
+            saddr,
+            daddr,
+            dport,
+            profileid,
+            timestamp,
+            twid,
+            uid,
+            what_to_check=''
+    ):
+        """
+        alerts when a connection to a private ip that doesn't belong to our local network is found
+        for example:
+        If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
+        :param what_to_check: can be 'saddr' or 'daddr'
+        """
+        saddr_obj = ipaddress.ip_address(saddr)
+        daddr_obj = ipaddress.ip_address(daddr)
+        own_local_network = __database__.get_local_network()
+
+
+        if validators.ipv4(daddr) and daddr_obj.is_private:
+            # if it's a private ipv4 addr, it should belong to our local network
+            if not daddr in ipaddress.IPv4Network(own_local_network):
+                self.helper.set_evidence_different_localnet_usage(
+                    daddr,
+                    dport,
+                    profileid,
+                    timestamp,
+                    twid,
+                    uid
+                )
+
 
     def run(self):
         utils.drop_root_privs()
