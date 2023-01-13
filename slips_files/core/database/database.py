@@ -513,7 +513,12 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         if self.is_gw_mac(MAC_info, incoming_ip):
-            return False
+            if incoming_ip != self.get_gateway_ip():
+                # we're trying to assign the gw mac to an ip that isn't the gateway's
+                return False
+            else:
+                # we're given the gw mac and ip, store them no issue
+                pass
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
