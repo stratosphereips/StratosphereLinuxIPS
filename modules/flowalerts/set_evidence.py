@@ -112,8 +112,8 @@ class Helper:
         evidence_type = 'DeviceChangingIP'
         saddr = profileid.split("_")[-1]
         attacker = saddr
-        description = f'Changing IPs. IP {saddr} was found ' \
-                      f'with MAC address {smac} which belongs originally to IP: {old_ip} '
+        description = f'A device changing IPs. IP {saddr} was found ' \
+                      f'with MAC address {smac} but the MAC belongs originally to IP: {old_ip}. '
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)

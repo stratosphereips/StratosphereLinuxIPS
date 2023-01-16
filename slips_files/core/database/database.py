@@ -345,7 +345,6 @@ class Database(ProfilingFlowsDatabase, object):
             # execlude ips outside of local network is it's set in slips.conf 
             if not self.should_add(profileid):
                 return False
-
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -370,6 +369,23 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
 
+    def was_ip_seen_in_connlog_before(self, ip) -> bool:
+        """
+        returns true if this is not the first flow slip sees of the given ip
+        """
+        # we store every source address seen in a conn.log flow in this key
+        # if the source address is not stored in this key, it means we may have seen it
+        # but not in conn.log yet
+
+        # if the ip's not in the following key, then its the first flow seen of this ip
+        return self.r.sismember("srcips_seen_in_connlog", ip)
+
+    def mark_srcip_as_seen_in_connlog(self, ip):
+        """
+        Marks the given ip as seen in conn.log
+        if an ip is not present in this set, it means we may have seen it but not in conn.log
+        """
+        self.r.sadd("srcips_seen_in_connlog", ip)
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """

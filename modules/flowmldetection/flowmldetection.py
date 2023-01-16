@@ -149,7 +149,6 @@ class Module(Module, multiprocessing.Process):
                 'flow_type' ,
                 'smac',
                 'dmac',
-                'first_flow_for_this_saddr'
             ]
             for field in to_drop:
                 try:

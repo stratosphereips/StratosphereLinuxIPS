@@ -66,7 +66,6 @@ class ProfilerProcess(multiprocessing.Process):
             'zeek-tabs': '\t',
             'argus-tabs': '\t'
         }
-        self.new_src_profile = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -1703,8 +1702,7 @@ class ProfilerProcess(multiprocessing.Process):
                 for network in self.home_net:
                     if self.saddr_as_obj in network:
                         # if a new profile is added for this saddr
-                        # self.new_src_profile will be true
-                        self.new_src_profile = __database__.addProfile(
+                        __database__.addProfile(
                             self.profileid, self.starttime, self.width
                         )
                         self.store_features_going_out()
@@ -1714,10 +1712,9 @@ class ProfilerProcess(multiprocessing.Process):
                         if self.daddr_as_obj in network:
                             self.handle_in_flows()
             else:
-
-                # home_network param wasn't set in slips.conf.
-                # Create profiles for everybody
-                self.new_src_profile = __database__.addProfile(self.profileid, self.starttime, self.width)
+                # home_network param wasn't set in slips.conf
+                # Create profiles for all ips we see
+                __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
                     # No home. Store all
@@ -1786,7 +1783,6 @@ class ProfilerProcess(multiprocessing.Process):
             appproto=self.column_values['appproto'],
             smac=self.column_values['smac'],
             dmac=self.column_values['dmac'],
-            first_flow_for_this_saddr=self.new_src_profile,
             uid=self.uid,
             label=self.label,
             flow_type=self.flow_type,
@@ -2061,7 +2057,9 @@ class ProfilerProcess(multiprocessing.Process):
 
     def store_features_going_in(self, profileid, twid):
         """
-        This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+        If we have the all direction set , slips creates profiles for each IP, the src and dst
+        store features going our adds the conn in the profileA from IP A -> IP B in the db
+        this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
         """
         role = 'Server'
 

@@ -811,12 +811,11 @@ class ProfilingFlowsDatabase(object):
         uid='',
         label='',
         flow_type='',
-        first_flow_for_this_saddr=False
     ):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
-        : param first_flow_for_this_saddr : is set to True for everytime we see a new srcaddr
+        : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
         summaryState = self.getFinalStateFromFlags(state, pkts)
         data = {
@@ -839,7 +838,6 @@ class ProfilingFlowsDatabase(object):
             'label': label,
             'flow_type': flow_type,
             'module_labels': {},
-            'first_flow_for_this_saddr':first_flow_for_this_saddr
         }
 
         # Convert to json string
@@ -867,7 +865,6 @@ class ProfilingFlowsDatabase(object):
         flow = json.dumps(flow)
         # Prepare the data to publish.
         to_send = {
-            'first_flow_for_this_saddr': first_flow_for_this_saddr,
             'profileid': profileid,
             'twid': twid,
             'flow': flow,
