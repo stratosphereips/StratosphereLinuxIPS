@@ -14,6 +14,7 @@
 - Add detection of high entropy DNS TXT answers 
 - Add detection of connections to/from IPs outside the used local network.
 - Add detection for DHCP scans
+- Add detection for devices changing IPs.
 - Support having IP ranges in your own local TI file own_malicious_iocs.csv
 - Remove rstcloud TI file from slips.conf
 - Add the option to change pastebin download detection threshold in slips.conf

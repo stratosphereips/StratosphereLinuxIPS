@@ -30,7 +30,7 @@ The detection techniques are:
 - Connection to private IPs 
 - Connection to private IPs outside the current local network
 - High entropy DNS TXT answers 
-
+- Devices changing IPs
 The details of each detection follows.
 
 
@@ -322,3 +322,10 @@ and alerted by slips.
 
 the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
 
+## Devices changing IPs
+
+Slips stores the MAC of each new IP it sees in conn.log.
+
+Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
+
+If so, it alerts "Device changing IPs".
