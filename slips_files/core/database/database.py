@@ -448,11 +448,6 @@ class Database(ProfilingFlowsDatabase, object):
         if not is_dhcp_set:
             self.r.hmset(profileid, {'dhcp': 'true'})
 
-    def get_IP_of_MAC(self, MAC):
-        """
-        Returns the IP associated with the given MAC in our database
-        """
-        return self.r.hget('MAC', MAC)
 
     def set_ipv6_of_profile(self, profileid, ip: list):
 
@@ -492,10 +487,20 @@ class Database(ProfilingFlowsDatabase, object):
             self.gateway_MAC_found = True
             return True
 
+
+    def get_IP_of_MAC(self, MAC):
+        """
+        Returns the IP associated with the given MAC in our database
+        """
+        return self.r.hget('MAC', MAC)
+
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
-        Used to associate this profile with it's MAC addr
+        Used to associate this profile with its MAC addr in the 'MAC' key in the db
+        format of the MAC key is
+            MAC: [ipv4, ipv6, etc.]
         :param MAC_info: dict containing mac address, hostname and vendor info
+        this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
@@ -522,7 +527,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
-        if not cached_ip or cached_ip is None:
+        if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
@@ -565,7 +570,6 @@ class Database(ProfilingFlowsDatabase, object):
                     ipv6.add(found_ip)
                     ipv6 = list(ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
-
 
                 # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
                 ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
@@ -667,9 +671,9 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            temp_id = 'profile' + self.separator + str(daddr_as_obj)
-            if data := self.r.sismember('profiles', temp_id):
-                return temp_id
+            profileid = 'profile' + self.separator + str(daddr_as_obj)
+            if data := self.r.sismember('profiles', profileid):
+                return profileid
             return False
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
@@ -758,7 +762,7 @@ class Database(ProfilingFlowsDatabase, object):
                 f'01|profiler|[Profile] {traceback.format_exc()}'
             )
 
-    def hasProfile(self, profileid):
+    def has_profile(self, profileid):
         """Check if we have the given profile"""
         if not profileid:
             # profileid is None if we're dealing with a profile

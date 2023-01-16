@@ -140,7 +140,17 @@ class Module(Module, multiprocessing.Process):
                 dataset = dataset[dataset.proto != proto]
 
             # For now, discard the ports
-            to_drop = ['appproto' , 'daddr', 'saddr', 'ts', 'origstate', 'flow_type' , 'smac', 'dmac']
+            to_drop = [
+                'appproto' ,
+                'daddr',
+                'saddr',
+                'ts',
+                'origstate',
+                'flow_type' ,
+                'smac',
+                'dmac',
+                'first_flow_for_this_saddr'
+            ]
             for field in to_drop:
                 try:
                     dataset = dataset.drop(field, axis=1)
