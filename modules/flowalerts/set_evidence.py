@@ -96,6 +96,29 @@ class Helper:
         )
 
 
+    def set_evidence_device_changing_ips(
+            self,
+            smac,
+            old_ip,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        attacker_direction = 'srcip'
+        evidence_type = 'DeviceChangingIP'
+        saddr = profileid.split("_")[-1]
+        attacker = saddr
+        description = f'Changing IPs. IP {saddr} was found ' \
+                      f'with MAC address {smac} which belongs originally to IP: {old_ip} '
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+
+
     def set_evidence_non_http_port_80_conn(
         self, daddr ,profileid,timestamp, twid, uid
     ):

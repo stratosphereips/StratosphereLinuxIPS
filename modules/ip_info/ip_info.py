@@ -493,9 +493,6 @@ class Module(Module, multiprocessing.Process):
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
 
-
-
-
     def run(self):
         utils.drop_root_privs()
 

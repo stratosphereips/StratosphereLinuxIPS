@@ -207,7 +207,7 @@ class Module(Module, multiprocessing.Process):
             # wait a while before alerting.
             time.sleep(4)
             # make sure we have a profile for any of the above IPs
-            if __database__.hasProfile(src_profileid):
+            if __database__.has_profile(src_profileid):
                 attacker_direction = 'dstip'
                 profileid = src_profileid
                 attacker = dstip
@@ -217,7 +217,7 @@ class Module(Module, multiprocessing.Process):
                     f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
                 )
 
-            elif __database__.hasProfile(dst_profileid):
+            elif __database__.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
