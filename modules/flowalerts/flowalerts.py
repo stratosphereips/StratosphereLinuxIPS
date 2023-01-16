@@ -1003,12 +1003,14 @@ class Module(Module, multiprocessing.Process):
         minor_v,
         twid,
         uid,
+        role='SSH::CLIENT'
     ):
         """
         checks if this srcip was detected using a different
-         ssh client versions before
+         ssh client or server versions before
+        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
         """
-        if 'SSH::CLIENT' not in used_software:
+        if role not in used_software:
             return
 
         profileid = f'profile_{saddr}'
@@ -1023,7 +1025,7 @@ class Module(Module, multiprocessing.Process):
 
         cached_software = cached_ssh_versions['software']
         if cached_software != used_software:
-            # we need them both to be "SSH::CLIENT"
+            # we need them both to be the same role, either client or server
             return False
 
         cached_major_v = cached_ssh_versions['version-major']
@@ -1037,7 +1039,7 @@ class Module(Module, multiprocessing.Process):
         # get the uid of the cached versions, and the uid of the current used versions
         uids = [cached_ssh_versions['uid'], uid]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uids
+            saddr, cached_versions, current_versions, starttime, twid, uids, role=role
         )
         return True
 
@@ -2033,7 +2035,6 @@ class Module(Module, multiprocessing.Process):
                     software_type = flow.get('software_type', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
-
                     self.check_multiple_ssh_clients(
                         starttime,
                         saddr,
@@ -2042,6 +2043,17 @@ class Module(Module, multiprocessing.Process):
                         minor_v,
                         twid,
                         uid,
+                        role='SSH::CLIENT'
+                    )
+                    self.check_multiple_ssh_clients(
+                        starttime,
+                        saddr,
+                        software_type,
+                        major_v,
+                        minor_v,
+                        twid,
+                        uid,
+                        role='SSH::SEVRER'
                     )
 
                 message = __database__.get_message(self.c10)

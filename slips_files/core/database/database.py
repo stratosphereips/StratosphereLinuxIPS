@@ -409,7 +409,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         if not profileid:
             return False
-
+        # todo support client and server
         if used_software := self.r.hmget(profileid, 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
