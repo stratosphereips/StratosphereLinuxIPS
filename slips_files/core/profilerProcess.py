@@ -65,8 +65,8 @@ class ProfilerProcess(multiprocessing.Process):
             'argus': ',',
             'zeek-tabs': '\t',
             'argus-tabs': '\t'
-
         }
+        self.new_src_profile = False
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -1702,7 +1702,9 @@ class ProfilerProcess(multiprocessing.Process):
                 # Home network is defined in slips.conf. Create profiles for home IPs only
                 for network in self.home_net:
                     if self.saddr_as_obj in network:
-                        __database__.addProfile(
+                        # if a new profile is added for this saddr
+                        # self.new_src_profile will be true
+                        self.new_src_profile = __database__.addProfile(
                             self.profileid, self.starttime, self.width
                         )
                         self.store_features_going_out()
@@ -1715,7 +1717,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                 # home_network param wasn't set in slips.conf.
                 # Create profiles for everybody
-                __database__.addProfile(self.profileid, self.starttime, self.width)
+                self.new_src_profile = __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
                     # No home. Store all
@@ -1784,6 +1786,7 @@ class ProfilerProcess(multiprocessing.Process):
             appproto=self.column_values['appproto'],
             smac=self.column_values['smac'],
             dmac=self.column_values['dmac'],
+            first_flow_for_this_saddr=self.new_src_profile,
             uid=self.uid,
             label=self.label,
             flow_type=self.flow_type,
@@ -1908,6 +1911,9 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_smtp', to_send)
 
     def handle_in_flows(self):
+        """
+        Adds a flow for the daddr <- saddr connection
+        """
         # they are not actual flows to add in slips,
         # they are info about some ips derived by zeek from the flows
         execluded_flows = ('software')

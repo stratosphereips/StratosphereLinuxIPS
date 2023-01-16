@@ -811,10 +811,12 @@ class ProfilingFlowsDatabase(object):
         uid='',
         label='',
         flow_type='',
+        first_flow_for_this_saddr=False
     ):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
+        : param first_flow_for_this_saddr : is set to True for everytime we see a new srcaddr
         """
         summaryState = self.getFinalStateFromFlags(state, pkts)
         data = {
@@ -837,8 +839,8 @@ class ProfilingFlowsDatabase(object):
             'label': label,
             'flow_type': flow_type,
             'module_labels': {},
+            'first_flow_for_this_saddr':first_flow_for_this_saddr
         }
-        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
 
         # Convert to json string
         data = json.dumps(data)
@@ -856,23 +858,27 @@ class ProfilingFlowsDatabase(object):
         # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby('labels', 1, label)
+
         # We can publish the flow directly without asking for it, but
         # its good to maintain the format given by the get_flow() function.
         flow = self.get_flow(profileid, twid, uid)
+
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
         # Prepare the data to publish.
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = flow
-        to_send['stime'] = stime
+        to_send = {
+            'first_flow_for_this_saddr': first_flow_for_this_saddr,
+            'profileid': profileid,
+            'twid': twid,
+            'flow': flow,
+            'stime': stime,
+        }
         to_send = json.dumps(to_send)
 
         # set the pcap/file stime in the analysis key
         if self.first_flow:
-            self.first_flow = False
             self.set_input_metadata({'file_start': stime})
+            self.first_flow = False
 
         # set the local network used in the db
         if not self.is_localnet_set:
@@ -882,8 +888,8 @@ class ProfilingFlowsDatabase(object):
             ):
                 # get the local network of this saddr
                 if network_range := utils.get_cidr_of_ip(saddr):
-                    self.is_localnet_set = True
                     self.r.set("local_network", network_range)
+                    self.is_localnet_set = True
 
         self.publish('new_flow', to_send)
         return True
