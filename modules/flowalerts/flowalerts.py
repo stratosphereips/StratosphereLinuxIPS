@@ -1683,6 +1683,37 @@ class Module(Module, multiprocessing.Process):
             ip_outside_localnet=what_to_check
         )
 
+    def check_device_changing_ips(
+            self,
+            first_flow_for_this_saddr: bool,
+            smac,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        Every time we have a flow for a new ip (an ip that we're seeing for the first time)
+        we check if the MAC of this srcip was associated with another ip
+        this function is only called once for each source ip slips sees
+        """
+        if not first_flow_for_this_saddr:
+            return
+
+        saddr = profileid.split("_")[-1]
+        if not ipaddress.ip_address(saddr).is_private:
+            return
+        if old_ip := __database__.get_IP_of_MAC(smac):
+            if old_ip != saddr:
+                # we found this smac associated with an ip other than this saddr
+                self.helper.set_evidence_device_changing_ips(
+                    smac,
+                    old_ip,
+                    profileid,
+                    twid,
+                    uid,
+                    timestamp
+                )
 
 
     def run(self):
@@ -1697,14 +1728,11 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
+                    new_flow = json.loads(message['data'])
+                    profileid = new_flow['profileid']
+                    twid = new_flow['twid']
+                    flow = new_flow['flow']
+                    first_flow_for_this_saddr = new_flow['first_flow_for_this_saddr']
                     flow = json.loads(flow)
                     uid = next(iter(flow))
                     flow_dict = json.loads(flow[uid])
@@ -1716,23 +1744,24 @@ class Module(Module, multiprocessing.Process):
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
                     timestamp = data['stime']
-                    # ports are of type int
-                    sport = flow_dict['sport']
-                    dport = flow_dict.get('dport', None)
+                    sport: int = flow_dict['sport']
+                    dport: int = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
                     sbytes = flow_dict.get('sbytes', 0)
                     appproto = flow_dict.get('appproto', '')
                     smac = flow_dict.get('smac', '')
-                    dmac = flow_dict.get('dmac', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
+                    # dmac = flow_dict.get('dmac', '')
                     # stime = flow_dict['ts']
                     # timestamp = data['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
+
                     self.check_device_changing_ips(
-                        smac, profileid, twid, uid, timestamp
+                        first_flow_for_this_saddr, smac, profileid, twid, uid, timestamp
                     )
+
                     self.check_long_connection(
                         dur, daddr, saddr, profileid, twid, uid, timestamp
                     )
