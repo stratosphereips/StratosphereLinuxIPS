@@ -38,7 +38,7 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'MultipleSSHVersions'
         attacker = srcip
-        description = f'Possible SSH bruteforce by using multiple SSH versions {cached_versions} then {current_versions}'
+        description = f'SSH client version changing from {cached_versions} to {current_versions}'
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 

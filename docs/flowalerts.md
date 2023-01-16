@@ -22,7 +22,7 @@ The detection techniques are:
 - Bad SMTP logins
 - SMTP login bruteforce
 - DNS ARPA Scans
-- Multiple SSH versions
+- SSH version changing
 - Incompatible CN
 - Weird HTTP methods
 - Non-SSL connections on port 443
@@ -253,7 +253,7 @@ Then, if the source IP is seen doing 10 or more ARPA queries within 2 seconds,
 slips generates an ARPA scan detection.
 
 
-## Multiple SSH versions
+## SSH version changing
 
 Zeek logs the used software and software versions in software.log, so slips knows from this file the software used by different IPs, like whether it's an SSH::CLIENT, an HTTP::BROWSER, or an HTTP::SERVER
 

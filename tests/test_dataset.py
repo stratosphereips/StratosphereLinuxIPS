@@ -193,11 +193,11 @@ def test_binetflow(
                 'bad SMTP login to 80.75.42.226',
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
-                'Detected Possible SSH bruteforce',
+                'SSH client version changing',
                 'Incompatible certificate CN',
                 'Malicious JA3: 6734f37431670b3ab4292b8f60f29984',
                 'sending ARP packet to a destination address outside of local network',
-                'Detected broadcasting unsolicited ARP',
+                'broadcasting unsolicited ARP',
                 'suspicious user-agent'
             ],
             'test9-mixed-zeek-dir/',
