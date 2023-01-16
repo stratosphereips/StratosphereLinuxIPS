@@ -1685,7 +1685,7 @@ class Module(Module, multiprocessing.Process):
 
     def check_device_changing_ips(
             self,
-            first_flow_for_this_saddr: bool,
+            flow_type,
             smac,
             profileid,
             twid,
@@ -1695,15 +1695,39 @@ class Module(Module, multiprocessing.Process):
         """
         Every time we have a flow for a new ip (an ip that we're seeing for the first time)
         we check if the MAC of this srcip was associated with another ip
-        this function is only called once for each source ip slips sees
+        this check is only done once for each source ip slips sees
         """
-        if not first_flow_for_this_saddr:
+        if 'conn' not in flow_type:
             return
 
         saddr = profileid.split("_")[-1]
-        if not ipaddress.ip_address(saddr).is_private:
+
+        if __database__.was_ip_seen_in_connlog_before(saddr):
+            # we should only check once for the first time we're seeing this flow
             return
-        if old_ip := __database__.get_IP_of_MAC(smac):
+
+        __database__.mark_srcip_as_seen_in_connlog(saddr)
+
+        if not (
+                validators.ipv4(saddr)
+                and ipaddress.ip_address(saddr).is_private
+        ):
+            return
+
+        if old_ip_list := __database__.get_IP_of_MAC(smac):
+            # old_ip is a list that may contain the ipv6 of this MAC
+            # this ipv6 may be of the same device that has the given saddr and MAC
+            # so this would be fp. make sure we're dealing with ipv4 only
+            for ip in json.loads(old_ip_list):
+                if validators.ipv4(ip):
+                    old_ip = ip
+                    break
+            else:
+                # all the IPs associated with the given macs are ipv6,
+                # 1 computer might have several ipv6, AND/OR a combination of ipv6 and 4
+                # so this detection will only work if both the old ip and the given saddr are ipv4 private ips
+                return
+
             if old_ip != saddr:
                 # we found this smac associated with an ip other than this saddr
                 self.helper.set_evidence_device_changing_ips(
@@ -1732,7 +1756,6 @@ class Module(Module, multiprocessing.Process):
                     profileid = new_flow['profileid']
                     twid = new_flow['twid']
                     flow = new_flow['flow']
-                    first_flow_for_this_saddr = new_flow['first_flow_for_this_saddr']
                     flow = json.loads(flow)
                     uid = next(iter(flow))
                     flow_dict = json.loads(flow[uid])
@@ -1743,7 +1766,7 @@ class Module(Module, multiprocessing.Process):
                     daddr = flow_dict['daddr']
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
-                    timestamp = data['stime']
+                    timestamp = new_flow['stime']
                     sport: int = flow_dict['sport']
                     dport: int = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
@@ -1754,13 +1777,9 @@ class Module(Module, multiprocessing.Process):
                         appproto = flow_dict.get('type', '')
                     # dmac = flow_dict.get('dmac', '')
                     # stime = flow_dict['ts']
-                    # timestamp = data['stime']
+                    # timestamp = new_flow['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
-
-                    self.check_device_changing_ips(
-                        first_flow_for_this_saddr, smac, profileid, twid, uid, timestamp
-                    )
 
                     self.check_long_connection(
                         dur, daddr, saddr, profileid, twid, uid, timestamp
@@ -1873,6 +1892,11 @@ class Module(Module, multiprocessing.Process):
                         uid,
                         timestamp,
                     )
+
+                    self.check_device_changing_ips(
+                        flow_type, smac, profileid, twid, uid, timestamp
+                    )
+
                 # --- Detect successful SSH connections ---
                 message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
