@@ -1008,10 +1008,11 @@ class Module(Module, multiprocessing.Process):
         checks if this srcip was detected using a different
          ssh client versions before
         """
-        if 'ssh' not in used_software.lower():
+        if 'SSH::CLIENT' not in used_software:
             return
 
         profileid = f'profile_{saddr}'
+        # what software was used before for this profile?
         # returns a dict with software, 'version-major', 'version-minor'
         cached_ssh_versions: dict = __database__.get_software_from_profile(
             profileid
@@ -1032,6 +1033,7 @@ class Module(Module, multiprocessing.Process):
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
+
         # get the uid of the cached versions, and the uid of the current used versions
         uids = [cached_ssh_versions['uid'], uid]
         self.helper.set_evidence_multiple_ssh_versions(
@@ -2027,6 +2029,7 @@ class Module(Module, multiprocessing.Process):
                     saddr = flow.get('saddr', '')
                     uid = flow.get('uid', '')
                     twid = flow.get('twid', '')
+                    # can be 'SSH::SERVER' or 'SSH::CLIENT'
                     software_type = flow.get('software_type', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
