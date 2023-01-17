@@ -105,6 +105,18 @@ class Main:
             return None
         return ipaddr_check
 
+    def start_webinterface(self):
+        """
+        Starts the web interface shell script if -w is given
+        """
+        # The parentheses creates a subshell, detached from the current parent process.
+        # Without them, flask doesn't release the terminal and we get requests logs in slips cli
+        # tried pop with subprocess.devnull, 2>&1, nohup, but this is the only way to completely run it in the bg
+        cmd = '( ./webinterface.sh > /dev/null 2> /dev/null  & )'
+        os.system(cmd)
+        self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
+        # todo we won't be seeing the logs, so if anything fails no msg will be printed
+
     def store_host_ip(self):
         """
         Store the host IP address if input type is interface
@@ -1339,7 +1351,7 @@ class Main:
     def check_given_flags(self):
         """
         check the flags that don't require starting slips
-        for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
+        for ex: clear db, clearing the blocking chain, killing all servers, stopping the daemon, etc.
         """
 
         if self.args.help:
@@ -1553,7 +1565,6 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
-
             self.print_version()
 
             print('https://stratosphereips.org')
@@ -1593,8 +1604,6 @@ class Main:
                 self.redis_port = 6379
                 # self.check_if_port_is_in_use(self.redis_port)
 
-
-
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
@@ -1629,8 +1638,6 @@ class Main:
 
             __database__.set_slips_mode(self.mode)
 
-
-
             if self.mode == 'daemonized':
                 std_files = {
                     'stderr': self.daemon.stderr,
@@ -1647,12 +1654,10 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-
             self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
             self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
             self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 0, 1)
-
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
@@ -1660,9 +1665,9 @@ class Main:
                 self.update_local_TI_files()
                 self.load_modules()
 
-
             # self.start_gui_process()
-
+            if self.args.webinterface:
+                self.start_webinterface()
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):

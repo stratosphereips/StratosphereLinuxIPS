@@ -22,6 +22,7 @@
 - Store zeek files in the output directory by default
 - Portscan detector is now called network service discovery
 - Move all TI feeds to their separate files in the config/ directory for easier use
+- Add the option to start slips web interface automatically using -w
 - Fix multiple SSH client versions detection
 - Add detection of IPs using multiple SSH server versions
 -1.0.0
