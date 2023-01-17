@@ -25,11 +25,12 @@ class Helper:
                                  stime, category, profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_multiple_ssh_versions(
-        self, srcip, cached_versions, current_versions, timestamp, twid, uid
+        self, srcip, cached_versions, current_versions, timestamp, twid, uid, role=''
     ):
         """
         :param cached_versions: major.minor
         :param current_versions: major.minor
+        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
         """
         profileid = f'profile_{srcip}'
         confidence = 0.9
@@ -38,7 +39,8 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'MultipleSSHVersions'
         attacker = srcip
-        description = f'Possible SSH bruteforce by using multiple SSH versions {cached_versions} then {current_versions}'
+        role = 'client' if 'CLIENT' in role else 'server'
+        description = f'SSH {role} version changing from {cached_versions} to {current_versions}'
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
@@ -117,7 +119,6 @@ class Helper:
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
 
     def set_evidence_non_http_port_80_conn(
         self, daddr ,profileid,timestamp, twid, uid

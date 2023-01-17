@@ -401,24 +401,25 @@ class Database(ProfilingFlowsDatabase, object):
         Used to associate this profile with it's used software and version
         :param uid:  uid of the flow using the given versions
         """
-        if cached_sw := self.get_software_from_profile(profileid):
-            if cached_sw['software'] == software:
-                # we already have an ssh client for this proileid.
-                # dont store this one, let flowalerts detect the incompatibility
-                return
-
-        if 'SSH' not in software:
-            return
-
         sw_dict = {
-            'software': software,
-            'version-major': version_major,
-            'version-minor': version_minor,
-            'uid': uid
+            software:{
+                    'version-major': version_major,
+                    'version-minor': version_minor,
+                    'uid': uid
+                }
         }
-        self.r.hmset(profileid, {
-            'used_software': json.dumps(sw_dict)
-        })
+        # cached_sw is {software: {'version-major':x, 'version-minor':y, 'uid':...}}
+        if cached_sw := self.get_software_from_profile(profileid):
+            if software in cached_sw:
+                # we already have this same software for this proileid.
+                # dont store this one
+                return
+            # add this new sw to the list of softwares this profile is using
+            cached_sw.update(sw_dict)
+            self.r.hmset(profileid, {'used_software': json.dumps(cached_sw)})
+        else:
+            # first time for this profile to use a software
+            self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
 
     def get_software_from_profile(self, profileid):
         """
@@ -430,6 +431,7 @@ class Database(ProfilingFlowsDatabase, object):
         if used_software := self.r.hmget(profileid, 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
+
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """

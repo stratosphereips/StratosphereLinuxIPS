@@ -22,6 +22,8 @@
 - Store zeek files in the output directory by default
 - Portscan detector is now called network service discovery
 - Move all TI feeds to their separate files in the config/ directory for easier use
+- Fix multiple SSH client versions detection
+- Add detection of IPs using multiple SSH server versions
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip

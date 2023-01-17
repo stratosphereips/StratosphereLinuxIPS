@@ -995,7 +995,7 @@ class Module(Module, multiprocessing.Process):
         )
 
 
-    def check_multiple_ssh_clients(
+    def check_multiple_ssh_versions(
         self,
         starttime,
         saddr,
@@ -1004,39 +1004,41 @@ class Module(Module, multiprocessing.Process):
         minor_v,
         twid,
         uid,
+        role='SSH::CLIENT'
     ):
         """
         checks if this srcip was detected using a different
-         ssh client versions before
+         ssh client or server versions before
+        :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
         """
-        if 'ssh' not in used_software.lower():
+        if role not in used_software:
             return
 
         profileid = f'profile_{saddr}'
-        # returns a dict with software, 'version-major', 'version-minor'
-        cached_ssh_versions: dict = __database__.get_software_from_profile(
+        # what software was used before for this profile?
+        # returns a dict with
+        # software:
+        #   { 'version-major': ,'version-minor': ,'uid': }
+        cached_used_sw: dict = __database__.get_software_from_profile(
             profileid
         )
-        if not cached_ssh_versions:
+        if not cached_used_sw:
             # we have no previous software info about this saddr in out db
             return False
 
-        cached_software = cached_ssh_versions['software']
-        if cached_software != used_software:
-            # we need them both to be "SSH::CLIENT"
-            return False
+        # these are the versions that this profile once used
+        cached_ssh_versions = cached_used_sw[used_software]
+        cached_versions = f"{cached_ssh_versions['version-major']}_{cached_ssh_versions['version-minor']}"
 
-        cached_major_v = cached_ssh_versions['version-major']
-        cached_minor_v = cached_ssh_versions['version-minor']
-        cached_versions = f'{cached_major_v}_{cached_minor_v}'
         current_versions = f'{major_v}_{minor_v}'
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
+
         # get the uid of the cached versions, and the uid of the current used versions
         uids = [cached_ssh_versions['uid'], uid]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uids
+            saddr, cached_versions, current_versions, starttime, twid, uids, role=role
         )
         return True
 
@@ -2151,11 +2153,11 @@ class Module(Module, multiprocessing.Process):
                     saddr = flow.get('saddr', '')
                     uid = flow.get('uid', '')
                     twid = flow.get('twid', '')
+                    # can be 'SSH::SERVER' or 'SSH::CLIENT'
                     software_type = flow.get('software_type', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
-
-                    self.check_multiple_ssh_clients(
+                    self.check_multiple_ssh_versions(
                         starttime,
                         saddr,
                         software_type,
@@ -2163,6 +2165,17 @@ class Module(Module, multiprocessing.Process):
                         minor_v,
                         twid,
                         uid,
+                        role='SSH::CLIENT'
+                    )
+                    self.check_multiple_ssh_versions(
+                        starttime,
+                        saddr,
+                        software_type,
+                        major_v,
+                        minor_v,
+                        twid,
+                        uid,
+                        role='SSH::SERVER'
                     )
 
                 message = __database__.get_message(self.c10)
