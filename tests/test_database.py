@@ -77,14 +77,12 @@ def add_flow(db):
 def test_add_flow(outputQueue):
     database = create_db_instace(outputQueue)
     uid = '1234'
-    assert add_flow(database) ==  True
+    added_flow = {"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88,
+         "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20,
+         "spkts": 20, "sbytes": 20, "appproto": "dhcp", "smac": "", "dmac": "", "label": "", "flow_type": "", "module_labels": {}}
+    assert add_flow(database) == True
     assert (
-        database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
-        == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,'
-        ' "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established",'
-        ' "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20,'
-        ' "sbytes": 20, "appproto": "dhcp", "label": "",'
-        ' "flow_type": "", "module_labels": {}}'
+        json.loads(database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)) == added_flow
     )
 
 
