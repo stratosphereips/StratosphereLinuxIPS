@@ -1294,7 +1294,8 @@ class Module(Module, multiprocessing.Process):
             timestamps[-1]
         )
 
-        if diff <= 10:
+        if diff > 10:
+            # didnt happen within 10s!
             # remove the first login from cache so we can check the next 3 logins
             self.smtp_bruteforce_cache[profileid][0].pop(0)
             self.smtp_bruteforce_cache[profileid][1].pop(0)
@@ -1700,6 +1701,9 @@ class Module(Module, multiprocessing.Process):
         this check is only done once for each source ip slips sees
         """
         if 'conn' not in flow_type:
+            return
+
+        if not smac:
             return
 
         saddr = profileid.split("_")[-1]
