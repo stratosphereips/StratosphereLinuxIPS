@@ -20,6 +20,7 @@
 - Store zeek files in the output directory by default
 - Portscan detector is now called network service discovery
 - Move all TI feeds to their separate files in the config/ directory for easier use
+- Add the option to start slips web interface automatically using -w
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip

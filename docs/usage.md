@@ -718,11 +718,31 @@ For example, if you want to add a zeek script called ```arp.zeek``` you should a
 
 Zeek output is suppressed by default, so if your script has errors, Slips will fail silently.
 
-## Getting Slips version
+## Slips parameters
 
-You can check out your running slips version using ```-V``` or ```--version``` flags.
+- ```-c``` or  ```--config``` Used for changing then path to the Slips config file. default is config/slips.conf
+- ```-v``` or  ```--verbose``` Verbosity level. This logs more info about Slips.
+- ```-e``` or  ```--debug``` Debugging level. This shows more detailed errors.
+- ```-f``` or  ```--filepath``` Read and automatically recognize a Zeek dir, a Zeek conn.log file, a Suricata JSON file, Argus, PCAP.
+- ```-i``` or  ```--interface``` Read packets from an interface.
+- ```-l``` or  ```--createlogfiles``` Create log files with all the traffic info and detections.
+- ```-F``` or  ```--pcapfilter``` Packet filter for Zeek. BPF style.
+- ```-cc``` or  ```--clearcache``` Clear the cache database.
+- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.
+- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain 
+- ```-o``` or  ```--output``` Store alerts.json and alerts.txt in the given folder.
+- ```-s``` or  ```--save``` Save the analysed file db to disk.
+- ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
+- ```-D``` or  ```--daemon``` Run slips in daemon mode 
+- ```-S``` or  ```--stopdaemon``` Stop slips daemon
+- ```-k``` or  ```--killall``` Kill all unused redis servers
+- ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
+- ```-P``` or  ```--port``` The redis-server port to use
+- ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
+- ```-w``` or  ```--webinterface``` Start Slips web interface automatically
+- ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 
-## Containing Slips resource consuption
+## Containing Slips resource consumption
 
 When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of 
 Slips by running:
