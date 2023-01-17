@@ -114,7 +114,7 @@ class Main:
         # tried pop with subprocess.devnull, 2>&1, nohup, but this is the only way to completely run it in the bg
         cmd = '( ./webinterface.sh > /dev/null 2> /dev/null  & )'
         os.system(cmd)
-        self.print('Slips web interface running on http://127.0.0.1:55000/')
+        self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
         # todo we won't be seeing the logs, so if anything fails no msg will be printed
 
     def store_host_ip(self):

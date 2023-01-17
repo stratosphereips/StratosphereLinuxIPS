@@ -265,7 +265,7 @@ Now you can run
 ```./kalipso.sh```
 
 
-2. You can use Slips' web interface by running:
+2. You can use Slips' web interface by running slips with ```-w``` or running:
 
    ./webinteface.sh
 
