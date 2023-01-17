@@ -181,7 +181,6 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 
 ## Flowalerts Module
 
-
 This module is responsible for detecting malicious behaviours in your traffic.
     
 Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html) for detailed explanation of what Slips detects and how it detects.

@@ -30,7 +30,15 @@ The detection techniques are:
 - SMTP login bruteforce
 - DNS ARPA Scans
 - Multiple SSH versions
-
+- Incompatible CN
+- Weird HTTP methods
+- Non-SSL connections on port 443
+- Non-HTTP connections on port 80
+- Connection to private IPs 
+- Connection to private IPs outside the current local network
+- High entropy DNS TXT answers 
+- Devices changeing IPs
+- 
 The details of each detection follows.
 
 
@@ -41,16 +49,60 @@ By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minut
 
 This threshold can be changed ```config/slips.conf``` by changing the value of  ```long_connection_threshold```  
 
+### Incompatible CN
 
-## Weird HTTP methods
+Zeek logs each Certificate CN in ssl.log
+
+When slips enccounters a cn that claims to belong to any of Slips supported orgs (Google, Microsoft, Apple or Twitter)
+Slips checks if the destination address or the destination server name belongs to these org. 
+
+If not, slips generates an alert.
+
+### High entropy DNS TXT answers 
+
+Slips check every DNS answer with TXT record for high entropy
+strings. 
+Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
+and alerted by slips.
+
+the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
+
+
+
+### Devices changing IPs
+
+Slips stores the MAC of each new IP it sees in conn.log.
+
+Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
+
+If so, it alerts "Device changing IPs".
+
+
+### SMTP login bruteforce
+
+Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
+
+
+### Connection to private IPs
+
+Slips detects when a private IP is connected to another private IP with threat level info.
+
+### Connection to private IPs outside the current local network
+
+Slips detects the currently used local network and alerts if it find a
+connection to/from a private IP that doesn't belong to it.
+
+For example if the currently used local network is: 192.168.1.0/24
+
+and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
+
+### Weird HTTP methods
 
 Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
 
 When there's a weird HTTP method, slips detects it as well.
 
-
-
-##Non-SSL connections on port 443 
+### Non-SSL connections on port 443 
 
 Slips detects established connections on port 443 that are not using HTTP
 using zeek's conn.log flows
@@ -58,7 +110,7 @@ using zeek's conn.log flows
 if slips finds a flow using destination port 443 and the 'service' field 
 in conn.log isn't set to 'ssl', it alerts
 
-##Non-HTTP connections on port 80.
+## Non-HTTP connections on port 80.
 
 Slips detects established connections on port 80 that are not using SSL
 using zeek's conn.log flows
@@ -115,7 +167,6 @@ The domains that are excepted are:
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
 - Ignore WPAD domain from Windows
 - Ignore domains without a TLD such as the Chrome test domains.
-
 
 
 ### Connection to unknown ports
@@ -979,3 +1030,4 @@ We detect a scan every threshold. So we generate an evidence when there is
 ---
 
 If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
+

@@ -42,6 +42,81 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_different_localnet_usage(
+            self,
+            daddr,
+            dport,
+            profileid,
+            timestamp,
+            twid,
+            uid,
+            ip_outside_localnet: str=''
+    ):
+        """
+        :param ip_outside_localnet: was the 'srcip' outside the localnet or the 'dstip'?
+        """
+        srcip = profileid.split('_')[-1]
+        # the attacker here is the IP found to be private and outside th localnet
+        if ip_outside_localnet == 'srcip':
+            attacker = srcip
+            victim = daddr
+            direction = 'from'
+            rev_direction = 'to'
+        else:
+            attacker = daddr
+            victim = srcip
+            direction = 'to'
+            rev_direction = 'from'
+
+        confidence = 1
+        threat_level = 'high'
+        category = 'Anomaly.Traffic'
+        attacker_direction = ip_outside_localnet
+        evidence_type = 'DifferentLocalnet'
+        localnet = __database__.get_local_network()
+        description = f'A connection {direction} a private IP ({attacker}) ' \
+                      f'outside of the used local network {localnet}.' \
+                      f' {rev_direction} IP: {victim} '\
+
+        if ip_outside_localnet == 'dstip':
+            description += f'on port: {dport}'
+
+        __database__.setEvidence(
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            profileid=profileid,
+            twid=twid,
+            uid=uid
+        )
+
+
+    def set_evidence_device_changing_ips(
+            self,
+            smac,
+            old_ip,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        confidence = 0.8
+        threat_level = 'medium'
+        category = 'Anomaly.Traffic'
+        attacker_direction = 'srcip'
+        evidence_type = 'DeviceChangingIP'
+        saddr = profileid.split("_")[-1]
+        attacker = saddr
+        description = f'A device changing IPs. IP {saddr} was found ' \
+                      f'with MAC address {smac} but the MAC belongs originally to IP: {old_ip}. '
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
 
     def set_evidence_non_http_port_80_conn(

@@ -27,9 +27,10 @@ The detection techniques are:
 - Weird HTTP methods
 - Non-SSL connections on port 443
 - Non-HTTP connections on port 80
-- Connection to private IPs
+- Connection to private IPs 
+- Connection to private IPs outside the current local network
 - High entropy DNS TXT answers 
-
+- Devices changing IPs
 The details of each detection follows.
 
 
@@ -154,6 +155,10 @@ Some scans are also detected by Slips independently of Zeek, like ICMP sweeps an
 Check 
 [PING Sweeps](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#ping-sweeps) 
 section for more info 
+
+## SMTP login bruteforce
+
+Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
 
 ## Password Guessing
 
@@ -299,6 +304,15 @@ in conn.log isn't set to 'http', it alerts
 
 Slips detects when a private IP is connected to another private IP with threat level info.
 
+## Connection to private IPs outside the current local network
+
+Slips detects the currently used local network and alerts if it find a
+connection to/from a private IP that doesn't belong to it.
+
+For example if the currently used local network is: 192.168.1.0/24
+
+and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
+
 ## High entropy DNS TXT answers 
 
 Slips check every DNS answer with TXT record for high entropy
@@ -308,3 +322,10 @@ and alerted by slips.
 
 the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
 
+## Devices changing IPs
+
+Slips stores the MAC of each new IP it sees in conn.log.
+
+Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
+
+If so, it alerts "Device changing IPs".

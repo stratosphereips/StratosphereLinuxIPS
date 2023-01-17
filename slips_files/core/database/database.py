@@ -75,14 +75,15 @@ class Database(ProfilingFlowsDatabase, object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
-        self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
         self.set_redis_options()
         self.our_ips = utils.get_own_IPs()
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
+        # to make sure we only detect and store the user's localnet once
+        self.is_localnet_set = False
 
 
     def set_redis_options(self):
@@ -341,10 +342,9 @@ class Database(ProfilingFlowsDatabase, object):
             if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
-
+            # execlude ips outside of local network is it's set in slips.conf 
             if not self.should_add(profileid):
                 return False
-
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -369,6 +369,23 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
 
+    def was_ip_seen_in_connlog_before(self, ip) -> bool:
+        """
+        returns true if this is not the first flow slip sees of the given ip
+        """
+        # we store every source address seen in a conn.log flow in this key
+        # if the source address is not stored in this key, it means we may have seen it
+        # but not in conn.log yet
+
+        # if the ip's not in the following key, then its the first flow seen of this ip
+        return self.r.sismember("srcips_seen_in_connlog", ip)
+
+    def mark_srcip_as_seen_in_connlog(self, ip):
+        """
+        Marks the given ip as seen in conn.log
+        if an ip is not present in this set, it means we may have seen it but not in conn.log
+        """
+        self.r.sadd("srcips_seen_in_connlog", ip)
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
@@ -447,11 +464,6 @@ class Database(ProfilingFlowsDatabase, object):
         if not is_dhcp_set:
             self.r.hmset(profileid, {'dhcp': 'true'})
 
-    def get_IP_of_MAC(self, MAC):
-        """
-        Returns the IP associated with the given MAC in our database
-        """
-        return self.r.hget('MAC', MAC)
 
     def set_ipv6_of_profile(self, profileid, ip: list):
 
@@ -464,7 +476,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
-        Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
+        Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
         :param ip: dst ip that should be associated with the given MAC info
         """
 
@@ -473,37 +485,38 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         if self.gateway_MAC_found:
-            # gateway ip already set using this function
+            # gateway MAC already set using this function
             return True if __database__.get_gateway_MAC() == MAC else False
 
-        # if we saw the same mac assigned to 3+ IPs, we know this is the gw mac
-        if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
-            # we are sure this is the gw mac,
-            # set it if we don't already have it in the db
-            if not self.get_gateway_MAC():
-                for field, mac_info in MAC_info.items():
-                    self.set_default_gateway(field, mac_info)
-
-                # mark the gw mac as found so we don't look for it again
-                self.gateway_MAC_found = True
-                delattr(self, 'seen_MACs')
-                return True
-
-        # the dst MAC of all public IPs is the dst mac of the gw,
-        # we shouldn't be assigning it to the public IPs
+        # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
         if not ip_obj.is_private:
-            # trying to associate a mac with a public ip!
-            try:
-                self.seen_MACs[MAC] += 1
-            except KeyError:
-                self.seen_MACs[MAC] = 1
+            # now we're given a public ip and a MAC that's supposedly belongs to it
+            # we are sure this is the gw mac
+            # set it if we don't already have it in the db
+            # set the ip of the gw, and the mac of the gw
+            for address_type, address in MAC_info.items():
+                # address_type can be 'IP' or 'MAC' or 'Vendor'
+                self.set_default_gateway(address_type, address)
+
+            # mark the gw mac as found so we don't look for it again
+            self.gateway_MAC_found = True
             return True
+
+
+    def get_IP_of_MAC(self, MAC):
+        """
+        Returns the IP associated with the given MAC in our database
+        """
+        return self.r.hget('MAC', MAC)
 
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
-        Used to associate this profile with it's MAC addr
+        Used to associate this profile with its MAC addr in the 'MAC' key in the db
+        format of the MAC key is
+            MAC: [ipv4, ipv6, etc.]
         :param MAC_info: dict containing mac address, hostname and vendor info
+        this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
@@ -521,11 +534,16 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         if self.is_gw_mac(MAC_info, incoming_ip):
-            return False
+            if incoming_ip != self.get_gateway_ip():
+                # we're trying to assign the gw mac to an ip that isn't the gateway's
+                return False
+            else:
+                # we're given the gw mac and ip, store them no issue
+                pass
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
-        if not cached_ip or cached_ip is None:
+        if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
@@ -569,7 +587,6 @@ class Database(ProfilingFlowsDatabase, object):
                     ipv6 = list(ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
 
-
                 # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
                 ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
                 if not ipv6:
@@ -587,7 +604,6 @@ class Database(ProfilingFlowsDatabase, object):
                 # OR one of them is 0.0.0.0 and didn't take an ip yet
                 # will be detected later by the ARP module
                 return False
-
 
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
@@ -671,9 +687,9 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            temp_id = 'profile' + self.separator + str(daddr_as_obj)
-            if data := self.r.sismember('profiles', temp_id):
-                return temp_id
+            profileid = 'profile' + self.separator + str(daddr_as_obj)
+            if data := self.r.sismember('profiles', profileid):
+                return profileid
             return False
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
@@ -762,7 +778,7 @@ class Database(ProfilingFlowsDatabase, object):
                 f'01|profiler|[Profile] {traceback.format_exc()}'
             )
 
-    def hasProfile(self, profileid):
+    def has_profile(self, profileid):
         """Check if we have the given profile"""
         if not profileid:
             # profileid is None if we're dealing with a profile
@@ -2108,7 +2124,11 @@ class Database(ProfilingFlowsDatabase, object):
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac
         """
-        if not self.get_gateway_ip():
+        # make sure the IP or mac aren't already set before re-setting
+        if (
+                address_type == 'IP' and not self.get_gateway_ip()
+                or address_type == 'MAC' and not self.get_gateway_MAC()
+        ):
             self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):

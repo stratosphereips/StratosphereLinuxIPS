@@ -39,11 +39,9 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
-        self.c4 = __database__.subscribe('new_dhcp')
         # update asn every 1 month
         self.update_period = 2592000
-        # if we found the gw ip using dhcp, this will be set to true
-        self.gw_set = False
+        self.is_gw_mac_set = False
         # we can only getthe age of these tlds
         self.valid_tlds = [
             '.ac_uk',
@@ -317,7 +315,6 @@ class Module(Module, multiprocessing.Process):
                 return vendor
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
-        # sourcery skip: remove-redundant-pass
         """
         Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
         """
@@ -414,17 +411,19 @@ class Module(Module, multiprocessing.Process):
         """
         Slips tries different ways to get the ip of the default gateway
         this method tries to get the default gateway IP address using ip route
+        only works when running on an interface
         """
-        if '-i' not in sys.argv:
+        if not ('-i' in sys.argv or __database__.is_growing_zeek_dir()):
+            # only works if running on an interface
             return False
 
-        gateway = False
+        gw_ip = False
         if platform.system() == 'Darwin':
             route_default_result = subprocess.check_output(
                 ['route', 'get', 'default']
             ).decode()
             try:
-                gateway = re.search(
+                gw_ip = re.search(
                     r'\d{1,3}.\d{1,3}.\d{1,3}.\d{1,3}',
                     route_default_result,
                 ).group(0)
@@ -436,24 +435,28 @@ class Module(Module, multiprocessing.Process):
                 r"([\w.][\w.]*'?\w?)",
                 subprocess.check_output(['ip', 'route']).decode(),
             )
-            gateway = route_default_result[2]
-        return gateway
+            gw_ip = route_default_result[2]
+        return gw_ip
 
-    def get_gateway_MAC(self, gw_ip):
+    def get_gateway_MAC(self, gw_ip: str):
         """
-        Gets MAC from arp.log or from arp tables
+        Given the gw_ip, this function tries to get the MAC
+         from arp.log or from arp tables
         """
+        # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
-        # check if we saved the mac of this gw_ip. whenever we see an arp.log we save the ip and the mac
-        MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
-        if MAC:
-            __database__.set_default_gateway('MAC', MAC)
-            return MAC
+        # check if we have the mac of this ip already saved in the db.
+        gw_MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
+        if gw_MAC:
+            __database__.set_default_gateway('MAC', gw_MAC)
+            return gw_MAC
 
-        # we don't have it in arp.log
+        # we don't have it in arp.log(in the db)
         running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         if not running_on_interface:
-            # no mac in arp.log and can't use arp table, so no way to get the gateway MAC
+            # no MAC in arp.log (in the db) and can't use arp tables,
+            # so it's up to the db.is_gw_mac() function to determine the gw mac
+            # if it's seen associated with a public IP
             return
 
         # get it using arp table
@@ -461,9 +464,9 @@ class Module(Module, multiprocessing.Process):
         output = subprocess.check_output(cmd.split()).decode()
         for line in output:
             if gw_ip in line:
-                MAC = line.split()[-4]
-                __database__.set_default_gateway('MAC', MAC)
-                return MAC
+                gw_MAC = line.split()[-4]
+                __database__.set_default_gateway('MAC', gw_MAC)
+                return gw_MAC
 
     def check_if_we_have_pending_mac_queries(self):
         """
@@ -490,28 +493,12 @@ class Module(Module, multiprocessing.Process):
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
 
-
-    def set_gw_ip(self, dhcp_flow):
-        """
-        Sets the IP of the gateway as the IP of the dhcp server
-        """
-        server_addr = dhcp_flow.get('server_addr', False)
-        if not server_addr:
-            # no gw IP to set
-            return
-        if self.gw_set:
-            return
-        self.gw_set = True
-        # override the gw in the db since we have a dhcp
-        __database__.set_default_gateway("IP", server_addr)
-        self.get_gateway_MAC(server_addr)
-
-
     def run(self):
         utils.drop_root_privs()
 
         self.wait_for_dbs()
 
+        # the following method only works when running on an interface
         if ip := self.get_gateway_ip():
             __database__.set_default_gateway('IP', ip)
 
@@ -529,6 +516,16 @@ class Module(Module, multiprocessing.Process):
                     profileid = data['profileid']
                     self.get_vendor(mac_addr, host_name, profileid)
                     self.check_if_we_have_pending_mac_queries()
+                    # set the gw mac and ip if they're not set yet
+                    if not self.is_gw_mac_set:
+                        # whether we found the gw ip using dhcp in profileprocess
+                        # or using ip route using self.get_gateway_ip()
+                        # now that it's found, get and store the mac addr of it
+                        if ip:= __database__.get_gateway_ip():
+                            # now that we know the GW IP address,
+                            # try to get the MAC of this IP (of the gw)
+                            self.get_gateway_MAC(ip)
+                            self.is_gw_mac_set = True
 
                 message = __database__.get_message(self.c3)
                 if message and message['data'] == 'stop_process':
@@ -538,9 +535,9 @@ class Module(Module, multiprocessing.Process):
                 if utils.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message['data']
                     data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
+                    # profileid = data['profileid']
+                    # twid = data['twid']
+                    # uid = data['uid']
                     flow_data = json.loads(
                         data['flow']
                     )   # this is a dict {'uid':json flow data}
@@ -589,20 +586,6 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
-
-
-                message = __database__.get_message(self.c4)
-                # if timewindows are not updated for a long time (see at logsProcess.py),
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_dhcp'):
-                    # this channel will only get 1 msg if we have dhcp.log
-                    dhcp_flow = json.loads(message['data'])
-                    self.set_gw_ip(dhcp_flow)
-
 
 
             except KeyboardInterrupt:

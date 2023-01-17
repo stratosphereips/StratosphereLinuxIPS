@@ -19,12 +19,13 @@ class Utils(object):
 
 
     def __init__(self):
-        self.home_network_ranges = (
+        self.home_network_ranges_str = (
             '192.168.0.0/16',
             '172.16.0.0/12',
             '10.0.0.0/8',
         )
-        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges))
+        # IPv4Network objs
+        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges_str))
         self.supported_orgs = (
             'google',
             'microsoft',
@@ -57,6 +58,20 @@ class Utils(object):
          )
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+
+    def get_cidr_of_ip(self, ip):
+        """
+        returns the cidr/range of the given private ip
+        :param ip: should be  a private ips
+        """
+        if validators.ipv4(ip):
+            first_octet = ip.split('.')[0]
+            # see if the first octet of the given ip matches any of the
+            # home network ranges
+            for network_range in self.home_network_ranges_str:
+                if first_octet in network_range:
+                    return network_range
+
 
     def threat_level_to_string(self, threat_level: float):
         for str_lvl, int_value in self.threat_levels.items():

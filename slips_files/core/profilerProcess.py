@@ -65,7 +65,6 @@ class ProfilerProcess(multiprocessing.Process):
             'argus': ',',
             'zeek-tabs': '\t',
             'argus-tabs': '\t'
-
         }
 
     def print(self, text, verbose=1, debug=0):
@@ -1702,6 +1701,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Home network is defined in slips.conf. Create profiles for home IPs only
                 for network in self.home_net:
                     if self.saddr_as_obj in network:
+                        # if a new profile is added for this saddr
                         __database__.addProfile(
                             self.profileid, self.starttime, self.width
                         )
@@ -1712,9 +1712,8 @@ class ProfilerProcess(multiprocessing.Process):
                         if self.daddr_as_obj in network:
                             self.handle_in_flows()
             else:
-
-                # home_network param wasn't set in slips.conf.
-                # Create profiles for everybody
+                # home_network param wasn't set in slips.conf
+                # Create profiles for all ips we see
                 __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
@@ -1782,6 +1781,8 @@ class ProfilerProcess(multiprocessing.Process):
             spkts=self.column_values['spkts'],
             sbytes=self.column_values['sbytes'],
             appproto=self.column_values['appproto'],
+            smac=self.column_values['smac'],
+            dmac=self.column_values['dmac'],
             uid=self.uid,
             label=self.label,
             flow_type=self.flow_type,
@@ -1906,6 +1907,9 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_smtp', to_send)
 
     def handle_in_flows(self):
+        """
+        Adds a flow for the daddr <- saddr connection
+        """
         # they are not actual flows to add in slips,
         # they are info about some ips derived by zeek from the flows
         execluded_flows = ('software')
@@ -1932,9 +1936,11 @@ class ProfilerProcess(multiprocessing.Process):
                 self.saddr,
                 host_name=(self.column_values.get('host_name', False))
             )
-
-        if self.column_values.get('server_addr', False):
-            __database__.store_dhcp_server(self.column_values.get('server_addr', False))
+        server_addr = self.column_values.get('server_addr', False)
+        if server_addr:
+            __database__.store_dhcp_server(server_addr)
+            # override the gw IP in the db since we have a dhcp
+            __database__.set_default_gateway("IP", server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
         self.publish_to_new_dhcp()
@@ -2051,7 +2057,9 @@ class ProfilerProcess(multiprocessing.Process):
 
     def store_features_going_in(self, profileid, twid):
         """
-        This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+        If we have the all direction set , slips creates profiles for each IP, the src and dst
+        store features going our adds the conn in the profileA from IP A -> IP B in the db
+        this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
         """
         role = 'Server'
 

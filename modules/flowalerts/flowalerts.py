@@ -70,7 +70,8 @@ class Module(Module, multiprocessing.Process):
         self.nxdomains = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
-        # when the ctr reaches the threshold in 10 seconds, we detect an smtp bruteforce
+        # when the ctr reaches the threshold in 10 seconds,
+        # we detect an smtp bruteforce
         self.smtp_bruteforce_threshold = 3
         # dict to keep track of bad smtp logins to check for bruteforce later
         # format {profileid: [ts,ts,...]}
@@ -1291,7 +1292,7 @@ class Module(Module, multiprocessing.Process):
             timestamps[-1]
         )
 
-        if diff > 10:
+        if diff <= 10:
             # remove the first login from cache so we can check the next 3 logins
             self.smtp_bruteforce_cache[profileid][0].pop(0)
             self.smtp_bruteforce_cache[profileid][1].pop(0)
@@ -1637,6 +1638,107 @@ class Module(Module, multiprocessing.Process):
                 uid
             )
 
+    def check_different_localnet_usage(
+            self,
+            saddr,
+            daddr,
+            dport,
+            proto,
+            profileid,
+            timestamp,
+            twid,
+            uid,
+            what_to_check=''
+    ):
+        """
+        alerts when a connection to a private ip that doesn't belong to our local network is found
+        for example:
+        If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
+        :param what_to_check: can be 'srcip' or 'dstip'
+        """
+        ip_to_check = saddr if what_to_check == 'srcip' else daddr
+        ip_obj = ipaddress.ip_address(ip_to_check)
+        own_local_network = __database__.get_local_network()
+
+        if not own_local_network:
+            # the current local network wasn't set in the db yet
+            # it's impossible to get here becaus ethe localnet is set before
+            # any msg is published in the new_flow channel
+            return
+
+        if not (validators.ipv4(ip_to_check) and ip_obj.is_private):
+            return
+
+        # if it's a private ipv4 addr, it should belong to our local network
+        if ip_obj in ipaddress.IPv4Network(own_local_network):
+            return
+
+        self.helper.set_evidence_different_localnet_usage(
+            daddr,
+            f'{dport}/{proto}',
+            profileid,
+            timestamp,
+            twid,
+            uid,
+            ip_outside_localnet=what_to_check
+        )
+
+    def check_device_changing_ips(
+            self,
+            flow_type,
+            smac,
+            profileid,
+            twid,
+            uid,
+            timestamp
+    ):
+        """
+        Every time we have a flow for a new ip (an ip that we're seeing for the first time)
+        we check if the MAC of this srcip was associated with another ip
+        this check is only done once for each source ip slips sees
+        """
+        if 'conn' not in flow_type:
+            return
+
+        saddr = profileid.split("_")[-1]
+
+        if __database__.was_ip_seen_in_connlog_before(saddr):
+            # we should only check once for the first time we're seeing this flow
+            return
+
+        __database__.mark_srcip_as_seen_in_connlog(saddr)
+
+        if not (
+                validators.ipv4(saddr)
+                and ipaddress.ip_address(saddr).is_private
+        ):
+            return
+
+        if old_ip_list := __database__.get_IP_of_MAC(smac):
+            # old_ip is a list that may contain the ipv6 of this MAC
+            # this ipv6 may be of the same device that has the given saddr and MAC
+            # so this would be fp. make sure we're dealing with ipv4 only
+            for ip in json.loads(old_ip_list):
+                if validators.ipv4(ip):
+                    old_ip = ip
+                    break
+            else:
+                # all the IPs associated with the given macs are ipv6,
+                # 1 computer might have several ipv6, AND/OR a combination of ipv6 and 4
+                # so this detection will only work if both the old ip and the given saddr are ipv4 private ips
+                return
+
+            if old_ip != saddr:
+                # we found this smac associated with an ip other than this saddr
+                self.helper.set_evidence_device_changing_ips(
+                    smac,
+                    old_ip,
+                    profileid,
+                    twid,
+                    uid,
+                    timestamp
+                )
+
 
     def run(self):
         utils.drop_root_privs()
@@ -1650,14 +1752,10 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_flow'):
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
+                    new_flow = json.loads(message['data'])
+                    profileid = new_flow['profileid']
+                    twid = new_flow['twid']
+                    flow = new_flow['flow']
                     flow = json.loads(flow)
                     uid = next(iter(flow))
                     flow_dict = json.loads(flow[uid])
@@ -1668,21 +1766,21 @@ class Module(Module, multiprocessing.Process):
                     daddr = flow_dict['daddr']
                     origstate = flow_dict['origstate']
                     state = flow_dict['state']
-                    timestamp = data['stime']
-                    # ports are of type int
-                    sport = flow_dict['sport']
-                    dport = flow_dict.get('dport', None)
+                    timestamp = new_flow['stime']
+                    sport: int = flow_dict['sport']
+                    dport: int = flow_dict.get('dport', None)
                     proto = flow_dict.get('proto')
                     sbytes = flow_dict.get('sbytes', 0)
                     appproto = flow_dict.get('appproto', '')
+                    smac = flow_dict.get('smac', '')
                     if not appproto or appproto == '-':
                         appproto = flow_dict.get('type', '')
+                    # dmac = flow_dict.get('dmac', '')
                     # stime = flow_dict['ts']
-                    # timestamp = data['stime']
+                    # timestamp = new_flow['stime']
                     # pkts = flow_dict['pkts']
                     # allbytes = flow_dict['allbytes']
 
-                    # --- Detect long Connections ---
                     self.check_long_connection(
                         dur, daddr, saddr, profileid, twid, uid, timestamp
                     )
@@ -1716,6 +1814,28 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid,
                         timestamp
+                    )
+                    self.check_different_localnet_usage(
+                        saddr,
+                        daddr,
+                        dport,
+                        proto,
+                        profileid,
+                        timestamp,
+                        twid,
+                        uid,
+                        what_to_check='srcip'
+                    )
+                    self.check_different_localnet_usage(
+                        saddr,
+                        daddr,
+                        dport,
+                        proto,
+                        profileid,
+                        timestamp,
+                        twid,
+                        uid,
+                        what_to_check='dstip'
                     )
 
                     self.check_connection_without_dns_resolution(
@@ -1771,6 +1891,10 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid,
                         timestamp,
+                    )
+
+                    self.check_device_changing_ips(
+                        flow_type, smac, profileid, twid, uid, timestamp
                     )
 
                 # --- Detect successful SSH connections ---
