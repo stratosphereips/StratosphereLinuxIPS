@@ -994,7 +994,7 @@ class Module(Module, multiprocessing.Process):
         )
 
 
-    def check_multiple_ssh_clients(
+    def check_multiple_ssh_versions(
         self,
         starttime,
         saddr,
@@ -1015,22 +1015,20 @@ class Module(Module, multiprocessing.Process):
 
         profileid = f'profile_{saddr}'
         # what software was used before for this profile?
-        # returns a dict with software, 'version-major', 'version-minor'
-        cached_ssh_versions: dict = __database__.get_software_from_profile(
+        # returns a dict with
+        # software:
+        #   { 'version-major': ,'version-minor': ,'uid': }
+        cached_used_sw: dict = __database__.get_software_from_profile(
             profileid
         )
-        if not cached_ssh_versions:
+        if not cached_used_sw:
             # we have no previous software info about this saddr in out db
             return False
 
-        cached_software = cached_ssh_versions['software']
-        if cached_software != used_software:
-            # we need them both to be the same role, either client or server
-            return False
+        # these are the versions that this profile once used
+        cached_ssh_versions = cached_used_sw[used_software]
+        cached_versions = f"{cached_ssh_versions['version-major']}_{cached_ssh_versions['version-minor']}"
 
-        cached_major_v = cached_ssh_versions['version-major']
-        cached_minor_v = cached_ssh_versions['version-minor']
-        cached_versions = f'{cached_major_v}_{cached_minor_v}'
         current_versions = f'{major_v}_{minor_v}'
         if cached_versions == current_versions:
             # they're using the same ssh client version
@@ -2035,7 +2033,7 @@ class Module(Module, multiprocessing.Process):
                     software_type = flow.get('software_type', '')
                     major_v = flow.get('version.major', '')
                     minor_v = flow.get('version.minor', '')
-                    self.check_multiple_ssh_clients(
+                    self.check_multiple_ssh_versions(
                         starttime,
                         saddr,
                         software_type,
@@ -2045,7 +2043,7 @@ class Module(Module, multiprocessing.Process):
                         uid,
                         role='SSH::CLIENT'
                     )
-                    self.check_multiple_ssh_clients(
+                    self.check_multiple_ssh_versions(
                         starttime,
                         saddr,
                         software_type,
@@ -2053,7 +2051,7 @@ class Module(Module, multiprocessing.Process):
                         minor_v,
                         twid,
                         uid,
-                        role='SSH::SEVRER'
+                        role='SSH::SERVER'
                     )
 
                 message = __database__.get_message(self.c10)
