@@ -250,7 +250,7 @@ class Module(Module, multiprocessing.Process):
             reverse_dns = socket.gethostbyaddr(ip)[0]
             # if there's no reverse dns record for this ip, reverse_dns will be an ip.
             try:
-                # reverse_dns is an ip and there's no reverse dns, don't store
+                # reverse_dns is an ip. there's no reverse dns. don't store
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
                 return False
             except socket.error:
@@ -270,7 +270,6 @@ class Module(Module, multiprocessing.Process):
         # If there is no match in the online database,
         # you will receive an empty response with a status code
         # of HTTP/1.1 204 No Content
-
         url = 'https://api.macvendors.com'
         try:
             response = requests.get(f'{url}/{mac_addr}', timeout=5)
@@ -316,7 +315,8 @@ class Module(Module, multiprocessing.Process):
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         """
-        Get vendor info of a MAC address from our offline database and add it to this profileid info in the database
+        Returns vendor info of a MAC address either from an offline or an online
+         database
         """
 
         if (

@@ -2545,11 +2545,9 @@ class Database(ProfilingFlowsDatabase, object):
     def delete_file_info(self, file):
         self.rcache.hdel('TI_files_info', file)
 
-    def set_asn_cache(self, asn, asn_range) -> None:
+    def set_asn_cache(self, asn: str, asn_range: str) -> None:
         """
         Stores the range of asn in cached_asn hash
-        :param asn: str
-        :param asn_range: str
         """
         self.rcache.hset('cached_asn', asn, asn_range)
 
