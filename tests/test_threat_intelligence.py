@@ -13,22 +13,22 @@ def do_nothing(*args):
 def create_threatintel_instance(outputQueue):
     """Create an instance of threatintel.py
     needed by every other test in this file"""
-    threatintel = Module(outputQueue, 6380)
+    threatintel = Module(outputQueue, 1234)
     # override the self.print function to avoid broken pipes
     threatintel.print = do_nothing
     return threatintel
 
 
-def test_parse_ti_file(outputQueue):
+def test_parse_ti_file(database, outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
-    # get local data dir
-    dir_ = threatintel.path_to_local_ti_files
-    # get the first local threat intel file in local_data_files
-    filename = os.listdir(dir_)[0]
-    assert threatintel.parse_local_ti_file(dir_ + filename) == True
+    local_ti_files_dir = threatintel.path_to_local_ti_files
+    local_ti_file = os.path.join(local_ti_files_dir, 'own_malicious_iocs.csv')
+    # this is an ip we know we have in own_maicious_iocs.csv
+    assert threatintel.parse_local_ti_file(local_ti_file) == True
+    assert database.search_IP_in_IoC('54.192.46.116')
 
 
-def test_check_local_ti_files(outputQueue):
+def test_check_local_ti_files_for_update(outputQueue):
     threatintel = create_threatintel_instance(outputQueue)
     dir_ = threatintel.path_to_local_ti_files
     assert threatintel.check_local_ti_files_for_update(dir_) == True
