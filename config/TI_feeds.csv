@@ -10,7 +10,7 @@
 https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv,medium, ['phishing','honeypot']
 https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv,medium, ['phishing','honeypot']
 https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/strangereallintel-cyberthreatintel.csv,medium, ['phishing']
-https://raw.githubusercontent.com/Te-k/stalkerware-indicators/master/generated/network.csv,medium, ['stalkerware']
+https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/network.csv,medium, ['stalkerware']
 https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/adserversandtrackers.csv,medium, ['adtrackers']
 https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/civilsphereindicators.csv,medium, ['apt']
 https://raw.githubusercontent.com/botherder/targetedthreats/master/targetedthreats.csv,medium, ['apt']
