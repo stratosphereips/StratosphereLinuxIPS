@@ -835,6 +835,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.set_malicious_domain(
             domain, profileid, twid
         )
+
     def update_local_file(self, filename):
         """
         Updates the given local ti file if the hash of it has changed
@@ -867,81 +868,81 @@ class Module(Module, multiprocessing.Process, URLhaus):
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)
             return True
-        #
-        # while True:
-        #     try:
-        #         message = __database__.get_message(self.c1)
-        #         if message and message['data'] == 'stop_process':
-        #             self.should_shutdown = True
-        #
-        #         # The channel now can receive an IP address or a domain name
-        #         if utils.is_msg_intended_for(
-        #             message, 'give_threat_intelligence'
-        #         ):
-        #             # Data is sent in the channel as a json dict so we need to deserialize it first
-        #             data = json.loads(message['data'])
-        #             # Extract data from dict
-        #             profileid = data.get('profileid')
-        #             twid = data.get('twid')
-        #             timestamp = data.get('stime')
-        #             uid = data.get('uid')
-        #             protocol = data.get('proto')
-        #             # these 2 are only available when looking up dns answers
-        #             # the query is needed when a malicious answer is found,
-        #             # for more detailed description of the evidence
-        #             self.is_dns_response = data.get('is_dns_response')
-        #             self.dns_query = data.get('dns_query')
-        #             # IP is the IP that we want the TI for. It can be a SRC or DST IP
-        #             to_lookup = data.get('to_lookup', '')
-        #             # detect the type given because sometimes, http.log host field has ips OR domains
-        #             type_ = utils.detect_data_type(to_lookup)
-        #
-        #             # ip_state will say if it is a srcip or if it was a dst_ip
-        #             ip_state = data.get('ip_state')
-        #             # self.print(ip)
-        #
-        #             # If given an IP, ask for it
-        #             # Block only if the traffic isn't outgoing ICMP port unreachable packet
-        #             if type_ == 'ip':
-        #                 ip = to_lookup
-        #                 if not (
-        #                         utils.is_ignored_ip(ip)
-        #                         or self.is_outgoing_icmp_packet(protocol, ip_state)
-        #                     ):
-        #                     self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
-        #                     self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
-        #             elif type_ == 'domain':
-        #                 self.is_malicious_domain(
-        #                     to_lookup,
-        #                     uid,
-        #                     timestamp,
-        #                     profileid,
-        #                     twid
-        #                 )
-        #             elif type_ == 'url':
-        #                 self.is_malicious_url(
-        #                     to_lookup,
-        #                     uid,
-        #                     timestamp,
-        #                     profileid,
-        #                     twid
-        #                 )
-        #
-        #         message = __database__.get_message(self.c2)
-        #         if message and message['data'] == 'stop_process':
-        #             self.should_shutdown = True
-        #
-        #         if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-        #             file_info = json.loads(message['data'])
-        #             self.is_malicious_hash(file_info)
-        #             continue
-        #
-        #         if self.should_shutdown:
-        #              self.shutdown_gracefully()
-        #
-        #     except KeyboardInterrupt:
-        #         self.shutdown_gracefully()
-        #     except Exception as inst:
-        #         exception_line = sys.exc_info()[2].tb_lineno
-        #         self.print(f'Problem on the run() line {exception_line}', 0, 1)
-        #         self.print(traceback.format_exc())
+
+        while True:
+            try:
+                message = __database__.get_message(self.c1)
+                if message and message['data'] == 'stop_process':
+                    self.should_shutdown = True
+
+                # The channel now can receive an IP address or a domain name
+                if utils.is_msg_intended_for(
+                    message, 'give_threat_intelligence'
+                ):
+                    # Data is sent in the channel as a json dict so we need to deserialize it first
+                    data = json.loads(message['data'])
+                    # Extract data from dict
+                    profileid = data.get('profileid')
+                    twid = data.get('twid')
+                    timestamp = data.get('stime')
+                    uid = data.get('uid')
+                    protocol = data.get('proto')
+                    # these 2 are only available when looking up dns answers
+                    # the query is needed when a malicious answer is found,
+                    # for more detailed description of the evidence
+                    self.is_dns_response = data.get('is_dns_response')
+                    self.dns_query = data.get('dns_query')
+                    # IP is the IP that we want the TI for. It can be a SRC or DST IP
+                    to_lookup = data.get('to_lookup', '')
+                    # detect the type given because sometimes, http.log host field has ips OR domains
+                    type_ = utils.detect_data_type(to_lookup)
+
+                    # ip_state will say if it is a srcip or if it was a dst_ip
+                    ip_state = data.get('ip_state')
+                    # self.print(ip)
+
+                    # If given an IP, ask for it
+                    # Block only if the traffic isn't outgoing ICMP port unreachable packet
+                    if type_ == 'ip':
+                        ip = to_lookup
+                        if not (
+                                utils.is_ignored_ip(ip)
+                                or self.is_outgoing_icmp_packet(protocol, ip_state)
+                            ):
+                            self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+                    elif type_ == 'domain':
+                        self.is_malicious_domain(
+                            to_lookup,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid
+                        )
+                    elif type_ == 'url':
+                        self.is_malicious_url(
+                            to_lookup,
+                            uid,
+                            timestamp,
+                            profileid,
+                            twid
+                        )
+
+                message = __database__.get_message(self.c2)
+                if message and message['data'] == 'stop_process':
+                    self.should_shutdown = True
+
+                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                    file_info = json.loads(message['data'])
+                    self.is_malicious_hash(file_info)
+                    continue
+
+                if self.should_shutdown:
+                     self.shutdown_gracefully()
+
+            except KeyboardInterrupt:
+                self.shutdown_gracefully()
+            except Exception as inst:
+                exception_line = sys.exc_info()[2].tb_lineno
+                self.print(f'Problem on the run() line {exception_line}', 0, 1)
+                self.print(traceback.format_exc())
