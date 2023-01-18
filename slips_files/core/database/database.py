@@ -392,7 +392,7 @@ class Database(ProfilingFlowsDatabase, object):
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.r.hmset(profileid, {'User-agent': user_agent})
+        self.r.hset(profileid, 'User-agent', user_agent)
 
     def add_software_to_profile(
         self, profileid, software, version_major, version_minor, uid
@@ -464,7 +464,7 @@ class Database(ProfilingFlowsDatabase, object):
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hmset(profileid, {'dhcp': 'true'})
+            self.r.hset(profileid, 'dhcp', 'true')
 
 
     def set_ipv6_of_profile(self, profileid, ip: list):
@@ -474,7 +474,7 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.hmset(profileid, ipv6)
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
+        self.r.hset(profileid, 'IPv4', json.dumps([ip]))
 
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """

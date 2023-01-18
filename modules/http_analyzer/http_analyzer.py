@@ -253,8 +253,7 @@ class Module(Module, multiprocessing.Process):
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
         try:
             # responses from this domain are broken for now. so this is a temp fix until they fix it from their side
-            response = response.text.replace("<br />",'').replace("Connection could not be established !!",'')
-            json_response = json.loads(response)
+            json_response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
             # unexpected server response
             return False
