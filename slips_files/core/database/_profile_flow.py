@@ -886,7 +886,9 @@ class ProfilingFlowsDatabase(object):
                     self.r.set("local_network", network_range)
                     self.is_localnet_set = True
 
-        self.publish('new_flow', to_send)
+        # dont send arp flows in this channel, they have their own new_arp channel
+        if flow_type != 'arp':
+            self.publish('new_flow', to_send)
         return True
 
     def get_local_network(self):
