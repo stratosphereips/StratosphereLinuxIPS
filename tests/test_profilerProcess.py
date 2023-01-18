@@ -29,8 +29,6 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     return profilerProcess
 
 
-
-
 @pytest.mark.parametrize(
     'file,expected_value', [('dataset/test6-malicious.suricata.json', 'suricata')]
 )
