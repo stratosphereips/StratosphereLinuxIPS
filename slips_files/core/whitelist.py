@@ -4,7 +4,7 @@ from slips_files.common.config_parser import ConfigParser
 import ipaddress
 import validators
 from slips_files.common.slips_utils import utils
-import re
+import tld
 import os
 
 
@@ -324,9 +324,17 @@ class Whitelist:
                 # self.print(f"The domain of this flow ({domain}) belongs to the domains of {org}")
                 return True
 
-            flow_TLD = domain.split('.')[-1]
+            try:
+                flow_TLD = tld.get_tld(domain, as_object=True)
+            except tld.exceptions.TldBadUrl:
+                flow_TLD = domain.split('.')[-1]
+
             for org_domain in org_domains:
-                org_domain_TLD = org_domain.split('.')[-1]
+                try:
+                    org_domain_TLD = tld.get_tld(org_domain, as_object=True)
+                except tld.exceptions.TldBadUrl:
+                    org_domain_TLD = org_domain.split('.')[-1]
+
                 # make sure the 2 domains have the same same top level domain
                 if flow_TLD != org_domain_TLD:
                     continue
@@ -670,6 +678,7 @@ class Whitelist:
             whitelisted_macs = {}
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs
 
+
     def is_whitelisted_evidence(
             self, srcip, data, attacker_direction, description
         ) -> bool:
@@ -757,7 +766,13 @@ class Whitelist:
             if data_type == 'domain':
                 is_srcdomain = attacker_direction in ('srcdomain')
                 is_dstdomain = attacker_direction in ('dstdomain')
-                domain = data
+                # extract the top level domain
+                try:
+                    domain = tld.get_fld(data, fix_protocol=True)
+                except tld.exceptions.TldBadUrl:
+                    domain = data
+                    for str_ in ('http://', 'https://','www'):
+                        domain = domain.replace(str_, "")
                 # is domain in whitelisted domains?
                 for domain_in_whitelist in whitelisted_domains:
                     # We go one by one so we can match substrings in the domains
@@ -786,8 +801,6 @@ class Whitelist:
                             #            f'related to {data} in {description}')
                             return True
 
-                # remove the www. because no tranco whitelist entry has it
-                domain = domain.replace('www.','')
                 if __database__.is_whitelisted_tranco_domain(domain):
                     # tranco list contains the top 10k known benign domains
                     # https://tranco-list.eu/list/X5QNN/1000000
