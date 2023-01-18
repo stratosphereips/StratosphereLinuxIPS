@@ -33,3 +33,4 @@ pytest-dependency
 whois
 wheel
 flask
+tld
