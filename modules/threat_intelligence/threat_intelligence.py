@@ -387,7 +387,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         Returns nothing, but the dictionary should be filled
         :param path: full path_to local threat intel file
         """
-        data_file_name = path.split('/')[-1]
+        filename = os.path.basename(path)
         ja3_dict = {}
         # used for debugging
         line_number = 0
@@ -417,13 +417,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 )
 
                 # validate the threat level taken from the user
-                if threat_level not in (
-                    'info',
-                    'low',
-                    'medium',
-                    'high',
-                    'critical',
-                ):
+                if utils.is_valid_threat_level(threat_level):
                     # default value
                     threat_level = 'medium'
 
@@ -434,7 +428,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 ja3_dict[ja3] = json.dumps(
                     {
                         'description': description,
-                        'source': data_file_name,
+                        'source': filename,
                         'threat_level': threat_level,
                     }
                 )
@@ -442,53 +436,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.add_ja3_to_IoC(ja3_dict)
         return True
 
-    def check_local_ti_files_for_update(self, path_to_files: str) -> bool:
+    def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
-        Checks if a local TI file was changed based
-        on it's hash. if so, update its content and delete old data
+        Checks if a local TI file was changed based on it's hash.
+        If the file should be updated, its hash will be returned
+        :param path_to_local_ti_file: full path to a local ti file in our config/local_ti_files
         """
-        local_ti_files = os.listdir(path_to_files)
-        for localfile in local_ti_files:
-            self.print(f'Loading local TI file {localfile}', 2, 0)
-            # Get what files are stored in cache db and their E-TAG to comapre with current files
-            data = __database__.get_TI_file_info(localfile)
-            old_hash = data.get('hash', False)
+        filename = os.path.basename(path_to_local_ti_file)
 
-            # In the case of the local file, we dont store the e-tag
-            # we calculate the hash
-            new_hash = utils.get_hash_from_file(f'{path_to_files}/{localfile}')
+        self.print(f'Loading local TI file {path_to_local_ti_file}', 2, 0)
+        # Get what files are stored in cache db and their E-TAG to comapre with current files
+        data = __database__.get_TI_file_info(filename)
+        old_hash = data.get('hash', False)
 
-            if not new_hash:
-                # Something failed. Do not download
-                self.print(
-                    f'Some error ocurred on calculating file hash.'
-                    f' Not loading the file {localfile}', 0, 3,
-                )
-                return False
+        # In the case of the local file, we dont store the e-tag
+        # we calculate the hash
+        new_hash = utils.get_hash_from_file(path_to_local_ti_file)
 
-            if old_hash == new_hash:
-                # The 2 hashes are identical. File is up to date.
-                self.print(f'File {localfile} is up to date.', 2, 0)
+        if not new_hash:
+            # Something failed. Do not download
+            self.print(
+                f'Some error ocurred on calculating file hash.'
+                f' Not loading the file {path_to_local_ti_file}', 0, 3,
+            )
+            return False
 
-            else:
-                # Our TI file was changed. Load the new one
-                self.print(f'Updating the local TI file {localfile}', 2, 0)
-                if old_hash:
-                    # File is updated and was in database.
-                    # Delete previous data of this file.
-                    self.__delete_old_source_data_from_database(localfile)
-                full_path_to_file = os.path.join(path_to_files, localfile)
-                # we have 2 types of local files, TI and JA3 files
-                if 'ja3' in localfile.lower():
-                    self.parse_ja3_file(full_path_to_file)
-                else:
-                    # Load updated data to the database
-                    self.parse_local_ti_file(full_path_to_file)
+        if old_hash == new_hash:
+            # The 2 hashes are identical. File is up to date.
+            self.print(f'File {path_to_local_ti_file} is up to date.', 2, 0)
+            return False
 
-                # Store the new etag and time of file in the database
-                malicious_file_info = {'hash': new_hash}
-                __database__.set_TI_file_info(localfile, malicious_file_info)
-        return True
+        else:
+            # Our TI file was changed. Load the new one
+            self.print(f'Updating the local TI file {path_to_local_ti_file}', 2, 0)
+
+            if old_hash:
+                # File is updated and was in database.
+                # Delete previous data of this file from the db.
+                self.__delete_old_source_data_from_database(filename)
+            return new_hash
 
     def set_maliciousIP_to_IPInfo(self, ip, ip_description):
         """
@@ -849,101 +835,113 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.set_malicious_domain(
             domain, profileid, twid
         )
-
+    def update_local_file(self, filename):
+        """
+        Updates the given local ti file if the hash of it has changed
+        : param filename: local ti file, has to be plased in config/local_ti_files/ dir
+        """
+        fullpath = os.path.join(self.path_to_local_ti_files, filename)
+        if filehash := self.should_update_local_ti_file(fullpath):
+            if 'JA3' in filename:
+                # Load updated data to the database
+                self.parse_ja3_file(fullpath)
+            else:
+                # Load updated data to the database
+                self.parse_local_ti_file(fullpath)
+            # Store the new etag and time of file in the database
+            malicious_file_info = {'hash': filehash}
+            __database__.set_TI_file_info(filename, malicious_file_info)
+            return True
 
     def run(self):
         try:
             utils.drop_root_privs()
-            # Load the local Threat Intelligence files that are stored in the local folder
+            # Load the local Threat Intelligence files that are
+            # stored in the local folder self.path_to_local_ti_files
             # The remote files are being loaded by the update_manager
-            # check if we should update the files
-            if not self.check_local_ti_files_for_update(
-                self.path_to_local_ti_files
-            ):
-                self.print(
-                    f'Could not load the local TI files {self.path_to_local_ti_files}'
-                )
+            self.update_local_file('own_malicious_iocs.csv')
+            self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
         except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)
             return True
-
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.should_shutdown = True
-
-                # The channel now can receive an IP address or a domain name
-                if utils.is_msg_intended_for(
-                    message, 'give_threat_intelligence'
-                ):
-                    # Data is sent in the channel as a json dict so we need to deserialize it first
-                    data = json.loads(message['data'])
-                    # Extract data from dict
-                    profileid = data.get('profileid')
-                    twid = data.get('twid')
-                    timestamp = data.get('stime')
-                    uid = data.get('uid')
-                    protocol = data.get('proto')
-                    # these 2 are only available when looking up dns answers
-                    # the query is needed when a malicious answer is found,
-                    # for more detailed description of the evidence
-                    self.is_dns_response = data.get('is_dns_response')
-                    self.dns_query = data.get('dns_query')
-                    # IP is the IP that we want the TI for. It can be a SRC or DST IP
-                    to_lookup = data.get('to_lookup', '')
-                    # detect the type given because sometimes, http.log host field has ips OR domains
-                    type_ = utils.detect_data_type(to_lookup)
-
-                    # ip_state will say if it is a srcip or if it was a dst_ip
-                    ip_state = data.get('ip_state')
-                    # self.print(ip)
-
-                    # If given an IP, ask for it
-                    # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if type_ == 'ip':
-                        ip = to_lookup
-                        if not (
-                                utils.is_ignored_ip(ip)
-                                or self.is_outgoing_icmp_packet(protocol, ip_state)
-                            ):
-                            self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
-                            self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
-                    elif type_ == 'domain':
-                        self.is_malicious_domain(
-                            to_lookup,
-                            uid,
-                            timestamp,
-                            profileid,
-                            twid
-                        )
-                    elif type_ == 'url':
-                        self.is_malicious_url(
-                            to_lookup,
-                            uid,
-                            timestamp,
-                            profileid,
-                            twid
-                        )
-
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.should_shutdown = True
-
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    file_info = json.loads(message['data'])
-                    self.is_malicious_hash(file_info)
-                    continue
-
-                if self.should_shutdown:
-                     self.shutdown_gracefully()
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc())
+        #
+        # while True:
+        #     try:
+        #         message = __database__.get_message(self.c1)
+        #         if message and message['data'] == 'stop_process':
+        #             self.should_shutdown = True
+        #
+        #         # The channel now can receive an IP address or a domain name
+        #         if utils.is_msg_intended_for(
+        #             message, 'give_threat_intelligence'
+        #         ):
+        #             # Data is sent in the channel as a json dict so we need to deserialize it first
+        #             data = json.loads(message['data'])
+        #             # Extract data from dict
+        #             profileid = data.get('profileid')
+        #             twid = data.get('twid')
+        #             timestamp = data.get('stime')
+        #             uid = data.get('uid')
+        #             protocol = data.get('proto')
+        #             # these 2 are only available when looking up dns answers
+        #             # the query is needed when a malicious answer is found,
+        #             # for more detailed description of the evidence
+        #             self.is_dns_response = data.get('is_dns_response')
+        #             self.dns_query = data.get('dns_query')
+        #             # IP is the IP that we want the TI for. It can be a SRC or DST IP
+        #             to_lookup = data.get('to_lookup', '')
+        #             # detect the type given because sometimes, http.log host field has ips OR domains
+        #             type_ = utils.detect_data_type(to_lookup)
+        #
+        #             # ip_state will say if it is a srcip or if it was a dst_ip
+        #             ip_state = data.get('ip_state')
+        #             # self.print(ip)
+        #
+        #             # If given an IP, ask for it
+        #             # Block only if the traffic isn't outgoing ICMP port unreachable packet
+        #             if type_ == 'ip':
+        #                 ip = to_lookup
+        #                 if not (
+        #                         utils.is_ignored_ip(ip)
+        #                         or self.is_outgoing_icmp_packet(protocol, ip_state)
+        #                     ):
+        #                     self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
+        #                     self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+        #             elif type_ == 'domain':
+        #                 self.is_malicious_domain(
+        #                     to_lookup,
+        #                     uid,
+        #                     timestamp,
+        #                     profileid,
+        #                     twid
+        #                 )
+        #             elif type_ == 'url':
+        #                 self.is_malicious_url(
+        #                     to_lookup,
+        #                     uid,
+        #                     timestamp,
+        #                     profileid,
+        #                     twid
+        #                 )
+        #
+        #         message = __database__.get_message(self.c2)
+        #         if message and message['data'] == 'stop_process':
+        #             self.should_shutdown = True
+        #
+        #         if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+        #             file_info = json.loads(message['data'])
+        #             self.is_malicious_hash(file_info)
+        #             continue
+        #
+        #         if self.should_shutdown:
+        #              self.shutdown_gracefully()
+        #
+        #     except KeyboardInterrupt:
+        #         self.shutdown_gracefully()
+        #     except Exception as inst:
+        #         exception_line = sys.exc_info()[2].tb_lineno
+        #         self.print(f'Problem on the run() line {exception_line}', 0, 1)
+        #         self.print(traceback.format_exc())
