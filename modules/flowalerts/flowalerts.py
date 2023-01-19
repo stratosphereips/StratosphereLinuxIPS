@@ -651,9 +651,8 @@ class Module(Module, multiprocessing.Process):
         # after starting slips because the dns may have happened before starting slips
         running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
         if running_on_interface:
-
             # connection without dns in case of an interface,
-            # should only be detected from the srcip of this instance,
+            # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
             saddr = profileid.split("_")[-1]
             if saddr not in self.our_ips:
@@ -662,7 +661,7 @@ class Module(Module, multiprocessing.Process):
             start_time = __database__.get_slips_start_time()
             now = datetime.datetime.now()
             diff = utils.get_time_diff(start_time, now, return_type='minutes')
-            if diff >= self.conn_without_dns_interface_wait_time:
+            if diff < self.conn_without_dns_interface_wait_time:
                 # less than 30 minutes have passed
                 return False
 
