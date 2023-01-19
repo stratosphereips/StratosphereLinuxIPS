@@ -22,7 +22,6 @@ class UpdateFileManager:
         __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
-        self.new_update_time = float('-inf')
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
@@ -122,7 +121,7 @@ class UpdateFileManager:
             url, threat_level = line[0], line[1]
             tags: str = " ".join(line[2:])
             tags = tags.replace('[','').replace(']','').replace('\'',"").replace('\"',"").split(',')
-
+            url = utils.sanitize(url.strip())
 
             threat_level = threat_level.lower()
             # remove commented lines from the cache db
@@ -309,7 +308,6 @@ class UpdateFileManager:
         return True
 
 
-
     def download_file(self, file_to_download):
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
@@ -344,19 +342,14 @@ class UpdateFileManager:
         Used for remote files that are updated periodically
         :param file_to_download: url that contains the file to download
         """
-        if not (
-                self.riskiq_email
-                and self.riskiq_key
-        ):
-            return False
+
 
         # the response will be stored in self.responses if the file is old and needs to be updated
 
         file_name_to_download = file_to_download.split('/')[-1]
         # Get the last time this file was updated
-        ti_file_info = __database__.get_TI_file_info(file_name_to_download)
+        ti_file_info = __database__.get_TI_file_info(file_to_download)
         last_update = ti_file_info.get('time', float('-inf'))
-
         if last_update + update_period > time.time():
             # Update period hasn't passed yet, but the file is in our db
             self.loaded_ti_files += 1
@@ -369,7 +362,6 @@ class UpdateFileManager:
 
         # Update only if the e-tag is different
         try:
-            file_name_to_download = file_to_download.split('/')[-1]
             # response will be used to get e-tag, and if the file was updated
             # the same response will be used to update the content in our db
             response = self.download_file(file_to_download)
@@ -383,7 +375,7 @@ class UpdateFileManager:
                 return True
 
             # Get the E-TAG of this file to compare with current files
-            data = __database__.get_TI_file_info(file_name_to_download)
+            data = __database__.get_TI_file_info(file_to_download)
             old_e_tag = data.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
@@ -402,9 +394,8 @@ class UpdateFileManager:
                     self.responses[file_to_download] = response
                     return True
                 else:
-                    self.new_update_time = time.time()
                     # update the time we last checked this file for update
-                    __database__.set_last_update_time(file_to_download, self.new_update_time)
+                    __database__.set_last_update_time(file_to_download, time.time())
                     self.loaded_ti_files += 1
                     return False
 
@@ -418,9 +409,8 @@ class UpdateFileManager:
                 # old_e_tag == new_e_tag
                 # update period passed but the file hasnt changed on the server, no need to update
                 # Store the update time like we downloaded it anyway
-                self.new_update_time = time.time()
                 # Store the new etag and time of file in the database
-                __database__.set_last_update_time(file_to_download, self.new_update_time)
+                __database__.set_last_update_time(file_to_download, time.time())
                 self.loaded_ti_files += 1
                 return False
 
@@ -611,11 +601,10 @@ class UpdateFileManager:
                 return False
 
             # Store the new etag and time of file in the database
-            self.new_update_time = time.time()
             new_e_tag = self.get_e_tag(response)
             file_info = {
                 'e-tag': new_e_tag,
-                'time': self.new_update_time
+                'time': time.time()
             }
             __database__.set_TI_file_info(link_to_download, file_info)
 
@@ -642,11 +631,14 @@ class UpdateFileManager:
 
     def update_riskiq_feed(self):
         """Get and parse RiskIQ feed"""
+        if not (
+                self.riskiq_email
+                and self.riskiq_key
+        ):
+            return False
         try:
             self.log(f'Updating RiskIQ domains')
-            base_url = 'https://api.riskiq.net/pt'
-            path = '/v2/articles/indicators'
-            url = base_url + path
+            url = 'https://api.riskiq.net/pt/v2/articles/indicators'
             auth = (self.riskiq_email, self.riskiq_key)
             today = datetime.date.today()
             days_ago = datetime.timedelta(7)
@@ -1511,9 +1503,6 @@ class UpdateFileManager:
             files_to_download.update(self.ssl_feeds)
 
             for file_to_download in files_to_download.keys():
-                file_to_download = file_to_download.strip()
-                file_to_download = utils.sanitize(file_to_download)
-
                 if self.__check_if_update(file_to_download, self.update_period):
                     # failed to get the response, either a server problem
                     # or the file is up to date so the response isn't needed
