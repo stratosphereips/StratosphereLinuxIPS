@@ -50,6 +50,8 @@ class UpdateFileManager:
         # to track how many times an ip is present in different blacklists
         self.ips_ctr = {}
         self.first_time_reading_files = False
+        # store the responses of the files that should be updated when their update period passed
+        self.responses = {}
 
     def read_configuration(self):
         def read_riskiq_creds(RiskIQ_credentials_path):
@@ -146,9 +148,6 @@ class UpdateFileManager:
                 'tags': tags
             }
         return parsed_feeds
-
-
-
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -342,73 +341,72 @@ class UpdateFileManager:
         """
         return response.headers.get('Last-Modified', False)
 
-    def __check_if_update(self, file_to_download: str, update_period):
+    def __check_if_update(self, file_to_download: str, update_period) -> bool:
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
-
-        Returns the response if the file is old and needs to be updated
+        :param file_to_download: url that contains the file to download
         """
+        # the response will be stored in self.responses if the file is old and needs to be updated
+
         file_name_to_download = file_to_download.split('/')[-1]
         # Get the last time this file was updated
-        data = __database__.get_TI_file_info(file_name_to_download)
+        ti_file_info = __database__.get_TI_file_info(file_name_to_download)
         try:
-            last_update = data['time']
-            last_update = float(last_update)
-        except (TypeError, KeyError):
+            last_update = float(ti_file_info['time'])
+        except (TypeError, KeyError, ValueError):
             last_update = float('-inf')
 
-        now = time.time()
+        if last_update + update_period > time.time():
+            # Update period hasn't passed yet, but the file is in our db
+            self.loaded_ti_files += 1
+            return False
 
-        if last_update + update_period < now:
-            if (
-                'risk' in file_to_download
-            ):
-                # updating riskiq TI data does not depend on an e-tag
+        # update period passed
+        if 'risk' in file_to_download:
+            # updating riskiq TI data does not depend on an e-tag
+            return True
+
+        # Update only if the e-tag is different
+        try:
+            file_name_to_download = file_to_download.split('/')[-1]
+            # response will be used to get e-tag, and if the file was updated
+            # the same response will be used to update the content in our db
+            response = self.download_file(file_to_download)
+            if not response:
+                return False
+
+            if 'maclookup' in file_to_download:
+                # no need to check the e-tag
+                # we always need to download this file for slips to get info about MACs
+                self.responses['mac_db'] = response
                 return True
 
-            # Update only if the e-tag is different
-            try:
-                file_name_to_download = file_to_download.split('/')[-1]
+            # Get the E-TAG of this file to compare with current files
+            data = __database__.get_TI_file_info(file_name_to_download)
+            old_e_tag = data.get('e-tag', '')
+            # Check now if E-TAG of file in github is same as downloaded
+            # file here.
+            new_e_tag = self.get_e_tag(response)
+            if not new_e_tag:
+                # use last modified instead
+                cached_last_modified = new_e_tag
+                new_last_modified = self.get_last_modified(response)
 
-                # response will be used to get e-tag, and if the file was updated
-                # the same response will be used to update the content in our db
-                response = self.download_file(file_to_download)
-                if not response:
+                if not new_last_modified:
+                    self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
                     return False
 
-                if 'maclookup' in file_to_download:
-                    # no need to check the e-tag
-                    return response
-
-                # Get what files are stored in cache db and their E-TAG to compare with current files
-                data = __database__.get_TI_file_info(file_name_to_download)
-                old_e_tag = data.get('e-tag', '')
-                # Check now if E-TAG of file in github is same as downloaded
-                # file here.
-                new_e_tag = self.get_e_tag(response)
-                if not new_e_tag:
-                    # use last modified instead
-                    last_modified = self.get_last_modified(response)
-                    if not last_modified:
-                        self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
-                        return False
-                    # use last modified date instead of e-tag
-                    new_e_tag = last_modified
-
-                if old_e_tag != new_e_tag:
-                    # Our TI file is old. Download the new one.
-                    # we'll be storing this e-tag in our database
-                    return response
-
+                # use last modified date instead of e-tag
+                if new_last_modified != cached_last_modified:
+                    self.responses[file_name_to_download] = response
+                    return True
                 else:
-                    # old_e_tag == new_e_tag
-                    # self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                    # Store the update time like we downloaded it anyway
                     self.new_update_time = time.time()
-                    # Store the new etag and time of file in the database
+                    # Store the new last_modified value
+                    # and time of last update in the database
                     ti_file_info = {
-                        'e-tag': new_e_tag,
+                        'last_modified': new_last_modified,
                         'time': self.new_update_time,
                     }
                     __database__.set_TI_file_info(
@@ -417,16 +415,34 @@ class UpdateFileManager:
                     self.loaded_ti_files += 1
                     return False
 
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(
-                    f'Problem on update_TI_file() line {exception_line}', 0, 1
-                )
-                self.print(traceback.format_exc(), 0, 1)
-        else:
-            # Update period hasn't passed yet, but the file is in our db
-            self.loaded_ti_files += 1
+            if old_e_tag != new_e_tag:
+                # Our TI file is old. Download the new one.
+                # we'll be storing this e-tag in our database
+                self.responses[file_name_to_download] = response
+                return True
 
+            else:
+                # old_e_tag == new_e_tag
+                # update period passed but the file hasnt changed on the server, no need to update
+                # Store the update time like we downloaded it anyway
+                self.new_update_time = time.time()
+                # Store the new etag and time of file in the database
+                ti_file_info = {
+                    'e-tag': new_e_tag,
+                    'time': self.new_update_time,
+                }
+                __database__.set_TI_file_info(
+                    file_name_to_download, ti_file_info
+                )
+                self.loaded_ti_files += 1
+                return False
+
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(
+                f'Problem on update_TI_file() line {exception_line}', 0, 1
+            )
+            self.print(traceback.format_exc(), 0, 1)
         return False
 
     def get_e_tag(self, response):
@@ -1429,9 +1445,14 @@ class UpdateFileManager:
         self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 2, 0)
         self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 2, 0)
 
-    def update_mac_db(self, response):
+    def update_mac_db(self):
+        """
+        Updates the mac db using the response stored in self.response
+        """
+        response = self.responses['mac_db']
         if response.status_code != 200:
             return False
+
         self.log(f'Updating the MAC database.')
         path_to_mac_db = 'databases/macaddress-db.json'
 
@@ -1440,7 +1461,10 @@ class UpdateFileManager:
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
 
-        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
+        __database__.set_TI_file_info(
+            os.path.basename(self.mac_db_link),
+            {'time': time.time()}
+        )
         return True
 
     def update_online_whitelist(self, response):
@@ -1477,8 +1501,8 @@ class UpdateFileManager:
             # self.update_org_files()
 
             ############### Update slips local files ################
-            if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
-                self.update_mac_db(response)
+            if self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
+                self.update_mac_db()
 
             ############### Update online whitelist ################
             if response := self.__check_if_update_online_whitelist():
