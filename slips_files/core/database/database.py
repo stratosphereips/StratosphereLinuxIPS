@@ -2530,6 +2530,21 @@ class Database(ProfilingFlowsDatabase, object):
         data = json.dumps(data)
         self.rcache.hset('TI_files_info', file, data)
 
+    def set_last_update_time(self, file: str, time: float):
+        """
+        sets the 'time' of last update of the given file
+        :param file: ti file
+        """
+        if file_info := self.rcache.hget('TI_files_info', file):
+            # update an existin time
+            file_info = json.loads(file_info)
+            file_info.update({"time": time})
+            self.rcache.hset('TI_files_info', file, json.dumps(file_info))
+            return
+
+        # no cached info about this file
+        self.rcache.hset('TI_files_info', file, json.dumps(file_info))
+
     def get_TI_file_info(self, file):
         """
         Get TI file info
