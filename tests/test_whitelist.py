@@ -25,7 +25,7 @@ def test_read_whitelist(outputQueue, inputQueue, database):
     uses tests/test_whitelist.conf for testing
     """
     whitelist = create_whitelist_instance(outputQueue)
-    # 9 is the number of lines read after the comment lines at th ebegging of the file
+    # 9 is the number of lines read after the comment lines at th begining of the file
     assert whitelist.read_whitelist() == 29
     assert '91.121.83.118' in database.get_whitelist('IPs').keys()
     assert 'apple.com' in database.get_whitelist('domains').keys()

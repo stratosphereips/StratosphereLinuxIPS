@@ -342,11 +342,7 @@ class UpdateFileManager:
         Used for remote files that are updated periodically
         :param file_to_download: url that contains the file to download
         """
-
-
         # the response will be stored in self.responses if the file is old and needs to be updated
-
-        file_name_to_download = file_to_download.split('/')[-1]
         # Get the last time this file was updated
         ti_file_info = __database__.get_TI_file_info(file_to_download)
         last_update = ti_file_info.get('time', float('-inf'))
@@ -375,14 +371,14 @@ class UpdateFileManager:
                 return True
 
             # Get the E-TAG of this file to compare with current files
-            data = __database__.get_TI_file_info(file_to_download)
-            old_e_tag = data.get('e-tag', '')
+            ti_file_info = __database__.get_TI_file_info(file_to_download)
+            old_e_tag = ti_file_info.get('e-tag', '')
             # Check now if E-TAG of file in github is same as downloaded
             # file here.
             new_e_tag = self.get_e_tag(response)
             if not new_e_tag:
                 # use last modified instead
-                cached_last_modified = new_e_tag
+                cached_last_modified = ti_file_info.get('Last-Modified', '')
                 new_last_modified = self.get_last_modified(response)
 
                 if not new_last_modified:
@@ -601,10 +597,10 @@ class UpdateFileManager:
                 return False
 
             # Store the new etag and time of file in the database
-            new_e_tag = self.get_e_tag(response)
             file_info = {
-                'e-tag': new_e_tag,
-                'time': time.time()
+                'e-tag': self.get_e_tag(response),
+                'time': time.time(),
+                'Last-Modified': self.get_last_modified(response)
             }
             __database__.set_TI_file_info(link_to_download, file_info)
 
