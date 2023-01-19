@@ -46,7 +46,7 @@ def validate_slips_data(message_data: str) -> (str, int):
     try:
         message_data = json.loads(message_data)
         ip_address = message_data.get('ip')
-        time_since_cached = int(message_data.get('cache_age', 0))
+        # time_since_cached = int(message_data.get('cache_age', 0))
         if not p2p_utils.validate_ip_address(ip_address):
             return None
 

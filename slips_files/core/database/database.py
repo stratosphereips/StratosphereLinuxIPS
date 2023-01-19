@@ -708,18 +708,6 @@ class Database(ProfilingFlowsDatabase, object):
         profiles = self.r.smembers('profiles')
         return profiles if profiles != set() else {}
 
-    def getProfileData(self, profileid):
-        """Get all the data for this particular profile.
-        Returns:
-        A json formated representation of the hashmap with all the data of the profile
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-
-        profile = self.r.hgetall(profileid)
-        return profile if profile != set() else False
 
     def getTWsfromProfile(self, profileid):
         """
@@ -973,26 +961,8 @@ class Database(ProfilingFlowsDatabase, object):
             return False
         return True
 
-    def getModifiedTWTime(self, profileid, twid):
-        """
-        Get the time when this TW was modified
-        """
-        return self.r.zcore(
-            'ModifiedTW',
-            f'{profileid}{self.separator}{twid}'
-        ) or -1
-
     def setSlipsInternalTime(self, timestamp):
         self.r.set('slips_internal_time', timestamp)
-
-
-    def refresh_data_tuples(self):
-        """
-        Go through all the tuples and refresh the data about the ipsinfo
-        TODO
-        """
-        outtuples = self.getOutTuplesfromProfileTW()
-        intuples = self.getInTuplesfromProfileTW()
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -1353,20 +1323,6 @@ class Database(ProfilingFlowsDatabase, object):
                 return True
         return False
 
-    def set_flow_causing_evidence(self, uid, evidence_ID):
-        """
-        :param uid: can be a str or a list
-        """
-        if type(uid) == str:
-            uid = [uid]
-        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
-
-    def get_flows_causing_evidence(self, evidence_ID) -> list:
-        uids = self.r.hget("flows_causing_evidence", evidence_ID)
-        if not uids:
-            return []
-        else:
-            return json.loads(uids)
 
     def setEvidence(
             self,
@@ -1420,7 +1376,6 @@ class Database(ProfilingFlowsDatabase, object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
-        self.set_flow_causing_evidence(uid, evidence_ID)
 
         # some evidence are caused by several uids, use the last one only
         if type(uid) == list:
@@ -1534,23 +1489,6 @@ class Database(ProfilingFlowsDatabase, object):
         evidence = json.dumps(evidence)
         self.r.sadd('Evidence', evidence)
 
-    def get_evidence_count(self, evidence_type, profileid, twid):
-        """
-        Returns the number of evidence of this type in this profiled and twid
-        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
-        """
-        count = 0
-        evidence = self.getEvidenceForTW(profileid, twid)
-        if not evidence:
-            return False
-
-        evidence: dict = json.loads(evidence)
-        # loop through each evidence in this tw
-        for description, evidence_details in evidence.items():
-            evidence_details = json.loads(evidence_details)
-            if evidence_type in evidence_details['evidence_type']:
-                count += 1
-        return count
 
     def deleteEvidence(self, profileid, twid, evidence_ID: str):
         """
@@ -1643,18 +1581,6 @@ class Database(ProfilingFlowsDatabase, object):
         if evidence:
             evidence = self.remove_whitelisted_evidence(evidence)
         return evidence
-
-    def getEvidenceForProfileid(self, profileid):
-        profile_evidence = {}
-        # get all tws for this profileid
-        timewindows = self.getTWsfromProfile(profileid)
-        for twid, ts in timewindows:
-            # get all evidence in this tw
-            tw_evidence = self.getEvidenceForTW(profileid, twid)
-            if tw_evidence:
-                tw_evidence = json.loads(tw_evidence)
-                profile_evidence.update(tw_evidence)
-        return profile_evidence
 
     def checkBlockedProfTW(self, profileid, twid):
         """
@@ -1805,17 +1731,6 @@ class Database(ProfilingFlowsDatabase, object):
             data = False
         return data
 
-    def getallIPs(self):
-        """Return list of all IPs in the DB"""
-        data = self.rcache.hgetall('IPsInfo')
-        # data = json.loads(data)
-        return data
-
-    def getallURLs(self):
-        """Return list of all URLs in the DB"""
-        data = self.rcache.hgetall('URLsInfo')
-        # data = json.loads(data)
-        return data
 
     def setNewURL(self, url: str):
         """
@@ -1831,34 +1746,6 @@ class Database(ProfilingFlowsDatabase, object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset('URLsInfo', url, '{}')
-
-    def getIP(self, ip):
-        """Check if this ip is the hash of the profiles!"""
-        data = self.rcache.hget('IPsInfo', ip)
-        if data:
-            return True
-        else:
-            return False
-
-    def getURL(self, url):
-        """Check if this url is the hash of the profiles!"""
-        data = self.rcache.hget('URLsInfo', url)
-        if data:
-            return True
-        else:
-            return False
-
-    def setInfoForFile(self, md5: str, filedata: dict):
-        """
-        Store information for this file (only if it's malicious)
-        We receive a dictionary, such as {'virustotal': score} that we are
-        going to store for this IP.
-        If it was not there before we store it. If it was there before, we
-        overwrite it
-        """
-
-        file_info = json.dumps(filedata)
-        self.rcache.hset('FileInfo', md5, file_info)
 
     def setInfoForURLs(self, url: str, urldata: dict):
         """
@@ -2023,18 +1910,6 @@ class Database(ProfilingFlowsDatabase, object):
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
-    def get_timeline_last_line(self, profileid, twid):
-        """Add a line to the time line of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-        key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
-        )
-        data = self.r.zrange(key, -1, -1)
-        return data
-
     def get_timeline_last_lines(
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
@@ -2052,17 +1927,6 @@ class Database(ProfilingFlowsDatabase, object):
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
-    def get_timeline_all_lines(self, profileid, twid):
-        """Add a line to the time line of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-        key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
-        )
-        data = self.r.zrange(key, 0, -1)
-        return data
 
     def set_port_info(self, portproto: str, name):
         """
@@ -2233,19 +2097,6 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.rcache.hmset('IoC_SSL', malicious_ssl_certs)
 
-    def add_ip_to_IoC(self, ip: str, description: str) -> None:
-        """
-        Store in the DB 1 IP we read from an IoC source  with its description
-        """
-        self.rcache.hset('IoC_ips', ip, description)
-
-    def add_domain_to_IoC(self, domain: str, description: str) -> None:
-        """
-        Store in the DB 1 domain we read from an IoC source
-        with its description
-        """
-        self.rcache.hset('IoC_domains', domain, description)
-
     def get_malicious_ip_ranges(self) -> dict:
         """
         Returns all the malicious ip ranges we have from different feeds
@@ -2350,19 +2201,6 @@ class Database(ProfilingFlowsDatabase, object):
         else:
             return dns_resolutions
 
-    def get_last_dns_ts(self):
-        """returns the timestamp of the last DNS resolution slips read"""
-        dns_resolutions = self.get_all_dns_resolutions()
-        if dns_resolutions:
-            # sort resolutions by ts
-            # k_v is a tuple (key, value) , each value is a serialized json dict.
-            sorted_dns_resolutions = sorted(
-                dns_resolutions.items(),
-                key=lambda k_v: json.loads(k_v[1])['ts'],
-            )
-            # return the ts of the last dns resolution in our db
-            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
-            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
@@ -2434,28 +2272,6 @@ class Database(ProfilingFlowsDatabase, object):
             profileid + self.separator + twid, 'Reconnections', str(data)
         )
 
-    def get_flow_timestamp(self, profileid, twid, uid):
-        """
-        Return the timestamp of the flow
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        timestamp = ''
-        if uid:
-            try:
-                time.sleep(
-                    1
-                )   # it takes time for the binetflow to put the flow into the database
-                flow_information = self.r.hget(
-                    profileid + '_' + twid + '_flows', uid
-                )
-                flow_information = json.loads(flow_information)
-                timestamp = flow_information.get('ts')
-            except Exception as ex:
-                pass
-        return timestamp
 
     def is_domain_malicious(self, domain: str) -> tuple:
         """
@@ -2477,13 +2293,6 @@ class Database(ProfilingFlowsDatabase, object):
         else:
             return domain_description, False
 
-    def get_last_update_time_malicious_file(self):
-        """Return the time of last update of the remote malicious file from the db"""
-        return self.r.get('last_update_malicious_file')
-
-    def set_last_update_time_malicious_file(self, time):
-        """Return the time of last update of the remote malicious file from the db"""
-        self.r.set('last_update_malicious_file', time)
 
     def get_host_ip(self):
         """Get the IP addresses of the host from a db. There can be more than one"""
@@ -2493,15 +2302,6 @@ class Database(ProfilingFlowsDatabase, object):
         """Store the IP address of the host in a db. There can be more than one"""
         self.r.sadd('hostIP', ip)
 
-    def set_profile_as_malicious(
-        self, profileid: str, description: str
-    ) -> None:
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        # Add description to this malicious ip profile.
-        self.r.hset(profileid, 'labeled_as_malicious', description)
 
     def is_profile_malicious(self, profileid: str) -> str:
         if not profileid:

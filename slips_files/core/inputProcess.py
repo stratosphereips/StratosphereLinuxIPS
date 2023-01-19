@@ -74,7 +74,6 @@ class InputProcess(multiprocessing.Process):
         self.testing = False
         # number of lines read
         self.lines = 0
-        self.marked_as_growing = False
         # these are the files that slips doesn't read
         self.ignored_files = {
             'capture_loss',

@@ -156,22 +156,6 @@ class Utils(object):
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
 
-    def timeit(method):
-        def timed(*args, **kw):
-            ts = time.time()
-            result = method(*args, **kw)
-            te = time.time()
-            if 'log_time' in kw:
-                name = kw.get('log_name', method.__name__.upper())
-                kw['log_time'][name] = int((te - ts) * 1000)
-            else:
-                print(
-                    f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m'
-                )
-            return result
-
-        return timed
-
 
     def convert_format(self, ts, required_format: str):
         """
@@ -544,17 +528,5 @@ class Utils(object):
             )
 
         return IDEA_dict
-
-    def timing(f):
-        """Function to measure the time another function takes."""
-
-        def wrap(*args):
-            time1 = time.time()
-            ret = f(*args)
-            time2 = time.time()
-            print('[DB] Function took {:.3f} ms'.format((time2 - time1) * 1000.0))
-            return ret
-
-        return wrap
 
 utils = Utils()

@@ -181,7 +181,7 @@ class Module(Module, multiprocessing.Process):
         """
         rule = info.get('rule').replace('_', ' ')
         offset = info.get('offset')
-        vars_matched = info.get('vars_matched')
+        # vars_matched = info.get('vars_matched')
         strings_matched = info.get('strings_matched')
         # we now know there's a match at offset x, we need to know offset x belongs to which packet
         if packet_info := self.get_packet_info(offset):

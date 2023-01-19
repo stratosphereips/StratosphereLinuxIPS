@@ -326,7 +326,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
-        if MAC_vendor := __database__.get_mac_vendor_from_profile(profileid):
+        if __database__.get_mac_vendor_from_profile(profileid):
             return True
 
         MAC_info = {

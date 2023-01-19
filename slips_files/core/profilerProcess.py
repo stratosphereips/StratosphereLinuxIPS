@@ -42,7 +42,6 @@ class ProfilerProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.columns_defined = False
         self.timeformat = None
         self.input_type = False
         self.whitelist = Whitelist(outputqueue, redis_port)
@@ -51,8 +50,6 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.start(redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
-        # 1st. Get the data from the interpreted columns
-        self.id_separator = __database__.getFieldSeparator()
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line

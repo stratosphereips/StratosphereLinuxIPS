@@ -133,18 +133,6 @@ class EvidenceProcess(multiprocessing.Process):
         if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
             self.popup_alerts = False
 
-    def format_blocked_srcip_evidence(self, ip, twid, flow_datetime, now):
-        """
-        Function to prepare evidence about the blocked profileid and twid
-        This evidence will be written in alerts.log, it won't be displayed in the terminal
-        """
-        try:
-            return
-
-        except Exception as ex:
-            self.print('Error in print_alert()')
-            self.print(traceback.print_exc(),0,1)
-
 
     def format_evidence_string(self, ip, detection_module, attacker, description):
         """
@@ -165,9 +153,9 @@ class EvidenceProcess(multiprocessing.Process):
             dns_resolution_ip = dns_resolution_ip[0]
         elif len(dns_resolution_ip) == 0:
             dns_resolution_ip = ''
-        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
-            dns_resolution_ip[:3]
-            ) > 0 else '. '
+        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
+        #     dns_resolution_ip[:3]
+        #     ) > 0 else '. '
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             evidence_string = f'Detected {description}'

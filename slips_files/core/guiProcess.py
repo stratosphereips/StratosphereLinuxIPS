@@ -31,7 +31,7 @@ class GuiProcess(multiprocessing.Process):
     def __init__(
         self, inputqueue, outputqueue, verbose, debug, redis_port
     ):
-        self.myname = 'GUI'
+        self.name = 'GUI'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue

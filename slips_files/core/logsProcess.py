@@ -28,19 +28,6 @@ import json
 import traceback
 
 
-def timing(f):
-    """Function to measure the time another function takes. It should be used as decorator: @timing"""
-
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('function took {:.3f} ms'.format((time2 - time1) * 1000.0))
-        return ret
-
-    return wrap
-
-
 # Logs output Process
 class LogsProcess(multiprocessing.Process):
     """A class to output data in logs files"""
@@ -69,8 +56,6 @@ class LogsProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         self.mainfoldername = mainfoldername
         self.timeline_first_index = {}
-        # self.stop_counter = 0
-        self.is_timline_file = False
 
     def read_configuration(self):
         conf = ConfigParser()

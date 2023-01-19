@@ -485,22 +485,6 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_for_invalid_certificates(
-        self, profileid, twid, ip, description, uid, timestamp
-    ):
-        """
-        Set evidence for Invalid SSL certificates.
-        """
-        confidence = 0.5
-        threat_level = 'low'
-        category = 'Anomaly.Behaviour'
-        attacker_direction = 'dstip'
-        evidence_type = 'InvalidCertificate'
-        attacker = ip
-
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
-
     def set_evidence_suspicious_dns_answer(self, query, answer, entropy, daddr, profileid, twid, stime, uid):
         confidence = 0.6
         threat_level = 'medium'

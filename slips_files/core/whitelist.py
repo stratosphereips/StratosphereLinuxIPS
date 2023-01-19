@@ -188,7 +188,7 @@ class Whitelist:
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and (
-                        'flows' in what_to_ignore or 'both' in what_to_ignore
+                        self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the src IP {column_values['saddr']}")
                     return True
@@ -198,7 +198,7 @@ class Whitelist:
                 from_ = whitelisted_IPs[daddr]['from']
                 what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
                 if ('dst' in from_ or 'both' in from_) and (
-                    'flows' in what_to_ignore or 'both' in what_to_ignore
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
@@ -224,7 +224,7 @@ class Whitelist:
                 if (
                     ('src' in from_ or 'both' in from_)
                     and
-                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                    (self.should_ignore_flows(what_to_ignore))
                 ):
                     # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
                     return True
@@ -238,7 +238,7 @@ class Whitelist:
                 if (
                     ('dst' in from_ or 'both' in from_)
                     and
-                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                    (self.should_ignore_flows(what_to_ignore))
                 ):
                     # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
                     return True
@@ -258,9 +258,7 @@ class Whitelist:
                 ]  # flows, alerts or both
                 # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
-
-
-                if 'flows' in what_to_ignore or 'both' in what_to_ignore:
+                if self.should_ignore_flows(what_to_ignore):
                     # We want to block flows from this org. get the domains of this flow based on the direction.
                     if 'both' in from_:
                         domains_to_check = (

@@ -89,10 +89,9 @@ class URLhaus():
         return info
 
     def parse_urlhaus_md5_response(self, response, md5):
-        info = {}
         file_type = response.get("file_type", "")
         file_name = response.get("filename", "")
-        file_size = response.get("file_size", "")
+        # file_size = response.get("file_size", "")
         tags = response.get("signature", "")
         # urls is a list of urls hosting this file
         # urls: list= response.get("urls")

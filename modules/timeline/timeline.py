@@ -26,10 +26,6 @@ class Module(Module, multiprocessing.Process):
         self.separator = __database__.getFieldSeparator()
         # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')
-        # To store the timelines of each profileid_twid
-        self.profiles_tw = {}
-        # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
-        self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()

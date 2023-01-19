@@ -418,6 +418,7 @@ class Module(Module, multiprocessing.Process):
                     mbs_sent, uids = bytes_sent[daddr]
                     mbs_sent += sbytes
                     uids.append(uid)
+                    bytes_sent[daddr] = (mbs_sent, uids)
                 else:
                     bytes_sent[daddr] = (sbytes, [uid])
 

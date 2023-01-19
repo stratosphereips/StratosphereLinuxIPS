@@ -476,16 +476,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 self.__delete_old_source_data_from_database(filename)
             return new_hash
 
-    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
-        """
-        Set malicious IP in IPsInfo.
-        """
-
-        ip_data = {'threatintelligence': ip_description}
-        __database__.setInfoForIPs(
-            ip, ip_data
-        )  # Set in the IP info that IP is blacklisted
-
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
         Check whether this IP is our computer sending an ICMP unreacheable packet to

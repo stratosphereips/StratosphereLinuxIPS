@@ -11,7 +11,6 @@ class ProfilingFlowsDatabase(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
-        self.seen_MACs = {}
 
 
     def publish(self, channel, data):
@@ -337,7 +336,6 @@ class ProfilingFlowsDatabase(object):
         totbytes = columns['bytes']
         pkts = columns['pkts']
         spkts = columns['spkts']
-        dpkts = columns.get('dpkts', 0)
         state = columns['state']
         proto = columns['proto'].upper()
         daddr = columns['daddr']
@@ -345,6 +343,7 @@ class ProfilingFlowsDatabase(object):
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
+        # dpkts = columns.get('dpkts', 0)
         # sport = columns['sport']
         # sbytes = columns['sbytes']
 
@@ -517,7 +516,7 @@ class ProfilingFlowsDatabase(object):
             # Convert the json str to a dictionary
             tuples = json.loads(tuples)
             try:
-                stored_tuple = tuples[tupleid]
+                tuples[tupleid]
                 # Disasemble the input
                 self.print(
                     'Not the first time for tuple {} as an {} for {} in TW {}. '
