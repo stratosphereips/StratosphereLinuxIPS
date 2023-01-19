@@ -43,8 +43,5 @@ jobs:
             - name: Clear redis cache
               run: ./slips.py -cc
 
-            - name: Close all open redis servers
-              run: printf "0" | ./slips.py -k
-
             - name: Integration tests
               run: python3 -m pytest -s tests/test_dataset.py -n 3 -p no:warnings -vv
