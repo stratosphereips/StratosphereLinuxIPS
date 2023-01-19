@@ -26,10 +26,6 @@ class Module(Module, multiprocessing.Process):
         self.separator = __database__.getFieldSeparator()
         # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')
-        # To store the timelines of each profileid_twid
-        self.profiles_tw = {}
-        # Store malicious IPs. We do not make alert everytime we receive flow with thi IP but only once.
-        self.alerted_malicous_ips_dict = {}
         # Read information how we should print timestamp.
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
@@ -62,7 +58,8 @@ class Module(Module, multiprocessing.Process):
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
-        Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
+        Process the received flow  for this profileid and twid
+         so its printed by the logprocess later
         """
         timestamp_human = self.process_timestamp(timestamp)
 
@@ -380,15 +377,12 @@ class Module(Module, multiprocessing.Process):
             )
 
 
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on process_flow() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
+            self.print(traceback.print_exc(),0,1)
             return True
 
     def shutdown_gracefully(self):
@@ -414,12 +408,9 @@ class Module(Module, multiprocessing.Process):
                     mdata = json.loads(mdata)
                     profileid = mdata['profileid']
                     twid = mdata['twid']
-                    # Get flow as a json
                     flow = mdata['flow']
                     timestamp = mdata['stime']
-                    # Convert flow to a dict
                     flow = json.loads(flow)
-                    # Process the flow
                     return_value = self.process_flow(
                         profileid, twid, flow, timestamp
                     )
@@ -429,7 +420,5 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

@@ -11,9 +11,6 @@ class ProfilingFlowsDatabase(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
-        self.seen_MACs = {}
 
 
     def publish(self, channel, data):
@@ -261,16 +258,12 @@ class ProfilingFlowsDatabase(object):
                     """
                     return 'Not Established'
             return None
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
-            self.print(traceback.format_exc())
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
 
     def getDataFromProfileTW(
         self,
@@ -318,10 +311,7 @@ class ProfilingFlowsDatabase(object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -346,7 +336,6 @@ class ProfilingFlowsDatabase(object):
         totbytes = columns['bytes']
         pkts = columns['pkts']
         spkts = columns['spkts']
-        dpkts = columns.get('dpkts', 0)
         state = columns['state']
         proto = columns['proto'].upper()
         daddr = columns['daddr']
@@ -354,6 +343,7 @@ class ProfilingFlowsDatabase(object):
         uid = columns['uid']
         starttime = str(columns['starttime'])
         ip = str(ip_as_obj)
+        # dpkts = columns.get('dpkts', 0)
         # sport = columns['sport']
         # sbytes = columns['sbytes']
 
@@ -526,7 +516,7 @@ class ProfilingFlowsDatabase(object):
             # Convert the json str to a dictionary
             tuples = json.loads(tuples)
             try:
-                stored_tuple = tuples[tupleid]
+                tuples[tupleid]
                 # Disasemble the input
                 self.print(
                     'Not the first time for tuple {} as an {} for {} in TW {}. '
@@ -588,10 +578,6 @@ class ProfilingFlowsDatabase(object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
             self.outputqueue.put(
                 '01|database|[DB] {}'.format(traceback.format_exc())
             )
@@ -819,6 +805,8 @@ class ProfilingFlowsDatabase(object):
         spkts='',
         sbytes='',
         appproto='',
+        smac='',
+        dmac='',
         uid='',
         label='',
         flow_type='',
@@ -826,9 +814,10 @@ class ProfilingFlowsDatabase(object):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
+        : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
         summaryState = self.getFinalStateFromFlags(state, pkts)
-        data = {
+        flow = {
             'ts': stime,
             'dur': dur,
             'saddr': saddr,
@@ -843,19 +832,20 @@ class ProfilingFlowsDatabase(object):
             'spkts': spkts,
             'sbytes': sbytes,
             'appproto': appproto,
+            'smac': smac,
+            'dmac': dmac,
             'label': label,
             'flow_type': flow_type,
             'module_labels': {},
         }
-        # when adding a flow, there are still no labels ftom other modules, so the values is empty dictionary
 
         # Convert to json string
-        data = json.dumps(data)
-        # Store in the hash 10.0.0.1_timewindow1_flows, a key uid, with data
+        flow = json.dumps(flow)
+        # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}flows',
             uid,
-            data,
+            flow,
         )
         if not value:
             # duplicate flow
@@ -865,23 +855,43 @@ class ProfilingFlowsDatabase(object):
         # Store the label in our uniq set, and increment it by 1
         if label:
             self.r.zincrby('labels', 1, label)
-        # We can publish the flow directly without asking for it, but its good to maintain the format given by the get_flow() function.
-        flow = self.get_flow(profileid, twid, uid)
+
+        flow = {uid: flow}
+
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
         # Prepare the data to publish.
-        to_send = {}
-        to_send['profileid'] = profileid
-        to_send['twid'] = twid
-        to_send['flow'] = flow
-        to_send['stime'] = stime
+        to_send = {
+            'profileid': profileid,
+            'twid': twid,
+            'flow': flow,
+            'stime': stime,
+        }
         to_send = json.dumps(to_send)
+
         # set the pcap/file stime in the analysis key
         if self.first_flow:
-            self.first_flow = False
             self.set_input_metadata({'file_start': stime})
-        self.publish('new_flow', to_send)
+            self.first_flow = False
+
+        # set the local network used in the db
+        if not self.is_localnet_set:
+            if (
+                    validators.ipv4(saddr)
+                    and ipaddress.ip_address(saddr).is_private
+            ):
+                # get the local network of this saddr
+                if network_range := utils.get_cidr_of_ip(saddr):
+                    self.r.set("local_network", network_range)
+                    self.is_localnet_set = True
+
+        # dont send arp flows in this channel, they have their own new_arp channel
+        if flow_type != 'arp':
+            self.publish('new_flow', to_send)
         return True
+
+    def get_local_network(self):
+         return self.r.get("local_network")
 
     def get_label_count(self, label):
         """
@@ -1435,9 +1445,9 @@ class ProfilingFlowsDatabase(object):
             for answer in answers:
                 # Make sure it's an ip not a CNAME
                 if not validators.ipv6(answer) and not validators.ipv4(answer):
-                    # now this is not an ip, it's a CNAME or a TXT
                     if 'TXT' in answer:
                         continue
+                    # now this is not an ip, it's a CNAME or a TXT
                     # it's a CNAME
                     CNAMEs.append(answer)
                     continue
@@ -1673,7 +1683,8 @@ class ProfilingFlowsDatabase(object):
             'stime': stime,
             'uid': uid,
             'rcode_name': rcode_name,
-            'daddr': daddr
+            'daddr': daddr,
+            'answers': answers
         }
 
         to_send = json.dumps(to_send)

@@ -268,6 +268,13 @@ class ArgumentParser(argparse.ArgumentParser):
             help='Treat the given zeek directory as growing. eg. zeek dirs generated when running on an interface',
         )
         self.add_argument(
+            '-w',
+            '--webinterface',
+            action='store_true',
+            required=False,
+            help='Start Slips web interface automatically',
+        )
+        self.add_argument(
             '-V',
             '--version',
             action='store_true',

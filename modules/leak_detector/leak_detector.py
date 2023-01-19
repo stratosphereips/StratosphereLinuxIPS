@@ -1,18 +1,15 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import sys
-
-# Your imports
-from subprocess import check_output
 import base64
 import time
 import binascii
 import os
 import subprocess
 import json
+import traceback
 
 
 class Module(Module, multiprocessing.Process):
@@ -27,7 +24,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         # this module is only loaded when a pcap is given get the pcap path
         try:
-            self.pcap = sys.argv[sys.argv.index('-f') + 1]
+            self.pcap = utils.sanitize(sys.argv[sys.argv.index('-f') + 1])
         except ValueError:
             # this error is raised when we start this module in the unit tests so there's no argv
             # ignore it
@@ -125,13 +122,21 @@ class Module(Module, multiprocessing.Process):
                 if offset <= end_offset and offset >= start_offset:
                     # print(f"Found a match. Packet number in wireshark: {packet_number+1}")
                     # use tshark to get packet info
-                    command = f'tshark -r {self.pcap} -T json -Y frame.number=={packet_number}'
-                    result = subprocess.run(
-                        command.split(),
+                    cmd = f'tshark -r "{self.pcap}" -T json -Y frame.number=={packet_number}'
+                    tshark_proc = subprocess.Popen(
+                        cmd,
                         stdout=subprocess.PIPE,
-                        stderr=open('/dev/null', 'w'),
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.PIPE,
+                        shell=True
                     )
-                    json_packet = result.stdout.decode('utf-8')
+
+                    result, error = tshark_proc.communicate()
+                    if error:
+                        self.print (f"tshark error {tshark_proc.returncode}: {error.strip()}")
+                        return
+
+                    json_packet = result.decode()
 
                     try:
                         json_packet = json.loads(json_packet)
@@ -176,7 +181,7 @@ class Module(Module, multiprocessing.Process):
         """
         rule = info.get('rule').replace('_', ' ')
         offset = info.get('offset')
-        vars_matched = info.get('vars_matched')
+        # vars_matched = info.get('vars_matched')
         strings_matched = info.get('strings_matched')
         # we now know there's a match at offset x, we need to know offset x belongs to which packet
         if packet_info := self.get_packet_info(offset):
@@ -202,19 +207,20 @@ class Module(Module, multiprocessing.Process):
             # wait a while before alerting.
             time.sleep(4)
             # make sure we have a profile for any of the above IPs
-            if __database__.hasProfile(src_profileid):
-                type_detection = 'dstip'
+            if __database__.has_profile(src_profileid):
+                attacker_direction = 'dstip'
                 profileid = src_profileid
-                detection_info = dstip
+                attacker = dstip
                 ip_identification = __database__.getIPIdentification(dstip)
                 description = (
                     f'{rule} to destination address: {dstip} {ip_identification} '
                     f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
                 )
-            elif __database__.hasProfile(dst_profileid):
-                type_detection = 'srcip'
+
+            elif __database__.has_profile(dst_profileid):
+                attacker_direction = 'srcip'
                 profileid = dst_profileid
-                detection_info = srcip
+                attacker = srcip
                 ip_identification = __database__.getIPIdentification(srcip)
                 description = (
                     f'{rule} to destination address: {srcip} {ip_identification} '
@@ -233,26 +239,13 @@ class Module(Module, multiprocessing.Process):
                 twid = twid[0]
                 source_target_tag = 'CC'
                 # TODO: this needs to be changed if add more rules to the rules/dir
-                type_evidence = 'NETWORK_gps_location_leaked'
+                evidence_type = 'NETWORK_gps_location_leaked'
                 category = 'Malware'
                 confidence = 0.9
                 threat_level = 'high'
-                __database__.setEvidence(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    ts,
-                    category,
-                    source_target_tag=source_target_tag,
-                    port=dport,
-                    proto=proto,
-                    profileid=profileid,
-                    twid=twid,
-                    uid=uid,
-                )
+                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                         description, ts, category, source_target_tag=source_target_tag, port=dport,
+                                         proto=proto, profileid=profileid, twid=twid, uid=uid)
 
     def compile_and_save_rules(self):
         """
@@ -291,15 +284,27 @@ class Module(Module, multiprocessing.Process):
             # -p 7 means use 7 threads for faster analysis
             # -f to stop searching for strings when they were already found
             # -s prints the found string
-            cmd = f'yara -C {compiled_rule_path} {self.pcap} -p 7 -f -s '
-            lines = check_output(cmd.split()).decode().splitlines()
+            cmd = f'yara -C {compiled_rule_path} "{self.pcap}" -p 7 -f -s '
+            yara_proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.PIPE,
+                shell=True
+            )
 
+            lines, error = yara_proc.communicate()
+            lines = lines.decode()
+            if error:
+                self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
+                return
             if not lines:
                 # no match
                 return
 
+            lines = lines.splitlines()
             matching_rule = lines[0].split()[0]
-            # each match (line) should be a separate detection
+            # each match (line) should be a separate detection(yara match)
             for line in lines[1:]:
                 # example of a line: 0x4e15c:$rgx_gps_loc: ll=00.000000,-00.000000
                 line = line.split(':')
@@ -333,7 +338,5 @@ class Module(Module, multiprocessing.Process):
         except Exception as inst:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
             return True

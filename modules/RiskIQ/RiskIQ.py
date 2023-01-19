@@ -4,12 +4,14 @@ import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+import traceback
 
 # Your imports
 import os
 import json
 import sys
-
+import requests
+from requests.auth import HTTPBasicAuth
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -63,34 +65,48 @@ class Module(Module, multiprocessing.Process):
 
     def get_passive_dns(self, ip) -> list:
         """
-        Get passive dns info abbout this ip from passive total
+        Get passive dns info about this ip from passive total/RiskIQ
         """
-
-        command = f"curl -m 25 --insecure -s -u {self.riskiq_email}:{self.riskiq_key} 'https://api.riskiq.net/pt/v2/dns/passive?query={ip}' "
-        response = os.popen(command).read()
         try:
-            response = json.loads(response)
-            # Sort and reverse the keys
-            # Store the samples in our dictionary so we can sort them
-            pt_data = {}
-            # the response may have results key, OR 'message' key with an error,
-            # make sure we have results before processing
-            results = response.get('results', False)
-            if results:
-                for pt_results in results:
-                    pt_data[pt_results['lastSeen']] = [
-                        pt_results['firstSeen'],
-                        pt_results['resolve'],
-                        pt_results['collected'],
-                    ]
-                # Sort them by datetime and convert to list, sort the first 10 entries only
-                sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
-            else:
-                sorted_pt_results = None
+            params = {
+                'query': ip
+            }
+            response = requests.get(
+                f'https://api.riskiq.net/pt/v2/dns/passive',
+                params=params,
+                timeout=20,
+                verify=False,
+                auth=HTTPBasicAuth(self.riskiq_email, self.riskiq_key)
+            )
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.ReadTimeout):
+            return
 
+        if response.status_code != 200:
+            return
+        try:
+            response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
-            sorted_pt_results = None
+            return
 
+
+        # Store the samples in our dictionary so we can sort them
+        pt_data = {}
+        # the response will either have 'results' key, OR 'message' key with an error,
+        # make sure we have results before processing
+        results = response.get('results', False)
+        if not results:
+            return
+
+        for pt_results in results:
+            pt_data[pt_results['lastSeen']] = [
+                pt_results['firstSeen'],
+                pt_results['resolve'],
+                pt_results['collected'],
+            ]
+        # Sort them by datetime and convert to list, sort the first 10 entries only
+        sorted_pt_results = sorted(pt_data.items(), reverse=True)[:10]
         return sorted_pt_results
 
     def shutdown_gracefully(self):
@@ -105,7 +121,6 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 message = __database__.get_message(self.c1)
-
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -115,12 +130,12 @@ class Module(Module, multiprocessing.Process):
                     if utils.is_ignored_ip(ip):
                         continue
                     # Only get passive total dns data if we don't have it in the db
-                    if passive_dns_info := __database__.get_passive_dns(ip) == '':
-                        # we don't have it in the db , get it from passive total
-                        passive_dns = self.get_passive_dns(ip)
-                        if passive_dns:
-                            # we found data from passive total, store it in the db
-                            __database__.set_passive_dns(ip, passive_dns)
+                    if __database__.get_passive_dns(ip):
+                        continue
+                    # we don't have it in the db , get it from passive total
+                    if passive_dns := self.get_passive_dns(ip):
+                        # we found data from passive total, store it in the db
+                        __database__.set_passive_dns(ip, passive_dns)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
@@ -128,7 +143,5 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

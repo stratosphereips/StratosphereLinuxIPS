@@ -27,9 +27,9 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, redis_port, monitored_zeek_files, input_type):
+    def __init__(self, redis_port, dir_to_monitor, input_type):
         super().__init__(self.REGEX)
-        self.monitored_zeek_files = monitored_zeek_files
+        self.dir_to_monitor = dir_to_monitor
         __database__.start(redis_port)
         utils.drop_root_privs()
         self.input_type = input_type
@@ -41,12 +41,12 @@ class FileEventHandler(RegexMatchingEventHandler):
 
     def on_moved(self, event):
         """this will be triggered everytime zeek renames all log files"""
-        # tell inputProcess to delete old files
+        # tell inputProcess to change open handles
         if event.dest_path != 'True':
             to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
             to_send = json.dumps(to_send)
             __database__.publish('remove_old_files', to_send)
-            # give inputProc.py time to close the handle and delete the file
+            # give inputProc.py time to close the handle or delete the file
             time.sleep(1)
 
     def on_modified(self, event):
@@ -55,14 +55,13 @@ class FileEventHandler(RegexMatchingEventHandler):
         # so if zeek recieves a termination signal,
         # slips would know about it
         filename, ext = os.path.splitext(event.src_path)
-
         if 'reporter' in filename:
             # check if it's a termination signal
             # get the exact file name (a ts is appended to it)
-            for file in os.listdir(self.monitored_zeek_files):
+            for file in os.listdir(self.dir_to_monitor):
                 if 'reporter' not in file:
                     continue
-                with open(os.path.join(self.monitored_zeek_files, file), 'r') as f:
+                with open(os.path.join(self.dir_to_monitor, file), 'r') as f:
                     while line := f.readline():
                         if 'termination' in line:
                             __database__.publish('finished_modules', 'stop_slips')

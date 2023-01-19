@@ -105,6 +105,18 @@ class Main:
             return None
         return ipaddr_check
 
+    def start_webinterface(self):
+        """
+        Starts the web interface shell script if -w is given
+        """
+        # The parentheses creates a subshell, detached from the current parent process.
+        # Without them, flask doesn't release the terminal and we get requests logs in slips cli
+        # tried pop with subprocess.devnull, 2>&1, nohup, but this is the only way to completely run it in the bg
+        cmd = '( ./webinterface.sh > /dev/null 2> /dev/null  & )'
+        os.system(cmd)
+        self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
+        # todo we won't be seeing the logs, so if anything fails no msg will be printed
+
     def store_host_ip(self):
         """
         Store the host IP address if input type is interface
@@ -1066,16 +1078,24 @@ class Main:
         # default output/
         if '-o' in sys.argv:
             # -o is given
-            # Create output folder for alerts.log and
-            # alerts.json if it doesn't  exist
-            files_to_clear = ('alerts.json', 'alerts.log', 'errors.log', 'slips.log')
-            for file in files_to_clear:
-                try:
-                    file = os.path.join(self.args.output, file)
-                    os.remove(file)
-                except OSError:
-                    # they weren't created in the first place
-                    pass
+            # delet all old files in the output dir
+            if os.path.exists(self.args.output):
+                for file in os.listdir(self.args.output):
+                    # in integration tests, slips redirct its' output to slips_output.txt,
+                    # don't delete that file
+                    if self.args.testing and 'slips_output.txt' in file:
+                        continue
+
+                    file_path = os.path.join(self.args.output, file)
+                    try:
+                        if os.path.isfile(file_path):
+                            os.remove(file_path)
+                        elif os.path.isdir(file_path):
+                            shutil.rmtree(file_path)
+                    except Exception as ex:
+                        pass
+            else:
+                os.makedirs(self.args.output)
             return
 
         # self.args.output is the same as self.alerts_default_path
@@ -1092,8 +1112,7 @@ class Main:
         ts = utils.convert_format(datetime.now(), '%Y-%m-%d_%H:%M:%S')
         self.args.output += f'_{ts}/'
 
-        if not os.path.exists(self.args.output):
-            os.makedirs(self.args.output)
+        os.makedirs(self.args.output)
 
         # print(f'[Main] Storing Slips logs in {self.args.output}')
 
@@ -1332,7 +1351,7 @@ class Main:
     def check_given_flags(self):
         """
         check the flags that don't require starting slips
-        for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
+        for ex: clear db, clearing the blocking chain, killing all servers, stopping the daemon, etc.
         """
 
         if self.args.help:
@@ -1528,11 +1547,24 @@ class Main:
         print(slips_version)
 
 
+    def check_if_port_is_in_use(self, port):
+        if port == 6379:
+            # even if it's already in use, slips will override it
+            return False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("localhost", port))
+            return False
+        except OSError:
+            print(f"[Main] Port {port} already is use by another process."
+                  f" Choose another port using -P <portnumber> \n"
+                  f"Or kill your open redis ports using: ./slips.py -k ")
+            self.terminate_slips()
+
 
     def start(self):
         """Main Slips Function"""
         try:
-
             self.print_version()
 
             print('https://stratosphereips.org')
@@ -1557,6 +1589,8 @@ class Main:
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
+                # close slips if port is in use
+                self.check_if_port_is_in_use(self.redis_port)
             elif self.args.multiinstance:
                 self.redis_port = self.get_random_redis_port()
                 if not self.redis_port:
@@ -1566,7 +1600,9 @@ class Main:
                         self.close_all_ports()
                     self.terminate_slips()
             else:
+                # even if this port is in use, it will be overwritten by slips
                 self.redis_port = 6379
+                # self.check_if_port_is_in_use(self.redis_port)
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
@@ -1602,8 +1638,6 @@ class Main:
 
             __database__.set_slips_mode(self.mode)
 
-
-
             if self.mode == 'daemonized':
                 std_files = {
                     'stderr': self.daemon.stderr,
@@ -1620,12 +1654,10 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-
             self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
             self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
             self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 0, 1)
-
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
@@ -1633,9 +1665,9 @@ class Main:
                 self.update_local_TI_files()
                 self.load_modules()
 
-
             # self.start_gui_process()
-
+            if self.args.webinterface:
+                self.start_webinterface()
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):

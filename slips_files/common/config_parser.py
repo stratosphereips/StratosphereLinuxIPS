@@ -47,6 +47,7 @@ class ConfigParser(object):
         return parser
 
 
+
     def get_args(self):
         """
         Returns the args given to slips parsed by ArgumentParser
@@ -71,6 +72,31 @@ class ConfigParser(object):
             # or no section or no configuration file specified
             return default_value
 
+    def get_entropy_threshold(self):
+        """
+        gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf
+        """
+        threshold = self.read_configuration(
+            'flowalerts', 'entropy_threshold', 5
+        )
+
+        try:
+            return float(threshold)
+        except Exception as ex:
+            return 5
+
+
+    def get_pastebin_download_threshold(self):
+
+        threshold = self.read_configuration(
+            'flowalerts', 'pastebin_download_threshold', 700
+        )
+
+        try:
+            return int(threshold)
+        except Exception as ex:
+            return 700
+
 
     def get_all_homenet_ranges(self):
         return self.home_network_ranges
@@ -89,7 +115,7 @@ class ConfigParser(object):
             home_nets = [network.strip() for network in home_nets]
             return list(map(ipaddress.ip_network, home_nets))
         else:
-            # return self.home_network_ranges
+            # return self.home_network_ranges_str
             return False
 
 
@@ -187,6 +213,14 @@ class ConfigParser(object):
         return self.read_configuration(
             'modes', 'stderr', 'errors.log'
         )
+
+
+    def create_p2p_logfile(self):
+        create_p2p_logfile = self.read_configuration(
+            'P2P', 'create_p2p_logfile', 'no'
+        )
+        return 'yes' in create_p2p_logfile.lower()
+
 
     def ts_format(self):
         return self.read_configuration(
@@ -527,34 +561,26 @@ class ConfigParser(object):
         return utils.sanitize(path)
 
     def ti_files(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ti_files',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
 
     def ja3_feeds(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ja3_feeds',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
+
 
     def ssl_feeds(self):
-        feeds = self.read_configuration(
+        return self.read_configuration(
             'threatintelligence',
             'ssl_feeds',
             False
         )
-        if feeds:
-            return feeds.split('\n')
-        return {}
 
     def timeline_human_timestamp(self):
         return self.read_configuration(

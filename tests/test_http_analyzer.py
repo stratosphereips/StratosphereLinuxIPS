@@ -63,17 +63,7 @@ def test_check_multiple_google_connections(outputQueue, database):
         )
     assert found_detection == True
 
-
-def test_get_ua_info_online(outputQueue, database):
-    """
-    tests get_user_agent_info and check_incompatible_user_agent
-    """
-    http_analyzer = create_http_analyzer_instance(outputQueue)
-    ua_info = http_analyzer.get_ua_info_online(SAFARI_UA)
-    assert ua_info != False, 'Connection error'
-
-
-def test_parsing_online_ua_info(outputQueue, database):
+def test_parsing_online_ua_info(outputQueue, database, mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
@@ -81,6 +71,14 @@ def test_parsing_online_ua_info(outputQueue, database):
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db
     profileid = 'profile_192.168.99.99'
+    # mock the function that gets info about the given ua from an online db
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.text = """{
+        "agent_name":"Safari",
+        "os_type":"Macintosh",
+        "os_name":"OS X"
+    }"""
 
     # add os_type , os_name and agent_name to the db
     ua_info = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
@@ -88,18 +86,26 @@ def test_parsing_online_ua_info(outputQueue, database):
     assert ua_info['browser'] == 'Safari'
 
 
-def test_check_incompatible_user_agent(outputQueue, database):
+def test_check_incompatible_user_agent(outputQueue, database, mocker):
 
     http_analyzer = create_http_analyzer_instance(outputQueue)
     # use a different profile for this unit test to make sure we don't already have info about
-    # it in the db
+    # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
     profileid = 'profile_192.168.77.254'
+    # mock the function that gets info about the given ua from an online db
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.text = """{
+        "agent_name":"Safari",
+        "os_type":"Macintosh",
+        "os_name":"OS X"
+    }"""
 
     # get ua info online, and add os_type , os_name and agent_name anout this profile
     # to the db
     ua_added_to_db = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
     assert ua_added_to_db != None, 'Error getting UA info online'
-    assert ua_added_to_db != False, 'We already  have UA info about this profile in the db'
+    assert ua_added_to_db != False, 'We already have UA info about this profile in the db'
 
     # set this profile's vendor to intel
     MAC_info = {

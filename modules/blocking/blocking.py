@@ -1,19 +1,17 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import platform
+import traceback
 import sys
-
-# Your imports
 import os
 import shutil
 import json
 import subprocess
 import time
-
+import traceback
 
 class Module(Module, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
@@ -449,7 +447,6 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
+
                 return True

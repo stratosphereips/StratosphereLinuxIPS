@@ -4,6 +4,7 @@ from slips_files.common.slips_utils import utils
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from modules.threat_intelligence.urlhaus import URLhaus
 import sys
 
 # Your imports
@@ -17,11 +18,11 @@ import requests
 import threading
 import time
 
-class Module(Module, multiprocessing.Process):
-    # Name: short name of the module. Do not use spaces
+
+class Module(Module, multiprocessing.Process, URLhaus):
     name = 'Threat Intelligence'
     description = 'Check if the source IP or destination IP are in a malicious list of IPs'
-    authors = ['Frantisek Strasak, Sebastian Garcia']
+    authors = ['Frantisek Strasak, Sebastian Garcia, Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
@@ -33,13 +34,13 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_downloaded_file')
         self.__read_configuration()
         self.get_malicious_ip_ranges()
-        self.create_urlhaus_session()
         self.create_circl_lu_session()
         self.circllu_queue = multiprocessing.Queue()
         self.circllu_calls_thread = threading.Thread(
             target=self.make_pending_query, daemon=True
         )
         self.should_shutdown = False
+        self.urlhaus = URLhaus()
 
     def make_pending_query(self):
         """
@@ -52,7 +53,7 @@ class Module(Module, multiprocessing.Process):
             time.sleep(120)
             try:
                 flow_info = self.circllu_queue.get(timeout=0.5)
-            except:
+            except Exception as ex:
                 # queue is empty wait extra 2 min
                 continue
 
@@ -60,12 +61,6 @@ class Module(Module, multiprocessing.Process):
             while self.circllu_queue != [] and queries_done <= max_queries:
                 self.is_malicious_hash(flow_info)
                 queries_done += 1
-
-
-
-    def create_urlhaus_session(self):
-        self.urlhaus_session = requests.session()
-        self.urlhaus_session.verify = True
 
     def create_circl_lu_session(self):
         self.circl_session = requests.session()
@@ -123,17 +118,17 @@ class Module(Module, multiprocessing.Process):
         :param ip_state: can be 'srcip' or 'dstip'
         """
 
-        type_detection = ip_state
-        detection_info = ip
-        type_evidence = 'ThreatIntelligenceBlacklistIP'
+        attacker_direction = ip_state
+        attacker = ip
+        evidence_type = 'ThreatIntelligenceBlacklistIP'
 
         threat_level = ip_info.get('threat_level', 'medium')
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        if 'src' in type_detection:
+        if 'src' in attacker_direction:
             direction = 'from'
-        elif 'dst' in type_detection:
+        elif 'dst' in attacker_direction:
             direction = 'to'
 
         # getting the ip identification adds ti description and tags to the returned str
@@ -149,35 +144,23 @@ class Module(Module, multiprocessing.Process):
                 f'for query: {self.dns_query} '
             )
         else:
-            description = f'connection {direction} blacklisted IP {ip} '
+            other_direction = 'to' if 'from' in direction else 'from'
+            # this will be 'blacklisted conn from x to y'
+            # or 'blacklisted conn tox from y'
+            description = f'connection {direction} blacklisted IP {ip} ' \
+                          f'{other_direction} {profileid.split("_")[-1]}'
+
 
         description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
-        tags = ''
-        if tags_temp := ip_info.get('tags', False):
-            # We need tags_temp so we avoid doing a replace on a bool.
-            tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
-
-        if tags != '':
-            # description += f' tags={tags}'
-            source_target_tag = tags.capitalize()
+        if tags := ip_info.get('tags', False):
+            source_target_tag = tags[0].capitalize()
         else:
             source_target_tag = 'BlacklistedIP'
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -205,30 +188,20 @@ class Module(Module, multiprocessing.Process):
         if not domain_info:
             return
 
-        type_detection = 'dstdomain'
-        detection_info = domain
+        attacker_direction = 'dstdomain'
+        attacker = domain
         category = 'Anomaly.Traffic'
-        type_evidence = 'ThreatIntelligenceBlacklistDomain'
+        evidence_type = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
         confidence = 0.7 if is_subdomain else 1
 
-        if 'URLhaus' in domain_info["source"]:
-            # this is because URLhause detects google drive and github as malicious
-            # because we're only checking domains not URLS
-            confidence = 0.1
-
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
-        tags = (
-            domain_info.get('tags', '')
-                .replace('[', '')
-                .replace(']', '')
-                .replace("'", '')
-        )
-        source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
+        tags = domain_info.get('tags', False)
+        source_target_tag = tags[0].capitalize() if tags else 'BlacklistedDomain'
 
         if self.is_dns_response:
             description = f'DNS answer with a blacklisted CNAME: {domain} ' \
@@ -238,24 +211,13 @@ class Module(Module, multiprocessing.Process):
 
         description += f'Description: {domain_info.get("description", "")}, '\
                        f'Found in feed: {domain_info["source"]}, '\
-                       f'with tags: {tags}. '\
                        f'Confidence: {confidence}.'
+        if tags:
+            description += f'with tags: {tags}. '
 
-
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -290,8 +252,9 @@ class Module(Module, multiprocessing.Process):
         :param ti_file_path: full path_to local threat intel file
         """
         data_file_name = ti_file_path.split('/')[-1]
-        malicious_ips_dict = {}
-        malicious_domains_dict = {}
+        malicious_ips = {}
+        malicious_domains = {}
+        malicious_ip_ranges = {}
         # used for debugging
         line_number = 0
         with open(ti_file_path) as local_ti_file:
@@ -330,7 +293,7 @@ class Module(Module, multiprocessing.Process):
                     # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
                     if ip_address.is_global:
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps(
+                        malicious_ips[str(ip_address)] = json.dumps(
                             {
                                 'description': description,
                                 'source': data_file_name,
@@ -339,7 +302,7 @@ class Module(Module, multiprocessing.Process):
                             }
                         )
                 elif data_type == 'domain':
-                    malicious_domains_dict[ioc] = json.dumps(
+                    malicious_domains[ioc] = json.dumps(
                         {
                             'description': description,
                             'source': data_file_name,
@@ -347,6 +310,25 @@ class Module(Module, multiprocessing.Process):
                             'tags': 'local TI file',
                         }
                     )
+                elif data_type == 'ip_range':
+                    net_addr = ioc[: ioc.index('/')]
+                    ip_obj = ipaddress.ip_address(net_addr)
+                    if (
+                        ip_obj.is_multicast
+                        or ip_obj.is_private
+                        or ip_obj.is_link_local
+                        or net_addr in utils.home_networks
+                    ):
+                        continue
+                    malicious_ip_ranges[ioc] = json.dumps(
+                        {
+                            'description': description,
+                            'source': data_file_name,
+                            'threat_level': threat_level,
+                            'tags': 'local TI file',
+                        }
+                    )
+
                 else:
                     # invalid ioc, skip it
                     self.print(
@@ -356,9 +338,10 @@ class Module(Module, multiprocessing.Process):
                     )
 
         # Add all loaded malicious ips to the database
-        __database__.add_ips_to_IoC(malicious_ips_dict)
+        __database__.add_ips_to_IoC(malicious_ips)
         # Add all loaded malicious domains to the database
-        __database__.add_domains_to_IoC(malicious_domains_dict)
+        __database__.add_domains_to_IoC(malicious_domains)
+        __database__.add_ip_range_to_IoC(malicious_ip_ranges)
         return True
 
     def __delete_old_source_IPs(self, file):
@@ -404,7 +387,7 @@ class Module(Module, multiprocessing.Process):
         Returns nothing, but the dictionary should be filled
         :param path: full path_to local threat intel file
         """
-        data_file_name = path.split('/')[-1]
+        filename = os.path.basename(path)
         ja3_dict = {}
         # used for debugging
         line_number = 0
@@ -434,13 +417,7 @@ class Module(Module, multiprocessing.Process):
                 )
 
                 # validate the threat level taken from the user
-                if threat_level not in (
-                    'info',
-                    'low',
-                    'medium',
-                    'high',
-                    'critical',
-                ):
+                if utils.is_valid_threat_level(threat_level):
                     # default value
                     threat_level = 'medium'
 
@@ -451,7 +428,7 @@ class Module(Module, multiprocessing.Process):
                 ja3_dict[ja3] = json.dumps(
                     {
                         'description': description,
-                        'source': data_file_name,
+                        'source': filename,
                         'threat_level': threat_level,
                     }
                 )
@@ -459,63 +436,45 @@ class Module(Module, multiprocessing.Process):
         __database__.add_ja3_to_IoC(ja3_dict)
         return True
 
-    def check_local_ti_files_for_update(self, path_to_files: str) -> bool:
+    def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
-        Checks if a local TI file was changed based
-        on it's hash. if so, update its content and delete old data
+        Checks if a local TI file was changed based on it's hash.
+        If the file should be updated, its hash will be returned
+        :param path_to_local_ti_file: full path to a local ti file in our config/local_ti_files
         """
-        local_ti_files = os.listdir(path_to_files)
-        for localfile in local_ti_files:
-            self.print(f'Loading local TI file {localfile}', 2, 0)
-            # Get what files are stored in cache db and their E-TAG to comapre with current files
-            data = __database__.get_TI_file_info(localfile)
-            old_hash = data.get('hash', False)
+        filename = os.path.basename(path_to_local_ti_file)
 
-            # In the case of the local file, we dont store the e-tag
-            # we calculate the hash
-            new_hash = utils.get_hash_from_file(f'{path_to_files}/{localfile}')
+        self.print(f'Loading local TI file {path_to_local_ti_file}', 2, 0)
+        # Get what files are stored in cache db and their E-TAG to comapre with current files
+        data = __database__.get_TI_file_info(filename)
+        old_hash = data.get('hash', False)
 
-            if not new_hash:
-                # Something failed. Do not download
-                self.print(
-                    f'Some error ocurred on calculating file hash.'
-                    f' Not loading the file {localfile}', 0, 3,
-                )
-                return False
+        # In the case of the local file, we dont store the e-tag
+        # we calculate the hash
+        new_hash = utils.get_hash_from_file(path_to_local_ti_file)
 
-            if old_hash == new_hash:
-                # The 2 hashes are identical. File is up to date.
-                self.print(f'File {localfile} is up to date.', 2, 0)
+        if not new_hash:
+            # Something failed. Do not download
+            self.print(
+                f'Some error ocurred on calculating file hash.'
+                f' Not loading the file {path_to_local_ti_file}', 0, 3,
+            )
+            return False
 
-            else:
-                # Our TI file was changed. Load the new one
-                self.print(f'Updating the local TI file {localfile}', 2, 0)
-                if old_hash:
-                    # File is updated and was in database.
-                    # Delete previous data of this file.
-                    self.__delete_old_source_data_from_database(localfile)
-                full_path_to_file = os.path.join(path_to_files, localfile)
-                # we have 2 types of local files, TI and JA3 files
-                if 'ja3' in localfile.lower():
-                    self.parse_ja3_file(full_path_to_file)
-                else:
-                    # Load updated data to the database
-                    self.parse_local_ti_file(full_path_to_file)
+        if old_hash == new_hash:
+            # The 2 hashes are identical. File is up to date.
+            self.print(f'File {path_to_local_ti_file} is up to date.', 2, 0)
+            return False
 
-                # Store the new etag and time of file in the database
-                malicious_file_info = {'hash': new_hash}
-                __database__.set_TI_file_info(localfile, malicious_file_info)
-        return True
+        else:
+            # Our TI file was changed. Load the new one
+            self.print(f'Updating the local TI file {path_to_local_ti_file}', 2, 0)
 
-    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
-        """
-        Set malicious IP in IPsInfo.
-        """
-
-        ip_data = {'threatintelligence': ip_description}
-        __database__.setInfoForIPs(
-            ip, ip_data
-        )  # Set in the IP info that IP is blacklisted
+            if old_hash:
+                # File is updated and was in database.
+                # Delete previous data of this file from the db.
+                self.__delete_old_source_data_from_database(filename)
+            return new_hash
 
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
@@ -566,7 +525,7 @@ class Module(Module, multiprocessing.Process):
 
         try:
             spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
-        except:
+        except Exception as ex:
             spamhaus_result = 0
 
         if not spamhaus_result:
@@ -609,103 +568,6 @@ class Module(Module, multiprocessing.Process):
                 return True
 
 
-    def urlhaus(self, ioc):
-        """
-        Supports URL lookups only
-        :param ioc: can be domain or ip
-        """
-        def parse_urlhaus_url_response(response):
-            threat = response['threat']
-            url_status = response['url_status']
-            description = f"Connecting to a malicious URL {ioc}. Detected by: URLhaus " \
-                          f"threat: {threat}, URL status: {url_status}"
-            try:
-                tags = " ".join(tag for tag in response['tags'])
-                description += f', tags: {tags}'
-            except TypeError:
-                # no tags available
-                tags = ''
-
-
-            try:
-                payloads: dict = response['payloads'][0]
-                file_type = payloads.get("file_type", "")
-                file_name = payloads.get("filename", "")
-                md5 = payloads.get("response_md5", "")
-                signature = payloads.get("signature", "")
-
-                description += f', the file hosted in this url is of type: {file_type},' \
-                               f' filename: {file_name} md5: {md5} signature: {signature}. '
-
-                # if we dont have a percentage repprted by vt, we will set out own
-                # tl in set_evidence_malicious_url() function
-                threat_level = False
-                virustotal_info = payloads.get("virustotal", "")
-                if virustotal_info:
-                    virustotal_percent = virustotal_info.get("percent", "")
-                    threat_level = virustotal_percent
-                    # virustotal_result = virustotal_info.get("result", "")
-                    # virustotal_result.replace('\',''')
-                    description += f'and was marked by {virustotal_percent}% of virustotal\'s AVs as malicious'
-
-            except (KeyError, IndexError):
-                # no payloads available
-                pass
-
-
-            info = {
-                # get all the blacklists where this ioc is listed
-                'source': 'URLhaus',
-                'url': ioc,
-                'description': description,
-                'threat_level': threat_level,
-                'tags': tags,
-            }
-            return info
-
-        urlhaus_base_url = 'https://urlhaus-api.abuse.ch/v1'
-
-        # available types at urlhaus are host, md5 or sha256
-
-        ioc_type = utils.detect_data_type(ioc)
-        # urlhaus doesn't support ipv6
-        if not ioc_type or ioc_type != 'url':
-            # not a valid url or hash
-            return
-
-        # get the urlhause supported type
-        # indicator_type = types[ioc_type]
-        urlhaus_data = {
-            'url': ioc
-        }
-
-        try:
-
-            urlhaus_api_response = self.urlhaus_session.post(
-                f'{urlhaus_base_url}/url/',
-                urlhaus_data,
-                headers=self.urlhaus_session.headers
-            )
-        except requests.exceptions.ConnectionError:
-            self.create_urlhaus_session()
-            return
-
-        if urlhaus_api_response.status_code != 200:
-            return
-
-        response: dict = json.loads(urlhaus_api_response.text)
-
-
-        if(
-            response['query_status'] == 'no_results'
-            or response['query_status'] == 'invalid_url'
-        ):
-            # no response or empty response
-            return
-
-        info = parse_urlhaus_url_response(response)
-
-        return info
 
     def set_evidence_malicious_hash(self,
                                     file_info: dict
@@ -713,84 +575,26 @@ class Module(Module, multiprocessing.Process):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-        type_detection = 'file'
+        attacker_direction = 'md5'
         category = 'Malware'
-        type_evidence = 'MaliciousDownloadedFile'
-
-        detection_info = file_info["md5"]
-        saddr = file_info["saddr"]
+        evidence_type = 'MaliciousDownloadedFile'
+        attacker = file_info["md5"]
+        threat_level = file_info["threat_level"]
+        daddr = file_info["daddr"]
+        ip_identification = __database__.getIPIdentification(daddr)
         confidence = file_info["confidence"]
-        threat_level = utils.threat_level_to_string(file_info["threat_level"])
+        threat_level = utils.threat_level_to_string(threat_level)
 
-        ip_identification = __database__.getIPIdentification(saddr)
         description = (
-            f'Malicious downloaded file {detection_info}. '
+            f'Malicious downloaded file {attacker}. '
             f'size: {file_info["size"]} '
-            f'from IP: {saddr}. Detected by: {file_info["blacklist"]}, circl.lu. '
+            f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
 
-
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            file_info["ts"],
-            category,
-            profileid=file_info["profileid"],
-            twid=file_info["twid"],
-            uid=file_info["uid"],
-        )
-
-    def set_evidence_malicious_url(
-            self,
-            url_info,
-            uid,
-            timestamp,
-            profileid,
-            twid
-    ):
-        """
-        :param url_info: dict with source, description, therat_level, and tags of url
-        """
-        threat_level = url_info['threat_level']
-        detection_info = url_info['url']
-        description = url_info['description']
-
-        confidence = 0.7
-
-        if not threat_level:
-            threat_level = 'medium'
-        else:
-            # convert percentage reporte by urlhaus (virustotal) to
-            # a valid slips confidence
-            try:
-                threat_level = int(threat_level)/100
-                threat_level = utils.threat_level_to_string(threat_level)
-            except ValueError:
-                threat_level = 'medium'
-
-
-        type_detection = 'url'
-        category = 'Malware'
-        type_evidence = 'MaliciousURL'
-
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
+                                 uid=file_info["uid"])
 
     def circl_lu(self, flow_info):
         """
@@ -805,7 +609,7 @@ class Module(Module, multiprocessing.Process):
             benign_percentage = float(circl_trust)
             malicious_percentage = 100 - benign_percentage
             # scale the benign percentage from 0 to 1
-            threat_level = malicious_percentage/100
+            threat_level = float(malicious_percentage)/100
             return threat_level
 
         def calculate_confidence(blacklists):
@@ -828,7 +632,7 @@ class Module(Module, multiprocessing.Process):
                 f"{circl_base_url}/md5/{md5}",
                headers=self.circl_session.headers
             )
-        except:
+        except Exception as ex:
             # add the hash to the cirllu queue and ask for it later
             self.circllu_queue.put(flow_info)
             return
@@ -843,7 +647,7 @@ class Module(Module, multiprocessing.Process):
         file_info = {
             'confidence': calculate_confidence(response["KnownMalicious"]),
             'threat_level': calculate_threat_level(response["hashlookup:trust"]),
-            'blacklist': response["KnownMalicious"]
+            'blacklist': f'{response["KnownMalicious"]}, circl.lu'
         }
         return file_info
 
@@ -853,7 +657,13 @@ class Module(Module, multiprocessing.Process):
         returns a dict containing confidence, threat level and blacklist or the
         reporting website
         """
-        return self.circl_lu(flow_info)
+        circllu_info = self.circl_lu(flow_info)
+        if circllu_info:
+            return circllu_info
+
+        urlhaus_info = self.urlhaus.urlhaus_lookup(flow_info['md5'], 'md5_hash')
+        if urlhaus_info:
+            return urlhaus_info
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
@@ -870,9 +680,13 @@ class Module(Module, multiprocessing.Process):
             return spamhaus_res
 
 
-    def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
+    def ip_belongs_to_blacklisted_range(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
         """ check if this ip belongs to any of our blacklisted ranges"""
         ip_obj = ipaddress.ip_address(ip)
+        # Malicious IP ranges are stored in slips sorted by the first octet
+        # so get the ranges that match the fist octet of the given IP
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
             ranges_starting_with_octet = self.cached_ipv4_ranges.get(first_octet, [])
@@ -881,7 +695,6 @@ class Module(Module, multiprocessing.Process):
             ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
         else:
             return False
-
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges
@@ -913,7 +726,7 @@ class Module(Module, multiprocessing.Process):
         return False, False
 
     def search_online_for_url(self, url):
-        return self.urlhaus(url)
+        return self.urlhaus.urlhaus_lookup(url, 'url')
 
     def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
@@ -947,9 +760,11 @@ class Module(Module, multiprocessing.Process):
             # is malicious.
             # update the file_info dict with uid, twid, ts etc.
             file_info.update(flow_info)
-            self.set_evidence_malicious_hash(
-                file_info
-            )
+            # is the detection done by urlhaus or circllu?
+            if 'URLhaus' in file_info['blacklist']:
+                self.urlhaus.set_evidence_malicious_hash(file_info)
+            else:
+                self.set_evidence_malicious_hash(file_info)
 
     def is_malicious_url(
             self,
@@ -1011,27 +826,37 @@ class Module(Module, multiprocessing.Process):
             domain, profileid, twid
         )
 
+    def update_local_file(self, filename):
+        """
+        Updates the given local ti file if the hash of it has changed
+        : param filename: local ti file, has to be plased in config/local_ti_files/ dir
+        """
+        fullpath = os.path.join(self.path_to_local_ti_files, filename)
+        if filehash := self.should_update_local_ti_file(fullpath):
+            if 'JA3' in filename:
+                # Load updated data to the database
+                self.parse_ja3_file(fullpath)
+            else:
+                # Load updated data to the database
+                self.parse_local_ti_file(fullpath)
+            # Store the new etag and time of file in the database
+            malicious_file_info = {'hash': filehash}
+            __database__.set_TI_file_info(filename, malicious_file_info)
+            return True
 
     def run(self):
         try:
             utils.drop_root_privs()
-            # Load the local Threat Intelligence files that are stored in the local folder
+            # Load the local Threat Intelligence files that are
+            # stored in the local folder self.path_to_local_ti_files
             # The remote files are being loaded by the update_manager
-            # check if we should update the files
-            if not self.check_local_ti_files_for_update(
-                self.path_to_local_ti_files
-            ):
-                self.print(
-                    f'Could not load the local TI files {self.path_to_local_ti_files}'
-                )
+            self.update_local_file('own_malicious_iocs.csv')
+            self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
+            self.print(traceback.print_exc(),0,1)
             return True
 
         while True:
@@ -1110,7 +935,4 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
                 self.print(traceback.format_exc())

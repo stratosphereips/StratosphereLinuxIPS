@@ -1,11 +1,9 @@
-# Must imports
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-
-# Your imports
+import multiprocessing
+import traceback
 import json
 import sys
 import ipaddress
@@ -90,7 +88,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
-            except:
+            except Exception as ex:
                 # nothing in queue
                 time.sleep(5)
                 continue
@@ -103,7 +101,7 @@ class Module(Module, multiprocessing.Process):
             while True:
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
-                except:
+                except Exception as ex:
                     # queue is empty
                     break
 
@@ -231,27 +229,15 @@ class Module(Module, multiprocessing.Process):
         description = (
             f'performing an arp scan. Confidence {confidence}.'
         )
-        type_evidence = 'ARPScan'
+        evidence_type = 'ARPScan'
         # category of this evidence according to idea categories
         category = 'Recon.Scanning'
-        type_detection = 'srcip'
+        attacker_direction = 'srcip'
         source_target_tag = 'Recon'  # srcip description
-        detection_info = profileid.split('_')[1]
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            ts,
-            category,
-            source_target_tag=source_target_tag,
-            conn_count=conn_count,
-            profileid=profileid,
-            twid=twid,
-            uid=uids,
-        )
+        attacker = profileid.split('_')[1]
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 ts, category, source_target_tag=source_target_tag, conn_count=conn_count,
+                                 profileid=profileid, twid=twid, uid=uids)
         # after we set evidence, clear the dict so we can detect if it does another scan
         try:
             self.cache_arp_requests.pop(f'{profileid}_{twid}')
@@ -288,23 +274,12 @@ class Module(Module, multiprocessing.Process):
             threat_level = 'low'
             ip_identification = __database__.getIPIdentification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
-            type_evidence = 'arp-outside-localnet'
+            evidence_type = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
-            type_detection = 'srcip'
-            detection_info = profileid.split('_')[1]
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                ts,
-                category,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
+            attacker_direction = 'srcip'
+            attacker = profileid.split('_')[1]
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
     def detect_unsolicited_arp(
@@ -321,26 +296,15 @@ class Module(Module, multiprocessing.Process):
             confidence = 0.8
             threat_level = 'info'
             description = 'broadcasting unsolicited ARP'
-            type_evidence = 'UnsolicitedARP'
+            evidence_type = 'UnsolicitedARP'
             # This may be arp spoofing
             category = 'Information'
-            type_detection = 'srcip'
+            attacker_direction = 'srcip'
             source_target_tag = 'Recon'   # srcip description
-            detection_info = profileid.split('_')[1]
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                ts,
-                category,
-                source_target_tag=source_target_tag,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
+            attacker = profileid.split('_')[1]
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, ts, category, source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
             return True
 
     def detect_MITM_ARP_attack(self, profileid, twid, uid, saddr, ts, src_mac):
@@ -375,12 +339,12 @@ class Module(Module, multiprocessing.Process):
             # todo how to find out which one is it??
             confidence = 0.2   # low confidence for now
             threat_level = 'critical'
-            type_evidence = 'MITM-arp-attack'
+            evidence_type = 'MITM-arp-attack'
             # This may be arp spoofing
             category = 'Recon'
-            type_detection = 'srcip'
+            attacker_direction = 'srcip'
             source_target_tag = 'MITM'
-            detection_info = profileid.split('_')[1]
+            attacker = profileid.split('_')[1]
 
             gateway_ip = __database__.get_gateway_ip()
             gateway_MAC = __database__.get_gateway_MAC()
@@ -399,20 +363,9 @@ class Module(Module, multiprocessing.Process):
                           f'now belonging to {saddr}, was seen before for {original_IP}.'
 
             # self.print(f'{saddr} is claiming to have {src_mac}')
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                ts,
-                category,
-                source_target_tag=source_target_tag,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, ts, category, source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
             return True
 
     def shutdown_gracefully(self):
@@ -436,7 +389,8 @@ class Module(Module, multiprocessing.Process):
         # saddr is the IP in the headers of the ARP packet
         # daddr is the IP in the headers of the ARP packet
 
-        # Gratuitous ARP can be used for (1) Updating ARP Mapping, (2) Announcing a Node’s Existence, (3) Redundancy, (4) MITM. Which is similar to an 'unrequested' load balancing
+        # Gratuitous ARP can be used for (1) Updating ARP Mapping, (2) Announcing a Node’s Existence,
+        (3) Redundancy, (4) MITM. Which is similar to an 'unrequested' load balancing
         # The saddr and daddr are the ones being avertised. The supposed purpose of the Gratuitous ARP
         """
 
@@ -450,8 +404,6 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         utils.drop_root_privs()
         self.timer_thread_arp_scan.start()
-
-        # Main loop function
         while True:
             try:
                 if (
@@ -538,10 +490,8 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

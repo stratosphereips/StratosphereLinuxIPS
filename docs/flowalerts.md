@@ -22,10 +22,15 @@ The detection techniques are:
 - Bad SMTP logins
 - SMTP login bruteforce
 - DNS ARPA Scans
-- Multiple SSH versions
+- SSH version changing
 - Incompatible CN
 - Weird HTTP methods
-
+- Non-SSL connections on port 443
+- Non-HTTP connections on port 80
+- Connection to private IPs 
+- Connection to private IPs outside the current local network
+- High entropy DNS TXT answers 
+- Devices changing IPs
 The details of each detection follows.
 
 
@@ -151,6 +156,10 @@ Check
 [PING Sweeps](https://stratospherelinuxips.readthedocs.io/en/develop/detection_modules.html#ping-sweeps) 
 section for more info 
 
+## SMTP login bruteforce
+
+Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
+
 ## Password Guessing
 
 Password guessing is detected using 2 ethods in slips
@@ -185,7 +194,9 @@ And you can add other SSL feeds in ```ssl_feeds``` in ```slips.conf```.
 
 Slips detects downloads from pastebin using SSL and HTTP
 
-It alerts when a downloaded file from pastebin exceeds 12000 bytes 
+It alerts when a downloaded file from pastebin exceeds 700 bytes 
+
+This value can be customized in slips.conf by changing ```pastebin_download_threshold```
 
 Slips detects the pastebin download once the SSL connection is over , which may take hours.  
 
@@ -247,13 +258,15 @@ Then, if the source IP is seen doing 10 or more ARPA queries within 2 seconds,
 slips generates an ARPA scan detection.
 
 
-## Multiple SSH versions
+## SSH version changing
 
-Zeek logs the used software and software versions in software.log, so slips knows from this file the software used by different IPs, like whether it's an SSH::CLIENT, an HTTP::BROWSER, or an HTTP::SERVER
 
-When slips detects an SSH client, it stores it with the IP and the SSH client versions used in the database
+Zeek logs the used software and software versions in software.log, so slips knows from this file the software used by different IPs,
+like whether it's an SSH::CLIENT, an HTTP::BROWSER, or an HTTP::SERVER
 
-Then whenever slips sees the same IP using another SSH client, it compares the stored SSH versions with the current SSH versions
+When slips detects an SSH client or an SSH server, it stores it with the IP and the SSH versions used in the database
+
+Then whenever slips sees the same IP using another SSH version, it compares the stored SSH versions with the current SSH versions
 
 If they are different, slips generates an alert
 
@@ -272,3 +285,49 @@ Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
 
 When there's a weird HTTP method, slips detects it as well.
 
+
+## Non-SSL connections on port 443 
+
+Slips detects established connections on port 443 that are not using HTTP
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 443 and the 'service' field 
+in conn.log isn't set to 'ssl', it alerts
+
+## Non-HTTP connections on port 80.
+
+Slips detects established connections on port 80 that are not using SSL
+using zeek's conn.log flows
+
+if slips finds a flow using destination port 80 and the 'service' field 
+in conn.log isn't set to 'http', it alerts
+
+## Connection to private IPs
+
+Slips detects when a private IP is connected to another private IP with threat level info.
+
+## Connection to private IPs outside the current local network
+
+Slips detects the currently used local network and alerts if it find a
+connection to/from a private IP that doesn't belong to it.
+
+For example if the currently used local network is: 192.168.1.0/24
+
+and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
+
+## High entropy DNS TXT answers 
+
+Slips check every DNS answer with TXT record for high entropy
+strings. 
+Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
+and alerted by slips.
+
+the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
+
+## Devices changing IPs
+
+Slips stores the MAC of each new IP it sees in conn.log.
+
+Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
+
+If so, it alerts "Device changing IPs".

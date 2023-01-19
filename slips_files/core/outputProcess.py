@@ -15,15 +15,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-
+from slips_files.core.database.database import __database__
+from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
 import io
-from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
 from pathlib import Path
 from datetime import datetime
 import os
+import traceback
 
 # Output Process
 class OutputProcess(multiprocessing.Process):
@@ -181,15 +181,13 @@ class OutputProcess(multiprocessing.Process):
                 sys.exit(-1)
             return (level, sender, msg)
 
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
                 f'{exception_line}'
             )
-            print(type(inst))
-            print(inst.args)
-            print(inst)
+            self.print(traceback.print_exc(), 0, 1)
             sys.exit(1)
 
     def log_error(self, sender, msg):
@@ -269,12 +267,10 @@ class OutputProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',
                 )
-                print(type(inst))
-                print(inst.args)
-                print(inst)
+                self.print(traceback.print_exc(), 0, 1)
                 return True

@@ -5,8 +5,7 @@ from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 import sys
-
-# Your imports
+import traceback
 import json
 import urllib3
 import certifi
@@ -287,14 +286,12 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, passive_dns, as_owner
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
 
     def get_domain_vt_data(self, domain: str):
         """
@@ -313,16 +310,14 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, as_owner
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_domain_vt_data() line {exception_line}',
                 0,
                 1,
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return False
 
     def get_ioc_type(self, ioc):
@@ -541,12 +536,10 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return True
 
         # Main loop function
@@ -660,10 +653,8 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

@@ -63,28 +63,14 @@ def test_load_modules():
 #     assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
 
-def test_recognize_host_ip():
-    main = create_Main_instance()
-    assert main.get_host_ip() != None
-
 
 def test_create_folder_for_logs():
     main = create_Main_instance()
     assert main.create_folder_for_logs() != False
 
 
-def test_check_redis_database():
-    main = create_Main_instance()
-    assert main.check_redis_database() == True
-
-
 def test_clear_redis_cache_database():
     main = create_Main_instance()
     assert main.clear_redis_cache_database() == True
-
-
-def test_check_zeek_or_bro():
-    main = create_Main_instance()
-    assert main.check_zeek_or_bro() != False
 
 

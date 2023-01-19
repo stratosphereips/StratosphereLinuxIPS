@@ -181,7 +181,6 @@ Refer to the [exporting section of the docs](https://stratospherelinuxips.readth
 
 ## Flowalerts Module
 
-
 This module is responsible for detecting malicious behaviours in your traffic.
     
 Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/flowalerts.html) for detailed explanation of what Slips detects and how it detects.
@@ -225,7 +224,7 @@ File hashes and URLs aren't supported in TI feeds.
 
 Besides the searching 40+ TI files for every IP/domain Slips encounters, It also uses the following websites for threat intelligence:
 
-URLhaus: for each url seen in http.log
+URLhaus: for each url seen in http.log and downloaded file seen in files.log
 Spamhaus: for IP lookups
 Circl.lu: for hash lookups (for each downloaded file)
 
@@ -248,7 +247,9 @@ The domains are currently taken from:
 - HTTP host names
 - TLS SNI
 
-Once a domain is found, it is verified against the downloaded list of domains from the blacklists defined in ```ti_files``` in the configuration file ```config/slips.conf```. 
+Once a domain is found, it is verified against the downloaded list of domains 
+from the blacklists defined in ```ti_files``` path in the configuration file ```config/slips.conf```. 
+which is ```config/TI_feeds.csv``` by default.
 If an exact match is found, then an evidence is generated. 
 
 If an exact match is not found, then Slips verifies if the verified domain is a
@@ -282,7 +283,7 @@ Slips has a local file for adding IoCs of your own,
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
-The format of the file is "IP address","Threat level", "Description"
+The format of the file is "IP address/IP Range/domain","Threat level", "Description"
 
 Threat level available options: info, low, medium, high, critical
 
@@ -314,21 +315,21 @@ Example:
 ### Adding your own remote feed
 
 
-We update the remote ones regularly. The list of remote threat intelligence files is set in the variables ```ti_files``` variable in config/slips.conf. You can add your own remote threat intelligence feeds in this variable. Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
+We update the remote ones regularly. The list of remote threat intelligence 
+files is set in the path of ```ti_files``` variable in ```config/slips.conf```.
+The path of all the TI feeds is in ```config/TI_feeds.csv``` by default.
+
+You can add your own remote threat intelligence feeds in this variable.
+Supported extensions are: .txt, .csv, .netset, ipsum feeds, or .intel.
 
 Each URL should be added with a threat_level and a tag, the format is (url,threat_level,tag) 
 
 tag is which category is this feed e.g. phishing, adtrackers, etc..
 
-
 Threat level available options: info, low, medium, high, critical
 
 Refer to the [architecture section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html) for detailed explanation of Slips threat levels.
 
-
-Be sure the format is:
-
-link, threat_level=0-1, tags=['tag1','tag2']
 
 TI files commented using # may be processed as they're still in our database. 
 
@@ -338,21 +339,21 @@ Commented TI files (lines starting with ;) will be completely removed from our d
 
 
 The remote files are downloaded to the path set in the ```download_path_for_local_threat_intelligence```. 
-By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` and deleted after slips
-is done reading them
+By default, the files are stored in the Slips directory ```modules/ThreatIntelligence1/remote_data_files/``` 
+are deleted after slips is done reading them.
 
 
 ### Commenting a remote TI feed
 
 If you have a remote file link that you wish to comment and remove from the database
-you can do so by adding ';' to the line that contains the feed link in ```config/slips.conf```, don't use the '#'
+you can do so by adding ';' to the line that contains the feed link in ```config/TI_feeds.csv```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
     
-    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, medium,['honeypot']
 
 instead of:
 
-    #https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    #https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 ## Update Manager Module
 
@@ -360,7 +361,7 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by 
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```config/slips.conf```
+The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
@@ -490,6 +491,7 @@ Available detection are:
 - Suspicious user agents
 - Incompatible user agents
 - Multiple user agents
+- Pastebin downloads
 
 ### Multiple empty connections
 
@@ -539,6 +541,15 @@ operating systems, an alert of type 'Multiple user agents' is made
 for example, if an IP is detected using a macOS user agent then an android user agent,
 slips detects this with 'low' threat level
 
+### Pastebin downloads
+
+Some malware use pastebin as the host of their malicious payloads. 
+
+Slips detects downloads of files from pastebin through HTTP with size >= 700 bytes. 
+
+This value can be customized in slips.conf by changing ```pastebin_download_threshold```
+
+When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
 
 ## Leak Detector Module
@@ -595,12 +606,13 @@ The rules will be automatically detected, compiled and run on the given PCAP.
 If you want to contribute, improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
-## Portscan Detector Module
+## Network Service Discovery Module
 
-This module is responsibe for detecting scans such as:
+This module is responsible for detecting scans such as:
 - Vertical port scans
 - Horizontal port scans
 - PING sweeps
+- DHCP Scans
 
 
 ### Vertical port scans
@@ -628,7 +640,7 @@ Slips ignores the broadcast IP 255.255.255.255 has destination of port scans.
 ### PING Sweeps
 
 ICMP messages can be used to find out which hosts are alive in a network.
-Slips relies on Zeek detecions for this, but it is done with our own Zeek scripts located in 
+Slips relies on Zeek detections for this, but it is done with our own Zeek scripts located in 
 zeek-scripts/icmps-scans.zeek. The scripts detects three types of ICMP scans: 'ICMP-Timestamp', 'ICMP-Address', 'ICMP-AddressMask'.
 
 We detect a scan every threshold. So we generate an evidence when there is 
@@ -637,6 +649,11 @@ We detect a scan every threshold. So we generate an evidence when there is
 Slips does this detection using Slips' own zeek script located in 
 zeek-scripts/icmps-scans.zeek for zeek and pcap files and using the portscan module for binetflow files.
 
+### DHCP Scans
+
+DHCP requests can be used to find out which IPs are taken in a network.
+Slips detects when an IP is requesting 4, 8, 12, etc. different IPs from the DHCP server within the same
+twimewindow (1 hour by default)
 
 # Connections Made By Slips
 
@@ -650,7 +667,7 @@ maclookup.app -> For getting MAC vendor info if no info was found in the local m
 ip-api.com -> For getting ASN info about IPs if no info was found in our Redis DB
 ipinfo.io -> For getting your public IP
 virustotal.com -> For getting scores about domains, IPs and URLs 
-urlhaus-api.abuse.ch -> For getting info about URLs
+urlhaus-api.abuse.ch -> For getting info about URLs and downloaded files
 check.torproject.org -> For getting info about tor exist nodes.
 cert.pl -> Used in our list of TI files.
 abuse.ch -> Used by urlhaus for getting info about contacted domains and downloaded files.
