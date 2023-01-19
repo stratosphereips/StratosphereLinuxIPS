@@ -344,6 +344,12 @@ class UpdateFileManager:
         Used for remote files that are updated periodically
         :param file_to_download: url that contains the file to download
         """
+        if not (
+                self.riskiq_email
+                and self.riskiq_key
+        ):
+            return False
+
         # the response will be stored in self.responses if the file is old and needs to be updated
 
         file_name_to_download = file_to_download.split('/')[-1]
@@ -393,26 +399,19 @@ class UpdateFileManager:
 
                 # use last modified date instead of e-tag
                 if new_last_modified != cached_last_modified:
-                    self.responses[file_name_to_download] = response
+                    self.responses[file_to_download] = response
                     return True
                 else:
                     self.new_update_time = time.time()
-                    # Store the new last_modified value
-                    # and time of last update in the database
-                    ti_file_info = {
-                        'last_modified': new_last_modified,
-                        'time': self.new_update_time,
-                    }
-                    __database__.set_TI_file_info(
-                        file_name_to_download, ti_file_info
-                    )
+                    # update the time we last checked this file for update
+                    __database__.set_last_update_time(file_to_download, self.new_update_time)
                     self.loaded_ti_files += 1
                     return False
 
             if old_e_tag != new_e_tag:
                 # Our TI file is old. Download the new one.
                 # we'll be storing this e-tag in our database
-                self.responses[file_name_to_download] = response
+                self.responses[file_to_download] = response
                 return True
 
             else:
@@ -421,13 +420,7 @@ class UpdateFileManager:
                 # Store the update time like we downloaded it anyway
                 self.new_update_time = time.time()
                 # Store the new etag and time of file in the database
-                ti_file_info = {
-                    'e-tag': new_e_tag,
-                    'time': self.new_update_time,
-                }
-                __database__.set_TI_file_info(
-                    file_name_to_download, ti_file_info
-                )
+                __database__.set_last_update_time(file_to_download, self.new_update_time)
                 self.loaded_ti_files += 1
                 return False
 
@@ -570,12 +563,13 @@ class UpdateFileManager:
         __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
         return True
 
-    async def update_TI_file(self, link_to_download: str, response) -> bool:
+    async def update_TI_file(self, link_to_download: str) -> bool:
         """
-        Update remote TI files and JA3 feeds by downloading and parsing them
-        :param response: the output of a request done with requests library
+        Update remote TI files, JA3 feeds and SSL feeds by writing them to disk and parsing them
         """
         try:
+            self.log(f'Updating the remote file {link_to_download}')
+            response = self.responses[link_to_download]
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
@@ -592,8 +586,8 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing JA3 feed {link_to_download}. Updating '
-                    f'was aborted.', 0, 1,
+                    f'Error parsing JA3 feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
 
@@ -602,8 +596,8 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was '
-                    f'aborted.', 0, 1,
+                    f'Error parsing feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
             elif (
@@ -611,10 +605,11 @@ class UpdateFileManager:
                     and not self.parse_ssl_feed(link_to_download, full_path)
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was '
-                    f'aborted.', 0, 1,
+                    f'Error parsing feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
+
             # Store the new etag and time of file in the database
             self.new_update_time = time.time()
             new_e_tag = self.get_e_tag(response)
@@ -622,7 +617,7 @@ class UpdateFileManager:
                 'e-tag': new_e_tag,
                 'time': self.new_update_time
             }
-            __database__.set_TI_file_info(file_name_to_download, file_info)
+            __database__.set_TI_file_info(link_to_download, file_info)
 
             self.log(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
@@ -648,6 +643,7 @@ class UpdateFileManager:
     def update_riskiq_feed(self):
         """Get and parse RiskIQ feed"""
         try:
+            self.log(f'Updating RiskIQ domains')
             base_url = 'https://api.riskiq.net/pt'
             path = '/v2/articles/indicators'
             url = base_url + path
@@ -688,8 +684,10 @@ class UpdateFileManager:
             __database__.set_TI_file_info(
                 'riskiq_domains', malicious_file_info
             )
+            self.log('Successfully updated RiskIQ domains.')
             return True
         except Exception as e:
+            self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
             self.print('An error occurred while updating RiskIQ feed.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
             return False
@@ -1456,7 +1454,7 @@ class UpdateFileManager:
             mac_db.write(mac_info)
 
         __database__.set_TI_file_info(
-            os.path.basename(self.mac_db_link),
+            self.mac_db_link,
             {'time': time.time()}
         )
         return True
@@ -1516,8 +1514,7 @@ class UpdateFileManager:
                 file_to_download = file_to_download.strip()
                 file_to_download = utils.sanitize(file_to_download)
 
-                response = self.__check_if_update(file_to_download, self.update_period)
-                if response:
+                if self.__check_if_update(file_to_download, self.update_period):
                     # failed to get the response, either a server problem
                     # or the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
@@ -1525,29 +1522,18 @@ class UpdateFileManager:
                     # this run wasn't started with existing ti files in the db
                     self.first_time_reading_files = True
 
-                    self.log(
-                        f'Downloading the remote file {file_to_download}'
-                    )
                     # every function call to update_TI_file is now running concurrently instead of serially
                     # so when a server's taking a while to give us the TI feed, we proceed
                     # to download the next file instead of being idle
                     task = asyncio.create_task(
-                        self.update_TI_file(file_to_download, response)
+                        self.update_TI_file(file_to_download)
                     )
-
-            ############### Update RiskIQ domains ################
+            #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if (
-                self.riskiq_email
-                and self.riskiq_key
-                and self.__check_if_update('riskiq_domains', self.riskiq_update_period)
-            ):
-                self.log(f'Updating RiskIQ domains')
-                if self.update_riskiq_feed():
-                    self.log('Successfully updated RiskIQ domains.')
-                else:
-                    self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
+            if self.__check_if_update('riskiq_domains', self.riskiq_update_period):
+                self.update_riskiq_feed()
+
             # wait for all TI files to update
             try:
                 await task
