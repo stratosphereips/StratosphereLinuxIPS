@@ -26,6 +26,7 @@
 - Fix multiple SSH client versions detection
 - Add detection of IPs using multiple SSH server versions
 - Wait 30 mins before the first connection without DNS evidence
+- Optimize code and performance
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
