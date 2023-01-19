@@ -817,7 +817,7 @@ class ProfilingFlowsDatabase(object):
         : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
         summaryState = self.getFinalStateFromFlags(state, pkts)
-        data = {
+        flow = {
             'ts': stime,
             'dur': dur,
             'saddr': saddr,
@@ -840,12 +840,12 @@ class ProfilingFlowsDatabase(object):
         }
 
         # Convert to json string
-        data = json.dumps(data)
-        # Store in the hash 10.0.0.1_timewindow1_flows, a key uid, with data
+        flow = json.dumps(flow)
+        # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}flows',
             uid,
-            data,
+            flow,
         )
         if not value:
             # duplicate flow
@@ -856,9 +856,7 @@ class ProfilingFlowsDatabase(object):
         if label:
             self.r.zincrby('labels', 1, label)
 
-        # We can publish the flow directly without asking for it, but
-        # its good to maintain the format given by the get_flow() function.
-        flow = self.get_flow(profileid, twid, uid)
+        flow = {uid: flow}
 
         # Get the dictionary and convert to json string
         flow = json.dumps(flow)
@@ -887,7 +885,9 @@ class ProfilingFlowsDatabase(object):
                     self.r.set("local_network", network_range)
                     self.is_localnet_set = True
 
-        self.publish('new_flow', to_send)
+        # dont send arp flows in this channel, they have their own new_arp channel
+        if flow_type != 'arp':
+            self.publish('new_flow', to_send)
         return True
 
     def get_local_network(self):

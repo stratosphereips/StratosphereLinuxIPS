@@ -58,7 +58,8 @@ class Module(Module, multiprocessing.Process):
 
     def process_flow(self, profileid, twid, flow, timestamp: float):
         """
-        Receives a flow and it process it for this profileid and twid so its printed by the logprocess later
+        Process the received flow  for this profileid and twid
+         so its printed by the logprocess later
         """
         timestamp_human = self.process_timestamp(timestamp)
 
@@ -407,12 +408,9 @@ class Module(Module, multiprocessing.Process):
                     mdata = json.loads(mdata)
                     profileid = mdata['profileid']
                     twid = mdata['twid']
-                    # Get flow as a json
                     flow = mdata['flow']
                     timestamp = mdata['stime']
-                    # Convert flow to a dict
                     flow = json.loads(flow)
-                    # Process the flow
                     return_value = self.process_flow(
                         profileid, twid, flow, timestamp
                     )

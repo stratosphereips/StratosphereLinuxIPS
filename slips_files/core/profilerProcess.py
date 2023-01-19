@@ -1995,6 +1995,7 @@ class ProfilerProcess(multiprocessing.Process):
             daddr=str(self.daddr_as_obj),
             proto='ARP',
             uid=self.uid,
+            flow_type='arp'
         )
 
     def handle_weird(self):
@@ -2120,6 +2121,7 @@ class ProfilerProcess(multiprocessing.Process):
             appproto=self.column_values['appproto'],
             uid=self.uid,
             label=self.label,
+            flow_type=self.flow_type
         )
         __database__.markProfileTWAsModified(profileid, twid, '')
 
