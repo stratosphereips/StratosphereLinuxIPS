@@ -416,10 +416,10 @@ class Database(ProfilingFlowsDatabase, object):
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.r.hmset(profileid, {'used_software': json.dumps(cached_sw)})
+            self.r.hset(profileid, 'used_software', json.dumps(cached_sw))
         else:
             # first time for this profile to use a software
-            self.r.hmset(profileid, {'used_software': json.dumps(sw_dict)})
+            self.r.hset(profileid, 'used_software', json.dumps(sw_dict))
 
     def get_software_from_profile(self, profileid):
         """
@@ -468,10 +468,7 @@ class Database(ProfilingFlowsDatabase, object):
 
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-
-        ipv6 = {
-            'IPv6': json.dumps(ip)}
-        self.r.hmset(profileid, ipv6)
+        self.r.hset(profileid, 'IPv6',  json.dumps(ip))
 
     def set_ipv4_of_profile(self, profileid, ip):
         self.r.hset(profileid, 'IPv4', json.dumps([ip]))
@@ -550,7 +547,7 @@ class Database(ProfilingFlowsDatabase, object):
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
-            self.r.hmset(profileid, MAC_info)
+            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
             return True
         else:
             # we found another profile that has the same mac as this one
@@ -621,7 +618,9 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_info = self.r.hmget(profileid, 'MAC')[0]
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info)['MAC']
         return MAC_info
 
     def get_mac_vendor_from_profile(self, profileid) -> str:
@@ -632,8 +631,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
-        return MAC_vendor
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info)['Vendor']
+        return MAC_info
 
     def get_hostname_from_profile(self, profileid) -> str:
         """
@@ -643,8 +644,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        hostname = self.r.hmget(profileid, 'host_name')[0]
-        return hostname
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info).get('host_name', False)
+        return MAC_info
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
@@ -2489,16 +2492,6 @@ class Database(ProfilingFlowsDatabase, object):
     def set_host_ip(self, ip):
         """Store the IP address of the host in a db. There can be more than one"""
         self.r.sadd('hostIP', ip)
-
-    def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
-        self.r.hmset('loaded_malicious_ips', ips_and_description)
-
-    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
-        self.r.hset('loaded_malicious_ips', ip, description)
-
-    def get_loaded_malicious_ip(self, ip: str) -> str:
-        ip_description = self.r.hget('loaded_malicious_ips', ip)
-        return ip_description
 
     def set_profile_as_malicious(
         self, profileid: str, description: str
