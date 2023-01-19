@@ -285,16 +285,12 @@ class UpdateFileManager:
         Used for online whitelist specified in slips.conf
         """
         # Get the last time this file was updated
-        data = __database__.get_TI_file_info('tranco_whitelist')
-        try:
-            last_update = data['time']
-            last_update = float(last_update)
-        except (TypeError, KeyError):
-            last_update = float('-inf')
+        ti_file_info = __database__.get_TI_file_info('tranco_whitelist')
+        last_update = ti_file_info.get('time', float('-inf'))
 
         now = time.time()
-
-        if last_update + self.online_whitelist_update_period  > now:
+        if last_update + self.online_whitelist_update_period > now:
+            # update period hasnt passed yet
             return False
 
         # update period passed
@@ -305,11 +301,12 @@ class UpdateFileManager:
             return False
 
         # update the timestamp in the db
-        ti_file_info = {'time': time.time()}
         __database__.set_TI_file_info(
-            'tranco_whitelist', ti_file_info
+            'tranco_whitelist',
+            {'time': time.time()}
         )
-        return response
+        self.responses['tranco_whitelist'] = response
+        return True
 
 
 
@@ -352,10 +349,7 @@ class UpdateFileManager:
         file_name_to_download = file_to_download.split('/')[-1]
         # Get the last time this file was updated
         ti_file_info = __database__.get_TI_file_info(file_name_to_download)
-        try:
-            last_update = float(ti_file_info['time'])
-        except (TypeError, KeyError, ValueError):
-            last_update = float('-inf')
+        last_update = ti_file_info.get('time', float('-inf'))
 
         if last_update + update_period > time.time():
             # Update period hasn't passed yet, but the file is in our db
@@ -1467,46 +1461,48 @@ class UpdateFileManager:
         )
         return True
 
-    def update_online_whitelist(self, response):
+    def update_online_whitelist(self):
         """
-        Updates online tranco whitelist defined in slips.conf online_whitelist key in the db
+        Updates online tranco whitelist defined in slips.conf online_whitelist key
         """
+        response = self.responses['tranco_whitelist']
         # write to the file so we don't store the 10k domains in memory
         online_whitelist_download_path = os.path.join(self.path_to_remote_ti_files, 'tranco-top-10000-whitelist')
         with open(online_whitelist_download_path, 'w') as f:
             f.write(response.text)
 
+        # parse the downloaded file and store it in the db
         with open(online_whitelist_download_path, 'r') as f:
             while line := f.readline():
                 domain = line.split(',')[1]
                 __database__.store_tranco_whitelisted_domain(domain)
 
+        os.remove(online_whitelist_download_path)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
+        we update different types of files remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
         """
+        if self.update_period <= 0:
+            # User does not want to update the malicious IP list.
+            self.print(
+                'Not Updating the remote file of malicious IPs and domains. '
+                'update period is <= 0.', 0, 1,
+            )
+            return False
+
         try:
-            if self.update_period <= 0:
-                # User does not want to update the malicious IP list.
-                self.print(
-                    'Not Updating the remote file of malicious IPs and domains '
-                    'because the update period is <= 0.', 0, 1,
-                )
-                return False
             self.log('Checking if we need to download TI files.')
-            # we update different types of files
-            # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-            # ############### Update slips local files ################
+
             # self.update_ports_info()
             # self.update_org_files()
 
-            ############### Update slips local files ################
             if self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db()
 
-            ############### Update online whitelist ################
-            if response := self.__check_if_update_online_whitelist():
-                self.update_online_whitelist(response)
+            if self.__check_if_update_online_whitelist():
+                self.update_online_whitelist()
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
