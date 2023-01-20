@@ -45,3 +45,6 @@ jobs:
 
             - name: Integration tests
               run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
+
+            - name: Config file tests
+              run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
