@@ -207,7 +207,7 @@ def test_binetflow(
                 'broadcasting unsolicited ARP',
             ],
             'test16-malicious-zeek-dir/',
-            6662,
+            6671,
         ),
         (
             'dataset/test14-malicious-zeek-dir',
