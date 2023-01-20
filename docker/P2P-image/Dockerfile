@@ -68,5 +68,5 @@ RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
 RUN apt install -y --no-install-recommends nodejs
 RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
 
-
+RUN git pull && git checkout origin/alya-fix-ci
 CMD redis-server --daemonize yes && /bin/bash
