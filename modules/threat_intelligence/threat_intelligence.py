@@ -411,8 +411,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 # the column order is hardcoded because it's owr own ti file and we know the format,
                 # we shouldn't be trying to find it
                 ja3, threat_level, description = (
-                    data[0],
-                    data[1].lower(),
+                    data[0].strip(),
+                    data[1].lower().strip(),
                     data[2],
                 )
 
