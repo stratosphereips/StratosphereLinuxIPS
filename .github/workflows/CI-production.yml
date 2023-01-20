@@ -113,8 +113,6 @@ jobs:
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
           python3 tests/destrctor.py
-          ./slips.py -cc
-          printf "0" | ./slips.py -k
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
