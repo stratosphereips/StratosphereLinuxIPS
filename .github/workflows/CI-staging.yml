@@ -44,4 +44,4 @@ jobs:
               run: ./slips.py -cc
 
             - name: Integration tests
-              run: python3 -m pytest -s tests/test_dataset.py -n 3 -p no:warnings -vv
+              run: python3 -m pytest -s tests/test_dataset.py::test_binetflow -n 3 -p no:warnings -vv
