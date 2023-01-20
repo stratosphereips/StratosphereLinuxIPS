@@ -46,7 +46,7 @@ RUN apt update && apt install -y --no-install-recommends \
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
-RUN git pull && git checkout origin/alya-fix-ci
+RUN git checkout origin/alya-fix-ci
 
 
 # Upgrade pip3 and install slips requirements
