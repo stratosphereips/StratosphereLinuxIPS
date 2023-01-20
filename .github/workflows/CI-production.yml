@@ -127,6 +127,16 @@ jobs:
         docker push $slips_image
         docker push stratosphereips/slips:latest
 
+    # build p2p image for ubuntu from dockerfile
+    - name: Build our p2p image from dockerfile
+      id: docker_build_p2p_for_slips
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/P2P-image/Dockerfile
+        tags: stratosphereips/slips_p2p:latest, stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
+        push: true
+
   build_and_push_dependency_image:
 
     runs-on: ubuntu-latest
