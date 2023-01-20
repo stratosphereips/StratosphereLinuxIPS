@@ -68,7 +68,6 @@ jobs:
     - name: Config file tests
       run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
-
      #Reaching this step means all unit tests passed outtside of docker
 
   test_slips_in_docker:
@@ -98,7 +97,7 @@ jobs:
       with:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/tmp_slips:latest, stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
         push: false
 
     # use the built image to run unit tests inside docker
@@ -107,7 +106,7 @@ jobs:
     - name: Run unit tests inside docker
       uses: addnab/docker-run-action@v3
       with:
-        image: stratosphereips/slips:latest
+        image: stratosphereips/tmp_slips:latest
         run: |
           redis-server --daemonize yes
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
@@ -122,10 +121,10 @@ jobs:
     # push one with the latest version as the tag, and another one with 'latest' as the tag
     - name: Push slips images to dockerhub
       env:
-        slips_image: stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        slips_image: stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
       run: |
         docker push $slips_image
-        docker push stratosphereips/slips:latest
+        docker push stratosphereips/tmp_slips:latest
 
     # build p2p image for ubuntu from dockerfile
     - name: Build our p2p image from dockerfile
@@ -134,7 +133,7 @@ jobs:
       with:
         context: ./
         file: ./docker/P2P-image/Dockerfile
-        tags: stratosphereips/slips_p2p:latest, stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/tmp_slips_p2p:latest, stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
         push: true
 
   build_and_push_dependency_image:
@@ -158,6 +157,6 @@ jobs:
       with:
         context: ./
         file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/slips_dependencies:latest
+        tags: stratosphereips/tmp_slips_dependencies:latest
         push: true
 
