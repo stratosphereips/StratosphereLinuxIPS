@@ -5,12 +5,10 @@ name: CI-staging
 on:
     push:
         branches:
-            - 'alya-fix-ci'
             - 'develop'
             - '!master'
     pull_request:
         branches:
-            - 'alya-fix-ci'
             - 'develop'
             - '!master'
 
