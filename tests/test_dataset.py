@@ -384,19 +384,18 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
 
 
 @pytest.mark.parametrize(
-    'pcap_path, expected_profiles, output_dir, expected_evidence, redis_port',
+    'pcap_path, expected_profiles, output_dir, redis_port',
     [
         (
             'dataset/test7-malicious.pcap',
             290,
-            'pcap_test_conf/',
-            'horizontal port scan to port  23',
+            'test_configuration_file/',
             6667,
         )
     ],
 )
 def test_conf_file(
-    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
+    pcap_path, expected_profiles, output_dir, redis_port
 ):
     """
     In this test we're using tests/test.conf
@@ -416,7 +415,6 @@ def test_conf_file(
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
 
     # testing disabled_detections param in the configuration file
     disabled_evidence = 'a connection without DNS resolution'

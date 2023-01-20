@@ -904,12 +904,12 @@ class ProfilingFlowsDatabase(object):
 
     def set_input_metadata(self, info:dict):
         """
-        sets name, size, analysis dates, and zeek output dir in the db
+        sets name, size, analysis dates, and zeek_dir in the db
         """
         for info, val in info.items():
             self.r.hset('analysis', info, val)
 
-    def get_zeek_output_dir(self, ):
+    def get_zeek_output_dir(self):
         """
         gets zeek output dir from the db
         """
