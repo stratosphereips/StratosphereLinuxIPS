@@ -32,7 +32,7 @@ jobs:
               run: redis-server --daemonize yes
 
             - name: Run unit tests
-              run: python3  -m pytest tests/ --ignore="tests/test_dataset.py" --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" -n 5 -p no:warnings -vv -s
+              run: python3  -m pytest tests/  --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
 
             - name: Run database unit tests
               run: python3  -m pytest tests/test_database.py -p no:warnings -vv
@@ -44,7 +44,7 @@ jobs:
               run: ./slips.py -cc
 
             - name: Integration tests
-              run: python3 -m pytest -s tests/test_dataset.py -n 4 -p no:warnings -vv
+              run: python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
 
             - name: Config file tests
               run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
