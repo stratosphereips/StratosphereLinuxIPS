@@ -1088,11 +1088,16 @@ class Database(ProfilingFlowsDatabase, object):
             alert_ID: json.dumps(evidence_IDs)
         }
 
-        # add the alert we have to the old alerts of this profileid_twid
-        profileid_twid_alerts: dict = old_profileid_twid_alerts | alert
+        if old_profileid_twid_alerts:
+            # update previous alerts for this profileid twid
+            # add the alert we have to the old alerts of this profileid_twid
+            old_profileid_twid_alerts.update(alert)
+            profileid_twid_alerts = json.dumps(old_profileid_twid_alerts)
+        else:
+            # no previous alerts for this profileid twid
+            profileid_twid_alerts = json.dumps(alert)
 
 
-        profileid_twid_alerts = json.dumps(profileid_twid_alerts)
         self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
 
         # the structure of alerts key is
