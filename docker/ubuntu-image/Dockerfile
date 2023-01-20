@@ -9,6 +9,11 @@ ENV IS_IN_A_DOCKER_CONTAINER True
 # destionation dir for slips inside the container
 ENV SLIPS_DIR /StratosphereLinuxIPS
 
+
+
+RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
+RUN (cd ${SLIPS_DIR} && chmod 774 slips.py && git checkout origin/alya-fix-ci)
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -43,10 +48,6 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
-RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
-
-RUN git checkout origin/alya-fix-ci
 
 
 # Upgrade pip3 and install slips requirements
