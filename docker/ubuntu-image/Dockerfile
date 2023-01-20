@@ -46,6 +46,8 @@ RUN apt update && apt install -y --no-install-recommends \
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
 RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 
+RUN git pull && git checkout origin/alya-fix-ci
+
 
 # Upgrade pip3 and install slips requirements
 RUN pip3 install --upgrade pip
@@ -59,6 +61,5 @@ RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 ch
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
-RUN git pull && git checkout origin/alya-fix-ci
 
 CMD redis-server --daemonize yes && /bin/bash
