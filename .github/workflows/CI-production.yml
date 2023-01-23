@@ -15,65 +15,65 @@ on:
 
 jobs:
 
-#  test_slips_locally:
-#    # runs the tests on a GH VM
-#    runs-on: ubuntu-20.04
-#    # 2 hours timeout
-#    timeout-minutes: 7200
-#
-#    env:
-#      SLIPS_VERSION: v1.0.1
-#
-#    steps:
-#    - uses: actions/checkout@v3
-#      with:
-#        ref: 'alya-fix-ci'
-#      # Fetch all history for all tags and branches
-#      #    fetch-depth: ''
-#
-#    - name: Install slips dependencies
-#      run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
-#
-#    - name: Install Zeek
-#      run: |
-#        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
-#        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
-#        sudo apt update
-#        sudo apt install -y --no-install-recommends zeek
-#        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
-#
-#    - name: Set up Python 3.8
-#      uses: actions/setup-python@v2
-#      with:
-#        python-version: "3.8"
-#
-#    - name: Install Python dependencies
-#      run:
-#        python -m pip install --upgrade pip
-#        pip install -r requirements.txt
-#
-#    - name: Start redis server
-#      run: redis-server --daemonize yes
-#
-#    - name: Run unit tests
-#      run: python3  -m pytest tests/  --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
-#
-#    - name: Run database unit tests
-#      run: python3  -m pytest tests/test_database.py -p no:warnings -vv
-#
-#    - name: Run daemon unit tests
-#      run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-#
-#    - name: Clear redis cache
-#      run: ./slips.py -cc
-#
-#    - name: Integration tests
-#      run: python3 -m pytest -s tests/integration_tests/test_dataset.py -n 3 -p no:warnings -vv
-#
-#    - name: Config file tests
-#      run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
-#
-#     #Reaching this step means all unit tests passed outtside of docker
+  test_slips_locally:
+    # runs the tests on a GH VM
+    runs-on: ubuntu-20.04
+    # 2 hours timeout
+    timeout-minutes: 7200
+
+    env:
+      SLIPS_VERSION: v1.0.1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: 'alya-fix-ci'
+      # Fetch all history for all tags and branches
+      #    fetch-depth: ''
+
+    - name: Install slips dependencies
+      run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+
+    - name: Install Zeek
+      run: |
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update
+        sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.8"
+
+    - name: Install Python dependencies
+      run:
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
+
+    - name: Run unit tests
+      run: python3  -m pytest tests/  --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+
+    - name: Run database unit tests
+      run: python3  -m pytest tests/test_database.py -p no:warnings -vv
+
+    - name: Run daemon unit tests
+      run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
+    - name: Integration tests
+      run: python3 -m pytest -s tests/integration_tests/test_dataset.py -n 3 -p no:warnings -vv
+
+    - name: Config file tests
+      run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+
+     #Reaching this step means all unit tests passed outtside of docker
 
   test_slips_in_docker:
     # runs the tests in a docker(built by this job) on stop of a GH VM
@@ -92,64 +92,64 @@ jobs:
         ref: 'alya-fix-ci'
 
     - name: Login to DockerHub
-      uses: docker/login-action@v1
+      uses: docker/login-action@v2
       with:
         username: stratosphereips
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
 
-#    # build slips from ubuntu dockerfile, but don't push
-#    - name: Build our ubuntu image from dockerfile
-#      id: docker_build_slips
-#      uses: docker/build-push-action@v2
-#      with:
-#        context: ./
-#        file: ./docker/ubuntu-image/Dockerfile
-#        tags: stratosphereips/tmp_slips:latest, stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
-#        push: false
-#
-#    # use the built image to run unit tests inside docker
-#    # we ignore the blocking module unit tests because we cannot run
-#    # docker with -cap-add=NET_ADMIN and use iptables in GH actions
-#    - name: Run unit tests inside docker
-#      uses: addnab/docker-run-action@v3
-#      with:
-#        image: stratosphereips/tmp_slips:latest
-#        run: |
-#          git pull & git checkout origin/alya-fix-ci
-#          redis-server --daemonize yes
-#          python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
-#          python3  -m pytest tests/test_database.py -p no:warnings -vv
-#          python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-#          python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
-#          python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
-#
-#    # push one with the latest version as the tag, and another one with 'latest' as the tag
-#    - name: Push slips images to dockerhub
-#      env:
-#        slips_image: stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
-#      run: |
-#        docker push $slips_image
-#        docker push stratosphereips/tmp_slips:latest
+    # build slips from ubuntu dockerfile, but don't push
+    - name: Build our ubuntu image from dockerfile
+      id: docker_build_slips
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        tags: stratosphereips/tmp_slips:latest, stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
+        push: false
 
-#
-#    # Set up Docker Buildx with docker-container driver is required
-#    # at the moment to be able to use a subdirectory with Git context
-#    - name: Set up Docker Buildx
-#      uses: docker/setup-buildx-action@v2
-#
-#    # build p2p image for ubuntu from dockerfile
-#    - name: Build our p2p image from dockerfile
-#      id: docker_build_p2p_for_slips
-#      uses: docker/build-push-action@v3
-#      with:
-#        allow: network.host
-#        context: ./
-#        file: ./docker/P2P-image/Dockerfile
-#        tags: |
-#          stratosphereips/tmp_slips_p2p:latest
-#          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
-#        push: true
+    # use the built image to run unit tests inside docker
+    # we ignore the blocking module unit tests because we cannot run
+    # docker with -cap-add=NET_ADMIN and use iptables in GH actions
+    - name: Run unit tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/tmp_slips:latest
+        run: |
+          git pull & git checkout origin/alya-fix-ci
+          redis-server --daemonize yes
+          python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+          python3  -m pytest tests/test_database.py -p no:warnings -vv
+          python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+
+    # push one with the latest version as the tag, and another one with 'latest' as the tag
+    - name: Push slips images to dockerhub
+      env:
+        slips_image: stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
+      run: |
+        docker push $slips_image
+        docker push stratosphereips/tmp_slips:latest
+
+
+    # Set up Docker Buildx with docker-container driver is required
+    # at the moment to be able to use a subdirectory with Git context
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # build p2p image for ubuntu from dockerfile
+    - name: Build our p2p image from dockerfile
+      id: docker_build_p2p_for_slips
+      uses: docker/build-push-action@v3
+      with:
+        allow: network.host
+        context: ./
+        file: ./docker/P2P-image/Dockerfile
+        tags: |
+          stratosphereips/tmp_slips_p2p:latest
+          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
+        push: true
 
   update_code_docs:
     runs-on: ubuntu-latest
@@ -177,29 +177,29 @@ jobs:
           message: '[Github actions] Update code docs'
           branch: 'code-docs-branch'
 
-#  build_and_push_dependency_image:
-#
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#
-#    # clone slips and checkout branch
-#    - uses: actions/checkout@v3
-#      with:
-#        ref: 'alya-fix-ci'
-#
-#    - name: Login to DockerHub
-#      uses: docker/login-action@v1
-#      with:
-#        username: stratosphereips
-#        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-#
-#    - name: Build and push latest dependency image
-#      id: docker_build_dependency_image
-#      uses: docker/build-push-action@v2
-#      with:
-#        context: ./
-#        file: ./docker/dependency-image/Dockerfile
-#        tags: stratosphereips/tmp_slips_dependencies:latest
-#        push: true
-#
+  build_and_push_dependency_image:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+    # clone slips and checkout branch
+    - uses: actions/checkout@v3
+      with:
+        ref: 'alya-fix-ci'
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and push latest dependency image
+      id: docker_build_dependency_image
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/dependency-image/Dockerfile
+        tags: stratosphereips/tmp_slips_dependencies:latest
+        push: true
+
