@@ -131,7 +131,7 @@ jobs:
 #      run: |
 #        docker push $slips_image
 #        docker push stratosphereips/tmp_slips:latest
-#
+
 
     # Set up Docker Buildx with docker-container driver is required
     # at the moment to be able to use a subdirectory with Git context
@@ -143,9 +143,12 @@ jobs:
       id: docker_build_p2p_for_slips
       uses: docker/build-push-action@v3
       with:
+        allow: [network.host]
         context: ./
         file: ./docker/P2P-image/Dockerfile
-        tags: stratosphereips/tmp_slips_p2p:latest, stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
+        tags: |
+          stratosphereips/tmp_slips_p2p:latest
+          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
         push: true
 #
 #  build_and_push_dependency_image:
