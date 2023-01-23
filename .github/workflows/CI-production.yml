@@ -16,18 +16,22 @@ on:
 jobs:
 
   test_slips_locally:
+    # runs the tests on a GH VM
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
+
     env:
       SLIPS_VERSION: v1.0.1
-
 
     steps:
     - uses: actions/checkout@v2
 
     - name: Install slips dependencies
-      run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+      run: sudo apt-get -y --no-install-recommends install python3 redis-server \
+        python3-pip python3-certifi python3-dev build-essential file lsof net-tools \
+        iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd \
+        yara libnotify-bin
 
     - name: Install Zeek
       run: |
@@ -71,7 +75,7 @@ jobs:
      #Reaching this step means all unit tests passed outtside of docker
 
   test_slips_in_docker:
-
+    # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
@@ -108,11 +112,11 @@ jobs:
       with:
         image: stratosphereips/tmp_slips:latest
         run: |
+          git pull & git checkout origin/alya-fix-ci
           redis-server --daemonize yes
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-          python3 tests/destrctor.py
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
