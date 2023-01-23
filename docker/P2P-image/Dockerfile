@@ -10,12 +10,6 @@ ENV IS_IN_A_DOCKER_CONTAINER True
 ENV SLIPS_DIR /StratosphereLinuxIPS
 
 
-RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
-# Switch to Slips installation dir when login.
-WORKDIR ${SLIPS_DIR}
-RUN git checkout origin/alya-fix-ci
-
-RUN chmod 774 slips.py &&  git submodule init && git submodule update
 
 
 # Install wget and add Zeek repository to our sources.
@@ -54,6 +48,12 @@ RUN apt update && apt install -y --no-install-recommends \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
 
+RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
+# Switch to Slips installation dir when login.
+WORKDIR ${SLIPS_DIR}
+RUN git checkout origin/alya-fix-ci
+
+RUN chmod 774 slips.py &&  git submodule init && git submodule update
 
 
 # set use_p2p to yes in the config file
