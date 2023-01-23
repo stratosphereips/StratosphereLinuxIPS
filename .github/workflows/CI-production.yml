@@ -86,7 +86,6 @@ jobs:
     - uses: actions/checkout@v2
       # fetch all history/branches
       with:
-        fetch-depth: 0
         #todo change this to main once testing is done
         path: origin/alya-fix-ci
 
