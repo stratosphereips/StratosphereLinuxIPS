@@ -84,10 +84,9 @@ jobs:
     # clone slips and checkout branch
     # By default it checks out only one commit
     - uses: actions/checkout@v2
-      # fetch all history/branches
       with:
         #todo change this to main once testing is done
-        path: origin/alya-fix-ci
+        path: alya-fix-ci
 
     - name: Login to DockerHub
       uses: docker/login-action@v1
