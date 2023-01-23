@@ -3,10 +3,10 @@ docs = 'docs/'
 own_name = os.path.basename(__file__)
 doxygen_repo_dirname = 'doxygen-awesome-css'
 
-def delete_all_files(dir_to_clear):
+def delete_old_docs(dir_to_clear):
     """
     This function deletes all files and subfiles of a given dir
-    excpet for the doxygen repo we use to generate the docs and this python script
+    except for the doxygen repo we use to generate the docs and this python script
     """
 
     for path, subdirs, files in os.walk(dir_to_clear):
@@ -53,16 +53,16 @@ def add_docs_dir_to_git():
     os.system(f"git add --all {docs}")
 
 # delete old generated docs
-delete_all_files(docs)
-print(f"{'*'*20}  Deleted old docs {'*'*20} ")
+delete_old_docs(docs)
+print(f"\n{'*'*20}  Deleted old docs {'*'*20} ")
 regenrate_docs()
-print(f"{'*'*20} Generated new docs {'*'*20} ")
+print(f"\n{'*'*20} Generated new docs {'*'*20} ")
 # docs are generated in docs/html, move them to docs/ dir
 move_html_files_to_docs_dir()
-print(f"{'*'*20} Moved new docs from docs/html/ to docs/ dir {'*'*20} ")
+print(f"\n{'*'*20} Moved new docs from docs/html/ to docs/ dir {'*'*20} ")
 
 add_docs_dir_to_git()
-print(f"{'*'*20} Added new docs/ dir to git {'*'*20} ")
+print(f"\n{'*'*20} Added new docs/ dir to git {'*'*20} ")
 
 
 

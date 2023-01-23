@@ -4,7 +4,6 @@ var classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client =
     [ "close", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#afabe6dd39a5b2127e572ff1e3c0b9709", null ],
     [ "connect", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#afdc1cfb5cc1bce41579b754273463ec2", null ],
     [ "create_file", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#aa280c3f5232af7b79bcb11b10ba5e36a", null ],
-    [ "getDebug", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#a2464c08d575fd88d282f86e4ab945084", null ],
     [ "getEvents", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#ab051ac89c22302ffd5c7fe5509b9d13c", null ],
     [ "getInfo", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#ae5dc1e009b184c26e5cda18c24129675", null ],
     [ "init_log", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html#a28c35966568a02d4fd61729fd3206c15", null ],

@@ -139,6 +139,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:abed649d4e2baedbe828ace4f0394b4a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a61dbf4a61e1ef10ce22a2b4b92a19ef6"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a61dbf4a61e1ef10ce22a2b4b92a19ef6">print</a> (self, text, verbose=1, debug=0)</td></tr>
 <tr class="separator:a61dbf4a61e1ef10ce22a2b4b92a19ef6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7466642b65f38b5b417f3597a74218ea"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a7466642b65f38b5b417f3597a74218ea">check_connection_to_local_ip</a> (self, daddr, dport, saddr, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a7466642b65f38b5b417f3597a74218ea"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a142e5e2361e8109176980253e139ab28"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a142e5e2361e8109176980253e139ab28">check_long_connection</a> (self, dur, daddr, saddr, profileid, twid, uid, timestamp)</td></tr>
 <tr class="separator:a142e5e2361e8109176980253e139ab28"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac10b42d66ceff8aea2f8605bc3a399f8"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ac10b42d66ceff8aea2f8605bc3a399f8">is_p2p</a> (self, dport, proto, daddr)</td></tr>
@@ -165,8 +167,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a55a2e3d921eb96236964a3ca7dd12b21"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae9015a98ff438721b8273781d23e14b7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ae9015a98ff438721b8273781d23e14b7">is_well_known_org</a> (self, ip)</td></tr>
 <tr class="separator:ae9015a98ff438721b8273781d23e14b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7f774f05a01ba148e15e32caa7871d06"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a7f774f05a01ba148e15e32caa7871d06">check_connection_without_dns_resolution</a> (self, daddr, twid, profileid, timestamp, uid)</td></tr>
-<tr class="separator:a7f774f05a01ba148e15e32caa7871d06"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af859323ff1d05ea7515a53727a16c820"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#af859323ff1d05ea7515a53727a16c820">check_connection_without_dns_resolution</a> (self, flow_type, appproto, daddr, twid, profileid, timestamp, uid)</td></tr>
+<tr class="separator:af859323ff1d05ea7515a53727a16c820"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a98b5dfeff839e474440580642cb963cb"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a98b5dfeff839e474440580642cb963cb">is_CNAME_contacted</a> (self, answers, contacted_ips)</td></tr>
 <tr class="separator:a98b5dfeff839e474440580642cb963cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab41c551e8a22861502f2c82b6772d454"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ab41c551e8a22861502f2c82b6772d454">check_dns_without_connection</a> (self, domain, list answers, str rcode_name, str timestamp, profileid, twid, uid)</td></tr>
@@ -179,18 +181,30 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a44d7b2ea59a95144f8dfcb6e4de3ed7e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a264b09ef5153812c95443dbe36abd165"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a264b09ef5153812c95443dbe36abd165">detect_incompatible_CN</a> (self, daddr, server_name, issuer, profileid, twid, uid, timestamp)</td></tr>
 <tr class="separator:a264b09ef5153812c95443dbe36abd165"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3e1e0351a11b53de3c5d9ef2bc419e41"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a3e1e0351a11b53de3c5d9ef2bc419e41">check_multiple_ssh_clients</a> (self, starttime, saddr, used_software, major_v, minor_v, twid, uid)</td></tr>
-<tr class="separator:a3e1e0351a11b53de3c5d9ef2bc419e41"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acb507991a62215be12318dff3463b9cd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#acb507991a62215be12318dff3463b9cd">check_multiple_ssh_versions</a> (self, starttime, saddr, used_software, major_v, minor_v, twid, uid, role='SSH::CLIENT')</td></tr>
+<tr class="separator:acb507991a62215be12318dff3463b9cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae700b645223d861ad0b249c91f896035"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ae700b645223d861ad0b249c91f896035">estimate_shannon_entropy</a> (self, string)</td></tr>
+<tr class="separator:ae700b645223d861ad0b249c91f896035"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a170bc03b5f35d8efa0659ee5b90aa670"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a170bc03b5f35d8efa0659ee5b90aa670">check_suspicious_dns_answers</a> (self, domain, answers, daddr, profileid, twid, stime, uid)</td></tr>
+<tr class="separator:a170bc03b5f35d8efa0659ee5b90aa670"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a74e84aaf748ef161d582f4c0b9da275e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a74e84aaf748ef161d582f4c0b9da275e">detect_DGA</a> (self, rcode_name, query, stime, daddr, profileid, twid, uid)</td></tr>
 <tr class="separator:a74e84aaf748ef161d582f4c0b9da275e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6d42d4e93f227c65c09a02575df0e8d1"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a6d42d4e93f227c65c09a02575df0e8d1">check_conn_to_port_0</a> (self, sport, dport, proto, saddr, daddr, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a6d42d4e93f227c65c09a02575df0e8d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad384e55c3d456378c5623a7c32c6310a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad384e55c3d456378c5623a7c32c6310a">check_multiple_reconnection_attempts</a> (self, origstate, saddr, daddr, dport, uid, profileid, twid, timestamp)</td></tr>
+<tr class="separator:ad384e55c3d456378c5623a7c32c6310a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a85ff678f65d43da3b638a1428b57aa6a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a85ff678f65d43da3b638a1428b57aa6a">detect_young_domains</a> (self, domain, stime, profileid, twid, uid)</td></tr>
 <tr class="separator:a85ff678f65d43da3b638a1428b57aa6a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aef69e9d0a6652f2910122b737e4d29c8"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aef69e9d0a6652f2910122b737e4d29c8">shutdown_gracefully</a> (self)</td></tr>
 <tr class="separator:aef69e9d0a6652f2910122b737e4d29c8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:adc82240a4cf72d47e93b3bc4f4a3ced5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#adc82240a4cf72d47e93b3bc4f4a3ced5">check_smtp_bruteforce</a> (self, stime, saddr, daddr, profileid, twid, uid)</td></tr>
-<tr class="separator:adc82240a4cf72d47e93b3bc4f4a3ced5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a27e65a305438c76dddf9f69ad9fe8371"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a27e65a305438c76dddf9f69ad9fe8371">check_smtp_bruteforce</a> (self, last_reply, stime, saddr, daddr, profileid, twid, uid)</td></tr>
+<tr class="separator:a27e65a305438c76dddf9f69ad9fe8371"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a05ebe253a5b58f7d48dc63170ae9db0f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a05ebe253a5b58f7d48dc63170ae9db0f">detect_connection_to_multiple_ports</a> (self, saddr, daddr, proto, state, appproto, dport, timestamp, profileid, twid)</td></tr>
 <tr class="separator:a05ebe253a5b58f7d48dc63170ae9db0f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acafb90dfc8a507bce346b542be5c00ec"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#acafb90dfc8a507bce346b542be5c00ec">detect_malicious_ja3</a> (self, saddr, daddr, ja3, ja3s, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:acafb90dfc8a507bce346b542be5c00ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5df2dbf1255cba3f8c152a182f237c8a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a5df2dbf1255cba3f8c152a182f237c8a">check_self_signed_certs</a> (self, validation_status, daddr, server_name, profileid, twid, timestamp, uid)</td></tr>
+<tr class="separator:a5df2dbf1255cba3f8c152a182f237c8a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8386338e710740fb6676373eaa58dd07"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a8386338e710740fb6676373eaa58dd07">check_ssh_password_guessing</a> (self, daddr, uid, timestamp, profileid, twid, auth_success)</td></tr>
 <tr class="separator:a8386338e710740fb6676373eaa58dd07"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a01e84d3fad583a32a7b2bfa859bd13a8"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a01e84d3fad583a32a7b2bfa859bd13a8">check_malicious_ssl</a> (self, ssl_info)</td></tr>
@@ -201,6 +215,10 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:aa16e1793609fe7937c1000b26a4c2ffc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a81a1108551767562160acf0cf455d049"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a81a1108551767562160acf0cf455d049">check_non_ssl_port_443_conns</a> (self, state, daddr, dport, proto, appproto, profileid, twid, uid, timestamp)</td></tr>
 <tr class="separator:a81a1108551767562160acf0cf455d049"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad4026deb3dd5a74c89a349e5346313c5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad4026deb3dd5a74c89a349e5346313c5">check_different_localnet_usage</a> (self, saddr, daddr, dport, proto, profileid, timestamp, twid, uid, what_to_check='')</td></tr>
+<tr class="separator:ad4026deb3dd5a74c89a349e5346313c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a50fcd31f08bedff37b9b2cbdcaf4242a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a50fcd31f08bedff37b9b2cbdcaf4242a">check_device_changing_ips</a> (self, flow_type, smac, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a50fcd31f08bedff37b9b2cbdcaf4242a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad8b078c4418be0f17e7fc90e93503c28"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad8b078c4418be0f17e7fc90e93503c28">run</a> (self)</td></tr>
 <tr class="separator:ad8b078c4418be0f17e7fc90e93503c28"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
@@ -276,8 +294,12 @@ Public Attributes</h2></td></tr>
 <tr class="separator:ae8007afd042425e0a85d1d5fb31791da"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a89605b8eb8f7d143ff467b3579220068"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a89605b8eb8f7d143ff467b3579220068">data_exfiltration_threshold</a></td></tr>
 <tr class="separator:a89605b8eb8f7d143ff467b3579220068"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae5dc1301c02626570a69281aaad688e3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ae5dc1301c02626570a69281aaad688e3">pastebin_downloads_threshold</a></td></tr>
+<tr class="separator:ae5dc1301c02626570a69281aaad688e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a648dc9ff8ce9a9dc5cb33e92b142aadf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a648dc9ff8ce9a9dc5cb33e92b142aadf">our_ips</a></td></tr>
 <tr class="separator:a648dc9ff8ce9a9dc5cb33e92b142aadf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a725af7b96adca2d912ee3b9070b1e5cd"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a725af7b96adca2d912ee3b9070b1e5cd">shannon_entropy_threshold</a></td></tr>
+<tr class="separator:a725af7b96adca2d912ee3b9070b1e5cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-static-attribs" name="pub-static-attribs"></a>
 Static Public Attributes</h2></td></tr>
@@ -324,8 +346,151 @@ Static Public Attributes</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a7f774f05a01ba148e15e32caa7871d06" name="a7f774f05a01ba148e15e32caa7871d06"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a7f774f05a01ba148e15e32caa7871d06">&#9670;&#160;</a></span>check_connection_without_dns_resolution()</h2>
+<a id="a6d42d4e93f227c65c09a02575df0e8d1" name="a6d42d4e93f227c65c09a02575df0e8d1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6d42d4e93f227c65c09a02575df0e8d1">&#9670;&#160;</a></span>check_conn_to_port_0()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_conn_to_port_0 </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts on connections to or from port 0 using protocols other than
+igmp, icmp
+</pre> 
+</div>
+</div>
+<a id="a7466642b65f38b5b417f3597a74218ea" name="a7466642b65f38b5b417f3597a74218ea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7466642b65f38b5b417f3597a74218ea">&#9670;&#160;</a></span>check_connection_to_local_ip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_connection_to_local_ip </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts when there's a connection from a local IP to another local IP
+</pre> 
+</div>
+</div>
+<a id="af859323ff1d05ea7515a53727a16c820" name="af859323ff1d05ea7515a53727a16c820"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af859323ff1d05ea7515a53727a16c820">&#9670;&#160;</a></span>check_connection_without_dns_resolution()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -335,6 +500,18 @@ Static Public Attributes</h2></td></tr>
           <td>(</td>
           <td class="paramtype">&#160;</td>
           <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>appproto</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -427,6 +604,147 @@ Static Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <pre class="fragment">Set evidence when 1 flow is sending &gt;= the flow_upload_threshold bytes
+</pre> 
+</div>
+</div>
+<a id="a50fcd31f08bedff37b9b2cbdcaf4242a" name="a50fcd31f08bedff37b9b2cbdcaf4242a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50fcd31f08bedff37b9b2cbdcaf4242a">&#9670;&#160;</a></span>check_device_changing_ips()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_device_changing_ips </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>smac</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Every time we have a flow for a new ip (an ip that we're seeing for the first time)
+we check if the MAC of this srcip was associated with another ip
+this check is only done once for each source ip slips sees
+</pre> 
+</div>
+</div>
+<a id="ad4026deb3dd5a74c89a349e5346313c5" name="ad4026deb3dd5a74c89a349e5346313c5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad4026deb3dd5a74c89a349e5346313c5">&#9670;&#160;</a></span>check_different_localnet_usage()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_different_localnet_usage </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>what_to_check</em> = <code>''</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">alerts when a connection to a private ip that doesn't belong to our local network is found
+for example:
+If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
+:param what_to_check: can be 'srcip' or 'dstip'
 </pre> 
 </div>
 </div>
@@ -646,7 +964,7 @@ Static Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <pre class="fragment">Check if a duration of the connection is
-above the threshold (more than 25 minutess by default).
+above the threshold (more than 25 minutes by default).
 :param dur: duration of the flow in seconds
 </pre> 
 </div>
@@ -679,14 +997,86 @@ above the threshold (more than 25 minutess by default).
 
 </div>
 </div>
-<a id="a3e1e0351a11b53de3c5d9ef2bc419e41" name="a3e1e0351a11b53de3c5d9ef2bc419e41"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3e1e0351a11b53de3c5d9ef2bc419e41">&#9670;&#160;</a></span>check_multiple_ssh_clients()</h2>
+<a id="ad384e55c3d456378c5623a7c32c6310a" name="ad384e55c3d456378c5623a7c32c6310a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad384e55c3d456378c5623a7c32c6310a">&#9670;&#160;</a></span>check_multiple_reconnection_attempts()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_multiple_ssh_clients </td>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_multiple_reconnection_attempts </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>origstate</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts when 5+ reconnection attempts from the same source IP to
+the same destination IP occurs
+</pre> 
+</div>
+</div>
+<a id="acb507991a62215be12318dff3463b9cd" name="acb507991a62215be12318dff3463b9cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acb507991a62215be12318dff3463b9cd">&#9670;&#160;</a></span>check_multiple_ssh_versions()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_multiple_ssh_versions </td>
           <td>(</td>
           <td class="paramtype">&#160;</td>
           <td class="paramname"><em>self</em>, </td>
@@ -731,7 +1121,13 @@ above the threshold (more than 25 minutess by default).
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>uid</em>&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>role</em> = <code>'SSH::CLIENT'</code>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -740,7 +1136,9 @@ above the threshold (more than 25 minutess by default).
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment">function to check if this srcip was detected using a different ssh client versions before
+<pre class="fragment">checks if this srcip was detected using a different
+ ssh client or server versions before
+:param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
 </pre> 
 </div>
 </div>
@@ -967,8 +1365,73 @@ This function waits for the ssl.log flow to appear in conn.log before alerting
 </pre> 
 </div>
 </div>
-<a id="adc82240a4cf72d47e93b3bc4f4a3ced5" name="adc82240a4cf72d47e93b3bc4f4a3ced5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adc82240a4cf72d47e93b3bc4f4a3ced5">&#9670;&#160;</a></span>check_smtp_bruteforce()</h2>
+<a id="a5df2dbf1255cba3f8c152a182f237c8a" name="a5df2dbf1255cba3f8c152a182f237c8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5df2dbf1255cba3f8c152a182f237c8a">&#9670;&#160;</a></span>check_self_signed_certs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_self_signed_certs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>validation_status</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>server_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">checks the validation status of every azeek ssl flow for self signed certs
+</pre> 
+</div>
+</div>
+<a id="a27e65a305438c76dddf9f69ad9fe8371" name="a27e65a305438c76dddf9f69ad9fe8371"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a27e65a305438c76dddf9f69ad9fe8371">&#9670;&#160;</a></span>check_smtp_bruteforce()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -978,6 +1441,12 @@ This function waits for the ssl.log flow to appear in conn.log before alerting
           <td>(</td>
           <td class="paramtype">&#160;</td>
           <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>last_reply</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -1080,8 +1549,9 @@ This function waits for the ssl.log flow to appear in conn.log before alerting
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment">This is only called when there's a failed ssh attempt
-alerts ssh pw bruteforce when there's more than 20 failed attempts by the same ip to the same IP
+<pre class="fragment">This detection is only done when there's a failed ssh attempt
+alerts ssh pw bruteforce when there's more than
+20 failed attempts by the same ip to the same IP
 </pre> 
 </div>
 </div>
@@ -1135,6 +1605,71 @@ alerts ssh pw bruteforce when there's more than 20 failed attempts by the same i
       </table>
 </div><div class="memdoc">
 <pre class="fragment">Function to check if an SSH connection logged in successfully
+</pre> 
+</div>
+</div>
+<a id="a170bc03b5f35d8efa0659ee5b90aa670" name="a170bc03b5f35d8efa0659ee5b90aa670"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a170bc03b5f35d8efa0659ee5b90aa670">&#9670;&#160;</a></span>check_suspicious_dns_answers()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.check_suspicious_dns_answers </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>domain</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>answers</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Uses shannon entropy to detect DNS TXT answers with encoded/encrypted strings
 </pre> 
 </div>
 </div>
@@ -1484,6 +2019,76 @@ to an org that the domain doesn't belong to
 </pre> 
 </div>
 </div>
+<a id="acafb90dfc8a507bce346b542be5c00ec" name="acafb90dfc8a507bce346b542be5c00ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acafb90dfc8a507bce346b542be5c00ec">&#9670;&#160;</a></span>detect_malicious_ja3()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.detect_malicious_ja3 </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ja3</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ja3s</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="ac4ea804b05c4c150f1685011fc7eca49" name="ac4ea804b05c4c150f1685011fc7eca49"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac4ea804b05c4c150f1685011fc7eca49">&#9670;&#160;</a></span>detect_successful_ssh_by_slips()</h2>
 
@@ -1637,6 +2242,34 @@ comparing all bytes sent and received to our threshold
 <pre class="fragment">Detect domains that are too young.
 The threshold is 60 days
 </pre> 
+</div>
+</div>
+<a id="ae700b645223d861ad0b249c91f896035" name="ae700b645223d861ad0b249c91f896035"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae700b645223d861ad0b249c91f896035">&#9670;&#160;</a></span>estimate_shannon_entropy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.flowalerts.flowalerts.Module.estimate_shannon_entropy </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>string</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
 </div>
 </div>
 <a id="a98b5dfeff839e474440580642cb963cb" name="a98b5dfeff839e474440580642cb963cb"></a>
@@ -2463,6 +3096,20 @@ ssl flows to wait for are stored in pending_ssl_flows
 
 </div>
 </div>
+<a id="ae5dc1301c02626570a69281aaad688e3" name="ae5dc1301c02626570a69281aaad688e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae5dc1301c02626570a69281aaad688e3">&#9670;&#160;</a></span>pastebin_downloads_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.flowalerts.flowalerts.Module.pastebin_downloads_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
 <a id="a1a300c6ce033cea267954509f8928b1d" name="a1a300c6ce033cea267954509f8928b1d"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a1a300c6ce033cea267954509f8928b1d">&#9670;&#160;</a></span>pending_ssl_flows</h2>
 
@@ -2485,6 +3132,20 @@ ssl flows to wait for are stored in pending_ssl_flows
       <table class="memname">
         <tr>
           <td class="memname">slips.modules.flowalerts.flowalerts.Module.pw_guessing_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a725af7b96adca2d912ee3b9070b1e5cd" name="a725af7b96adca2d912ee3b9070b1e5cd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a725af7b96adca2d912ee3b9070b1e5cd">&#9670;&#160;</a></span>shannon_entropy_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">slips.modules.flowalerts.flowalerts.Module.shannon_entropy_threshold</td>
         </tr>
       </table>
 </div><div class="memdoc">

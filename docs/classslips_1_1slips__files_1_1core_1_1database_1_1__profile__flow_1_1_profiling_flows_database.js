@@ -1,7 +1,7 @@
 var classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database =
 [
     [ "__init__", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a1c80cc98a1cad5814451a24ec3cd988a", null ],
-    [ "add_flow", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#ae68ee93a925cfd79108d6102d867a531", null ],
+    [ "add_flow", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a3527a7f62467b76c8b34ca2a41f52d11", null ],
     [ "add_ips", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#aa2c8df7f2e0a2e50c44cae2ebda31e42", null ],
     [ "add_out_dns", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a887b08ca91e9d9556f43067b213b12c5", null ],
     [ "add_out_http", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#ac9f3bccd17699070800abde8d427584d", null ],
@@ -18,6 +18,7 @@ var classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profil
     [ "get_flow", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a6f5640cf6c3080c423a720dd5dc22196", null ],
     [ "get_input_type", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#aef55f982a21633a6b6003a114fe72a17", null ],
     [ "get_label_count", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a1073c1f0f6e3616ce5abcf41314be166", null ],
+    [ "get_local_network", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a6118489c71e7eb9b07b43642db744441", null ],
     [ "get_output_dir", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a31eaf5cc524ae3879cc92b655b109a33", null ],
     [ "get_p2p_reports_about_ip", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a749124ec2f0d36e3a4660de0f93dc819", null ],
     [ "get_zeek_output_dir", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a70cd302e7684dd481481d66534549b1a", null ],
@@ -44,7 +45,7 @@ var classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profil
     [ "update_ip_info", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#abbda2dd430e8057d9837c9fd8f03f6b8", null ],
     [ "update_times_contacted", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a194df0d2f5caf64670aa19ce2b70aa9c", null ],
     [ "first_flow", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a005c5a4d890678f74b3cacdcf9ef1044", null ],
+    [ "is_localnet_set", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a126465187e06cd6298a85a37e087c3ba", null ],
     [ "name", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a49ddd5609ba6d917d86ede8b456b6045", null ],
-    [ "seen_MACs", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#aa551ad9f6001b661cdd7f67b835bfa4a", null ],
     [ "separator", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html#a78f040c4f1457fba31a0526b00fedef0", null ]
 ];

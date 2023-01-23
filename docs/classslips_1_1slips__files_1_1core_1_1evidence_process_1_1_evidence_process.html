@@ -140,10 +140,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a23bb066c5356109b9ed6cda59a56c471"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a4229f125b7ab49e2696912acd2cb6066"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a4229f125b7ab49e2696912acd2cb6066">read_configuration</a> (self)</td></tr>
 <tr class="separator:a4229f125b7ab49e2696912acd2cb6066"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a30463c2d8ab8f2735fea4c09bb4aa76b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a30463c2d8ab8f2735fea4c09bb4aa76b">format_blocked_srcip_evidence</a> (self, ip, twid, flow_datetime, now)</td></tr>
-<tr class="separator:a30463c2d8ab8f2735fea4c09bb4aa76b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aef61ae02840d173bd2dcb1bb72630969"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#aef61ae02840d173bd2dcb1bb72630969">format_evidence_string</a> (self, profileid, twid, ip, detection_module, detection_type, detection_info, description)</td></tr>
-<tr class="separator:aef61ae02840d173bd2dcb1bb72630969"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a80fcee71c79e78b0e32a57b7c6e99d25"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a80fcee71c79e78b0e32a57b7c6e99d25">format_evidence_string</a> (self, ip, detection_module, attacker, description)</td></tr>
+<tr class="separator:a80fcee71c79e78b0e32a57b7c6e99d25"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad56631a89189cccc83495b2b2be9e5d1"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ad56631a89189cccc83495b2b2be9e5d1">line_wrap</a> (self, txt)</td></tr>
 <tr class="separator:ad56631a89189cccc83495b2b2be9e5d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8ecf2b82c36cba3cc4345b1a444fda28"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a8ecf2b82c36cba3cc4345b1a444fda28">clean_file</a> (self, output_folder, file_to_clean)</td></tr>
@@ -567,54 +565,6 @@ profile malicious, aka evidence of this profile attacking others.
 </pre> 
 </div>
 </div>
-<a id="a30463c2d8ab8f2735fea4c09bb4aa76b" name="a30463c2d8ab8f2735fea4c09bb4aa76b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a30463c2d8ab8f2735fea4c09bb4aa76b">&#9670;&#160;</a></span>format_blocked_srcip_evidence()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">def slips.slips_files.core.evidenceProcess.EvidenceProcess.format_blocked_srcip_evidence </td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>self</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>ip</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>twid</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>flow_datetime</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>now</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<pre class="fragment">Function to prepare evidence about the blocked profileid and twid
-This evidence will be written in alerts.log, it won't be displayed in the terminal
-</pre> 
-</div>
-</div>
 <a id="a3f206ddf50cc504545a23afcc221b6ae" name="a3f206ddf50cc504545a23afcc221b6ae"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a3f206ddf50cc504545a23afcc221b6ae">&#9670;&#160;</a></span>format_evidence_causing_this_alert()</h2>
 
@@ -663,8 +613,8 @@ flow_datetime: time of the last evidence received
 </pre> 
 </div>
 </div>
-<a id="aef61ae02840d173bd2dcb1bb72630969" name="aef61ae02840d173bd2dcb1bb72630969"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aef61ae02840d173bd2dcb1bb72630969">&#9670;&#160;</a></span>format_evidence_string()</h2>
+<a id="a80fcee71c79e78b0e32a57b7c6e99d25" name="a80fcee71c79e78b0e32a57b7c6e99d25"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a80fcee71c79e78b0e32a57b7c6e99d25">&#9670;&#160;</a></span>format_evidence_string()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -674,18 +624,6 @@ flow_datetime: time of the last evidence received
           <td>(</td>
           <td class="paramtype">&#160;</td>
           <td class="paramname"><em>self</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>profileid</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>twid</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
@@ -703,13 +641,7 @@ flow_datetime: time of the last evidence received
           <td class="paramkey"></td>
           <td></td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>detection_type</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>detection_info</em>, </td>
+          <td class="paramname"><em>attacker</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>

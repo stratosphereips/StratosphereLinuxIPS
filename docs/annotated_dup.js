@@ -68,6 +68,11 @@ var annotated_dup =
             [ "Module", "classslips_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html", "classslips_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module" ]
           ] ]
         ] ],
+        [ "network_discovery", "namespaceslips_1_1modules_1_1network__discovery.html", [
+          [ "network_discovery", "namespaceslips_1_1modules_1_1network__discovery_1_1network__discovery.html", [
+            [ "PortScanProcess", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process" ]
+          ] ]
+        ] ],
         [ "p2ptrust", "namespaceslips_1_1modules_1_1p2ptrust.html", [
           [ "p2ptrust", "namespaceslips_1_1modules_1_1p2ptrust_1_1p2ptrust.html", [
             [ "Trust", "classslips_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html", "classslips_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust" ]
@@ -90,11 +95,6 @@ var annotated_dup =
             [ "printer", "namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer.html", [
               [ "Printer", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer" ]
             ] ]
-          ] ]
-        ] ],
-        [ "portscan_detector", "namespaceslips_1_1modules_1_1portscan__detector.html", [
-          [ "portscan_detector", "namespaceslips_1_1modules_1_1portscan__detector_1_1portscan__detector.html", [
-            [ "PortScanProcess", "classslips_1_1modules_1_1portscan__detector_1_1portscan__detector_1_1_port_scan_process.html", "classslips_1_1modules_1_1portscan__detector_1_1portscan__detector_1_1_port_scan_process" ]
           ] ]
         ] ],
         [ "RiskIQ", "namespaceslips_1_1modules_1_1_risk_i_q.html", [

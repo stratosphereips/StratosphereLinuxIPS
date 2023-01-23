@@ -11,7 +11,6 @@ var classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process =
     [ "debug", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a8bd539b6b4b0f6b6ce01a2260fafd506", null ],
     [ "fieldseparator", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#aee11c788715911395f169a5ea8d867d0", null ],
     [ "inputqueue", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#af2cefb98471d200b46771974cf51601d", null ],
-    [ "is_timline_file", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a9d0e4a837cd8424633fd9340905d6c32", null ],
     [ "mainfoldername", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a313cb75f17c7dbed3581e047aafd1bd3", null ],
     [ "name", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#a6e269f155be60a658bfbacd203d0431f", null ],
     [ "outputqueue", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html#aad60bbeb0c3f96fa2f974611ae583d94", null ],

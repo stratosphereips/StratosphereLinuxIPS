@@ -277,10 +277,10 @@ You need to have the token in your environment variables to use this module
 <pre class="fragment">Function to export evidence to a STIX_data.json file in the cwd.
 It keeps appending the given indicator to STIX_data.json until they're sent to the
 taxii server
-msg_to_send is a tuple: (type_evidence, type_detection,detection_info, description)
-    type_evidence: e.g PortScan, ThreatIntelligence etc
-    type_detection: e.g dip sip dport sport
-    detection_info: ip or port  OR ip:port:proto
+msg_to_send is a tuple: (evidence_type, attacker_direction,attacker, description)
+    evidence_type: e.g PortScan, ThreatIntelligence etc
+    attacker_direction: e.g dip sip dport sport
+    attacker: ip or port  OR ip:port:proto
     description: e.g 'New horizontal port scan detected to port 23. Not Estab TCP from IP: ip-address. Tot pkts sent all IPs: 9'
 </pre> 
 </div>

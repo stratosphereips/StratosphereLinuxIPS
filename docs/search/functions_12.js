@@ -1,6 +1,6 @@
 var searchData=
 [
-  ['task_0',['task',['../classslips_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread.html#ad3094e7ef8f67e6637516acddab0d003',1,'slips.modules.flowalerts.TimerThread.TimerThread.task()'],['../classslips_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread.html#a0544f234fcae2e24eb932ecf8be85ce5',1,'slips.slips_files.core.logsProcess.TimerThread.task()']]],
+  ['task_0',['task',['../classslips_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread.html#a0544f234fcae2e24eb932ecf8be85ce5',1,'slips.slips_files.core.logsProcess.TimerThread.task()'],['../classslips_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread.html#ad3094e7ef8f67e6637516acddab0d003',1,'slips.modules.flowalerts.TimerThread.TimerThread.task()']]],
   ['terminate_5fslips_1',['terminate_slips',['../classslips_1_1slips_1_1_main.html#a22bc7f63f9c5e89c5cb895706af0f32a',1,'slips::slips::Main']]],
   ['test_2',['test',['../classslips_1_1modules_1_1blocking_1_1blocking_1_1_module.html#acdbeb350740b00e84bab990e74c9efba',1,'slips::modules::blocking::blocking::Module']]],
   ['test_5fevaluation_5ferror_3',['test_evaluation_error',['../namespaceslips_1_1modules_1_1p2ptrust_1_1testing_1_1test__p2p.html#ae48cbb13a8932d37a1eeca0e4cb51862',1,'slips::modules::p2ptrust::testing::test_p2p']]],
@@ -12,8 +12,6 @@ var searchData=
   ['test_5fslips_5fintegration_9',['test_slips_integration',['../namespaceslips_1_1modules_1_1p2ptrust_1_1testing_1_1test__p2p.html#a14463bdd5fbce39f21579b67ce9e0784',1,'slips::modules::p2ptrust::testing::test_p2p']]],
   ['test_5ftrustdb_10',['test_trustdb',['../namespaceslips_1_1modules_1_1p2ptrust_1_1testing_1_1test__p2p.html#ad0a0c60b2b23c76ec0b2087e3ca9b9db',1,'slips::modules::p2ptrust::testing::test_p2p']]],
   ['threat_5flevel_5fto_5fstring_11',['threat_level_to_string',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html#a77fa8c9634001f1fb40313047e06388b',1,'slips::slips_files::common::slips_utils::Utils']]],
-  ['timeit_12',['timeit',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html#aa7532dc22a0e1412e84d8f4667ccd798',1,'slips::slips_files::common::slips_utils::Utils']]],
-  ['timing_13',['timing',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html#aa8c6ddb2b6fd30af2b853ce68fe0ec5b',1,'slips.slips_files.common.slips_utils.Utils.timing()'],['../namespaceslips_1_1slips__files_1_1core_1_1logs_process.html#a0cc667c638b48ce451df6e479382a7fc',1,'slips.slips_files.core.logsProcess.timing()']]],
-  ['to_5fdelta_14',['to_delta',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html#aa4a45dafd18c33c9e741745c0efb12fe',1,'slips::slips_files::common::slips_utils::Utils']]],
-  ['train_15',['train',['../classslips_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module.html#abd98ca9beee115c0df7ae2a81520ff9d',1,'slips::modules::flowmldetection::flowmldetection::Module']]]
+  ['to_5fdelta_12',['to_delta',['../classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html#aa4a45dafd18c33c9e741745c0efb12fe',1,'slips::slips_files::common::slips_utils::Utils']]],
+  ['train_13',['train',['../classslips_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module.html#abd98ca9beee115c0df7ae2a81520ff9d',1,'slips::modules::flowmldetection::flowmldetection::Module']]]
 ];

@@ -1,7 +1,6 @@
 var classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module =
 [
     [ "__init__", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aa7cf831a3e7eccea800bfde41133a2dc", null ],
-    [ "check_local_ti_files_for_update", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a65e1b6cec15b1b79cdefc39645eb2eec", null ],
     [ "circl_lu", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a45c83a0703483a1735ff9055f5445824", null ],
     [ "create_circl_lu_session", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aa5513f6cf80c5e373d5575cd4e4a4c20", null ],
     [ "get_malicious_ip_ranges", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a26670276d087f4dd51139e16d4f9e6bf", null ],
@@ -26,9 +25,10 @@ var classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_mo
     [ "set_evidence_malicious_domain", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aaf8d74e6b251a1ac764300573bebd558", null ],
     [ "set_evidence_malicious_hash", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#acff7fceda468b4b4b3281d894523bc7a", null ],
     [ "set_evidence_malicious_ip", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a996181423e9d8a97e7e019680598aeaa", null ],
-    [ "set_maliciousIP_to_IPInfo", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aff64d72e3de50b4ebebaff5a799f8a39", null ],
+    [ "should_update_local_ti_file", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a6580102f1d158a0ab2ed44d711166266", null ],
     [ "shutdown_gracefully", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a11da538ff9cf5e54014aa100644b0160", null ],
     [ "spamhaus", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a5fdcfb9247a9e348dfdcf818fff20ad3", null ],
+    [ "update_local_file", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a9224423d023d5455bb37c277754b85f3", null ],
     [ "c1", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a7b6c45db1f8012c065834d06c1d00536", null ],
     [ "c2", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#ac7d7657d0e2a21cfc0e98b24805acfd6", null ],
     [ "cached_ipv4_ranges", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a135f58080c671a91b0b4fdefe4e7e2ea", null ],

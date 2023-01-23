@@ -136,6 +136,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:accb6c9b5810a980826a5f0bba547c609"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad3506849fdb011c614312521f2e9b0e3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#ad3506849fdb011c614312521f2e9b0e3">get_host_ip</a> (self)</td></tr>
 <tr class="separator:ad3506849fdb011c614312521f2e9b0e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8291359989dd323c267dbe6fd9d0b4f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#aa8291359989dd323c267dbe6fd9d0b4f">start_webinterface</a> (self)</td></tr>
+<tr class="separator:aa8291359989dd323c267dbe6fd9d0b4f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae571110572450de13a60b650f50bb4fb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#ae571110572450de13a60b650f50bb4fb">store_host_ip</a> (self)</td></tr>
 <tr class="separator:ae571110572450de13a60b650f50bb4fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af5500b0d1a67efecff1eccc5c68d3df3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#af5500b0d1a67efecff1eccc5c68d3df3">create_folder_for_logs</a> (self)</td></tr>
@@ -240,8 +242,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a1e6e4038d01ddddfee9042ece54bfee8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:acc625c8619cbeeca3977b5322839541c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#acc625c8619cbeeca3977b5322839541c">print_version</a> (self)</td></tr>
 <tr class="separator:acc625c8619cbeeca3977b5322839541c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3a686449dcc62ac0a8a7c211fe4c1c0a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#a3a686449dcc62ac0a8a7c211fe4c1c0a">check_if_port_is_in_use</a> (self)</td></tr>
-<tr class="separator:a3a686449dcc62ac0a8a7c211fe4c1c0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5a983b86bb141754c8e170b21659398a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#a5a983b86bb141754c8e170b21659398a">check_if_port_is_in_use</a> (self, port)</td></tr>
+<tr class="separator:a5a983b86bb141754c8e170b21659398a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:af09a4289803334c68d2df28475b0b173"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1slips_1_1_main.html#af09a4289803334c68d2df28475b0b173">start</a> (self)</td></tr>
 <tr class="separator:af09a4289803334c68d2df28475b0b173"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
@@ -366,12 +368,12 @@ Public Attributes</h2></td></tr>
       </table>
 </div><div class="memdoc">
 <pre class="fragment">check the flags that don't require starting slips
-for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
+for ex: clear db, clearing the blocking chain, killing all servers, stopping the daemon, etc.
 </pre> 
 </div>
 </div>
-<a id="a3a686449dcc62ac0a8a7c211fe4c1c0a" name="a3a686449dcc62ac0a8a7c211fe4c1c0a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a3a686449dcc62ac0a8a7c211fe4c1c0a">&#9670;&#160;</a></span>check_if_port_is_in_use()</h2>
+<a id="a5a983b86bb141754c8e170b21659398a" name="a5a983b86bb141754c8e170b21659398a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5a983b86bb141754c8e170b21659398a">&#9670;&#160;</a></span>check_if_port_is_in_use()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -380,8 +382,18 @@ for ex: clear db, clear blocking, killing all servers, stopping the daemon, etc.
           <td class="memname">def slips.slips.Main.check_if_port_is_in_use </td>
           <td>(</td>
           <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>self</em></td><td>)</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
           <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
 </div><div class="memdoc">
@@ -1538,6 +1550,25 @@ or kill them after 15 mins
       </table>
 </div><div class="memdoc">
 
+</div>
+</div>
+<a id="aa8291359989dd323c267dbe6fd9d0b4f" name="aa8291359989dd323c267dbe6fd9d0b4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8291359989dd323c267dbe6fd9d0b4f">&#9670;&#160;</a></span>start_webinterface()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.slips.Main.start_webinterface </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Starts the web interface shell script if -w is given
+</pre> 
 </div>
 </div>
 <a id="a9e17888eab5fe5f2954fc5f771454a99" name="a9e17888eab5fe5f2954fc5f771454a99"></a>

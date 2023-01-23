@@ -153,10 +153,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a2b95113aa9c8c865371826673bfe7439"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a21b1f393653cb3aa6e0655c49a671cfd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a21b1f393653cb3aa6e0655c49a671cfd">parse_ja3_file</a> (self, path)</td></tr>
 <tr class="separator:a21b1f393653cb3aa6e0655c49a671cfd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a65e1b6cec15b1b79cdefc39645eb2eec"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a65e1b6cec15b1b79cdefc39645eb2eec">check_local_ti_files_for_update</a> (self, str path_to_files)</td></tr>
-<tr class="separator:a65e1b6cec15b1b79cdefc39645eb2eec"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aff64d72e3de50b4ebebaff5a799f8a39"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aff64d72e3de50b4ebebaff5a799f8a39">set_maliciousIP_to_IPInfo</a> (self, ip, ip_description)</td></tr>
-<tr class="separator:aff64d72e3de50b4ebebaff5a799f8a39"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6580102f1d158a0ab2ed44d711166266"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a6580102f1d158a0ab2ed44d711166266">should_update_local_ti_file</a> (self, str path_to_local_ti_file)</td></tr>
+<tr class="separator:a6580102f1d158a0ab2ed44d711166266"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a63f49324ecd13905605f85ceddf51e52"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a63f49324ecd13905605f85ceddf51e52">is_outgoing_icmp_packet</a> (self, str protocol, str ip_state)</td></tr>
 <tr class="separator:a63f49324ecd13905605f85ceddf51e52"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a11da538ff9cf5e54014aa100644b0160"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a11da538ff9cf5e54014aa100644b0160">shutdown_gracefully</a> (self)</td></tr>
@@ -189,6 +187,8 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:ae0aebedb699d061985c1baea1bbfd675"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6707355333f0ea738633706efc519056"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a6707355333f0ea738633706efc519056">is_malicious_domain</a> (self, domain, uid, timestamp, profileid, twid)</td></tr>
 <tr class="separator:a6707355333f0ea738633706efc519056"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9224423d023d5455bb37c277754b85f3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#a9224423d023d5455bb37c277754b85f3">update_local_file</a> (self, filename)</td></tr>
+<tr class="separator:a9224423d023d5455bb37c277754b85f3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aebec8d6037cde63aa93259cca04b6f51"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html#aebec8d6037cde63aa93259cca04b6f51">run</a> (self)</td></tr>
 <tr class="separator:aebec8d6037cde63aa93259cca04b6f51"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="inherit_header pub_methods_classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus"><td colspan="2" onclick="javascript:toggleInherit('pub_methods_classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus')"><img src="closed.png" alt="-"/>&#160;Public Member Functions inherited from <a class="el" href="classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html">slips.modules.threat_intelligence.urlhaus.URLhaus</a></td></tr>
@@ -297,36 +297,6 @@ Static Public Attributes</h2></td></tr>
 </div>
 </div>
 <h2 class="groupheader">Member Function Documentation</h2>
-<a id="a65e1b6cec15b1b79cdefc39645eb2eec" name="a65e1b6cec15b1b79cdefc39645eb2eec"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a65e1b6cec15b1b79cdefc39645eb2eec">&#9670;&#160;</a></span>check_local_ti_files_for_update()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname"> bool slips.modules.threat_intelligence.threat_intelligence.Module.check_local_ti_files_for_update </td>
-          <td>(</td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>self</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">str&#160;</td>
-          <td class="paramname"><em>path_to_files</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-<pre class="fragment">Checks if a local TI file was changed based
-on it's hash. if so, update its content and delete old data
-</pre> 
-</div>
-</div>
 <a id="a45c83a0703483a1735ff9055f5445824" name="a45c83a0703483a1735ff9055f5445824"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a45c83a0703483a1735ff9055f5445824">&#9670;&#160;</a></span>circl_lu()</h2>
 
@@ -1203,14 +1173,14 @@ reporting website
 </pre> 
 </div>
 </div>
-<a id="aff64d72e3de50b4ebebaff5a799f8a39" name="aff64d72e3de50b4ebebaff5a799f8a39"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aff64d72e3de50b4ebebaff5a799f8a39">&#9670;&#160;</a></span>set_maliciousIP_to_IPInfo()</h2>
+<a id="a6580102f1d158a0ab2ed44d711166266" name="a6580102f1d158a0ab2ed44d711166266"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6580102f1d158a0ab2ed44d711166266">&#9670;&#160;</a></span>should_update_local_ti_file()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">def slips.modules.threat_intelligence.threat_intelligence.Module.set_maliciousIP_to_IPInfo </td>
+          <td class="memname"> bool slips.modules.threat_intelligence.threat_intelligence.Module.should_update_local_ti_file </td>
           <td>(</td>
           <td class="paramtype">&#160;</td>
           <td class="paramname"><em>self</em>, </td>
@@ -1218,14 +1188,8 @@ reporting website
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>ip</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">&#160;</td>
-          <td class="paramname"><em>ip_description</em>&#160;</td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>path_to_local_ti_file</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -1234,7 +1198,9 @@ reporting website
         </tr>
       </table>
 </div><div class="memdoc">
-<pre class="fragment">Set malicious IP in IPsInfo.
+<pre class="fragment">Checks if a local TI file was changed based on it's hash.
+If the file should be updated, its hash will be returned
+:param path_to_local_ti_file: full path to a local ti file in our config/local_ti_files
 </pre> 
 </div>
 </div>
@@ -1282,6 +1248,36 @@ reporting website
       </table>
 </div><div class="memdoc">
 <pre class="fragment">Supports IP lookups only
+</pre> 
+</div>
+</div>
+<a id="a9224423d023d5455bb37c277754b85f3" name="a9224423d023d5455bb37c277754b85f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9224423d023d5455bb37c277754b85f3">&#9670;&#160;</a></span>update_local_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def slips.modules.threat_intelligence.threat_intelligence.Module.update_local_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>filename</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Updates the given local ti file if the hash of it has changed
+: param filename: local ti file, has to be plased in config/local_ti_files/ dir
 </pre> 
 </div>
 </div>
