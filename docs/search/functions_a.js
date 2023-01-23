@@ -1,7 +1,7 @@
 var searchData=
 [
-  ['kill_0',['kill',['../classslips_1_1slips_1_1_main.html#af8441f6689c654a8281f40dbc6491c3d',1,'slips::slips::Main']]],
-  ['kill_5fall_1',['kill_all',['../classslips_1_1slips_1_1_main.html#a9de16f5403d02a50964094149e180c27',1,'slips::slips::Main']]],
-  ['kill_5fredis_5fserver_2',['kill_redis_server',['../classslips_1_1slips_1_1_main.html#ae74d845051426b59e7a3f2f6d7b0284e',1,'slips::slips::Main']]],
-  ['killdaemon_3',['killdaemon',['../classslips_1_1daemon_1_1_daemon.html#a57bfa70e3b059f7e4f998481ac8d3d42',1,'slips::daemon::Daemon']]]
+  ['kill_1788',['kill',['../class_stratosphere_linux_i_p_s_1_1slips_1_1_main.html#ac37f072b21ad35c4a1eae2953eca7532',1,'StratosphereLinuxIPS::slips::Main']]],
+  ['kill_5fall_1789',['kill_all',['../class_stratosphere_linux_i_p_s_1_1slips_1_1_main.html#a7ce8393a2083d996b0356f97057a519a',1,'StratosphereLinuxIPS::slips::Main']]],
+  ['kill_5fredis_5fserver_1790',['kill_redis_server',['../class_stratosphere_linux_i_p_s_1_1slips_1_1_main.html#a4671f0435bdf562a41d7155c0162a254',1,'StratosphereLinuxIPS::slips::Main']]],
+  ['killdaemon_1791',['killdaemon',['../class_stratosphere_linux_i_p_s_1_1daemon_1_1_daemon.html#ae7f010109129b093377e2a23f2ff5a06',1,'StratosphereLinuxIPS::daemon::Daemon']]]
 ];

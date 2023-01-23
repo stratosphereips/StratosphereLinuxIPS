@@ -1,0 +1,1039 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a0b052fdbaad1df67702616bb7fa98693"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a0b052fdbaad1df67702616bb7fa98693">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a7a26b886b24d497d2faf0af81ffa07c4">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:a0b052fdbaad1df67702616bb7fa98693"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa2f73d07ce06ae518d907e8cd67f069d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aa2f73d07ce06ae518d907e8cd67f069d">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:aa2f73d07ce06ae518d907e8cd67f069d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4099b44782f0aa030cdbc9bf15d02e78"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a4099b44782f0aa030cdbc9bf15d02e78">read_configuration</a> (self)</td></tr>
+<tr class="separator:a4099b44782f0aa030cdbc9bf15d02e78"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2b26b287c4b4cc79f03502aafe9f27fd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a2b26b287c4b4cc79f03502aafe9f27fd">check_suspicious_user_agents</a> (self, uid, host, uri, timestamp, user_agent, profileid, twid)</td></tr>
+<tr class="separator:a2b26b287c4b4cc79f03502aafe9f27fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7b6e1230ad426f3e7735d783e6f26a3f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a7b6e1230ad426f3e7735d783e6f26a3f">check_multiple_empty_connections</a> (self, uid, contacted_host, timestamp, request_body_len, profileid, twid)</td></tr>
+<tr class="separator:a7b6e1230ad426f3e7735d783e6f26a3f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae68b0e380877dab0c1791236568e1902"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ae68b0e380877dab0c1791236568e1902">set_evidence_incompatible_user_agent</a> (self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid)</td></tr>
+<tr class="separator:ae68b0e380877dab0c1791236568e1902"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a91fc86e22ccc8a2bd22ed09abd037e24"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a91fc86e22ccc8a2bd22ed09abd037e24">check_incompatible_user_agent</a> (self, host, uri, timestamp, profileid, twid, uid)</td></tr>
+<tr class="separator:a91fc86e22ccc8a2bd22ed09abd037e24"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae5fa5748e531aa102683f11a08530905"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ae5fa5748e531aa102683f11a08530905">get_ua_info_online</a> (self, user_agent)</td></tr>
+<tr class="separator:ae5fa5748e531aa102683f11a08530905"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9776bffd1ea72be1ca7fe7fe386476e4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a9776bffd1ea72be1ca7fe7fe386476e4">get_user_agent_info</a> (self, str user_agent, str profileid)</td></tr>
+<tr class="separator:a9776bffd1ea72be1ca7fe7fe386476e4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af0d1cc0e87e6fc90f6e4c85dc5190e6b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#af0d1cc0e87e6fc90f6e4c85dc5190e6b">extract_info_from_UA</a> (self, user_agent, profileid)</td></tr>
+<tr class="separator:af0d1cc0e87e6fc90f6e4c85dc5190e6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a93113bbc42d6ebf53d93f7bca6a8e992"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a93113bbc42d6ebf53d93f7bca6a8e992">check_multiple_UAs</a> (self, dict cached_ua, dict user_agent, timestamp, profileid, twid, uid)</td></tr>
+<tr class="separator:a93113bbc42d6ebf53d93f7bca6a8e992"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad8e1d83339adfed20aae11e7d12b937e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ad8e1d83339adfed20aae11e7d12b937e">check_pastebin_downloads</a> (self, daddr, response_body_len, method, profileid, twid, timestamp, uid)</td></tr>
+<tr class="separator:ad8e1d83339adfed20aae11e7d12b937e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a028cc04d0bfb9a20ccbd00dcbfa396ad"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a028cc04d0bfb9a20ccbd00dcbfa396ad">detect_binary_downloads</a> (self, resp_mime_types, daddr, host, uri, timestamp, profileid, twid, uid)</td></tr>
+<tr class="separator:a028cc04d0bfb9a20ccbd00dcbfa396ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac84e43c821e38b7b5bc12da99fe65588"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ac84e43c821e38b7b5bc12da99fe65588">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:ac84e43c821e38b7b5bc12da99fe65588"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6f3c430348b2422bffd3fb4e76bc8145"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a6f3c430348b2422bffd3fb4e76bc8145">run</a> (self)</td></tr>
+<tr class="separator:a6f3c430348b2422bffd3fb4e76bc8145"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a7a26b886b24d497d2faf0af81ffa07c4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a7a26b886b24d497d2faf0af81ffa07c4">outputqueue</a></td></tr>
+<tr class="separator:a7a26b886b24d497d2faf0af81ffa07c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7f4b87f9865de828660592348cd2194c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a7f4b87f9865de828660592348cd2194c">c1</a></td></tr>
+<tr class="separator:a7f4b87f9865de828660592348cd2194c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae60b226dd9b6f2e8eaea0ac12cbf4940"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ae60b226dd9b6f2e8eaea0ac12cbf4940">connections_counter</a></td></tr>
+<tr class="separator:ae60b226dd9b6f2e8eaea0ac12cbf4940"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab828305d70da517101c5318b5ce9ba47"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#ab828305d70da517101c5318b5ce9ba47">empty_connections_threshold</a></td></tr>
+<tr class="separator:ab828305d70da517101c5318b5ce9ba47"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a23fcd3f04edde0e92d74d9304d5c1d78"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a23fcd3f04edde0e92d74d9304d5c1d78">hosts</a></td></tr>
+<tr class="separator:a23fcd3f04edde0e92d74d9304d5c1d78"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2ae0483848154b0d629a109986d8d007"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a2ae0483848154b0d629a109986d8d007">pastebin_downloads_threshold</a></td></tr>
+<tr class="separator:a2ae0483848154b0d629a109986d8d007"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a9d7e1fe4a6e44973fedceac2fdd84ac8"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#a9d7e1fe4a6e44973fedceac2fdd84ac8">name</a> = 'HTTP Analyzer'</td></tr>
+<tr class="separator:a9d7e1fe4a6e44973fedceac2fdd84ac8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aefc9c6289a02ce77e8eca8a9b44636c9"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aefc9c6289a02ce77e8eca8a9b44636c9">description</a> = 'Analyze HTTP flows'</td></tr>
+<tr class="separator:aefc9c6289a02ce77e8eca8a9b44636c9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa43df4c70614b3c9e62a54783e918e2b"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html#aa43df4c70614b3c9e62a54783e918e2b">authors</a> = ['Alya Gomaa']</td></tr>
+<tr class="separator:aa43df4c70614b3c9e62a54783e918e2b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a0b052fdbaad1df67702616bb7fa98693"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0b052fdbaad1df67702616bb7fa98693">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a91fc86e22ccc8a2bd22ed09abd037e24"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a91fc86e22ccc8a2bd22ed09abd037e24">&#9670;&nbsp;</a></span>check_incompatible_user_agent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.check_incompatible_user_agent </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uri</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Compare the user agent of this profile to the MAC vendor and check incompatibility
+</pre> 
+</div>
+</div>
+<a id="a7b6e1230ad426f3e7735d783e6f26a3f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7b6e1230ad426f3e7735d783e6f26a3f">&#9670;&nbsp;</a></span>check_multiple_empty_connections()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.check_multiple_empty_connections </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>contacted_host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>request_body_len</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detects more than 4 empty connections to google, bing, yandex and yahoo on port 80
+</pre> 
+</div>
+</div>
+<a id="a93113bbc42d6ebf53d93f7bca6a8e992"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93113bbc42d6ebf53d93f7bca6a8e992">&#9670;&nbsp;</a></span>check_multiple_UAs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.check_multiple_UAs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>cached_ua</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>user_agent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detect if the user is using an Apple UA, then android, then linux etc.
+Doesn't check multiple ssh clients
+:param user_agent: UA of the current flow
+:param cached_ua: UA of this profile from the db
+</pre> 
+</div>
+</div>
+<a id="ad8e1d83339adfed20aae11e7d12b937e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad8e1d83339adfed20aae11e7d12b937e">&#9670;&nbsp;</a></span>check_pastebin_downloads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.check_pastebin_downloads </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>response_body_len</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>method</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2b26b287c4b4cc79f03502aafe9f27fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2b26b287c4b4cc79f03502aafe9f27fd">&#9670;&nbsp;</a></span>check_suspicious_user_agents()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.check_suspicious_user_agents </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uri</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>user_agent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check unusual user agents and set evidence</pre> 
+</div>
+</div>
+<a id="a028cc04d0bfb9a20ccbd00dcbfa396ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a028cc04d0bfb9a20ccbd00dcbfa396ad">&#9670;&nbsp;</a></span>detect_binary_downloads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.detect_binary_downloads </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>resp_mime_types</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uri</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af0d1cc0e87e6fc90f6e4c85dc5190e6b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af0d1cc0e87e6fc90f6e4c85dc5190e6b">&#9670;&nbsp;</a></span>extract_info_from_UA()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.extract_info_from_UA </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>user_agent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Zeek sometimes collects info about a specific UA, in this case the UA starts with
+'server-bag'
+</pre> 
+</div>
+</div>
+<a id="ae5fa5748e531aa102683f11a08530905"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae5fa5748e531aa102683f11a08530905">&#9670;&nbsp;</a></span>get_ua_info_online()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.get_ua_info_online </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>user_agent</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Get OS and browser info about a use agent from an online database http://useragentstring.com
+</pre> 
+</div>
+</div>
+<a id="a9776bffd1ea72be1ca7fe7fe386476e4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9776bffd1ea72be1ca7fe7fe386476e4">&#9670;&nbsp;</a></span>get_user_agent_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.get_user_agent_info </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>user_agent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>profileid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Get OS and browser info about a user agent online
+</pre> 
+</div>
+</div>
+<a id="aa2f73d07ce06ae518d907e8cd67f069d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa2f73d07ce06ae518d907e8cd67f069d">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a4099b44782f0aa030cdbc9bf15d02e78"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4099b44782f0aa030cdbc9bf15d02e78">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6f3c430348b2422bffd3fb4e76bc8145"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6f3c430348b2422bffd3fb4e76bc8145">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae68b0e380877dab0c1791236568e1902"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae68b0e380877dab0c1791236568e1902">&#9670;&nbsp;</a></span>set_evidence_incompatible_user_agent()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.set_evidence_incompatible_user_agent </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uri</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>vendor</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>user_agent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac84e43c821e38b7b5bc12da99fe65588"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac84e43c821e38b7b5bc12da99fe65588">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="aa43df4c70614b3c9e62a54783e918e2b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa43df4c70614b3c9e62a54783e918e2b">&#9670;&nbsp;</a></span>authors</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">list StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.authors = ['Alya Gomaa']</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7f4b87f9865de828660592348cd2194c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7f4b87f9865de828660592348cd2194c">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae60b226dd9b6f2e8eaea0ac12cbf4940"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae60b226dd9b6f2e8eaea0ac12cbf4940">&#9670;&nbsp;</a></span>connections_counter</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.connections_counter</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aefc9c6289a02ce77e8eca8a9b44636c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefc9c6289a02ce77e8eca8a9b44636c9">&#9670;&nbsp;</a></span>description</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.description = 'Analyze HTTP flows'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab828305d70da517101c5318b5ce9ba47"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab828305d70da517101c5318b5ce9ba47">&#9670;&nbsp;</a></span>empty_connections_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.empty_connections_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a23fcd3f04edde0e92d74d9304d5c1d78"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23fcd3f04edde0e92d74d9304d5c1d78">&#9670;&nbsp;</a></span>hosts</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.hosts</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9d7e1fe4a6e44973fedceac2fdd84ac8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d7e1fe4a6e44973fedceac2fdd84ac8">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.name = 'HTTP Analyzer'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7a26b886b24d497d2faf0af81ffa07c4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7a26b886b24d497d2faf0af81ffa07c4">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2ae0483848154b0d629a109986d8d007"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2ae0483848154b0d629a109986d8d007">&#9670;&nbsp;</a></span>pastebin_downloads_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.http_analyzer.http_analyzer.Module.pastebin_downloads_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/http_analyzer/<a class="el" href="http__analyzer_8py.html">http_analyzer.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer.html">http_analyzer</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer.html">http_analyzer</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html">Module</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

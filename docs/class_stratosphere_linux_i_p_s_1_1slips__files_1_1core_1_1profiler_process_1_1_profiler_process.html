@@ -1,0 +1,1560 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a4629f98d2c2af7fd9a4eac785d8512eb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a4629f98d2c2af7fd9a4eac785d8512eb">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a9b250722ea4f21406f79dcaf1a2ffa79">inputqueue</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aecc0790f70cf2657fb73d69265f49880">outputqueue</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3316320f556f9dbaf01fab75f825335a">verbose</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a61b5335693890a1dc3872848761cd8ee">debug</a>, redis_port)</td></tr>
+<tr class="separator:a4629f98d2c2af7fd9a4eac785d8512eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5ceb35da6f74272da04df0ff5cebb245"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a5ceb35da6f74272da04df0ff5cebb245">print</a> (self, text, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3316320f556f9dbaf01fab75f825335a">verbose</a>=1, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a61b5335693890a1dc3872848761cd8ee">debug</a>=0)</td></tr>
+<tr class="separator:a5ceb35da6f74272da04df0ff5cebb245"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a018070c84db93fe0d268bba35c9bcfff"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a018070c84db93fe0d268bba35c9bcfff">read_configuration</a> (self)</td></tr>
+<tr class="separator:a018070c84db93fe0d268bba35c9bcfff"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a43ef4edfbdbaffd6b33c4d23dad92932"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a43ef4edfbdbaffd6b33c4d23dad92932">define_type</a> (self, line)</td></tr>
+<tr class="separator:a43ef4edfbdbaffd6b33c4d23dad92932"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae5f945d4d250af411a268bdfd2b40b4f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae5f945d4d250af411a268bdfd2b40b4f">define_columns</a> (self, new_line)</td></tr>
+<tr class="separator:ae5f945d4d250af411a268bdfd2b40b4f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a04b5751688fb3d8c9069f031be86bda5"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a04b5751688fb3d8c9069f031be86bda5">process_zeek_tabs_input</a> (self, str new_line)</td></tr>
+<tr class="separator:a04b5751688fb3d8c9069f031be86bda5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7c9f434a34ae1e86db00776033c29e41"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a7c9f434a34ae1e86db00776033c29e41">process_zeek_input</a> (self, dict new_line)</td></tr>
+<tr class="separator:a7c9f434a34ae1e86db00776033c29e41"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab05b2e648765b5d77a1d9c8308703b74"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ab05b2e648765b5d77a1d9c8308703b74">process_argus_input</a> (self, new_line)</td></tr>
+<tr class="separator:ab05b2e648765b5d77a1d9c8308703b74"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1161e2d97e1c49602ec044c73e83dafa"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a1161e2d97e1c49602ec044c73e83dafa">process_nfdump_input</a> (self, new_line)</td></tr>
+<tr class="separator:a1161e2d97e1c49602ec044c73e83dafa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af65e4736fd110ddccc14e05fa29d3f8e"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#af65e4736fd110ddccc14e05fa29d3f8e">process_suricata_input</a> (self, line)</td></tr>
+<tr class="separator:af65e4736fd110ddccc14e05fa29d3f8e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a02c6e633c0fb69691e41c5e7e8a0cdf5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a02c6e633c0fb69691e41c5e7e8a0cdf5">publish_to_new_MAC</a> (self, mac, ip, host_name=False)</td></tr>
+<tr class="separator:a02c6e633c0fb69691e41c5e7e8a0cdf5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9cc392bc7f5dfb69da4f1249583dab0d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a9cc392bc7f5dfb69da4f1249583dab0d">is_supported_flow</a> (self)</td></tr>
+<tr class="separator:a9cc392bc7f5dfb69da4f1249583dab0d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adcd50be19aab6c9bc70853c13576e458"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#adcd50be19aab6c9bc70853c13576e458">get_starttime</a> (self)</td></tr>
+<tr class="separator:adcd50be19aab6c9bc70853c13576e458"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adebd464f247449862de93aecafcb623a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#adebd464f247449862de93aecafcb623a">get_uid</a> (self)</td></tr>
+<tr class="separator:adebd464f247449862de93aecafcb623a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afb65d3a4b0f5be01e28afcafd04120e1"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#afb65d3a4b0f5be01e28afcafd04120e1">get_rev_profile</a> (self)</td></tr>
+<tr class="separator:afb65d3a4b0f5be01e28afcafd04120e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa621c8f47dcb4186df870f5a0cc1b1dc"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aa621c8f47dcb4186df870f5a0cc1b1dc">publish_to_new_dhcp</a> (self)</td></tr>
+<tr class="separator:aa621c8f47dcb4186df870f5a0cc1b1dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae5496025ea785b7b8a034af70c817a00"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae5496025ea785b7b8a034af70c817a00">publish_to_new_software</a> (self)</td></tr>
+<tr class="separator:ae5496025ea785b7b8a034af70c817a00"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:add6026358b54fbb87039b5cb51b9b4dc"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#add6026358b54fbb87039b5cb51b9b4dc">add_flow_to_profile</a> (self)</td></tr>
+<tr class="separator:add6026358b54fbb87039b5cb51b9b4dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae5c54cd9da403f701ceb0e7a3a1578f2"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae5c54cd9da403f701ceb0e7a3a1578f2">handle_conn</a> (self)</td></tr>
+<tr class="separator:ae5c54cd9da403f701ceb0e7a3a1578f2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7e40399bab2f66dc3675575ec1725609"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a7e40399bab2f66dc3675575ec1725609">handle_dns</a> (self)</td></tr>
+<tr class="separator:a7e40399bab2f66dc3675575ec1725609"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab1b8d5db1318a6c8070547048320c325"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ab1b8d5db1318a6c8070547048320c325">handle_http</a> (self)</td></tr>
+<tr class="separator:ab1b8d5db1318a6c8070547048320c325"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ace3db901f210841f3a929b8f21adee4d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ace3db901f210841f3a929b8f21adee4d">handle_ssl</a> (self)</td></tr>
+<tr class="separator:ace3db901f210841f3a929b8f21adee4d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a15a6d566e045f49a39a7cfd71fe15714"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a15a6d566e045f49a39a7cfd71fe15714">handle_ssh</a> (self)</td></tr>
+<tr class="separator:a15a6d566e045f49a39a7cfd71fe15714"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad8022ffe0d1c29f11b3f38bc99c38920"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ad8022ffe0d1c29f11b3f38bc99c38920">handle_notice</a> (self)</td></tr>
+<tr class="separator:ad8022ffe0d1c29f11b3f38bc99c38920"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a675bf58c9801cd0eaace6e837ad9877a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a675bf58c9801cd0eaace6e837ad9877a">handle_ftp</a> (self)</td></tr>
+<tr class="separator:a675bf58c9801cd0eaace6e837ad9877a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3531629500e98e0be740bfc2acce7615"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3531629500e98e0be740bfc2acce7615">handle_smtp</a> (self)</td></tr>
+<tr class="separator:a3531629500e98e0be740bfc2acce7615"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c8c35f0805a098a39a85535b6aa3469"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a6c8c35f0805a098a39a85535b6aa3469">handle_in_flows</a> (self)</td></tr>
+<tr class="separator:a6c8c35f0805a098a39a85535b6aa3469"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0981fece8b27f4850046c119145bfd13"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a0981fece8b27f4850046c119145bfd13">handle_software</a> (self)</td></tr>
+<tr class="separator:a0981fece8b27f4850046c119145bfd13"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aad46412d1cfe8c316b73c87b79e07932"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aad46412d1cfe8c316b73c87b79e07932">handle_dhcp</a> (self)</td></tr>
+<tr class="separator:aad46412d1cfe8c316b73c87b79e07932"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1fa2b80d98835933343e5c008fb36ea5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a1fa2b80d98835933343e5c008fb36ea5">handle_files</a> (self)</td></tr>
+<tr class="separator:a1fa2b80d98835933343e5c008fb36ea5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1301a0cca48d659a12711c18276c3478"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a1301a0cca48d659a12711c18276c3478">handle_arp</a> (self)</td></tr>
+<tr class="separator:a1301a0cca48d659a12711c18276c3478"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2e277cf46fa0f17e734238855c0c1211"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a2e277cf46fa0f17e734238855c0c1211">handle_weird</a> (self)</td></tr>
+<tr class="separator:a2e277cf46fa0f17e734238855c0c1211"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeba876be5333dc95b9e5bd9695e08048"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aeba876be5333dc95b9e5bd9695e08048">store_features_going_out</a> (self)</td></tr>
+<tr class="separator:aeba876be5333dc95b9e5bd9695e08048"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae41916d6c3b26629326803182f3db771"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae41916d6c3b26629326803182f3db771">store_features_going_in</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a0c5e7cb134981099ab214cde6bad3daf">profileid</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a4463a630909755c242e1de4b4ff9831f">twid</a>)</td></tr>
+<tr class="separator:ae41916d6c3b26629326803182f3db771"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3010508741b20335cdf1d7c94a6cbb6c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3010508741b20335cdf1d7c94a6cbb6c">compute_symbol</a> (self, str tuple_key)</td></tr>
+<tr class="separator:a3010508741b20335cdf1d7c94a6cbb6c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad630d66f49528f39ef097046216ce2d5"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ad630d66f49528f39ef097046216ce2d5">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:ad630d66f49528f39ef097046216ce2d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae3f5f8b1ae3c5b49877481b4d1884a71"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae3f5f8b1ae3c5b49877481b4d1884a71">run</a> (self)</td></tr>
+<tr class="separator:ae3f5f8b1ae3c5b49877481b4d1884a71"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:aac350a2e8fbe4fe565878eea154a0558"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aac350a2e8fbe4fe565878eea154a0558">name</a></td></tr>
+<tr class="separator:aac350a2e8fbe4fe565878eea154a0558"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9b250722ea4f21406f79dcaf1a2ffa79"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a9b250722ea4f21406f79dcaf1a2ffa79">inputqueue</a></td></tr>
+<tr class="separator:a9b250722ea4f21406f79dcaf1a2ffa79"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aecc0790f70cf2657fb73d69265f49880"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#aecc0790f70cf2657fb73d69265f49880">outputqueue</a></td></tr>
+<tr class="separator:aecc0790f70cf2657fb73d69265f49880"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6b9d6400583f46f26af72f8948e9cd1f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a6b9d6400583f46f26af72f8948e9cd1f">timeformat</a></td></tr>
+<tr class="separator:a6b9d6400583f46f26af72f8948e9cd1f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb994f83c8079f69d259e3ac024545b2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#abb994f83c8079f69d259e3ac024545b2">input_type</a></td></tr>
+<tr class="separator:abb994f83c8079f69d259e3ac024545b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4da2301b23e34a217e05e5b568f37f45"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a4da2301b23e34a217e05e5b568f37f45">whitelist</a></td></tr>
+<tr class="separator:a4da2301b23e34a217e05e5b568f37f45"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3316320f556f9dbaf01fab75f825335a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3316320f556f9dbaf01fab75f825335a">verbose</a></td></tr>
+<tr class="separator:a3316320f556f9dbaf01fab75f825335a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a61b5335693890a1dc3872848761cd8ee"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a61b5335693890a1dc3872848761cd8ee">debug</a></td></tr>
+<tr class="separator:a61b5335693890a1dc3872848761cd8ee"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3e87752f952a53c868aecb190f78adaf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a3e87752f952a53c868aecb190f78adaf">timeout</a></td></tr>
+<tr class="separator:a3e87752f952a53c868aecb190f78adaf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae155b5a1e781da47204153b8130d8e33"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ae155b5a1e781da47204153b8130d8e33">c1</a></td></tr>
+<tr class="separator:ae155b5a1e781da47204153b8130d8e33"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a92e749c66f94a9fb97211fbcc157a64f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a92e749c66f94a9fb97211fbcc157a64f">separators</a></td></tr>
+<tr class="separator:a92e749c66f94a9fb97211fbcc157a64f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ace27446fb2a7395853064c456f02cd20"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ace27446fb2a7395853064c456f02cd20">whitelist_path</a></td></tr>
+<tr class="separator:ace27446fb2a7395853064c456f02cd20"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7d9ad8ef076f1e51f444cdd099e9dc58"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a7d9ad8ef076f1e51f444cdd099e9dc58">analysis_direction</a></td></tr>
+<tr class="separator:a7d9ad8ef076f1e51f444cdd099e9dc58"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0f5f32e35e8ac7884142f6991455c791"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a0f5f32e35e8ac7884142f6991455c791">label</a></td></tr>
+<tr class="separator:a0f5f32e35e8ac7884142f6991455c791"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abbb6ffb8926ded10f7afbaedaf8239a6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#abbb6ffb8926ded10f7afbaedaf8239a6">home_net</a></td></tr>
+<tr class="separator:abbb6ffb8926ded10f7afbaedaf8239a6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad7375c6f2774fbf2eb83397fd0973bd9"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ad7375c6f2774fbf2eb83397fd0973bd9">width</a></td></tr>
+<tr class="separator:ad7375c6f2774fbf2eb83397fd0973bd9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abfea47066ac89a298f87b6d17f8f11e7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#abfea47066ac89a298f87b6d17f8f11e7">separator</a></td></tr>
+<tr class="separator:abfea47066ac89a298f87b6d17f8f11e7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2bd4585ebe59f4bd35faf209f4b2c2ce"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a2bd4585ebe59f4bd35faf209f4b2c2ce">column_idx</a></td></tr>
+<tr class="separator:a2bd4585ebe59f4bd35faf209f4b2c2ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7ad793bfdd21deb0b4582159afde11c2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a7ad793bfdd21deb0b4582159afde11c2">column_values</a></td></tr>
+<tr class="separator:a7ad793bfdd21deb0b4582159afde11c2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a21a05d12aae2a62a305f33684e0d6625"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a21a05d12aae2a62a305f33684e0d6625">uid</a></td></tr>
+<tr class="separator:a21a05d12aae2a62a305f33684e0d6625"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2fdde6cafad629c9d46d5f94ef7bf43c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a2fdde6cafad629c9d46d5f94ef7bf43c">flow_type</a></td></tr>
+<tr class="separator:a2fdde6cafad629c9d46d5f94ef7bf43c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5b3ecd00a52eade4d547ea51e9e83081"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a5b3ecd00a52eade4d547ea51e9e83081">saddr</a></td></tr>
+<tr class="separator:a5b3ecd00a52eade4d547ea51e9e83081"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a93aa186f5aa73201dbc273820f378bdc"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a93aa186f5aa73201dbc273820f378bdc">daddr</a></td></tr>
+<tr class="separator:a93aa186f5aa73201dbc273820f378bdc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c5e7cb134981099ab214cde6bad3daf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a0c5e7cb134981099ab214cde6bad3daf">profileid</a></td></tr>
+<tr class="separator:a0c5e7cb134981099ab214cde6bad3daf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad0c48a103f9b2993908873ee9ccfea2d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#ad0c48a103f9b2993908873ee9ccfea2d">saddr_as_obj</a></td></tr>
+<tr class="separator:ad0c48a103f9b2993908873ee9ccfea2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8007931b9778756502e313c7ea4efefe"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a8007931b9778756502e313c7ea4efefe">daddr_as_obj</a></td></tr>
+<tr class="separator:a8007931b9778756502e313c7ea4efefe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acec5e735924d51b820af964e4e4dfc9e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#acec5e735924d51b820af964e4e4dfc9e">starttime</a></td></tr>
+<tr class="separator:acec5e735924d51b820af964e4e4dfc9e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4463a630909755c242e1de4b4ff9831f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html#a4463a630909755c242e1de4b4ff9831f">twid</a></td></tr>
+<tr class="separator:a4463a630909755c242e1de4b4ff9831f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">A class to create the profiles for IPs and the rest of data</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a4629f98d2c2af7fd9a4eac785d8512eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4629f98d2c2af7fd9a4eac785d8512eb">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>inputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="add6026358b54fbb87039b5cb51b9b4dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#add6026358b54fbb87039b5cb51b9b4dc">&#9670;&nbsp;</a></span>add_flow_to_profile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.add_flow_to_profile </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This is the main function that takes the columns of a flow and does all the magic to
+convert it into a working data in our system.
+It includes checking if the profile exists and how to put the flow correctly.
+It interprets each column
+</pre> 
+</div>
+</div>
+<a id="a3010508741b20335cdf1d7c94a6cbb6c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3010508741b20335cdf1d7c94a6cbb6c">&#9670;&nbsp;</a></span>compute_symbol()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.compute_symbol </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>tuple_key</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This function computes the new symbol for the tuple according to the
+original stratosphere ips model of letters
+Here we do not apply any detection model, we just create the letters
+as one more feature twid is the starttime of the flow
+</pre> 
+</div>
+</div>
+<a id="ae5f945d4d250af411a268bdfd2b40b4f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae5f945d4d250af411a268bdfd2b40b4f">&#9670;&nbsp;</a></span>define_columns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.define_columns </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>new_line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Define the columns for Argus and Zeek-tabs from the line received
+:param new_line: should be the header line of the argus/zeek-tabs file
+</pre> 
+</div>
+</div>
+<a id="a43ef4edfbdbaffd6b33c4d23dad92932"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43ef4edfbdbaffd6b33c4d23dad92932">&#9670;&nbsp;</a></span>define_type()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.define_type </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Try to define very fast the type of input
+Heuristic detection: dict (zeek from pcap of int), json (suricata), or csv (argus), or TAB separated (conn.log only from zeek)?
+Bro actually gives us json, but it was already coverted into a dict
+in inputProcess
+Outputs can be: zeek, suricata, argus, zeek-tabs
+</pre> 
+</div>
+</div>
+<a id="afb65d3a4b0f5be01e28afcafd04120e1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afb65d3a4b0f5be01e28afcafd04120e1">&#9670;&nbsp;</a></span>get_rev_profile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.get_rev_profile </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">get the profileid and twid of the daddr at the current starttime,
+ not the source address
+</pre> 
+</div>
+</div>
+<a id="adcd50be19aab6c9bc70853c13576e458"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adcd50be19aab6c9bc70853c13576e458">&#9670;&nbsp;</a></span>get_starttime()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.get_starttime </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adebd464f247449862de93aecafcb623a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adebd464f247449862de93aecafcb623a">&#9670;&nbsp;</a></span>get_uid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.get_uid </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Generates a uid if none is found
+</pre> 
+</div>
+</div>
+<a id="a1301a0cca48d659a12711c18276c3478"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1301a0cca48d659a12711c18276c3478">&#9670;&nbsp;</a></span>handle_arp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_arp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae5c54cd9da403f701ceb0e7a3a1578f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae5c54cd9da403f701ceb0e7a3a1578f2">&#9670;&nbsp;</a></span>handle_conn()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_conn </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aad46412d1cfe8c316b73c87b79e07932"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aad46412d1cfe8c316b73c87b79e07932">&#9670;&nbsp;</a></span>handle_dhcp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_dhcp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7e40399bab2f66dc3675575ec1725609"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7e40399bab2f66dc3675575ec1725609">&#9670;&nbsp;</a></span>handle_dns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_dns </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1fa2b80d98835933343e5c008fb36ea5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1fa2b80d98835933343e5c008fb36ea5">&#9670;&nbsp;</a></span>handle_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment"> Send files.log data to new_downloaded_file channel in vt module to see if it's malicious</pre> 
+</div>
+</div>
+<a id="a675bf58c9801cd0eaace6e837ad9877a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a675bf58c9801cd0eaace6e837ad9877a">&#9670;&nbsp;</a></span>handle_ftp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_ftp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab1b8d5db1318a6c8070547048320c325"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab1b8d5db1318a6c8070547048320c325">&#9670;&nbsp;</a></span>handle_http()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_http </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6c8c35f0805a098a39a85535b6aa3469"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c8c35f0805a098a39a85535b6aa3469">&#9670;&nbsp;</a></span>handle_in_flows()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_in_flows </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Adds a flow for the daddr &lt;- saddr connection
+</pre> 
+</div>
+</div>
+<a id="ad8022ffe0d1c29f11b3f38bc99c38920"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad8022ffe0d1c29f11b3f38bc99c38920">&#9670;&nbsp;</a></span>handle_notice()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_notice </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3531629500e98e0be740bfc2acce7615"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3531629500e98e0be740bfc2acce7615">&#9670;&nbsp;</a></span>handle_smtp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_smtp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0981fece8b27f4850046c119145bfd13"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0981fece8b27f4850046c119145bfd13">&#9670;&nbsp;</a></span>handle_software()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_software </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a15a6d566e045f49a39a7cfd71fe15714"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15a6d566e045f49a39a7cfd71fe15714">&#9670;&nbsp;</a></span>handle_ssh()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_ssh </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ace3db901f210841f3a929b8f21adee4d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace3db901f210841f3a929b8f21adee4d">&#9670;&nbsp;</a></span>handle_ssl()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_ssl </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2e277cf46fa0f17e734238855c0c1211"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e277cf46fa0f17e734238855c0c1211">&#9670;&nbsp;</a></span>handle_weird()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.handle_weird </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">handles weird.log zeek flows
+</pre> 
+</div>
+</div>
+<a id="a9cc392bc7f5dfb69da4f1249583dab0d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9cc392bc7f5dfb69da4f1249583dab0d">&#9670;&nbsp;</a></span>is_supported_flow()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.is_supported_flow </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5ceb35da6f74272da04df0ff5cebb245"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5ceb35da6f74272da04df0ff5cebb245">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="ab05b2e648765b5d77a1d9c8308703b74"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab05b2e648765b5d77a1d9c8308703b74">&#9670;&nbsp;</a></span>process_argus_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.process_argus_input </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>new_line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process the line and extract columns for argus
+</pre> 
+</div>
+</div>
+<a id="a1161e2d97e1c49602ec044c73e83dafa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1161e2d97e1c49602ec044c73e83dafa">&#9670;&nbsp;</a></span>process_nfdump_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.process_nfdump_input </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>new_line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process the line and extract columns for nfdump
+</pre> 
+</div>
+</div>
+<a id="af65e4736fd110ddccc14e05fa29d3f8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af65e4736fd110ddccc14e05fa29d3f8e">&#9670;&nbsp;</a></span>process_suricata_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.process_suricata_input </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Read suricata json input</pre> 
+</div>
+</div>
+<a id="a7c9f434a34ae1e86db00776033c29e41"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7c9f434a34ae1e86db00776033c29e41">&#9670;&nbsp;</a></span>process_zeek_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.process_zeek_input </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>new_line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process one zeek line(new_line) and extract columns
+(parse them into column_values dict) to send to the database
+</pre> 
+</div>
+</div>
+<a id="a04b5751688fb3d8c9069f031be86bda5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a04b5751688fb3d8c9069f031be86bda5">&#9670;&nbsp;</a></span>process_zeek_tabs_input()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.process_zeek_tabs_input </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>new_line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Process the tab line from zeek.
+</pre> 
+</div>
+</div>
+<a id="aa621c8f47dcb4186df870f5a0cc1b1dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa621c8f47dcb4186df870f5a0cc1b1dc">&#9670;&nbsp;</a></span>publish_to_new_dhcp()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.publish_to_new_dhcp </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Publish the GW addr in the new_dhcp channel
+</pre> 
+</div>
+</div>
+<a id="a02c6e633c0fb69691e41c5e7e8a0cdf5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a02c6e633c0fb69691e41c5e7e8a0cdf5">&#9670;&nbsp;</a></span>publish_to_new_MAC()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.publish_to_new_MAC </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>mac</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>host_name</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">check if mac and ip aren't multicast or link-local
+and publish to new_MAC channel to get more info about the mac
+:param mac: src/dst mac
+:param ip: src/dst ip
+src macs should be passed with srcips, dstmac with dstips
+</pre> 
+</div>
+</div>
+<a id="ae5496025ea785b7b8a034af70c817a00"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae5496025ea785b7b8a034af70c817a00">&#9670;&nbsp;</a></span>publish_to_new_software()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.publish_to_new_software </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Send the whole flow to new_software channel
+</pre> 
+</div>
+</div>
+<a id="a018070c84db93fe0d268bba35c9bcfff"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a018070c84db93fe0d268bba35c9bcfff">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae3f5f8b1ae3c5b49877481b4d1884a71"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae3f5f8b1ae3c5b49877481b4d1884a71">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad630d66f49528f39ef097046216ce2d5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad630d66f49528f39ef097046216ce2d5">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae41916d6c3b26629326803182f3db771"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae41916d6c3b26629326803182f3db771">&#9670;&nbsp;</a></span>store_features_going_in()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.store_features_going_in </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">If we have the all direction set , slips creates profiles for each IP, the src and dst
+store features going our adds the conn in the profileA from IP A -&gt; IP B in the db
+this function stores the reverse of this connection. adds the conn in the profileB from IP B &lt;- IP A
+</pre> 
+</div>
+</div>
+<a id="aeba876be5333dc95b9e5bd9695e08048"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeba876be5333dc95b9e5bd9695e08048">&#9670;&nbsp;</a></span>store_features_going_out()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.store_features_going_out </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">function for adding the features going out of the profile
+</pre> 
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a7d9ad8ef076f1e51f444cdd099e9dc58"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7d9ad8ef076f1e51f444cdd099e9dc58">&#9670;&nbsp;</a></span>analysis_direction</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.analysis_direction</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae155b5a1e781da47204153b8130d8e33"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae155b5a1e781da47204153b8130d8e33">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2bd4585ebe59f4bd35faf209f4b2c2ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2bd4585ebe59f4bd35faf209f4b2c2ce">&#9670;&nbsp;</a></span>column_idx</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.column_idx</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7ad793bfdd21deb0b4582159afde11c2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7ad793bfdd21deb0b4582159afde11c2">&#9670;&nbsp;</a></span>column_values</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.column_values</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a93aa186f5aa73201dbc273820f378bdc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93aa186f5aa73201dbc273820f378bdc">&#9670;&nbsp;</a></span>daddr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.daddr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8007931b9778756502e313c7ea4efefe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8007931b9778756502e313c7ea4efefe">&#9670;&nbsp;</a></span>daddr_as_obj</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.daddr_as_obj</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a61b5335693890a1dc3872848761cd8ee"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a61b5335693890a1dc3872848761cd8ee">&#9670;&nbsp;</a></span>debug</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.debug</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2fdde6cafad629c9d46d5f94ef7bf43c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2fdde6cafad629c9d46d5f94ef7bf43c">&#9670;&nbsp;</a></span>flow_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.flow_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abbb6ffb8926ded10f7afbaedaf8239a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abbb6ffb8926ded10f7afbaedaf8239a6">&#9670;&nbsp;</a></span>home_net</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.home_net</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abb994f83c8079f69d259e3ac024545b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abb994f83c8079f69d259e3ac024545b2">&#9670;&nbsp;</a></span>input_type</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.input_type</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9b250722ea4f21406f79dcaf1a2ffa79"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9b250722ea4f21406f79dcaf1a2ffa79">&#9670;&nbsp;</a></span>inputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.inputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0f5f32e35e8ac7884142f6991455c791"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0f5f32e35e8ac7884142f6991455c791">&#9670;&nbsp;</a></span>label</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.label</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aac350a2e8fbe4fe565878eea154a0558"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aac350a2e8fbe4fe565878eea154a0558">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aecc0790f70cf2657fb73d69265f49880"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aecc0790f70cf2657fb73d69265f49880">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0c5e7cb134981099ab214cde6bad3daf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c5e7cb134981099ab214cde6bad3daf">&#9670;&nbsp;</a></span>profileid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.profileid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5b3ecd00a52eade4d547ea51e9e83081"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b3ecd00a52eade4d547ea51e9e83081">&#9670;&nbsp;</a></span>saddr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.saddr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad0c48a103f9b2993908873ee9ccfea2d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad0c48a103f9b2993908873ee9ccfea2d">&#9670;&nbsp;</a></span>saddr_as_obj</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.saddr_as_obj</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abfea47066ac89a298f87b6d17f8f11e7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abfea47066ac89a298f87b6d17f8f11e7">&#9670;&nbsp;</a></span>separator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.separator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a92e749c66f94a9fb97211fbcc157a64f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a92e749c66f94a9fb97211fbcc157a64f">&#9670;&nbsp;</a></span>separators</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.separators</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acec5e735924d51b820af964e4e4dfc9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acec5e735924d51b820af964e4e4dfc9e">&#9670;&nbsp;</a></span>starttime</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.starttime</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6b9d6400583f46f26af72f8948e9cd1f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6b9d6400583f46f26af72f8948e9cd1f">&#9670;&nbsp;</a></span>timeformat</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.timeformat</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3e87752f952a53c868aecb190f78adaf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3e87752f952a53c868aecb190f78adaf">&#9670;&nbsp;</a></span>timeout</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.timeout</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4463a630909755c242e1de4b4ff9831f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4463a630909755c242e1de4b4ff9831f">&#9670;&nbsp;</a></span>twid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.twid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a21a05d12aae2a62a305f33684e0d6625"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a21a05d12aae2a62a305f33684e0d6625">&#9670;&nbsp;</a></span>uid</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.uid</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3316320f556f9dbaf01fab75f825335a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3316320f556f9dbaf01fab75f825335a">&#9670;&nbsp;</a></span>verbose</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.verbose</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4da2301b23e34a217e05e5b568f37f45"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4da2301b23e34a217e05e5b568f37f45">&#9670;&nbsp;</a></span>whitelist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.whitelist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ace27446fb2a7395853064c456f02cd20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ace27446fb2a7395853064c456f02cd20">&#9670;&nbsp;</a></span>whitelist_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.whitelist_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad7375c6f2774fbf2eb83397fd0973bd9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7375c6f2774fbf2eb83397fd0973bd9">&#9670;&nbsp;</a></span>width</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.profilerProcess.ProfilerProcess.width</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/slips_files/core/<a class="el" href="profiler_process_8py.html">profilerProcess.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><b>slips_files</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process.html">profilerProcess</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html">ProfilerProcess</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

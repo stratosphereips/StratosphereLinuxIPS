@@ -1,0 +1,6 @@
+var namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager =
+[
+    [ "timer_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1timer__manager.html", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1timer__manager" ],
+    [ "update_file_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager.html", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager" ],
+    [ "update_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager.html", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager" ]
+];

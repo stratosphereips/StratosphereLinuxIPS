@@ -1,4 +1,0 @@
-var namespaceslips_1_1modules_1_1network__discovery_1_1network__discovery =
-[
-    [ "PortScanProcess", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process" ]
-];

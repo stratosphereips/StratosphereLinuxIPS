@@ -1,0 +1,636 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a86b0e402bea93c5bd4229437a38bfa67"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a86b0e402bea93c5bd4229437a38bfa67">__init__</a> (self, inputqueue, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a2c76c36fd902a8b7c64cbbc9fff7854d">verbose</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a90837c38c2a70086edfc5bb13128b824">debug</a>, redis_port, stdout='', stderr='output/errors.log', <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a8e515bc369d15a39816862c7d71e847d">slips_logfile</a>='output/slips.log')</td></tr>
+<tr class="separator:a86b0e402bea93c5bd4229437a38bfa67"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaecb69e1084cce78ea4c2ca47dea81ed"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#aaecb69e1084cce78ea4c2ca47dea81ed">log_branch_info</a> (self, logfile)</td></tr>
+<tr class="separator:aaecb69e1084cce78ea4c2ca47dea81ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4b930d98b9d4db51d6f14a0d5dead297"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a4b930d98b9d4db51d6f14a0d5dead297">create_logfile</a> (self, path)</td></tr>
+<tr class="separator:a4b930d98b9d4db51d6f14a0d5dead297"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afa0b4ef92a1901c329cce320f4060421"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#afa0b4ef92a1901c329cce320f4060421">log_line</a> (self, sender, msg)</td></tr>
+<tr class="separator:afa0b4ef92a1901c329cce320f4060421"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2e1f1ecd3b55ed6bc5dc39adfde24eea"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a2e1f1ecd3b55ed6bc5dc39adfde24eea">change_stdout</a> (self, file)</td></tr>
+<tr class="separator:a2e1f1ecd3b55ed6bc5dc39adfde24eea"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:affe604664154307689eb34ab5f7ef914"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#affe604664154307689eb34ab5f7ef914">process_line</a> (self, line)</td></tr>
+<tr class="separator:affe604664154307689eb34ab5f7ef914"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab9d32b151d24fa894ed111cc02320da3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#ab9d32b151d24fa894ed111cc02320da3">log_error</a> (self, sender, msg)</td></tr>
+<tr class="separator:ab9d32b151d24fa894ed111cc02320da3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af5fec37a797199bb82707114bcb9f131"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#af5fec37a797199bb82707114bcb9f131">output_line</a> (self, level, sender, msg)</td></tr>
+<tr class="separator:af5fec37a797199bb82707114bcb9f131"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac35c64b67a1cfb31e1a99bfe967f58a7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#ac35c64b67a1cfb31e1a99bfe967f58a7">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:ac35c64b67a1cfb31e1a99bfe967f58a7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8db13bc3d5fcb90f5d3e14f0b21fa9f4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a8db13bc3d5fcb90f5d3e14f0b21fa9f4">run</a> (self)</td></tr>
+<tr class="separator:a8db13bc3d5fcb90f5d3e14f0b21fa9f4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a2c76c36fd902a8b7c64cbbc9fff7854d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a2c76c36fd902a8b7c64cbbc9fff7854d">verbose</a></td></tr>
+<tr class="separator:a2c76c36fd902a8b7c64cbbc9fff7854d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a90837c38c2a70086edfc5bb13128b824"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a90837c38c2a70086edfc5bb13128b824">debug</a></td></tr>
+<tr class="separator:a90837c38c2a70086edfc5bb13128b824"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5fc6dc316fa5adf2232a873c9351c461"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a5fc6dc316fa5adf2232a873c9351c461">errors_logfile</a></td></tr>
+<tr class="memdesc:a5fc6dc316fa5adf2232a873c9351c461"><td class="mdescLeft">&#160;</td><td class="mdescRight">create the log files  <a href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a5fc6dc316fa5adf2232a873c9351c461">More...</a><br /></td></tr>
+<tr class="separator:a5fc6dc316fa5adf2232a873c9351c461"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e515bc369d15a39816862c7d71e847d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a8e515bc369d15a39816862c7d71e847d">slips_logfile</a></td></tr>
+<tr class="separator:a8e515bc369d15a39816862c7d71e847d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeaa8db8ffe8726ad1474755b9da30e49"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#aeaa8db8ffe8726ad1474755b9da30e49">name</a></td></tr>
+<tr class="separator:aeaa8db8ffe8726ad1474755b9da30e49"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1dd592cd4ac8143f8b93046abd662429"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a1dd592cd4ac8143f8b93046abd662429">queue</a></td></tr>
+<tr class="separator:a1dd592cd4ac8143f8b93046abd662429"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a73d4e9868a5a1ed61de0f057dc885a9e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a73d4e9868a5a1ed61de0f057dc885a9e">quiet</a></td></tr>
+<tr class="separator:a73d4e9868a5a1ed61de0f057dc885a9e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">A class to process the output of everything Slips need. Manages all the output
+If any Slips module or process needs to output anything to screen, or logs,
+it should use always the output queue. Then this output class will handle how to deal with it
+</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a86b0e402bea93c5bd4229437a38bfa67"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86b0e402bea93c5bd4229437a38bfa67">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>inputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stdout</em> = <code>''</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stderr</em> = <code>'output/errors.log'</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>slips_logfile</em> = <code>'output/slips.log'</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a2e1f1ecd3b55ed6bc5dc39adfde24eea"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e1f1ecd3b55ed6bc5dc39adfde24eea">&#9670;&nbsp;</a></span>change_stdout()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.change_stdout </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4b930d98b9d4db51d6f14a0d5dead297"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4b930d98b9d4db51d6f14a0d5dead297">&#9670;&nbsp;</a></span>create_logfile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.create_logfile </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">creates slips.log and errors.log if they don't exist
+</pre> 
+</div>
+</div>
+<a id="aaecb69e1084cce78ea4c2ca47dea81ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaecb69e1084cce78ea4c2ca47dea81ed">&#9670;&nbsp;</a></span>log_branch_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.log_branch_info </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>logfile</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab9d32b151d24fa894ed111cc02320da3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9d32b151d24fa894ed111cc02320da3">&#9670;&nbsp;</a></span>log_error()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.log_error </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sender</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>msg</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Log error line to errors.log
+</pre> 
+</div>
+</div>
+<a id="afa0b4ef92a1901c329cce320f4060421"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afa0b4ef92a1901c329cce320f4060421">&#9670;&nbsp;</a></span>log_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.log_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sender</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>msg</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Log error line to slips.log
+</pre> 
+</div>
+</div>
+<a id="af5fec37a797199bb82707114bcb9f131"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5fec37a797199bb82707114bcb9f131">&#9670;&nbsp;</a></span>output_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.output_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>level</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sender</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>msg</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Print depending on the debug and verbose levels
+</pre> 
+</div>
+</div>
+<a id="affe604664154307689eb34ab5f7ef914"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#affe604664154307689eb34ab5f7ef914">&#9670;&nbsp;</a></span>process_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.process_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Extract the verbosity level, the sender and the message from the line.
+The line is separated by | and the fields are:
+1. The level. It means the importance/verbosity we should be. The lower the less important
+    The level is a two digit number
+    first digit: verbosity level
+    second digit: debug level
+    both levels range from 0 to 3
+
+    verbosity:
+        0 - don't print
+        1 - basic operation/proof of work
+        2 - log I/O operations and filenames
+        3 - log database/profile/timewindow changes
+
+    debug:
+        0 - don't print
+        1 - print exceptions
+        2 - unsupported and unhandled types (cases that may cause errors)
+        3 - red warnings that needs examination - developer warnings
+
+    Messages should be about verbosity or debugging, but not both simultaneously
+2. The sender
+3. The message
+
+The level is always an integer from 0 to 10
+</pre> 
+</div>
+</div>
+<a id="a8db13bc3d5fcb90f5d3e14f0b21fa9f4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8db13bc3d5fcb90f5d3e14f0b21fa9f4">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac35c64b67a1cfb31e1a99bfe967f58a7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac35c64b67a1cfb31e1a99bfe967f58a7">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a90837c38c2a70086edfc5bb13128b824"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90837c38c2a70086edfc5bb13128b824">&#9670;&nbsp;</a></span>debug</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.debug</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5fc6dc316fa5adf2232a873c9351c461"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5fc6dc316fa5adf2232a873c9351c461">&#9670;&nbsp;</a></span>errors_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.errors_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>create the log files </p>
+
+</div>
+</div>
+<a id="aeaa8db8ffe8726ad1474755b9da30e49"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeaa8db8ffe8726ad1474755b9da30e49">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1dd592cd4ac8143f8b93046abd662429"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1dd592cd4ac8143f8b93046abd662429">&#9670;&nbsp;</a></span>queue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.queue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a73d4e9868a5a1ed61de0f057dc885a9e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73d4e9868a5a1ed61de0f057dc885a9e">&#9670;&nbsp;</a></span>quiet</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.quiet</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8e515bc369d15a39816862c7d71e847d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e515bc369d15a39816862c7d71e847d">&#9670;&nbsp;</a></span>slips_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.slips_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2c76c36fd902a8b7c64cbbc9fff7854d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2c76c36fd902a8b7c64cbbc9fff7854d">&#9670;&nbsp;</a></span>verbose</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.outputProcess.OutputProcess.verbose</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/slips_files/core/<a class="el" href="output_process_8py.html">outputProcess.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><b>slips_files</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process.html">outputProcess</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html">OutputProcess</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

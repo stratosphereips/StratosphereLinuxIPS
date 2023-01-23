@@ -1,0 +1,4 @@
+var namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager =
+[
+    [ "UpdateFileManager", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager" ]
+];

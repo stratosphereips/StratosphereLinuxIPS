@@ -1,0 +1,1335 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a7178ad8aa1d3f58a9e3225696a80f135"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a7178ad8aa1d3f58a9e3225696a80f135">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a98b37592b03b9a8a1991b90b024060a0">inputqueue</a>, <a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a8e02b87d18f6a7eb554d8d0dcd20a2ae">outputqueue</a>, output_folder, logs_folder, redis_port)</td></tr>
+<tr class="separator:a7178ad8aa1d3f58a9e3225696a80f135"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acaced3bb3aee7eb50a243ec28ce79b28"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#acaced3bb3aee7eb50a243ec28ce79b28">clear_logs_dir</a> (self, logs_folder)</td></tr>
+<tr class="separator:acaced3bb3aee7eb50a243ec28ce79b28"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ade091b3f1b0b95d39efcc3cac0d6f8ef"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ade091b3f1b0b95d39efcc3cac0d6f8ef">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:ade091b3f1b0b95d39efcc3cac0d6f8ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a24110d76bb5c121683f0591ed47c857e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a24110d76bb5c121683f0591ed47c857e">read_configuration</a> (self)</td></tr>
+<tr class="separator:a24110d76bb5c121683f0591ed47c857e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2bbfd07417061d68290fb1347f453a05"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a2bbfd07417061d68290fb1347f453a05">format_evidence_string</a> (self, ip, detection_module, attacker, description)</td></tr>
+<tr class="separator:a2bbfd07417061d68290fb1347f453a05"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a8c5198514f9d0c6976ad8a77b8a615"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a9a8c5198514f9d0c6976ad8a77b8a615">line_wrap</a> (self, txt)</td></tr>
+<tr class="separator:a9a8c5198514f9d0c6976ad8a77b8a615"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad11ae42ed1339471cdf3ea80aac22af3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ad11ae42ed1339471cdf3ea80aac22af3">clean_file</a> (self, output_folder, file_to_clean)</td></tr>
+<tr class="separator:ad11ae42ed1339471cdf3ea80aac22af3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad7c4ac462e4ad661a3318608eb1e915e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ad7c4ac462e4ad661a3318608eb1e915e">addDataToJSONFile</a> (self, dict IDEA_dict)</td></tr>
+<tr class="separator:ad7c4ac462e4ad661a3318608eb1e915e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a019c190a82e89d5a2059d289284d2bbc"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a019c190a82e89d5a2059d289284d2bbc">addDataToLogFile</a> (self, data)</td></tr>
+<tr class="separator:a019c190a82e89d5a2059d289284d2bbc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae4669314d02b59a07aa8d8e49a670e82"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ae4669314d02b59a07aa8d8e49a670e82">get_domains_of_flow</a> (self, dict flow)</td></tr>
+<tr class="separator:ae4669314d02b59a07aa8d8e49a670e82"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a70debadccb98af18c664179089aa7103"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a70debadccb98af18c664179089aa7103">show_popup</a> (self, str alert_to_log)</td></tr>
+<tr class="separator:a70debadccb98af18c664179089aa7103"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac3c7cb86e0f1271ce2ad8f04c1629626"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ac3c7cb86e0f1271ce2ad8f04c1629626">add_to_log_folder</a> (self, data)</td></tr>
+<tr class="separator:ac3c7cb86e0f1271ce2ad8f04c1629626"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a34297db2aa3087d06f99742a9aabd5d0"><td class="memItemLeft" align="right" valign="top">str&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a34297db2aa3087d06f99742a9aabd5d0">format_evidence_causing_this_alert</a> (self, all_evidence, profileid, twid, flow_datetime)</td></tr>
+<tr class="separator:a34297db2aa3087d06f99742a9aabd5d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9c1c91e9f9a9e3319381f556f919efbf"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a9c1c91e9f9a9e3319381f556f919efbf">is_running_on_interface</a> (self)</td></tr>
+<tr class="separator:a9c1c91e9f9a9e3319381f556f919efbf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a355d81a4b9356987842aa0745ec1957e"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a355d81a4b9356987842aa0745ec1957e">decide_blocking</a> (self, profileid)</td></tr>
+<tr class="separator:a355d81a4b9356987842aa0745ec1957e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac6a1802526eb8902e3c4756554ac1dca"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ac6a1802526eb8902e3c4756554ac1dca">mark_as_blocked</a> (self, profileid, twid, flow_datetime, accumulated_threat_level, blocked=False)</td></tr>
+<tr class="separator:ac6a1802526eb8902e3c4756554ac1dca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a260e588b8db870d95aa29fe3f1f85daf"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a260e588b8db870d95aa29fe3f1f85daf">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a260e588b8db870d95aa29fe3f1f85daf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac97e1152ce9a79c0bfa87eee98909830"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ac97e1152ce9a79c0bfa87eee98909830">delete_alerted_evidence</a> (self, profileid, twid, dict tw_evidence)</td></tr>
+<tr class="separator:ac97e1152ce9a79c0bfa87eee98909830"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae08646c44945b3f90dd928a16ac9ac10"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ae08646c44945b3f90dd928a16ac9ac10">delete_whitelisted_evidence</a> (self, evidence)</td></tr>
+<tr class="separator:ae08646c44945b3f90dd928a16ac9ac10"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae46af92eddae3879c01e343651f5de08"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ae46af92eddae3879c01e343651f5de08">delete_evidence_done_by_others</a> (self, tw_evidence)</td></tr>
+<tr class="separator:ae46af92eddae3879c01e343651f5de08"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8b4528ba8e9609b6821c6857ec771a83"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a8b4528ba8e9609b6821c6857ec771a83">get_evidence_for_tw</a> (self, profileid, twid)</td></tr>
+<tr class="separator:a8b4528ba8e9609b6821c6857ec771a83"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af5a9121c9d6c82a84fc831256f6b9b34"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#af5a9121c9d6c82a84fc831256f6b9b34">get_accumulated_threat_level</a> (self, tw_evidence)</td></tr>
+<tr class="separator:af5a9121c9d6c82a84fc831256f6b9b34"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a03dfbfa2e0a3509db6e28cd626036ebc"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a03dfbfa2e0a3509db6e28cd626036ebc">get_last_evidence_ID</a> (self, tw_evidence)</td></tr>
+<tr class="separator:a03dfbfa2e0a3509db6e28cd626036ebc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6375b72d67870355108ce04c6a43e872"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a6375b72d67870355108ce04c6a43e872">send_to_exporting_module</a> (self, tw_evidence)</td></tr>
+<tr class="separator:a6375b72d67870355108ce04c6a43e872"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa80a661a79ca5ee8b780884ad226abb2"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#aa80a661a79ca5ee8b780884ad226abb2">run</a> (self)</td></tr>
+<tr class="separator:aa80a661a79ca5ee8b780884ad226abb2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a3948b17a51f78da0bf6c691f8d337d43"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a3948b17a51f78da0bf6c691f8d337d43">name</a></td></tr>
+<tr class="separator:a3948b17a51f78da0bf6c691f8d337d43"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98b37592b03b9a8a1991b90b024060a0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a98b37592b03b9a8a1991b90b024060a0">inputqueue</a></td></tr>
+<tr class="separator:a98b37592b03b9a8a1991b90b024060a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8e02b87d18f6a7eb554d8d0dcd20a2ae"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a8e02b87d18f6a7eb554d8d0dcd20a2ae">outputqueue</a></td></tr>
+<tr class="separator:a8e02b87d18f6a7eb554d8d0dcd20a2ae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9995728c1b76b9294d6bf0928e4ffd80"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a9995728c1b76b9294d6bf0928e4ffd80">whitelist</a></td></tr>
+<tr class="separator:a9995728c1b76b9294d6bf0928e4ffd80"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a070d20884a3c1c00891a04bae6fd4239"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a070d20884a3c1c00891a04bae6fd4239">separator</a></td></tr>
+<tr class="separator:a070d20884a3c1c00891a04bae6fd4239"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a59c7299a40edb044370198de449d76ee"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a59c7299a40edb044370198de449d76ee">detection_threshold_in_this_width</a></td></tr>
+<tr class="separator:a59c7299a40edb044370198de449d76ee"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afdb9645f0a7944d8c34db4de581a686e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#afdb9645f0a7944d8c34db4de581a686e">notify</a></td></tr>
+<tr class="separator:afdb9645f0a7944d8c34db4de581a686e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a87e45418e2a2875ef957655ada5e5329"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a87e45418e2a2875ef957655ada5e5329">popup_alerts</a></td></tr>
+<tr class="separator:a87e45418e2a2875ef957655ada5e5329"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a53eddb23de5df380d29f8af8b7dd5452"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a53eddb23de5df380d29f8af8b7dd5452">c1</a></td></tr>
+<tr class="separator:a53eddb23de5df380d29f8af8b7dd5452"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9f3ded05c469c0c282d1b1b882d8ac9f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a9f3ded05c469c0c282d1b1b882d8ac9f">c2</a></td></tr>
+<tr class="separator:a9f3ded05c469c0c282d1b1b882d8ac9f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a66bd0b23735393d29b35ff63562c1421"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a66bd0b23735393d29b35ff63562c1421">logfile</a></td></tr>
+<tr class="separator:a66bd0b23735393d29b35ff63562c1421"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aae88c87e4bf76525337fff53c1ba4183"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#aae88c87e4bf76525337fff53c1ba4183">is_interface</a></td></tr>
+<tr class="separator:aae88c87e4bf76525337fff53c1ba4183"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa1aba281ed29affbf54b6b1b2e960053"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#aa1aba281ed29affbf54b6b1b2e960053">jsonfile</a></td></tr>
+<tr class="separator:aa1aba281ed29affbf54b6b1b2e960053"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a116a62ac1e75e4ee6358d98ffd7e89fd"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a116a62ac1e75e4ee6358d98ffd7e89fd">our_ips</a></td></tr>
+<tr class="separator:a116a62ac1e75e4ee6358d98ffd7e89fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a60412f501d0212048c88c91cc3413ea9"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a60412f501d0212048c88c91cc3413ea9">is_first_alert</a></td></tr>
+<tr class="separator:a60412f501d0212048c88c91cc3413ea9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac815fb24a1ee05d3975a09eed67ec8fb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#ac815fb24a1ee05d3975a09eed67ec8fb">logs_logfile</a></td></tr>
+<tr class="separator:ac815fb24a1ee05d3975a09eed67ec8fb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a14d32eed723791bf3c68883b62f2d921"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a14d32eed723791bf3c68883b62f2d921">logs_jsonfile</a></td></tr>
+<tr class="separator:a14d32eed723791bf3c68883b62f2d921"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a28c45f959e3d162bdd06c1838c864b55"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a28c45f959e3d162bdd06c1838c864b55">width</a></td></tr>
+<tr class="separator:a28c45f959e3d162bdd06c1838c864b55"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3501bf3f26420b4aa22ece374b90551e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a3501bf3f26420b4aa22ece374b90551e">detection_threshold</a></td></tr>
+<tr class="separator:a3501bf3f26420b4aa22ece374b90551e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6539d62e8ba422c12cbb9188d27458b5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html#a6539d62e8ba422c12cbb9188d27458b5">IDs_causing_an_alert</a></td></tr>
+<tr class="separator:a6539d62e8ba422c12cbb9188d27458b5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">A class to process the evidence from the alerts and update the threat level
+It only work on evidence for IPs that were profiled
+This should be converted into a module
+</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a7178ad8aa1d3f58a9e3225696a80f135"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7178ad8aa1d3f58a9e3225696a80f135">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>inputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>output_folder</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>logs_folder</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="ac3c7cb86e0f1271ce2ad8f04c1629626"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac3c7cb86e0f1271ce2ad8f04c1629626">&#9670;&nbsp;</a></span>add_to_log_folder()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.add_to_log_folder </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad7c4ac462e4ad661a3318608eb1e915e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad7c4ac462e4ad661a3318608eb1e915e">&#9670;&nbsp;</a></span>addDataToJSONFile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.addDataToJSONFile </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>IDEA_dict</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Add a new evidence line to our alerts.json file in json IDEA format.
+:param IDEA_dict: dict containing 1 alert
+</pre> 
+</div>
+</div>
+<a id="a019c190a82e89d5a2059d289284d2bbc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a019c190a82e89d5a2059d289284d2bbc">&#9670;&nbsp;</a></span>addDataToLogFile()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.addDataToLogFile </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>data</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Add a new evidence line to the alerts.log and other log files if logging is enabled.
+</pre> 
+</div>
+</div>
+<a id="ad11ae42ed1339471cdf3ea80aac22af3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad11ae42ed1339471cdf3ea80aac22af3">&#9670;&nbsp;</a></span>clean_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.clean_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>output_folder</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_to_clean</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Clear the file if exists and return an open handle to it
+</pre> 
+</div>
+</div>
+<a id="acaced3bb3aee7eb50a243ec28ce79b28"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acaced3bb3aee7eb50a243ec28ce79b28">&#9670;&nbsp;</a></span>clear_logs_dir()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.clear_logs_dir </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>logs_folder</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a355d81a4b9356987842aa0745ec1957e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a355d81a4b9356987842aa0745ec1957e">&#9670;&nbsp;</a></span>decide_blocking()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.decide_blocking </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Decide whether to block or not and send to the blocking module
+:param ip: IP to block
+</pre> 
+</div>
+</div>
+<a id="ac97e1152ce9a79c0bfa87eee98909830"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac97e1152ce9a79c0bfa87eee98909830">&#9670;&nbsp;</a></span>delete_alerted_evidence()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.delete_alerted_evidence </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>tw_evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">if there was an alert in this tw before, remove the evidence that were part of the past alert
+from the current evidence
+</pre> 
+</div>
+</div>
+<a id="ae46af92eddae3879c01e343651f5de08"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae46af92eddae3879c01e343651f5de08">&#9670;&nbsp;</a></span>delete_evidence_done_by_others()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.delete_evidence_done_by_others </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tw_evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">given all the tw evidence, we should only consider evidence that makes this given
+profile malicious, aka evidence of this profile attacking others.
+</pre> 
+</div>
+</div>
+<a id="ae08646c44945b3f90dd928a16ac9ac10"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae08646c44945b3f90dd928a16ac9ac10">&#9670;&nbsp;</a></span>delete_whitelisted_evidence()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.delete_whitelisted_evidence </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">delete the hash of all whitelisted evidence from the given dict of evidence ids
+</pre> 
+</div>
+</div>
+<a id="a34297db2aa3087d06f99742a9aabd5d0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a34297db2aa3087d06f99742a9aabd5d0">&#9670;&nbsp;</a></span>format_evidence_causing_this_alert()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> str StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.format_evidence_causing_this_alert </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>all_evidence</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_datetime</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to format the string with all evidence causing an alert
+flow_datetime: time of the last evidence received
+</pre> 
+</div>
+</div>
+<a id="a2bbfd07417061d68290fb1347f453a05"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2bbfd07417061d68290fb1347f453a05">&#9670;&nbsp;</a></span>format_evidence_string()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.format_evidence_string </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>detection_module</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>attacker</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>description</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
+:return : string with a correct evidence displacement
+</pre> 
+</div>
+</div>
+<a id="af5a9121c9d6c82a84fc831256f6b9b34"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af5a9121c9d6c82a84fc831256f6b9b34">&#9670;&nbsp;</a></span>get_accumulated_threat_level()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.get_accumulated_threat_level </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tw_evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae4669314d02b59a07aa8d8e49a670e82"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae4669314d02b59a07aa8d8e49a670e82">&#9670;&nbsp;</a></span>get_domains_of_flow()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.get_domains_of_flow </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>flow</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns the domains of each ip (src and dst) that appeared in this flow</pre> 
+</div>
+</div>
+<a id="a8b4528ba8e9609b6821c6857ec771a83"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8b4528ba8e9609b6821c6857ec771a83">&#9670;&nbsp;</a></span>get_evidence_for_tw()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.get_evidence_for_tw </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a03dfbfa2e0a3509db6e28cd626036ebc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a03dfbfa2e0a3509db6e28cd626036ebc">&#9670;&nbsp;</a></span>get_last_evidence_ID()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.get_last_evidence_ID </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tw_evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9c1c91e9f9a9e3319381f556f919efbf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9c1c91e9f9a9e3319381f556f919efbf">&#9670;&nbsp;</a></span>is_running_on_interface()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.is_running_on_interface </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a8c5198514f9d0c6976ad8a77b8a615"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a8c5198514f9d0c6976ad8a77b8a615">&#9670;&nbsp;</a></span>line_wrap()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.line_wrap </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>txt</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">is called for evidence that are goinng to be printed in the terminal
+line wraps the given text so it looks nice
+</pre> 
+</div>
+</div>
+<a id="ac6a1802526eb8902e3c4756554ac1dca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6a1802526eb8902e3c4756554ac1dca">&#9670;&nbsp;</a></span>mark_as_blocked()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.mark_as_blocked </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_datetime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>accumulated_threat_level</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>blocked</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param blocked: bool. if the ip was blocked by the blocked modules, we should say so
+            in alerts.log, if not, we should say that we generated an alert
+</pre> 
+</div>
+</div>
+<a id="ade091b3f1b0b95d39efcc3cac0d6f8ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade091b3f1b0b95d39efcc3cac0d6f8ef">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a24110d76bb5c121683f0591ed47c857e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a24110d76bb5c121683f0591ed47c857e">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa80a661a79ca5ee8b780884ad226abb2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa80a661a79ca5ee8b780884ad226abb2">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6375b72d67870355108ce04c6a43e872"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6375b72d67870355108ce04c6a43e872">&#9670;&nbsp;</a></span>send_to_exporting_module()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.send_to_exporting_module </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>tw_evidence</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a70debadccb98af18c664179089aa7103"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a70debadccb98af18c664179089aa7103">&#9670;&nbsp;</a></span>show_popup()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.show_popup </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>alert_to_log</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to display a popup with the alert depending on the OS
+</pre> 
+</div>
+</div>
+<a id="a260e588b8db870d95aa29fe3f1f85daf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a260e588b8db870d95aa29fe3f1f85daf">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a53eddb23de5df380d29f8af8b7dd5452"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53eddb23de5df380d29f8af8b7dd5452">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9f3ded05c469c0c282d1b1b882d8ac9f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9f3ded05c469c0c282d1b1b882d8ac9f">&#9670;&nbsp;</a></span>c2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.c2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3501bf3f26420b4aa22ece374b90551e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3501bf3f26420b4aa22ece374b90551e">&#9670;&nbsp;</a></span>detection_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.detection_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a59c7299a40edb044370198de449d76ee"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a59c7299a40edb044370198de449d76ee">&#9670;&nbsp;</a></span>detection_threshold_in_this_width</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.detection_threshold_in_this_width</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6539d62e8ba422c12cbb9188d27458b5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6539d62e8ba422c12cbb9188d27458b5">&#9670;&nbsp;</a></span>IDs_causing_an_alert</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.IDs_causing_an_alert</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a98b37592b03b9a8a1991b90b024060a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98b37592b03b9a8a1991b90b024060a0">&#9670;&nbsp;</a></span>inputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.inputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a60412f501d0212048c88c91cc3413ea9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a60412f501d0212048c88c91cc3413ea9">&#9670;&nbsp;</a></span>is_first_alert</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.is_first_alert</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aae88c87e4bf76525337fff53c1ba4183"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae88c87e4bf76525337fff53c1ba4183">&#9670;&nbsp;</a></span>is_interface</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.is_interface</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa1aba281ed29affbf54b6b1b2e960053"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa1aba281ed29affbf54b6b1b2e960053">&#9670;&nbsp;</a></span>jsonfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.jsonfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a66bd0b23735393d29b35ff63562c1421"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a66bd0b23735393d29b35ff63562c1421">&#9670;&nbsp;</a></span>logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a14d32eed723791bf3c68883b62f2d921"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a14d32eed723791bf3c68883b62f2d921">&#9670;&nbsp;</a></span>logs_jsonfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.logs_jsonfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac815fb24a1ee05d3975a09eed67ec8fb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac815fb24a1ee05d3975a09eed67ec8fb">&#9670;&nbsp;</a></span>logs_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.logs_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3948b17a51f78da0bf6c691f8d337d43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3948b17a51f78da0bf6c691f8d337d43">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afdb9645f0a7944d8c34db4de581a686e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afdb9645f0a7944d8c34db4de581a686e">&#9670;&nbsp;</a></span>notify</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.notify</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a116a62ac1e75e4ee6358d98ffd7e89fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a116a62ac1e75e4ee6358d98ffd7e89fd">&#9670;&nbsp;</a></span>our_ips</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.our_ips</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8e02b87d18f6a7eb554d8d0dcd20a2ae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8e02b87d18f6a7eb554d8d0dcd20a2ae">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a87e45418e2a2875ef957655ada5e5329"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87e45418e2a2875ef957655ada5e5329">&#9670;&nbsp;</a></span>popup_alerts</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.popup_alerts</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a070d20884a3c1c00891a04bae6fd4239"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a070d20884a3c1c00891a04bae6fd4239">&#9670;&nbsp;</a></span>separator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.separator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9995728c1b76b9294d6bf0928e4ffd80"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9995728c1b76b9294d6bf0928e4ffd80">&#9670;&nbsp;</a></span>whitelist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.whitelist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a28c45f959e3d162bdd06c1838c864b55"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a28c45f959e3d162bdd06c1838c864b55">&#9670;&nbsp;</a></span>width</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.slips_files.core.evidenceProcess.EvidenceProcess.width</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/slips_files/core/<a class="el" href="evidence_process_8py.html">evidenceProcess.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><b>slips_files</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html">core</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process.html">evidenceProcess</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html">EvidenceProcess</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,3231 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:aee24559ac23a3887f3c606a55f299acf"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aee24559ac23a3887f3c606a55f299acf">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad43fd28141d3a510cc4710dadff194a5">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:aee24559ac23a3887f3c606a55f299acf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7817e734814f27ee798eb0fddd498674"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a7817e734814f27ee798eb0fddd498674">read_configuration</a> (self)</td></tr>
+<tr class="separator:a7817e734814f27ee798eb0fddd498674"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4d1e14ced12941b11e3da4a058fd46a3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a4d1e14ced12941b11e3da4a058fd46a3">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:a4d1e14ced12941b11e3da4a058fd46a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a334d17df847929a5fca74905cf9f152f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a334d17df847929a5fca74905cf9f152f">check_connection_to_local_ip</a> (self, daddr, dport, saddr, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a334d17df847929a5fca74905cf9f152f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a86d54387531e456db6d2e077f2b09dd4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a86d54387531e456db6d2e077f2b09dd4">check_long_connection</a> (self, dur, daddr, saddr, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a86d54387531e456db6d2e077f2b09dd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a77f0e059bd046bf605bd71e444aed796"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a77f0e059bd046bf605bd71e444aed796">is_p2p</a> (self, dport, proto, daddr)</td></tr>
+<tr class="separator:a77f0e059bd046bf605bd71e444aed796"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0ff768bec984c4a721bbd6f96c741a23"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a0ff768bec984c4a721bbd6f96c741a23">port_belongs_to_an_org</a> (self, daddr, portproto, profileid)</td></tr>
+<tr class="separator:a0ff768bec984c4a721bbd6f96c741a23"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aadfaa400e4fa8462afe4c7eb020278a1"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aadfaa400e4fa8462afe4c7eb020278a1">is_ignored_ip_data_upload</a> (self, ip)</td></tr>
+<tr class="separator:aadfaa400e4fa8462afe4c7eb020278a1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a56d653d5fc5402467eb879526feac0fa"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a56d653d5fc5402467eb879526feac0fa">check_data_upload</a> (self, sbytes, daddr, uid, profileid, twid)</td></tr>
+<tr class="separator:a56d653d5fc5402467eb879526feac0fa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeb0d793e5a587b15039e9afdef443c08"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aeb0d793e5a587b15039e9afdef443c08">wait_for_ssl_flows_to_appear_in_connlog</a> (self)</td></tr>
+<tr class="separator:aeb0d793e5a587b15039e9afdef443c08"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aff437bb38a15fe0a7c5f3c130181e706"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aff437bb38a15fe0a7c5f3c130181e706">check_pastebin_download</a> (self, daddr, server_name, uid, ts, profileid, twid, flow)</td></tr>
+<tr class="separator:aff437bb38a15fe0a7c5f3c130181e706"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad2f838d9abfa7a836b4a61af679fc7f7"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad2f838d9abfa7a836b4a61af679fc7f7">detect_data_upload_in_twid</a> (self, profileid, twid)</td></tr>
+<tr class="separator:ad2f838d9abfa7a836b4a61af679fc7f7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1a4f56a915156ca1e59a68595391e63f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a1a4f56a915156ca1e59a68595391e63f">check_unknown_port</a> (self, dport, proto, daddr, profileid, twid, uid, timestamp, state)</td></tr>
+<tr class="separator:a1a4f56a915156ca1e59a68595391e63f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4892f4ae23ef0f8a9b8e6fbd21fd3fde"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a4892f4ae23ef0f8a9b8e6fbd21fd3fde">check_if_resolution_was_made_by_different_version</a> (self, profileid, daddr)</td></tr>
+<tr class="separator:a4892f4ae23ef0f8a9b8e6fbd21fd3fde"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a03d71dd21a8622810c11bf7c366900bb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a03d71dd21a8622810c11bf7c366900bb">is_connection_made_by_different_version</a> (self, profileid, twid, daddr)</td></tr>
+<tr class="separator:a03d71dd21a8622810c11bf7c366900bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9fde892d71d9fafbe956b7b0666383d3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a9fde892d71d9fafbe956b7b0666383d3">check_dns_arpa_scan</a> (self, domain, stime, profileid, twid, uid)</td></tr>
+<tr class="separator:a9fde892d71d9fafbe956b7b0666383d3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae833a77a14ae10479a3e421aacde324c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ae833a77a14ae10479a3e421aacde324c">is_well_known_org</a> (self, ip)</td></tr>
+<tr class="separator:ae833a77a14ae10479a3e421aacde324c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8f5d081fe99cf1084c321d51a4db77eb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a8f5d081fe99cf1084c321d51a4db77eb">check_connection_without_dns_resolution</a> (self, flow_type, appproto, daddr, twid, profileid, timestamp, uid)</td></tr>
+<tr class="separator:a8f5d081fe99cf1084c321d51a4db77eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a17d329748a55604a79b98ad80bb531db"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a17d329748a55604a79b98ad80bb531db">is_CNAME_contacted</a> (self, answers, contacted_ips)</td></tr>
+<tr class="separator:a17d329748a55604a79b98ad80bb531db"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0c0cf4b224f1d3e0dd8e0152ae26f823"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a0c0cf4b224f1d3e0dd8e0152ae26f823">check_dns_without_connection</a> (self, domain, list answers, str rcode_name, str timestamp, profileid, twid, uid)</td></tr>
+<tr class="separator:a0c0cf4b224f1d3e0dd8e0152ae26f823"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4d38f308718f2d795ac8e4d7a521c56b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a4d38f308718f2d795ac8e4d7a521c56b">detect_successful_ssh_by_zeek</a> (self, uid, timestamp, profileid, twid)</td></tr>
+<tr class="separator:a4d38f308718f2d795ac8e4d7a521c56b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a97541b5aeb1aabf558a2d77d42763798"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a97541b5aeb1aabf558a2d77d42763798">detect_successful_ssh_by_slips</a> (self, uid, timestamp, profileid, twid, auth_success)</td></tr>
+<tr class="separator:a97541b5aeb1aabf558a2d77d42763798"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af64aea30e90115f6c4fddd7c6d8b5657"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#af64aea30e90115f6c4fddd7c6d8b5657">check_successful_ssh</a> (self, uid, timestamp, profileid, twid, auth_success)</td></tr>
+<tr class="separator:af64aea30e90115f6c4fddd7c6d8b5657"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a160c89fe0065c0abcdd63b2b57d0fb55"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a160c89fe0065c0abcdd63b2b57d0fb55">detect_incompatible_CN</a> (self, daddr, server_name, issuer, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a160c89fe0065c0abcdd63b2b57d0fb55"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a64ce525acfbddb5ea8755a9a1f3e1a8a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a64ce525acfbddb5ea8755a9a1f3e1a8a">check_multiple_ssh_versions</a> (self, starttime, saddr, used_software, major_v, minor_v, twid, uid, role='SSH::CLIENT')</td></tr>
+<tr class="separator:a64ce525acfbddb5ea8755a9a1f3e1a8a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3b5fdb110f6261c7ef248836878e8f43"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a3b5fdb110f6261c7ef248836878e8f43">estimate_shannon_entropy</a> (self, string)</td></tr>
+<tr class="separator:a3b5fdb110f6261c7ef248836878e8f43"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a93932929205e2856cc06fec4b194bb9d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a93932929205e2856cc06fec4b194bb9d">check_suspicious_dns_answers</a> (self, domain, answers, daddr, profileid, twid, stime, uid)</td></tr>
+<tr class="separator:a93932929205e2856cc06fec4b194bb9d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a865aef5be6b0bd9349f5a3cfb0aec7b3"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a865aef5be6b0bd9349f5a3cfb0aec7b3">detect_DGA</a> (self, rcode_name, query, stime, daddr, profileid, twid, uid)</td></tr>
+<tr class="separator:a865aef5be6b0bd9349f5a3cfb0aec7b3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1197a52a077f23dafb2f9be243575cb0"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a1197a52a077f23dafb2f9be243575cb0">check_conn_to_port_0</a> (self, sport, dport, proto, saddr, daddr, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a1197a52a077f23dafb2f9be243575cb0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a368e54103db48de65e0868c1c09ff038"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a368e54103db48de65e0868c1c09ff038">check_multiple_reconnection_attempts</a> (self, origstate, saddr, daddr, dport, uid, profileid, twid, timestamp)</td></tr>
+<tr class="separator:a368e54103db48de65e0868c1c09ff038"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:add71150ddc38c2fdc21b6b199a20957a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#add71150ddc38c2fdc21b6b199a20957a">detect_young_domains</a> (self, domain, stime, profileid, twid, uid)</td></tr>
+<tr class="separator:add71150ddc38c2fdc21b6b199a20957a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22ec5eef10f5791e5fe2d1b02b68fc7a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a22ec5eef10f5791e5fe2d1b02b68fc7a">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a22ec5eef10f5791e5fe2d1b02b68fc7a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8652d353ea3beb4219b7f1abf7421c90"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a8652d353ea3beb4219b7f1abf7421c90">check_smtp_bruteforce</a> (self, last_reply, stime, saddr, daddr, profileid, twid, uid)</td></tr>
+<tr class="separator:a8652d353ea3beb4219b7f1abf7421c90"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a17c5a3ee1ff80451e112cf62db181d03"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a17c5a3ee1ff80451e112cf62db181d03">detect_connection_to_multiple_ports</a> (self, saddr, daddr, proto, state, appproto, dport, timestamp, profileid, twid)</td></tr>
+<tr class="separator:a17c5a3ee1ff80451e112cf62db181d03"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8ec1316aa641c02d2274201e9f0a6c20"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a8ec1316aa641c02d2274201e9f0a6c20">detect_malicious_ja3</a> (self, saddr, daddr, ja3, ja3s, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a8ec1316aa641c02d2274201e9f0a6c20"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae07371e83a9b5ac89d77dcb482853d15"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ae07371e83a9b5ac89d77dcb482853d15">check_self_signed_certs</a> (self, validation_status, daddr, server_name, profileid, twid, timestamp, uid)</td></tr>
+<tr class="separator:ae07371e83a9b5ac89d77dcb482853d15"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2e8ad89f0ebbf3dec2ecb72f78661104"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a2e8ad89f0ebbf3dec2ecb72f78661104">check_ssh_password_guessing</a> (self, daddr, uid, timestamp, profileid, twid, auth_success)</td></tr>
+<tr class="separator:a2e8ad89f0ebbf3dec2ecb72f78661104"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adbc33e0105cc20520e6fe5146cff3e27"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#adbc33e0105cc20520e6fe5146cff3e27">check_malicious_ssl</a> (self, ssl_info)</td></tr>
+<tr class="separator:adbc33e0105cc20520e6fe5146cff3e27"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab784b277bc2831e74be9d17f29095dae"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ab784b277bc2831e74be9d17f29095dae">check_weird_http_method</a> (self, msg)</td></tr>
+<tr class="separator:ab784b277bc2831e74be9d17f29095dae"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acd5fdd21f7ad1349d50097478a436efe"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#acd5fdd21f7ad1349d50097478a436efe">check_non_http_port_80_conns</a> (self, state, daddr, dport, proto, appproto, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:acd5fdd21f7ad1349d50097478a436efe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3452a0d27e0b67049b06c11291af68e9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a3452a0d27e0b67049b06c11291af68e9">check_non_ssl_port_443_conns</a> (self, state, daddr, dport, proto, appproto, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a3452a0d27e0b67049b06c11291af68e9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a34fc28442960073dfeccf97488683e28"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a34fc28442960073dfeccf97488683e28">check_different_localnet_usage</a> (self, saddr, daddr, dport, proto, profileid, timestamp, twid, uid, what_to_check='')</td></tr>
+<tr class="separator:a34fc28442960073dfeccf97488683e28"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a78838c0cd42ced893fa84492b13ea6b2"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a78838c0cd42ced893fa84492b13ea6b2">check_device_changing_ips</a> (self, flow_type, smac, profileid, twid, uid, timestamp)</td></tr>
+<tr class="separator:a78838c0cd42ced893fa84492b13ea6b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5e0df0fd5945bf5ed70b4236ab6bf735"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a5e0df0fd5945bf5ed70b4236ab6bf735">run</a> (self)</td></tr>
+<tr class="separator:a5e0df0fd5945bf5ed70b4236ab6bf735"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:ad43fd28141d3a510cc4710dadff194a5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ad43fd28141d3a510cc4710dadff194a5">outputqueue</a></td></tr>
+<tr class="separator:ad43fd28141d3a510cc4710dadff194a5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa7a83eaccb5141e8b519a732c0a5c2ef"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aa7a83eaccb5141e8b519a732c0a5c2ef">normal_label</a></td></tr>
+<tr class="separator:aa7a83eaccb5141e8b519a732c0a5c2ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af07ea5187a17668ca651d2926144c658"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#af07ea5187a17668ca651d2926144c658">malicious_label</a></td></tr>
+<tr class="separator:af07ea5187a17668ca651d2926144c658"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afc5661dbae126e72a1f0ff3be40122b8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#afc5661dbae126e72a1f0ff3be40122b8">c1</a></td></tr>
+<tr class="separator:afc5661dbae126e72a1f0ff3be40122b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1f024ed7e0158ca8c8beeaf7cc2ebcd4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a1f024ed7e0158ca8c8beeaf7cc2ebcd4">c2</a></td></tr>
+<tr class="separator:a1f024ed7e0158ca8c8beeaf7cc2ebcd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abf59b78772f7be61fbbe16d59065920b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#abf59b78772f7be61fbbe16d59065920b">c3</a></td></tr>
+<tr class="separator:abf59b78772f7be61fbbe16d59065920b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aeba9f56b92c88ca6b136ada8d4978aa4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#aeba9f56b92c88ca6b136ada8d4978aa4">c4</a></td></tr>
+<tr class="separator:aeba9f56b92c88ca6b136ada8d4978aa4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afe496c99d531e827962332b7b22e4784"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#afe496c99d531e827962332b7b22e4784">c5</a></td></tr>
+<tr class="separator:afe496c99d531e827962332b7b22e4784"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a833c02015588bc71fa9b6b6f360b2813"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a833c02015588bc71fa9b6b6f360b2813">c6</a></td></tr>
+<tr class="separator:a833c02015588bc71fa9b6b6f360b2813"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9dce7e7b538fd81849a57fe77abf69bb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a9dce7e7b538fd81849a57fe77abf69bb">c7</a></td></tr>
+<tr class="separator:a9dce7e7b538fd81849a57fe77abf69bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a95489cca92fa9f33258b9fbbf9e339f2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a95489cca92fa9f33258b9fbbf9e339f2">c8</a></td></tr>
+<tr class="separator:a95489cca92fa9f33258b9fbbf9e339f2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab7652d04ce94881410fd1a502e5cde8b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ab7652d04ce94881410fd1a502e5cde8b">c9</a></td></tr>
+<tr class="separator:ab7652d04ce94881410fd1a502e5cde8b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1e24d144427732cbf5d59739fc1d49d7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a1e24d144427732cbf5d59739fc1d49d7">c10</a></td></tr>
+<tr class="separator:a1e24d144427732cbf5d59739fc1d49d7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4cc6323a64afe0ea84a364dec5205af2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a4cc6323a64afe0ea84a364dec5205af2">whitelist</a></td></tr>
+<tr class="separator:a4cc6323a64afe0ea84a364dec5205af2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a986833aec0d11b5508007699bd7f70a4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a986833aec0d11b5508007699bd7f70a4">helper</a></td></tr>
+<tr class="separator:a986833aec0d11b5508007699bd7f70a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afd420870ca29b420ca9e892ad0ee5bfe"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#afd420870ca29b420ca9e892ad0ee5bfe">p2p_daddrs</a></td></tr>
+<tr class="separator:afd420870ca29b420ca9e892ad0ee5bfe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1645dbd8ae25ff3f0b7a698ecca1e3c4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a1645dbd8ae25ff3f0b7a698ecca1e3c4">gateway</a></td></tr>
+<tr class="separator:a1645dbd8ae25ff3f0b7a698ecca1e3c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a64097cc260d34e0e448b51937ef9fef3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a64097cc260d34e0e448b51937ef9fef3">connections_checked_in_dns_conn_timer_thread</a></td></tr>
+<tr class="separator:a64097cc260d34e0e448b51937ef9fef3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2275b814f6f3cf7d2f3ca01c53b0954e"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a2275b814f6f3cf7d2f3ca01c53b0954e">connections_checked_in_conn_dns_timer_thread</a></td></tr>
+<tr class="separator:a2275b814f6f3cf7d2f3ca01c53b0954e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac955ae0c4a9a9cad3b7d5876543396b6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ac955ae0c4a9a9cad3b7d5876543396b6">connections_checked_in_ssh_timer_thread</a></td></tr>
+<tr class="separator:ac955ae0c4a9a9cad3b7d5876543396b6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a41843775ce8db0efd981a6f6fd190002"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a41843775ce8db0efd981a6f6fd190002">conn_without_dns_interface_wait_time</a></td></tr>
+<tr class="separator:a41843775ce8db0efd981a6f6fd190002"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ade028528a4f8a20ce940e71fef5033dc"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ade028528a4f8a20ce940e71fef5033dc">nxdomains</a></td></tr>
+<tr class="separator:ade028528a4f8a20ce940e71fef5033dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22eaeba353882782193d3b8ab5307c43"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a22eaeba353882782193d3b8ab5307c43">nxdomains_threshold</a></td></tr>
+<tr class="separator:a22eaeba353882782193d3b8ab5307c43"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a02bd89a97a59c2f957db55f9186ba63b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a02bd89a97a59c2f957db55f9186ba63b">smtp_bruteforce_threshold</a></td></tr>
+<tr class="separator:a02bd89a97a59c2f957db55f9186ba63b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a00823b7b6d93692826bad1cf1e5246db"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a00823b7b6d93692826bad1cf1e5246db">smtp_bruteforce_cache</a></td></tr>
+<tr class="separator:a00823b7b6d93692826bad1cf1e5246db"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a941f980c1999e5d63d26f54f8114bc"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a6a941f980c1999e5d63d26f54f8114bc">dns_arpa_queries</a></td></tr>
+<tr class="separator:a6a941f980c1999e5d63d26f54f8114bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac440e550f160fea54a8794c3c56d7854"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ac440e550f160fea54a8794c3c56d7854">arpa_scan_threshold</a></td></tr>
+<tr class="separator:ac440e550f160fea54a8794c3c56d7854"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a30378e069865d8566a6576ab134434bf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a30378e069865d8566a6576ab134434bf">flow_upload_threshold</a></td></tr>
+<tr class="separator:a30378e069865d8566a6576ab134434bf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab0f33dd9c82dc3736623d291575fef87"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ab0f33dd9c82dc3736623d291575fef87">pw_guessing_threshold</a></td></tr>
+<tr class="separator:ab0f33dd9c82dc3736623d291575fef87"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a73287a1e878a603fd7fdf3f93e255bcf"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a73287a1e878a603fd7fdf3f93e255bcf">password_guessing_cache</a></td></tr>
+<tr class="separator:a73287a1e878a603fd7fdf3f93e255bcf"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7253cf9eb74c8554d67531acaade12df"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a7253cf9eb74c8554d67531acaade12df">pending_ssl_flows</a></td></tr>
+<tr class="separator:a7253cf9eb74c8554d67531acaade12df"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab3f8925b6e923707f5586332906d941a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ab3f8925b6e923707f5586332906d941a">ssl_waiting_thread</a></td></tr>
+<tr class="separator:ab3f8925b6e923707f5586332906d941a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a86f6af6fce5e672d10f653b5250e0cec"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a86f6af6fce5e672d10f653b5250e0cec">long_connection_threshold</a></td></tr>
+<tr class="separator:a86f6af6fce5e672d10f653b5250e0cec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a082df084e3ed3440ab6374c3b0608e82"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a082df084e3ed3440ab6374c3b0608e82">ssh_succesful_detection_threshold</a></td></tr>
+<tr class="separator:a082df084e3ed3440ab6374c3b0608e82"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a46c0bd0601525cbf4c94f949d505bd9a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a46c0bd0601525cbf4c94f949d505bd9a">data_exfiltration_threshold</a></td></tr>
+<tr class="separator:a46c0bd0601525cbf4c94f949d505bd9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac4c96246550c19661828acb3e3a9d2e0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ac4c96246550c19661828acb3e3a9d2e0">pastebin_downloads_threshold</a></td></tr>
+<tr class="separator:ac4c96246550c19661828acb3e3a9d2e0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a0f11734b51be0023bcf4137a524b03"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a6a0f11734b51be0023bcf4137a524b03">our_ips</a></td></tr>
+<tr class="separator:a6a0f11734b51be0023bcf4137a524b03"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9fc8f32ae6788a42ddb1e316031c7a6f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a9fc8f32ae6788a42ddb1e316031c7a6f">shannon_entropy_threshold</a></td></tr>
+<tr class="separator:a9fc8f32ae6788a42ddb1e316031c7a6f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a0d0ed38c3373c881a8f008126eb42d97"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a0d0ed38c3373c881a8f008126eb42d97">name</a> = 'Flow Alerts'</td></tr>
+<tr class="separator:a0d0ed38c3373c881a8f008126eb42d97"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac7e859391fcc4a54fc2efdd3be3098c6"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#ac7e859391fcc4a54fc2efdd3be3098c6">description</a></td></tr>
+<tr class="separator:ac7e859391fcc4a54fc2efdd3be3098c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a17c2ecd909889676066757e9819a29f9"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html#a17c2ecd909889676066757e9819a29f9">authors</a> = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']</td></tr>
+<tr class="separator:a17c2ecd909889676066757e9819a29f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="aee24559ac23a3887f3c606a55f299acf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aee24559ac23a3887f3c606a55f299acf">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a1197a52a077f23dafb2f9be243575cb0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1197a52a077f23dafb2f9be243575cb0">&#9670;&nbsp;</a></span>check_conn_to_port_0()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_conn_to_port_0 </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts on connections to or from port 0 using protocols other than
+igmp, icmp
+</pre> 
+</div>
+</div>
+<a id="a334d17df847929a5fca74905cf9f152f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a334d17df847929a5fca74905cf9f152f">&#9670;&nbsp;</a></span>check_connection_to_local_ip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_connection_to_local_ip </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts when there's a connection from a local IP to another local IP
+</pre> 
+</div>
+</div>
+<a id="a8f5d081fe99cf1084c321d51a4db77eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f5d081fe99cf1084c321d51a4db77eb">&#9670;&nbsp;</a></span>check_connection_without_dns_resolution()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_connection_without_dns_resolution </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>appproto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Checks if there's a flow to a dstip that has no cached DNS answer
+</pre> 
+</div>
+</div>
+<a id="a56d653d5fc5402467eb879526feac0fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a56d653d5fc5402467eb879526feac0fa">&#9670;&nbsp;</a></span>check_data_upload()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_data_upload </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>sbytes</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Set evidence when 1 flow is sending &gt;= the flow_upload_threshold bytes
+</pre> 
+</div>
+</div>
+<a id="a78838c0cd42ced893fa84492b13ea6b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78838c0cd42ced893fa84492b13ea6b2">&#9670;&nbsp;</a></span>check_device_changing_ips()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_device_changing_ips </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>smac</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Every time we have a flow for a new ip (an ip that we're seeing for the first time)
+we check if the MAC of this srcip was associated with another ip
+this check is only done once for each source ip slips sees
+</pre> 
+</div>
+</div>
+<a id="a34fc28442960073dfeccf97488683e28"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a34fc28442960073dfeccf97488683e28">&#9670;&nbsp;</a></span>check_different_localnet_usage()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_different_localnet_usage </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>what_to_check</em> = <code>''</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">alerts when a connection to a private ip that doesn't belong to our local network is found
+for example:
+If we are on 192.168.1.0/24 then detect anything coming from/to 10.0.0.0/8
+:param what_to_check: can be 'srcip' or 'dstip'
+</pre> 
+</div>
+</div>
+<a id="a9fde892d71d9fafbe956b7b0666383d3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9fde892d71d9fafbe956b7b0666383d3">&#9670;&nbsp;</a></span>check_dns_arpa_scan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_dns_arpa_scan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>domain</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detect and ARPA scan if an ip performed 10(arpa_scan_threshold) or more arpa queries within 2 seconds
+</pre> 
+</div>
+</div>
+<a id="a0c0cf4b224f1d3e0dd8e0152ae26f823"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0c0cf4b224f1d3e0dd8e0152ae26f823">&#9670;&nbsp;</a></span>check_dns_without_connection()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_dns_without_connection </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>domain</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">list&#160;</td>
+          <td class="paramname"><em>answers</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>rcode_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Makes sure all cached DNS answers are used in contacted_ips
+:param contacted_ips:  dict of ips used in a specific tw {ip: uid}
+</pre> 
+</div>
+</div>
+<a id="a4892f4ae23ef0f8a9b8e6fbd21fd3fde"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4892f4ae23ef0f8a9b8e6fbd21fd3fde">&#9670;&nbsp;</a></span>check_if_resolution_was_made_by_different_version()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_if_resolution_was_made_by_different_version </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Sometimes the same computer makes dns requests using its ipv4 and ipv6 address, check if this is the case
+</pre> 
+</div>
+</div>
+<a id="a86d54387531e456db6d2e077f2b09dd4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86d54387531e456db6d2e077f2b09dd4">&#9670;&nbsp;</a></span>check_long_connection()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_long_connection </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dur</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check if a duration of the connection is
+above the threshold (more than 25 minutes by default).
+:param dur: duration of the flow in seconds
+</pre> 
+</div>
+</div>
+<a id="adbc33e0105cc20520e6fe5146cff3e27"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adbc33e0105cc20520e6fe5146cff3e27">&#9670;&nbsp;</a></span>check_malicious_ssl()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_malicious_ssl </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ssl_info</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a368e54103db48de65e0868c1c09ff038"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a368e54103db48de65e0868c1c09ff038">&#9670;&nbsp;</a></span>check_multiple_reconnection_attempts()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_multiple_reconnection_attempts </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>origstate</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts when 5+ reconnection attempts from the same source IP to
+the same destination IP occurs
+</pre> 
+</div>
+</div>
+<a id="a64ce525acfbddb5ea8755a9a1f3e1a8a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64ce525acfbddb5ea8755a9a1f3e1a8a">&#9670;&nbsp;</a></span>check_multiple_ssh_versions()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_multiple_ssh_versions </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>starttime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>used_software</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>major_v</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>minor_v</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>role</em> = <code>'SSH::CLIENT'</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">checks if this srcip was detected using a different
+ ssh client or server versions before
+:param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
+</pre> 
+</div>
+</div>
+<a id="acd5fdd21f7ad1349d50097478a436efe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acd5fdd21f7ad1349d50097478a436efe">&#9670;&nbsp;</a></span>check_non_http_port_80_conns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_non_http_port_80_conns </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>state</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>appproto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">alerts on established connections on port 80 that are not HTTP
+</pre> 
+</div>
+</div>
+<a id="a3452a0d27e0b67049b06c11291af68e9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3452a0d27e0b67049b06c11291af68e9">&#9670;&nbsp;</a></span>check_non_ssl_port_443_conns()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_non_ssl_port_443_conns </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>state</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>appproto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">alerts on established connections on port 443 that are not HTTPS (ssl)
+</pre> 
+</div>
+</div>
+<a id="aff437bb38a15fe0a7c5f3c130181e706"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aff437bb38a15fe0a7c5f3c130181e706">&#9670;&nbsp;</a></span>check_pastebin_download()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_pastebin_download </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>server_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ts</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Alerts on downloads from pastebin.com with more than 12000 bytes
+This function waits for the ssl.log flow to appear in conn.log before alerting
+:param wait_time: the time we wait for the ssl conn to appear in conn.log in seconds
+        every time the timer is over, we wait extra 2 min and call the function again
+: param flow: this is the conn.log of the ssl flow we're currently checking
+</pre> 
+</div>
+</div>
+<a id="ae07371e83a9b5ac89d77dcb482853d15"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae07371e83a9b5ac89d77dcb482853d15">&#9670;&nbsp;</a></span>check_self_signed_certs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_self_signed_certs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>validation_status</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>server_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">checks the validation status of every azeek ssl flow for self signed certs
+</pre> 
+</div>
+</div>
+<a id="a8652d353ea3beb4219b7f1abf7421c90"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8652d353ea3beb4219b7f1abf7421c90">&#9670;&nbsp;</a></span>check_smtp_bruteforce()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_smtp_bruteforce </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>last_reply</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2e8ad89f0ebbf3dec2ecb72f78661104"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2e8ad89f0ebbf3dec2ecb72f78661104">&#9670;&nbsp;</a></span>check_ssh_password_guessing()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_ssh_password_guessing </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>auth_success</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This detection is only done when there's a failed ssh attempt
+alerts ssh pw bruteforce when there's more than
+20 failed attempts by the same ip to the same IP
+</pre> 
+</div>
+</div>
+<a id="af64aea30e90115f6c4fddd7c6d8b5657"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af64aea30e90115f6c4fddd7c6d8b5657">&#9670;&nbsp;</a></span>check_successful_ssh()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_successful_ssh </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>auth_success</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to check if an SSH connection logged in successfully
+</pre> 
+</div>
+</div>
+<a id="a93932929205e2856cc06fec4b194bb9d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a93932929205e2856cc06fec4b194bb9d">&#9670;&nbsp;</a></span>check_suspicious_dns_answers()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_suspicious_dns_answers </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>domain</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>answers</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Uses shannon entropy to detect DNS TXT answers with encoded/encrypted strings
+</pre> 
+</div>
+</div>
+<a id="a1a4f56a915156ca1e59a68595391e63f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a4f56a915156ca1e59a68595391e63f">&#9670;&nbsp;</a></span>check_unknown_port()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_unknown_port </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>state</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Checks dports that are not in our
+slips_files/ports_info/services.csv
+</pre> 
+</div>
+</div>
+<a id="ab784b277bc2831e74be9d17f29095dae"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab784b277bc2831e74be9d17f29095dae">&#9670;&nbsp;</a></span>check_weird_http_method()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.check_weird_http_method </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>msg</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">detect weird http methods in zeek's weird.log
+</pre> 
+</div>
+</div>
+<a id="a17c5a3ee1ff80451e112cf62db181d03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17c5a3ee1ff80451e112cf62db181d03">&#9670;&nbsp;</a></span>detect_connection_to_multiple_ports()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_connection_to_multiple_ports </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>state</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>appproto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad2f838d9abfa7a836b4a61af679fc7f7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad2f838d9abfa7a836b4a61af679fc7f7">&#9670;&nbsp;</a></span>detect_data_upload_in_twid()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_data_upload_in_twid </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">For each contacted ip in this twid,
+check if the total bytes sent to this ip is &gt;= data_exfiltration_threshold
+</pre> 
+</div>
+</div>
+<a id="a865aef5be6b0bd9349f5a3cfb0aec7b3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a865aef5be6b0bd9349f5a3cfb0aec7b3">&#9670;&nbsp;</a></span>detect_DGA()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_DGA </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>rcode_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>query</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detect DGA based on the amount of NXDOMAINs seen in dns.log
+alerts when 10 15 20 etc. nxdomains are found
+Ignore queries done to *.in-addr.arpa domains and to *.local domains
+</pre> 
+</div>
+</div>
+<a id="a160c89fe0065c0abcdd63b2b57d0fb55"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a160c89fe0065c0abcdd63b2b57d0fb55">&#9670;&nbsp;</a></span>detect_incompatible_CN()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_incompatible_CN </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>server_name</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>issuer</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detects if a certificate claims that it's CN (common name) belongs
+to an org that the domain doesn't belong to
+</pre> 
+</div>
+</div>
+<a id="a8ec1316aa641c02d2274201e9f0a6c20"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8ec1316aa641c02d2274201e9f0a6c20">&#9670;&nbsp;</a></span>detect_malicious_ja3()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_malicious_ja3 </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>saddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ja3</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ja3s</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a97541b5aeb1aabf558a2d77d42763798"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a97541b5aeb1aabf558a2d77d42763798">&#9670;&nbsp;</a></span>detect_successful_ssh_by_slips()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_successful_ssh_by_slips </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>auth_success</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Try Slips method to detect if SSH was successful by
+comparing all bytes sent and received to our threshold
+</pre> 
+</div>
+</div>
+<a id="a4d38f308718f2d795ac8e4d7a521c56b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d38f308718f2d795ac8e4d7a521c56b">&#9670;&nbsp;</a></span>detect_successful_ssh_by_zeek()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_successful_ssh_by_zeek </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Check for auth_success: true in the given zeek flow
+</pre> 
+</div>
+</div>
+<a id="add71150ddc38c2fdc21b6b199a20957a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#add71150ddc38c2fdc21b6b199a20957a">&#9670;&nbsp;</a></span>detect_young_domains()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.detect_young_domains </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>domain</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>stime</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detect domains that are too young.
+The threshold is 60 days
+</pre> 
+</div>
+</div>
+<a id="a3b5fdb110f6261c7ef248836878e8f43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b5fdb110f6261c7ef248836878e8f43">&#9670;&nbsp;</a></span>estimate_shannon_entropy()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.estimate_shannon_entropy </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>string</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a17d329748a55604a79b98ad80bb531db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17d329748a55604a79b98ad80bb531db">&#9670;&nbsp;</a></span>is_CNAME_contacted()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.is_CNAME_contacted </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>answers</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>contacted_ips</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">check if any ip of the given CNAMEs is contacted
+</pre> 
+</div>
+</div>
+<a id="a03d71dd21a8622810c11bf7c366900bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a03d71dd21a8622810c11bf7c366900bb">&#9670;&nbsp;</a></span>is_connection_made_by_different_version()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.is_connection_made_by_different_version </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param daddr: the ip this connection is made to (destination ip)
+</pre> 
+</div>
+</div>
+<a id="aadfaa400e4fa8462afe4c7eb020278a1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aadfaa400e4fa8462afe4c7eb020278a1">&#9670;&nbsp;</a></span>is_ignored_ip_data_upload()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.is_ignored_ip_data_upload </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Ignore the IPs that we shouldn't alert about
+</pre> 
+</div>
+</div>
+<a id="a77f0e059bd046bf605bd71e444aed796"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a77f0e059bd046bf605bd71e444aed796">&#9670;&nbsp;</a></span>is_p2p()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.is_p2p </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>proto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">P2P is defined as following : proto is udp, port numbers are higher than 30000 at least 5 connections to different daddrs
+OR trying to connct to 1 ip on more than 5 unkown 30000+/udp ports
+</pre> 
+</div>
+</div>
+<a id="ae833a77a14ae10479a3e421aacde324c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae833a77a14ae10479a3e421aacde324c">&#9670;&nbsp;</a></span>is_well_known_org()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.is_well_known_org </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">get the SNI, ASN, and  rDNS of the IP to check if it belongs
+to a well-known org</pre> 
+</div>
+</div>
+<a id="a0ff768bec984c4a721bbd6f96c741a23"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ff768bec984c4a721bbd6f96c741a23">&#9670;&nbsp;</a></span>port_belongs_to_an_org()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.port_belongs_to_an_org </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>daddr</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>portproto</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Checks wehether a port is known to be used by a specific
+organization or not, and returns true if the daddr belongs to the
+same org as the port
+</pre> 
+</div>
+</div>
+<a id="a4d1e14ced12941b11e3da4a058fd46a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4d1e14ced12941b11e3da4a058fd46a3">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a7817e734814f27ee798eb0fddd498674"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7817e734814f27ee798eb0fddd498674">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5e0df0fd5945bf5ed70b4236ab6bf735"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5e0df0fd5945bf5ed70b4236ab6bf735">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a22ec5eef10f5791e5fe2d1b02b68fc7a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22ec5eef10f5791e5fe2d1b02b68fc7a">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aeb0d793e5a587b15039e9afdef443c08"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeb0d793e5a587b15039e9afdef443c08">&#9670;&nbsp;</a></span>wait_for_ssl_flows_to_appear_in_connlog()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.wait_for_ssl_flows_to_appear_in_connlog </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">thread that waits forever for ssl flows to appear in conn.log
+whenever the conn.log of an ssl flow is found, thread calls check_pastebin_download
+ssl flows to wait for are stored in pending_ssl_flows
+</pre> 
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="ac440e550f160fea54a8794c3c56d7854"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac440e550f160fea54a8794c3c56d7854">&#9670;&nbsp;</a></span>arpa_scan_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.arpa_scan_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a17c2ecd909889676066757e9819a29f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a17c2ecd909889676066757e9819a29f9">&#9670;&nbsp;</a></span>authors</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">list StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afc5661dbae126e72a1f0ff3be40122b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afc5661dbae126e72a1f0ff3be40122b8">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1e24d144427732cbf5d59739fc1d49d7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e24d144427732cbf5d59739fc1d49d7">&#9670;&nbsp;</a></span>c10</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c10</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f024ed7e0158ca8c8beeaf7cc2ebcd4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f024ed7e0158ca8c8beeaf7cc2ebcd4">&#9670;&nbsp;</a></span>c2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abf59b78772f7be61fbbe16d59065920b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abf59b78772f7be61fbbe16d59065920b">&#9670;&nbsp;</a></span>c3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aeba9f56b92c88ca6b136ada8d4978aa4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aeba9f56b92c88ca6b136ada8d4978aa4">&#9670;&nbsp;</a></span>c4</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c4</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afe496c99d531e827962332b7b22e4784"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe496c99d531e827962332b7b22e4784">&#9670;&nbsp;</a></span>c5</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c5</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a833c02015588bc71fa9b6b6f360b2813"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a833c02015588bc71fa9b6b6f360b2813">&#9670;&nbsp;</a></span>c6</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c6</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9dce7e7b538fd81849a57fe77abf69bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9dce7e7b538fd81849a57fe77abf69bb">&#9670;&nbsp;</a></span>c7</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c7</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a95489cca92fa9f33258b9fbbf9e339f2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a95489cca92fa9f33258b9fbbf9e339f2">&#9670;&nbsp;</a></span>c8</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c8</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab7652d04ce94881410fd1a502e5cde8b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7652d04ce94881410fd1a502e5cde8b">&#9670;&nbsp;</a></span>c9</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.c9</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a41843775ce8db0efd981a6f6fd190002"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a41843775ce8db0efd981a6f6fd190002">&#9670;&nbsp;</a></span>conn_without_dns_interface_wait_time</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.conn_without_dns_interface_wait_time</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2275b814f6f3cf7d2f3ca01c53b0954e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2275b814f6f3cf7d2f3ca01c53b0954e">&#9670;&nbsp;</a></span>connections_checked_in_conn_dns_timer_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.connections_checked_in_conn_dns_timer_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a64097cc260d34e0e448b51937ef9fef3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64097cc260d34e0e448b51937ef9fef3">&#9670;&nbsp;</a></span>connections_checked_in_dns_conn_timer_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.connections_checked_in_dns_conn_timer_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac955ae0c4a9a9cad3b7d5876543396b6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac955ae0c4a9a9cad3b7d5876543396b6">&#9670;&nbsp;</a></span>connections_checked_in_ssh_timer_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.connections_checked_in_ssh_timer_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a46c0bd0601525cbf4c94f949d505bd9a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46c0bd0601525cbf4c94f949d505bd9a">&#9670;&nbsp;</a></span>data_exfiltration_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.data_exfiltration_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac7e859391fcc4a54fc2efdd3be3098c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac7e859391fcc4a54fc2efdd3be3098c6">&#9670;&nbsp;</a></span>description</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">tuple StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.description</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+<b>Initial value:</b><div class="fragment"><div class="line">=  (</div>
+<div class="line">        <span class="stringliteral">&#39;Alerts about flows: long connection, successful ssh, &#39;</span></div>
+<div class="line">        <span class="stringliteral">&#39;password guessing, self-signed certificate, data exfiltration, etc.&#39;</span></div>
+<div class="line">    )</div>
+</div><!-- fragment -->
+</div>
+</div>
+<a id="a6a941f980c1999e5d63d26f54f8114bc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a941f980c1999e5d63d26f54f8114bc">&#9670;&nbsp;</a></span>dns_arpa_queries</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.dns_arpa_queries</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a30378e069865d8566a6576ab134434bf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a30378e069865d8566a6576ab134434bf">&#9670;&nbsp;</a></span>flow_upload_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.flow_upload_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1645dbd8ae25ff3f0b7a698ecca1e3c4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1645dbd8ae25ff3f0b7a698ecca1e3c4">&#9670;&nbsp;</a></span>gateway</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.gateway</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a986833aec0d11b5508007699bd7f70a4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a986833aec0d11b5508007699bd7f70a4">&#9670;&nbsp;</a></span>helper</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.helper</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a86f6af6fce5e672d10f653b5250e0cec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a86f6af6fce5e672d10f653b5250e0cec">&#9670;&nbsp;</a></span>long_connection_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.long_connection_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af07ea5187a17668ca651d2926144c658"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af07ea5187a17668ca651d2926144c658">&#9670;&nbsp;</a></span>malicious_label</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.malicious_label</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0d0ed38c3373c881a8f008126eb42d97"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0d0ed38c3373c881a8f008126eb42d97">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.name = 'Flow Alerts'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa7a83eaccb5141e8b519a732c0a5c2ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7a83eaccb5141e8b519a732c0a5c2ef">&#9670;&nbsp;</a></span>normal_label</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.normal_label</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ade028528a4f8a20ce940e71fef5033dc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ade028528a4f8a20ce940e71fef5033dc">&#9670;&nbsp;</a></span>nxdomains</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.nxdomains</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a22eaeba353882782193d3b8ab5307c43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22eaeba353882782193d3b8ab5307c43">&#9670;&nbsp;</a></span>nxdomains_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.nxdomains_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6a0f11734b51be0023bcf4137a524b03"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a0f11734b51be0023bcf4137a524b03">&#9670;&nbsp;</a></span>our_ips</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.our_ips</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad43fd28141d3a510cc4710dadff194a5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad43fd28141d3a510cc4710dadff194a5">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afd420870ca29b420ca9e892ad0ee5bfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd420870ca29b420ca9e892ad0ee5bfe">&#9670;&nbsp;</a></span>p2p_daddrs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.p2p_daddrs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a73287a1e878a603fd7fdf3f93e255bcf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73287a1e878a603fd7fdf3f93e255bcf">&#9670;&nbsp;</a></span>password_guessing_cache</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.password_guessing_cache</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac4c96246550c19661828acb3e3a9d2e0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4c96246550c19661828acb3e3a9d2e0">&#9670;&nbsp;</a></span>pastebin_downloads_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.pastebin_downloads_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7253cf9eb74c8554d67531acaade12df"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7253cf9eb74c8554d67531acaade12df">&#9670;&nbsp;</a></span>pending_ssl_flows</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.pending_ssl_flows</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab0f33dd9c82dc3736623d291575fef87"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab0f33dd9c82dc3736623d291575fef87">&#9670;&nbsp;</a></span>pw_guessing_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.pw_guessing_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9fc8f32ae6788a42ddb1e316031c7a6f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9fc8f32ae6788a42ddb1e316031c7a6f">&#9670;&nbsp;</a></span>shannon_entropy_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.shannon_entropy_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a00823b7b6d93692826bad1cf1e5246db"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00823b7b6d93692826bad1cf1e5246db">&#9670;&nbsp;</a></span>smtp_bruteforce_cache</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.smtp_bruteforce_cache</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a02bd89a97a59c2f957db55f9186ba63b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a02bd89a97a59c2f957db55f9186ba63b">&#9670;&nbsp;</a></span>smtp_bruteforce_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.smtp_bruteforce_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a082df084e3ed3440ab6374c3b0608e82"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a082df084e3ed3440ab6374c3b0608e82">&#9670;&nbsp;</a></span>ssh_succesful_detection_threshold</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.ssh_succesful_detection_threshold</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab3f8925b6e923707f5586332906d941a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3f8925b6e923707f5586332906d941a">&#9670;&nbsp;</a></span>ssl_waiting_thread</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.ssl_waiting_thread</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4cc6323a64afe0ea84a364dec5205af2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4cc6323a64afe0ea84a364dec5205af2">&#9670;&nbsp;</a></span>whitelist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.flowalerts.flowalerts.Module.whitelist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/flowalerts/<a class="el" href="flowalerts_8py.html">flowalerts.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts.html">flowalerts</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts.html">flowalerts</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html">Module</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

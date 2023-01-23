@@ -40,5 +40,15 @@ var namespaces_dup =
       [ "x_data", "namespacernn__model__training.html#a3349298572630a3a50c6389322005219", null ],
       [ "y_data", "namespacernn__model__training.html#a7db43a2a990a526f07a19355b34c5f2a", null ]
     ] ],
-    [ "slips", "namespaceslips.html", "namespaceslips" ]
+    [ "StratosphereLinuxIPS", null, [
+      [ "daemon", "namespace_stratosphere_linux_i_p_s_1_1daemon.html", "namespace_stratosphere_linux_i_p_s_1_1daemon" ],
+      [ "modules", "namespace_stratosphere_linux_i_p_s_1_1modules.html", "namespace_stratosphere_linux_i_p_s_1_1modules" ],
+      [ "slips", "namespace_stratosphere_linux_i_p_s_1_1slips.html", "namespace_stratosphere_linux_i_p_s_1_1slips" ],
+      [ "slips_files", null, [
+        [ "common", null, [
+          [ "slips_utils", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils.html", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils" ]
+        ] ],
+        [ "core", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core" ]
+      ] ]
+    ] ]
 ];

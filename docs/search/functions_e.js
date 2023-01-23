@@ -1,8 +1,8 @@
 var searchData=
 [
-  ['on_5fcreated_0',['on_created',['../classslips_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#a74ddeed1afa36ff8bed819225c6672a8',1,'slips::slips_files::core::filemonitor::FileEventHandler']]],
-  ['on_5fmodified_1',['on_modified',['../classslips_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#aaeecddb8990c0b3c0e509f964ba1b592',1,'slips::slips_files::core::filemonitor::FileEventHandler']]],
-  ['on_5fmoved_2',['on_moved',['../classslips_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#a17773bb9585478e74e2b54d05ade9547',1,'slips::slips_files::core::filemonitor::FileEventHandler']]],
-  ['open_5fdbs_3',['open_dbs',['../classslips_1_1modules_1_1ip__info_1_1ip__info_1_1_module.html#adb81b82f29ccc77acd0420a163eb29f2',1,'slips::modules::ip_info::ip_info::Module']]],
-  ['output_5fline_4',['output_line',['../classslips_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#a3ee8f2b5f914ff5fe8e1b8fe4f28269d',1,'slips::slips_files::core::outputProcess::OutputProcess']]]
+  ['on_5fcreated_1819',['on_created',['../class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#ac5688f2549110fc52f3d957384d32099',1,'StratosphereLinuxIPS::slips_files::core::filemonitor::FileEventHandler']]],
+  ['on_5fmodified_1820',['on_modified',['../class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#a8bb004908b417fab27291054fd0eb7e4',1,'StratosphereLinuxIPS::slips_files::core::filemonitor::FileEventHandler']]],
+  ['on_5fmoved_1821',['on_moved',['../class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html#aa0f80e5c5b079a0f2cec6251cba5ab41',1,'StratosphereLinuxIPS::slips_files::core::filemonitor::FileEventHandler']]],
+  ['open_5fdbs_1822',['open_dbs',['../class_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1ip__info_1_1_module.html#a8fb3c7c15f775b266c938662d917d96a',1,'StratosphereLinuxIPS::modules::ip_info::ip_info::Module']]],
+  ['output_5fline_1823',['output_line',['../class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html#af5fec37a797199bb82707114bcb9f131',1,'StratosphereLinuxIPS::slips_files::core::outputProcess::OutputProcess']]]
 ];

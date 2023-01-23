@@ -1,0 +1,697 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a87ad20562a6ba5be78a3658f9709893f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a87ad20562a6ba5be78a3658f9709893f">__init__</a> (self, str db_file, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html">Printer</a> <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a18831c3ea7ab650371a2bd3aa31d478f">printer</a>, bool drop_tables_on_startup=False)</td></tr>
+<tr class="separator:a87ad20562a6ba5be78a3658f9709893f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afd2acce63aa5ebafef62f997238c3fd4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#afd2acce63aa5ebafef62f997238c3fd4">__del__</a> (self)</td></tr>
+<tr class="separator:afd2acce63aa5ebafef62f997238c3fd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1a441e815485b108ecbcfe6907219153"><td class="memItemLeft" align="right" valign="top">None&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a1a441e815485b108ecbcfe6907219153">print</a> (self, str text, int verbose=1, int debug=0)</td></tr>
+<tr class="separator:a1a441e815485b108ecbcfe6907219153"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a409ec892f1d0497a79f84f641cf5dea4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a409ec892f1d0497a79f84f641cf5dea4">create_tables</a> (self)</td></tr>
+<tr class="separator:a409ec892f1d0497a79f84f641cf5dea4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a49e427ffd92c4a3ee1bda3f5f4002a0a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a49e427ffd92c4a3ee1bda3f5f4002a0a">delete_tables</a> (self)</td></tr>
+<tr class="separator:a49e427ffd92c4a3ee1bda3f5f4002a0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac0076b22757d3163a237d9cfaaccd41c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#ac0076b22757d3163a237d9cfaaccd41c">insert_slips_score</a> (self, str ip, float score, float confidence, int timestamp=None)</td></tr>
+<tr class="separator:ac0076b22757d3163a237d9cfaaccd41c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a312825a057c5bd1e506780dda1f32693"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a312825a057c5bd1e506780dda1f32693">insert_go_reliability</a> (self, str peerid, float reliability, int timestamp=None)</td></tr>
+<tr class="separator:a312825a057c5bd1e506780dda1f32693"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a48d28c28a86df234dd3f5629710d4e3d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a48d28c28a86df234dd3f5629710d4e3d">insert_go_ip_pairing</a> (self, str peerid, str ip, int timestamp=None)</td></tr>
+<tr class="separator:a48d28c28a86df234dd3f5629710d4e3d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a363ecf171505210f577e7542b376d99f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a363ecf171505210f577e7542b376d99f">insert_new_go_data</a> (self, list reports)</td></tr>
+<tr class="separator:a363ecf171505210f577e7542b376d99f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad96d75a5eccb4808df9e2890a4a0fa59"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#ad96d75a5eccb4808df9e2890a4a0fa59">insert_new_go_report</a> (self, str reporter_peerid, str key_type, str reported_key, float score, float confidence, int timestamp=None)</td></tr>
+<tr class="separator:ad96d75a5eccb4808df9e2890a4a0fa59"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a940c348b5656a71abc83201af9e99711"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a940c348b5656a71abc83201af9e99711">update_cached_network_opinion</a> (self, str key_type, str reported_key, float score, float confidence, float network_score)</td></tr>
+<tr class="separator:a940c348b5656a71abc83201af9e99711"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2b95498ed34c8e0112f67611c471a032"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a2b95498ed34c8e0112f67611c471a032">get_cached_network_opinion</a> (self, str key_type, str reported_key)</td></tr>
+<tr class="separator:a2b95498ed34c8e0112f67611c471a032"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0cf27edd952c72ace85b0c3d41bf20a4"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a0cf27edd952c72ace85b0c3d41bf20a4">get_ip_of_peer</a> (self, peerid)</td></tr>
+<tr class="separator:a0cf27edd952c72ace85b0c3d41bf20a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a43d9e5af4bbd1c3169ed8af61b13ac2b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a43d9e5af4bbd1c3169ed8af61b13ac2b">get_opinion_on_ip</a> (self, str ipaddress)</td></tr>
+<tr class="separator:a43d9e5af4bbd1c3169ed8af61b13ac2b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a18831c3ea7ab650371a2bd3aa31d478f"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a18831c3ea7ab650371a2bd3aa31d478f">printer</a></td></tr>
+<tr class="separator:a18831c3ea7ab650371a2bd3aa31d478f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8f5a20439c2d10acf0eea86cbea9b7e6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html#a8f5a20439c2d10acf0eea86cbea9b7e6">conn</a></td></tr>
+<tr class="separator:a8f5a20439c2d10acf0eea86cbea9b7e6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a87ad20562a6ba5be78a3658f9709893f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a87ad20562a6ba5be78a3658f9709893f">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>db_file</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html">Printer</a>&#160;</td>
+          <td class="paramname"><em>printer</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">bool &#160;</td>
+          <td class="paramname"><em>drop_tables_on_startup</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">create a database connection to a SQLite database</pre> 
+</div>
+</div>
+<a id="afd2acce63aa5ebafef62f997238c3fd4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afd2acce63aa5ebafef62f997238c3fd4">&#9670;&nbsp;</a></span>__del__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.__del__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a409ec892f1d0497a79f84f641cf5dea4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a409ec892f1d0497a79f84f641cf5dea4">&#9670;&nbsp;</a></span>create_tables()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.create_tables </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a49e427ffd92c4a3ee1bda3f5f4002a0a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a49e427ffd92c4a3ee1bda3f5f4002a0a">&#9670;&nbsp;</a></span>delete_tables()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.delete_tables </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2b95498ed34c8e0112f67611c471a032"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2b95498ed34c8e0112f67611c471a032">&#9670;&nbsp;</a></span>get_cached_network_opinion()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.get_cached_network_opinion </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>key_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reported_key</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a0cf27edd952c72ace85b0c3d41bf20a4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0cf27edd952c72ace85b0c3d41bf20a4">&#9670;&nbsp;</a></span>get_ip_of_peer()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.get_ip_of_peer </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>peerid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns the latest IP seen associated with the given peerid
+:param peerid: the id of the peer we want the ip of
+</pre> 
+</div>
+</div>
+<a id="a43d9e5af4bbd1c3169ed8af61b13ac2b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a43d9e5af4bbd1c3169ed8af61b13ac2b">&#9670;&nbsp;</a></span>get_opinion_on_ip()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.get_opinion_on_ip </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>ipaddress</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param ipaddress: The ip we're asking other peers about
+</pre> 
+</div>
+</div>
+<a id="a48d28c28a86df234dd3f5629710d4e3d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a48d28c28a86df234dd3f5629710d4e3d">&#9670;&nbsp;</a></span>insert_go_ip_pairing()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.insert_go_ip_pairing </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>peerid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>timestamp</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a312825a057c5bd1e506780dda1f32693"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a312825a057c5bd1e506780dda1f32693">&#9670;&nbsp;</a></span>insert_go_reliability()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.insert_go_reliability </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>peerid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>reliability</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>timestamp</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a363ecf171505210f577e7542b376d99f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a363ecf171505210f577e7542b376d99f">&#9670;&nbsp;</a></span>insert_new_go_data()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.insert_new_go_data </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">list&#160;</td>
+          <td class="paramname"><em>reports</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad96d75a5eccb4808df9e2890a4a0fa59"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad96d75a5eccb4808df9e2890a4a0fa59">&#9670;&nbsp;</a></span>insert_new_go_report()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.insert_new_go_report </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reporter_peerid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>key_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reported_key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>score</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>confidence</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>timestamp</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac0076b22757d3163a237d9cfaaccd41c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac0076b22757d3163a237d9cfaaccd41c">&#9670;&nbsp;</a></span>insert_slips_score()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.insert_slips_score </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>score</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>confidence</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>timestamp</em> = <code>None</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1a441e815485b108ecbcfe6907219153"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1a441e815485b108ecbcfe6907219153">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> None StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int &#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a940c348b5656a71abc83201af9e99711"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a940c348b5656a71abc83201af9e99711">&#9670;&nbsp;</a></span>update_cached_network_opinion()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.update_cached_network_opinion </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>key_type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>reported_key</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>score</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>confidence</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">float&#160;</td>
+          <td class="paramname"><em>network_score</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="a8f5a20439c2d10acf0eea86cbea9b7e6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f5a20439c2d10acf0eea86cbea9b7e6">&#9670;&nbsp;</a></span>conn</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.conn</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a18831c3ea7ab650371a2bd3aa31d478f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a18831c3ea7ab650371a2bd3aa31d478f">&#9670;&nbsp;</a></span>printer</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.p2ptrust.trust.trustdb.TrustDB.printer</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/p2ptrust/trust/<a class="el" href="trustdb_8py.html">trustdb.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust.html">p2ptrust</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust.html">trust</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb.html">trustdb</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html">TrustDB</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,595 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a63c9953bea057f5098c8240cfe2cbc69"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a63c9953bea057f5098c8240cfe2cbc69">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a73a32805eb489f771799c29c5f91826b">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:a63c9953bea057f5098c8240cfe2cbc69"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aefa3571c815c05e0768568f273452929"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#aefa3571c815c05e0768568f273452929">is_yara_installed</a> (self)</td></tr>
+<tr class="separator:aefa3571c815c05e0768568f273452929"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a19be5fec72395c950219908d70fc813d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a19be5fec72395c950219908d70fc813d">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a19be5fec72395c950219908d70fc813d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aab62f4556de52370bb0c0ed0b658c52b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#aab62f4556de52370bb0c0ed0b658c52b">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:aab62f4556de52370bb0c0ed0b658c52b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4c561ea8c222c8d48a51028758ffa3ce"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a4c561ea8c222c8d48a51028758ffa3ce">fix_json_packet</a> (self, json_packet)</td></tr>
+<tr class="separator:a4c561ea8c222c8d48a51028758ffa3ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98752e732bf72fefce80175e7670d42a"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a98752e732bf72fefce80175e7670d42a">get_packet_info</a> (self, int offset)</td></tr>
+<tr class="separator:a98752e732bf72fefce80175e7670d42a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abdd86b32669266a9a15af4e10f66e832"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#abdd86b32669266a9a15af4e10f66e832">set_evidence_yara_match</a> (self, dict info)</td></tr>
+<tr class="separator:abdd86b32669266a9a15af4e10f66e832"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9aef9868c9c1f65e87de7d57240bb1ad"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a9aef9868c9c1f65e87de7d57240bb1ad">compile_and_save_rules</a> (self)</td></tr>
+<tr class="separator:a9aef9868c9c1f65e87de7d57240bb1ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a447b05766cb3c8c8c1fd0f170d36319d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a447b05766cb3c8c8c1fd0f170d36319d">find_matches</a> (self)</td></tr>
+<tr class="separator:a447b05766cb3c8c8c1fd0f170d36319d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4befa55acc7864f3693dbb9e134e8e52"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a4befa55acc7864f3693dbb9e134e8e52">run</a> (self)</td></tr>
+<tr class="separator:a4befa55acc7864f3693dbb9e134e8e52"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a73a32805eb489f771799c29c5f91826b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a73a32805eb489f771799c29c5f91826b">outputqueue</a></td></tr>
+<tr class="separator:a73a32805eb489f771799c29c5f91826b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afe5ffffc191db406737bde818c8a89c6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#afe5ffffc191db406737bde818c8a89c6">pcap</a></td></tr>
+<tr class="separator:afe5ffffc191db406737bde818c8a89c6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a93c21402d43a50ef2fd9f8ada3b4f3"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#a6a93c21402d43a50ef2fd9f8ada3b4f3">yara_rules_path</a></td></tr>
+<tr class="separator:a6a93c21402d43a50ef2fd9f8ada3b4f3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aebba44f4f2196482951291d4bc42b5bb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#aebba44f4f2196482951291d4bc42b5bb">compiled_yara_rules_path</a></td></tr>
+<tr class="separator:aebba44f4f2196482951291d4bc42b5bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae619761f28d584523088665b2ef690c7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#ae619761f28d584523088665b2ef690c7">bin_found</a></td></tr>
+<tr class="separator:ae619761f28d584523088665b2ef690c7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:abf64eb5fe7224415e4db4f4a3b6f7892"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#abf64eb5fe7224415e4db4f4a3b6f7892">name</a> = 'Leak Detector'</td></tr>
+<tr class="separator:abf64eb5fe7224415e4db4f4a3b6f7892"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acacedd989647a1d1dbec23144a5b9baa"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#acacedd989647a1d1dbec23144a5b9baa">description</a> = 'Detect leaks of data in the traffic'</td></tr>
+<tr class="separator:acacedd989647a1d1dbec23144a5b9baa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaa7a590298e3f5c2ceb85e9fc0d2dd6a"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html#aaa7a590298e3f5c2ceb85e9fc0d2dd6a">authors</a> = ['Alya Gomaa']</td></tr>
+<tr class="separator:aaa7a590298e3f5c2ceb85e9fc0d2dd6a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a63c9953bea057f5098c8240cfe2cbc69"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a63c9953bea057f5098c8240cfe2cbc69">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a9aef9868c9c1f65e87de7d57240bb1ad"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9aef9868c9c1f65e87de7d57240bb1ad">&#9670;&nbsp;</a></span>compile_and_save_rules()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.compile_and_save_rules </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Compile and save all yara rules in the compiled_yara_rules_path
+</pre> 
+</div>
+</div>
+<a id="a447b05766cb3c8c8c1fd0f170d36319d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a447b05766cb3c8c8c1fd0f170d36319d">&#9670;&nbsp;</a></span>find_matches()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.find_matches </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Run yara rules on the given pcap and find matches</pre> 
+</div>
+</div>
+<a id="a4c561ea8c222c8d48a51028758ffa3ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4c561ea8c222c8d48a51028758ffa3ce">&#9670;&nbsp;</a></span>fix_json_packet()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.fix_json_packet </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>json_packet</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">in very large pcaps, tshark gets killed before it's done processing,
+but the first packet info is printed in a corrupted json format
+this function fixes the printed packet
+</pre> 
+</div>
+</div>
+<a id="a98752e732bf72fefce80175e7670d42a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98752e732bf72fefce80175e7670d42a">&#9670;&nbsp;</a></span>get_packet_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.get_packet_info </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>offset</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Parse pcap and determine the packet at this offset
+returns  a tuple with packet info (srcip, dstip, proto, sport, dport, ts) or False if not found
+</pre> 
+</div>
+</div>
+<a id="aefa3571c815c05e0768568f273452929"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aefa3571c815c05e0768568f273452929">&#9670;&nbsp;</a></span>is_yara_installed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.is_yara_installed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Checks if notify-send bin is installed
+</pre> 
+</div>
+</div>
+<a id="aab62f4556de52370bb0c0ed0b658c52b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aab62f4556de52370bb0c0ed0b658c52b">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a4befa55acc7864f3693dbb9e134e8e52"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4befa55acc7864f3693dbb9e134e8e52">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abdd86b32669266a9a15af4e10f66e832"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abdd86b32669266a9a15af4e10f66e832">&#9670;&nbsp;</a></span>set_evidence_yara_match()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.set_evidence_yara_match </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">dict&#160;</td>
+          <td class="paramname"><em>info</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This function is called when yara finds a match
+:param info: a dict with info about the matched rule, example keys 'vars_matched', 'index',
+'rule', 'srings_matched'
+</pre> 
+</div>
+</div>
+<a id="a19be5fec72395c950219908d70fc813d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19be5fec72395c950219908d70fc813d">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="aaa7a590298e3f5c2ceb85e9fc0d2dd6a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaa7a590298e3f5c2ceb85e9fc0d2dd6a">&#9670;&nbsp;</a></span>authors</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">list StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.authors = ['Alya Gomaa']</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae619761f28d584523088665b2ef690c7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae619761f28d584523088665b2ef690c7">&#9670;&nbsp;</a></span>bin_found</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.bin_found</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aebba44f4f2196482951291d4bc42b5bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aebba44f4f2196482951291d4bc42b5bb">&#9670;&nbsp;</a></span>compiled_yara_rules_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.compiled_yara_rules_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acacedd989647a1d1dbec23144a5b9baa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acacedd989647a1d1dbec23144a5b9baa">&#9670;&nbsp;</a></span>description</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.description = 'Detect leaks of data in the traffic'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="abf64eb5fe7224415e4db4f4a3b6f7892"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abf64eb5fe7224415e4db4f4a3b6f7892">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.name = 'Leak Detector'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a73a32805eb489f771799c29c5f91826b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a73a32805eb489f771799c29c5f91826b">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="afe5ffffc191db406737bde818c8a89c6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afe5ffffc191db406737bde818c8a89c6">&#9670;&nbsp;</a></span>pcap</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.pcap</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6a93c21402d43a50ef2fd9f8ada3b4f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a93c21402d43a50ef2fd9f8ada3b4f3">&#9670;&nbsp;</a></span>yara_rules_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.leak_detector.leak_detector.Module.yara_rules_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/leak_detector/<a class="el" href="leak__detector_8py.html">leak_detector.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector.html">leak_detector</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector.html">leak_detector</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html">Module</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

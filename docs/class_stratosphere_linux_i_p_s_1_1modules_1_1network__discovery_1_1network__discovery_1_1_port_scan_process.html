@@ -1,0 +1,1290 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="#pub-static-attribs">Static Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+
+<p>Inherits Module, and multiprocessing.Process.</p>
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a25f4c2ff33b509da618919acb0d23385"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a25f4c2ff33b509da618919acb0d23385">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a330cb62fb9a4c7f5e77a28f0f3ff6cf1">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:a25f4c2ff33b509da618919acb0d23385"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a99d6f0a2da247913a1342734d2e36dcb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a99d6f0a2da247913a1342734d2e36dcb">shutdown_gracefully</a> (self)</td></tr>
+<tr class="separator:a99d6f0a2da247913a1342734d2e36dcb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a23545d3320ff13a64049e3b2a2a092fd"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a23545d3320ff13a64049e3b2a2a092fd">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:a23545d3320ff13a64049e3b2a2a092fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0b32ff9b9a80489f3da6010c37c03a64"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a0b32ff9b9a80489f3da6010c37c03a64">check_horizontal_portscan</a> (self, profileid, twid)</td></tr>
+<tr class="separator:a0b32ff9b9a80489f3da6010c37c03a64"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2a1d2d72da995b6eb5e52d5f24687c06"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a2a1d2d72da995b6eb5e52d5f24687c06">wait_for_vertical_scans</a> (self)</td></tr>
+<tr class="separator:a2a1d2d72da995b6eb5e52d5f24687c06"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aadc84b1f53511a8e74c4edaf2ec2c394"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#aadc84b1f53511a8e74c4edaf2ec2c394">wait_for_horizontal_scans</a> (self)</td></tr>
+<tr class="separator:aadc84b1f53511a8e74c4edaf2ec2c394"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2efb4d1c15f14d10016d8919f9318bf9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a2efb4d1c15f14d10016d8919f9318bf9">set_evidence_horizontal_portscan</a> (self, timestamp, pkts_sent, protocol, profileid, twid, uid, dport, amount_of_dips)</td></tr>
+<tr class="separator:a2efb4d1c15f14d10016d8919f9318bf9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaf76a96ecdb9abed71587952b207fa7d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#aaf76a96ecdb9abed71587952b207fa7d">set_evidence_vertical_portscan</a> (self, timestamp, pkts_sent, protocol, profileid, twid, uid, amount_of_dports, dstip)</td></tr>
+<tr class="separator:aaf76a96ecdb9abed71587952b207fa7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6ab230c4e155fcce8175e4ca0ddc2742"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a6ab230c4e155fcce8175e4ca0ddc2742">calculate_confidence</a> (self, pkts_sent)</td></tr>
+<tr class="separator:a6ab230c4e155fcce8175e4ca0ddc2742"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad162dd251070bb99a22766dff0dab977"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ad162dd251070bb99a22766dff0dab977">check_vertical_portscan</a> (self, profileid, twid)</td></tr>
+<tr class="separator:ad162dd251070bb99a22766dff0dab977"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9ab8d8cf1ff08423d5934a7294c6f9b9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a9ab8d8cf1ff08423d5934a7294c6f9b9">check_icmp_sweep</a> (self, msg, note, profileid, uid, twid, timestamp)</td></tr>
+<tr class="separator:a9ab8d8cf1ff08423d5934a7294c6f9b9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3c98a6c586f5fce539dc9828db64d8ce"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a3c98a6c586f5fce539dc9828db64d8ce">check_portscan_type3</a> (self)</td></tr>
+<tr class="separator:a3c98a6c586f5fce539dc9828db64d8ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a934e5cb4003480494a5eb33c98b90a8e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a934e5cb4003480494a5eb33c98b90a8e">check_icmp_scan</a> (self, profileid, twid)</td></tr>
+<tr class="separator:a934e5cb4003480494a5eb33c98b90a8e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4a2b40de12bab301bfa695079cea8e14"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a4a2b40de12bab301bfa695079cea8e14">set_evidence_icmpscan</a> (self, number_of_scanned_ips, timestamp, pkts_sent, protocol, profileid, twid, icmp_flows_uids, attack, scanned_ip=False)</td></tr>
+<tr class="separator:a4a2b40de12bab301bfa695079cea8e14"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5b2bd3697e0a5bc80136a87d957d185c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a5b2bd3697e0a5bc80136a87d957d185c">set_evidence_dhcp_scan</a> (self, timestamp, profileid, twid, uids, number_of_requested_addrs)</td></tr>
+<tr class="separator:a5b2bd3697e0a5bc80136a87d957d185c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa8ed87d925c987e90cf5a61cd2bd7cd9"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#aa8ed87d925c987e90cf5a61cd2bd7cd9">check_dhcp_scan</a> (self, flow)</td></tr>
+<tr class="separator:aa8ed87d925c987e90cf5a61cd2bd7cd9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acf6e104257a612fa0c0ea079c433c32d"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#acf6e104257a612fa0c0ea079c433c32d">run</a> (self)</td></tr>
+<tr class="separator:acf6e104257a612fa0c0ea079c433c32d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:a330cb62fb9a4c7f5e77a28f0f3ff6cf1"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a330cb62fb9a4c7f5e77a28f0f3ff6cf1">outputqueue</a></td></tr>
+<tr class="separator:a330cb62fb9a4c7f5e77a28f0f3ff6cf1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae9a1f814fe1c245aeb06327a52d1df1d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ae9a1f814fe1c245aeb06327a52d1df1d">fieldseparator</a></td></tr>
+<tr class="separator:ae9a1f814fe1c245aeb06327a52d1df1d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a57cf9eb402ab245b5dd7bae8e9584429"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a57cf9eb402ab245b5dd7bae8e9584429">c1</a></td></tr>
+<tr class="separator:a57cf9eb402ab245b5dd7bae8e9584429"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1f351e0e8281f68865b7ab4a3f5adeda"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a1f351e0e8281f68865b7ab4a3f5adeda">c2</a></td></tr>
+<tr class="separator:a1f351e0e8281f68865b7ab4a3f5adeda"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:addc10e24dce91b9719fa7ce59b598a7b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#addc10e24dce91b9719fa7ce59b598a7b">c3</a></td></tr>
+<tr class="separator:addc10e24dce91b9719fa7ce59b598a7b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a168b786479e6eb08e22d614d8365ca"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a9a168b786479e6eb08e22d614d8365ca">cache_det_thresholds</a></td></tr>
+<tr class="separator:a9a168b786479e6eb08e22d614d8365ca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5b9c0d21ba5ba01f8ec267dbc429669b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a5b9c0d21ba5ba01f8ec267dbc429669b">normal_label</a></td></tr>
+<tr class="separator:a5b9c0d21ba5ba01f8ec267dbc429669b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a382e71f051c78ac0b93b9a0aeb0f656c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a382e71f051c78ac0b93b9a0aeb0f656c">malicious_label</a></td></tr>
+<tr class="separator:a382e71f051c78ac0b93b9a0aeb0f656c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac97e7ad636feed20580b9f242a08caeb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ac97e7ad636feed20580b9f242a08caeb">separator</a></td></tr>
+<tr class="separator:ac97e7ad636feed20580b9f242a08caeb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af92f5cdbb0e2df866fc422f2f1cac909"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#af92f5cdbb0e2df866fc422f2f1cac909">port_scan_minimum_dips</a></td></tr>
+<tr class="separator:af92f5cdbb0e2df866fc422f2f1cac909"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a165e8c5bb257e3df40ccbcdaf992c433"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a165e8c5bb257e3df40ccbcdaf992c433">port_scan_minimum_dports</a></td></tr>
+<tr class="memdesc:a165e8c5bb257e3df40ccbcdaf992c433"><td class="mdescLeft">&#160;</td><td class="mdescRight">PortScan Type 1.  <a href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a165e8c5bb257e3df40ccbcdaf992c433">More...</a><br /></td></tr>
+<tr class="separator:a165e8c5bb257e3df40ccbcdaf992c433"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae1c10197ce9d96ee8817dfc50616b973"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ae1c10197ce9d96ee8817dfc50616b973">pingscan_minimum_flows</a></td></tr>
+<tr class="separator:ae1c10197ce9d96ee8817dfc50616b973"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad31c510d53d396fb36d937841d9b1989"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ad31c510d53d396fb36d937841d9b1989">pingscan_minimum_scanned_ips</a></td></tr>
+<tr class="separator:ad31c510d53d396fb36d937841d9b1989"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a85a06d048356501d7e7d7610b902e30a"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a85a06d048356501d7e7d7610b902e30a">time_to_wait_before_generating_new_alert</a></td></tr>
+<tr class="separator:a85a06d048356501d7e7d7610b902e30a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae011df9dd5d8a2b65a97602192d8ff0c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ae011df9dd5d8a2b65a97602192d8ff0c">pending_vertical_ps_evidence</a></td></tr>
+<tr class="separator:ae011df9dd5d8a2b65a97602192d8ff0c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac2447220b9b43ac65ee13c83f9150a6c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ac2447220b9b43ac65ee13c83f9150a6c">pending_horizontal_ps_evidence</a></td></tr>
+<tr class="separator:ac2447220b9b43ac65ee13c83f9150a6c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2abd46a5891f0181de547fad60c736bb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a2abd46a5891f0181de547fad60c736bb">alerted_once_vertical_ps</a></td></tr>
+<tr class="separator:a2abd46a5891f0181de547fad60c736bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae306516eb017fab87e1c08c55946faf2"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#ae306516eb017fab87e1c08c55946faf2">alerted_once_horizontal_ps</a></td></tr>
+<tr class="separator:ae306516eb017fab87e1c08c55946faf2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a275fa7819fa8da9df3846ca673d98fdc"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a275fa7819fa8da9df3846ca673d98fdc">timer_thread_vertical_ps</a></td></tr>
+<tr class="separator:a275fa7819fa8da9df3846ca673d98fdc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8c058184d71cdf20caaea695eda36046"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a8c058184d71cdf20caaea695eda36046">timer_thread_horizontal_ps</a></td></tr>
+<tr class="separator:a8c058184d71cdf20caaea695eda36046"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a85f82368acd89045c7d81b72e711e7dd"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a85f82368acd89045c7d81b72e711e7dd">minimum_requested_addrs</a></td></tr>
+<tr class="separator:a85f82368acd89045c7d81b72e711e7dd"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-attribs"></a>
+Static Public Attributes</h2></td></tr>
+<tr class="memitem:a621be77d02e80a76f940f651fd70ea7c"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a621be77d02e80a76f940f651fd70ea7c">name</a> = 'Network Discovery'</td></tr>
+<tr class="separator:a621be77d02e80a76f940f651fd70ea7c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa05d7b6bfb4b9f8bed40e3b1f1e5bb58"><td class="memItemLeft" align="right" valign="top">string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#aa05d7b6bfb4b9f8bed40e3b1f1e5bb58">description</a> = 'Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans'</td></tr>
+<tr class="separator:aa05d7b6bfb4b9f8bed40e3b1f1e5bb58"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3c43d087c63884e39c48e207f6037371"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html#a3c43d087c63884e39c48e207f6037371">authors</a> = ['Sebastian Garcia', 'Alya Gomaa']</td></tr>
+<tr class="separator:a3c43d087c63884e39c48e207f6037371"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
+<div class="textblock"><pre class="fragment">A class process to find port scans
+This should be converted into a module that wakesup alone when a new alert arrives
+</pre> </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a25f4c2ff33b509da618919acb0d23385"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a25f4c2ff33b509da618919acb0d23385">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a6ab230c4e155fcce8175e4ca0ddc2742"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6ab230c4e155fcce8175e4ca0ddc2742">&#9670;&nbsp;</a></span>calculate_confidence()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.calculate_confidence </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>pkts_sent</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa8ed87d925c987e90cf5a61cd2bd7cd9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa8ed87d925c987e90cf5a61cd2bd7cd9">&#9670;&nbsp;</a></span>check_dhcp_scan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_dhcp_scan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>flow</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Detects DHCP scans, when a client requests 4+ different IPs in the same tw
+</pre> 
+</div>
+</div>
+<a id="a0b32ff9b9a80489f3da6010c37c03a64"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0b32ff9b9a80489f3da6010c37c03a64">&#9670;&nbsp;</a></span>check_horizontal_portscan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_horizontal_portscan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a934e5cb4003480494a5eb33c98b90a8e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a934e5cb4003480494a5eb33c98b90a8e">&#9670;&nbsp;</a></span>check_icmp_scan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_icmp_scan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9ab8d8cf1ff08423d5934a7294c6f9b9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ab8d8cf1ff08423d5934a7294c6f9b9">&#9670;&nbsp;</a></span>check_icmp_sweep()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_icmp_sweep </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>msg</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>note</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Use our own Zeek scripts to detect ICMP scans. 
+Threshold is on the scrips and it is 25 icmp flows
+</pre> 
+</div>
+</div>
+<a id="a3c98a6c586f5fce539dc9828db64d8ce"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c98a6c586f5fce539dc9828db64d8ce">&#9670;&nbsp;</a></span>check_portscan_type3()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_portscan_type3 </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">###
+# PortScan Type 3. Direction OUT
+# Considering all the flows in this TW, for all the Dst IP, get the sum of all the pkts send to each dst port TCP No tEstablished
+totalpkts = int(data[dport]['totalpkt'])
+# If for each port, more than X amount of packets were sent, report an evidence
+if totalpkts &gt; 3:
+    # Type of evidence
+    evidence_type = 'PortScanType3'
+    # Key
+    key = 'dport' + ':' + dport + ':' + evidence_type
+    # Description
+    description = 'Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts)
+    # Threat level
+    threat_level = 50
+    # Confidence. By counting how much we are over the threshold.
+    if totalpkts &gt;= 10:
+        # 10 pkts or more, receive the max confidence
+        confidence = 1
+    else:
+        # Between 3 and 10 pkts compute a kind of linear grow
+        confidence = totalpkts / 10.0
+    __database__.setEvidence(profileid, twid, evidence_type, threat_level, confidence)
+    self.print('Too Many Not Estab TCP to same port {} from IP: {}. Amount: {}'.format(dport, profileid.split('_')[1], totalpkts),6,0)
+</pre> 
+</div>
+</div>
+<a id="ad162dd251070bb99a22766dff0dab977"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad162dd251070bb99a22766dff0dab977">&#9670;&nbsp;</a></span>check_vertical_portscan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.check_vertical_portscan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a23545d3320ff13a64049e3b2a2a092fd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a23545d3320ff13a64049e3b2a2a092fd">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="acf6e104257a612fa0c0ea079c433c32d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acf6e104257a612fa0c0ea079c433c32d">&#9670;&nbsp;</a></span>run()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.run </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5b2bd3697e0a5bc80136a87d957d185c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b2bd3697e0a5bc80136a87d957d185c">&#9670;&nbsp;</a></span>set_evidence_dhcp_scan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.set_evidence_dhcp_scan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uids</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>number_of_requested_addrs</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2efb4d1c15f14d10016d8919f9318bf9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2efb4d1c15f14d10016d8919f9318bf9">&#9670;&nbsp;</a></span>set_evidence_horizontal_portscan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.set_evidence_horizontal_portscan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>pkts_sent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>protocol</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dport</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>amount_of_dips</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4a2b40de12bab301bfa695079cea8e14"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4a2b40de12bab301bfa695079cea8e14">&#9670;&nbsp;</a></span>set_evidence_icmpscan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.set_evidence_icmpscan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>number_of_scanned_ips</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>pkts_sent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>protocol</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>icmp_flows_uids</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>attack</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>scanned_ip</em> = <code>False</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aaf76a96ecdb9abed71587952b207fa7d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aaf76a96ecdb9abed71587952b207fa7d">&#9670;&nbsp;</a></span>set_evidence_vertical_portscan()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.set_evidence_vertical_portscan </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>timestamp</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>pkts_sent</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>protocol</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>profileid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>twid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>uid</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>amount_of_dports</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>dstip</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a99d6f0a2da247913a1342734d2e36dcb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a99d6f0a2da247913a1342734d2e36dcb">&#9670;&nbsp;</a></span>shutdown_gracefully()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.shutdown_gracefully </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aadc84b1f53511a8e74c4edaf2ec2c394"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aadc84b1f53511a8e74c4edaf2ec2c394">&#9670;&nbsp;</a></span>wait_for_horizontal_scans()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.wait_for_horizontal_scans </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">This thread waits for 10s then checks if more horizontal scans happened
+ to combine evidence
+</pre> 
+</div>
+</div>
+<a id="a2a1d2d72da995b6eb5e52d5f24687c06"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a1d2d72da995b6eb5e52d5f24687c06">&#9670;&nbsp;</a></span>wait_for_vertical_scans()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.wait_for_vertical_scans </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="ae306516eb017fab87e1c08c55946faf2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae306516eb017fab87e1c08c55946faf2">&#9670;&nbsp;</a></span>alerted_once_horizontal_ps</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.alerted_once_horizontal_ps</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2abd46a5891f0181de547fad60c736bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2abd46a5891f0181de547fad60c736bb">&#9670;&nbsp;</a></span>alerted_once_vertical_ps</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.alerted_once_vertical_ps</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a3c43d087c63884e39c48e207f6037371"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3c43d087c63884e39c48e207f6037371">&#9670;&nbsp;</a></span>authors</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">list StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.authors = ['Sebastian Garcia', 'Alya Gomaa']</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a57cf9eb402ab245b5dd7bae8e9584429"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a57cf9eb402ab245b5dd7bae8e9584429">&#9670;&nbsp;</a></span>c1</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.c1</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a1f351e0e8281f68865b7ab4a3f5adeda"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1f351e0e8281f68865b7ab4a3f5adeda">&#9670;&nbsp;</a></span>c2</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.c2</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="addc10e24dce91b9719fa7ce59b598a7b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#addc10e24dce91b9719fa7ce59b598a7b">&#9670;&nbsp;</a></span>c3</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.c3</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a9a168b786479e6eb08e22d614d8365ca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a168b786479e6eb08e22d614d8365ca">&#9670;&nbsp;</a></span>cache_det_thresholds</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.cache_det_thresholds</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa05d7b6bfb4b9f8bed40e3b1f1e5bb58"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa05d7b6bfb4b9f8bed40e3b1f1e5bb58">&#9670;&nbsp;</a></span>description</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.description = 'Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae9a1f814fe1c245aeb06327a52d1df1d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae9a1f814fe1c245aeb06327a52d1df1d">&#9670;&nbsp;</a></span>fieldseparator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.fieldseparator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a382e71f051c78ac0b93b9a0aeb0f656c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a382e71f051c78ac0b93b9a0aeb0f656c">&#9670;&nbsp;</a></span>malicious_label</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.malicious_label</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a85f82368acd89045c7d81b72e711e7dd"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85f82368acd89045c7d81b72e711e7dd">&#9670;&nbsp;</a></span>minimum_requested_addrs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.minimum_requested_addrs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a621be77d02e80a76f940f651fd70ea7c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a621be77d02e80a76f940f651fd70ea7c">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">string StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.name = 'Network Discovery'</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5b9c0d21ba5ba01f8ec267dbc429669b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5b9c0d21ba5ba01f8ec267dbc429669b">&#9670;&nbsp;</a></span>normal_label</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.normal_label</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a330cb62fb9a4c7f5e77a28f0f3ff6cf1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a330cb62fb9a4c7f5e77a28f0f3ff6cf1">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac2447220b9b43ac65ee13c83f9150a6c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2447220b9b43ac65ee13c83f9150a6c">&#9670;&nbsp;</a></span>pending_horizontal_ps_evidence</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.pending_horizontal_ps_evidence</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae011df9dd5d8a2b65a97602192d8ff0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae011df9dd5d8a2b65a97602192d8ff0c">&#9670;&nbsp;</a></span>pending_vertical_ps_evidence</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.pending_vertical_ps_evidence</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae1c10197ce9d96ee8817dfc50616b973"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1c10197ce9d96ee8817dfc50616b973">&#9670;&nbsp;</a></span>pingscan_minimum_flows</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.pingscan_minimum_flows</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad31c510d53d396fb36d937841d9b1989"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad31c510d53d396fb36d937841d9b1989">&#9670;&nbsp;</a></span>pingscan_minimum_scanned_ips</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.pingscan_minimum_scanned_ips</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="af92f5cdbb0e2df866fc422f2f1cac909"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af92f5cdbb0e2df866fc422f2f1cac909">&#9670;&nbsp;</a></span>port_scan_minimum_dips</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.port_scan_minimum_dips</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a165e8c5bb257e3df40ccbcdaf992c433"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a165e8c5bb257e3df40ccbcdaf992c433">&#9670;&nbsp;</a></span>port_scan_minimum_dports</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.port_scan_minimum_dports</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>PortScan Type 1. </p>
+<p>Direction OUT </p>
+
+</div>
+</div>
+<a id="ac97e7ad636feed20580b9f242a08caeb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac97e7ad636feed20580b9f242a08caeb">&#9670;&nbsp;</a></span>separator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.separator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a85a06d048356501d7e7d7610b902e30a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85a06d048356501d7e7d7610b902e30a">&#9670;&nbsp;</a></span>time_to_wait_before_generating_new_alert</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.time_to_wait_before_generating_new_alert</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a8c058184d71cdf20caaea695eda36046"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8c058184d71cdf20caaea695eda36046">&#9670;&nbsp;</a></span>timer_thread_horizontal_ps</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.timer_thread_horizontal_ps</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a275fa7819fa8da9df3846ca673d98fdc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a275fa7819fa8da9df3846ca673d98fdc">&#9670;&nbsp;</a></span>timer_thread_vertical_ps</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.network_discovery.network_discovery.PortScanProcess.timer_thread_vertical_ps</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/network_discovery/<a class="el" href="network__discovery_8py.html">network_discovery.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery.html">network_discovery</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery.html">network_discovery</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html">PortScanProcess</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

@@ -1,0 +1,1607 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/xhtml;charset=UTF-8"/>
+<meta http-equiv="X-UA-Compatible" content="IE=9"/>
+<meta name="generator" content="Doxygen 1.9.1"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<!-- BEGIN opengraph metadata -->
+<meta property="og:title" content="Doxygen Awesome" />
+<meta property="og:image" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta property="og:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<meta property="og:url" content="https://jothepro.github.io/doxygen-awesome-css/" />
+<!-- END opengraph metadata -->
+<!-- BEGIN twitter metadata -->
+<meta name="twitter:image:src" content="https://repository-images.githubusercontent.com/348492097/4f16df80-88fb-11eb-9d31-4015ff22c452" />
+<meta name="twitter:title" content="Doxygen Awesome" />
+<meta name="twitter:description" content="Custom CSS theme for doxygen html-documentation with lots of customization parameters." />
+<!-- END twitter metadata -->
+<title>Slips: StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager Class Reference</title>
+<link href="tabs.css" rel="stylesheet" type="text/css"/>
+<link rel="icon" type="image/svg+xml" href="logo.drawio.svg"/>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript" src="dynsections.js"></script>
+<script type="text/javascript" src="doxygen-awesome-darkmode-toggle.js"></script>
+<script type="text/javascript" src="doxygen-awesome-fragment-copy-button.js"></script>
+<script type="text/javascript" src="doxygen-awesome-paragraph-link.js"></script>
+<script type="text/javascript" src="toggle-alternative-theme.js"></script>
+<script type="text/javascript">
+    DoxygenAwesomeFragmentCopyButton.init()
+    DoxygenAwesomeDarkModeToggle.init()
+    DoxygenAwesomeParagraphLink.init()
+</script>
+<link href="navtree.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="resize.js"></script>
+<script type="text/javascript" src="navtreedata.js"></script>
+<script type="text/javascript" src="navtree.js"></script>
+<link href="search/search.css" rel="stylesheet" type="text/css"/>
+<script type="text/javascript" src="search/searchdata.js"></script>
+<script type="text/javascript" src="search/search.js"></script>
+<link href="doxygen.css" rel="stylesheet" type="text/css" />
+<link href="doxygen-awesome.css" rel="stylesheet" type="text/css"/>
+<link href="custom.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only.css" rel="stylesheet" type="text/css"/>
+<link href="doxygen-awesome-sidebar-only-darkmode-toggle.css" rel="stylesheet" type="text/css"/>
+<link href="custom-alternative.css" rel="stylesheet" type="text/css"/>
+</head>
+<body>
+<!-- https://tholman.com/github-corners/ -->
+<a href="https://github.com/jothepro/doxygen-awesome-css" class="github-corner" title="View source on GitHub" target="_blank">
+    <svg viewBox="0 0 250 250" width="40" height="40" style="position: absolute; top: 0; border: 0; right: 0; z-index: 99;" aria-hidden="true">
+    <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path><path d="M128.3,109.0 C113.8,99.7 119.0,89.6 119.0,89.6 C122.0,82.7 120.5,78.6 120.5,78.6 C119.2,72.0 123.4,76.3 123.4,76.3 C127.3,80.9 125.5,87.3 125.5,87.3 C122.9,97.6 130.6,101.9 134.4,103.2" fill="currentColor" style="transform-origin: 130px 106px;" class="octo-arm"></path><path d="M115.0,115.0 C114.9,115.1 118.7,116.5 119.8,115.4 L133.7,101.6 C136.9,99.2 139.9,98.4 142.2,98.6 C133.8,88.0 127.5,74.4 143.8,58.0 C148.5,53.4 154.0,51.2 159.7,51.0 C160.3,49.4 163.2,43.6 171.4,40.1 C171.4,40.1 176.1,42.5 178.8,56.2 C183.1,58.6 187.2,61.8 190.9,65.4 C194.5,69.0 197.7,73.2 200.1,77.6 C213.8,80.2 216.3,84.9 216.3,84.9 C212.7,93.1 206.9,96.0 205.4,96.6 C205.1,102.4 203.0,107.8 198.3,112.5 C181.9,128.9 168.3,122.5 157.7,114.1 C157.9,116.9 156.7,120.9 152.7,124.9 L141.0,136.5 C139.8,137.7 141.6,141.9 141.8,141.8 Z" fill="currentColor" class="octo-body"></path></svg></a><style>.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}</style>
+<div id="top"><!-- do not remove this div, it is closed by doxygen! -->
+<div id="titlearea">
+<table cellspacing="0" cellpadding="0">
+ <tbody>
+ <tr style="height: 56px;">
+  <td id="projectalign" style="padding-left: 0.5em;">
+   <div id="projectname">Slips
+   </div>
+   <div id="projectbrief">Stratosphere Linux IPS</div>
+  </td>
+ </tr>
+ </tbody>
+</table>
+</div>
+<!-- end header part -->
+<!-- Generated by Doxygen 1.9.1 -->
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+var searchBox = new SearchBox("searchBox", "search",false,'Search','.html');
+/* @license-end */
+</script>
+<script type="text/javascript" src="menudata.js"></script>
+<script type="text/javascript" src="menu.js"></script>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(function() {
+  initMenu('',true,false,'search.php','Search');
+  $(document).ready(function() { init_search(); });
+});
+/* @license-end */</script>
+<div id="main-nav"></div>
+</div><!-- top -->
+<div id="side-nav" class="ui-resizable side-nav-resizable">
+  <div id="nav-tree">
+    <div id="nav-tree-contents">
+      <div id="nav-sync" class="sync"></div>
+    </div>
+  </div>
+  <div id="splitbar" style="-moz-user-select:none;" 
+       class="ui-resizable-handle">
+  </div>
+</div>
+<script type="text/javascript">
+/* @license magnet:?xt=urn:btih:cf05388f2679ee054f2beb29a391d25f4e673ac3&amp;dn=gpl-2.0.txt GPL-v2 */
+$(document).ready(function(){initNavTree('class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html',''); initResizable(); });
+/* @license-end */
+</script>
+<div id="doc-content">
+<!-- window showing the filter options -->
+<div id="MSearchSelectWindow"
+     onmouseover="return searchBox.OnSearchSelectShow()"
+     onmouseout="return searchBox.OnSearchSelectHide()"
+     onkeydown="return searchBox.OnSearchSelectKey(event)">
+</div>
+
+<!-- iframe showing the search results (closed by default) -->
+<div id="MSearchResultsWindow">
+<iframe src="javascript:void(0)" frameborder="0" 
+        name="MSearchResults" id="MSearchResults">
+</iframe>
+</div>
+
+<div class="header">
+  <div class="summary">
+<a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-attribs">Public Attributes</a> &#124;
+<a href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager-members.html">List of all members</a>  </div>
+  <div class="headertitle">
+<div class="title">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager Class Reference</div>  </div>
+</div><!--header-->
+<div class="contents">
+<table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
+Public Member Functions</h2></td></tr>
+<tr class="memitem:a47ac10f2630678253b37015d7679f1aa"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a47ac10f2630678253b37015d7679f1aa">__init__</a> (self, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac2a57359f97af7798edc73dcf4540a31">outputqueue</a>, redis_port)</td></tr>
+<tr class="separator:a47ac10f2630678253b37015d7679f1aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6e6a1c8483819d8b79b1ccf59da6a17f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a6e6a1c8483819d8b79b1ccf59da6a17f">read_configuration</a> (self)</td></tr>
+<tr class="separator:a6e6a1c8483819d8b79b1ccf59da6a17f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a53cf94dc68bcbac9edb3d6da60b22b5e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a53cf94dc68bcbac9edb3d6da60b22b5e">get_feed_details</a> (self, feeds_path)</td></tr>
+<tr class="separator:a53cf94dc68bcbac9edb3d6da60b22b5e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa293687adde6f312bc730fd5410f3344"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aa293687adde6f312bc730fd5410f3344">print</a> (self, text, verbose=1, debug=0)</td></tr>
+<tr class="separator:aa293687adde6f312bc730fd5410f3344"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a447f69dc00e357d52680cc12ad17fc87"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a447f69dc00e357d52680cc12ad17fc87">log</a> (self, text)</td></tr>
+<tr class="separator:a447f69dc00e357d52680cc12ad17fc87"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5d843e6bbb9dab4b12be70651bfd0a31"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5d843e6bbb9dab4b12be70651bfd0a31">read_ports_info</a> (self, ports_info_filepath)</td></tr>
+<tr class="separator:a5d843e6bbb9dab4b12be70651bfd0a31"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af50bf75e701f606085d500346842cf86"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#af50bf75e701f606085d500346842cf86">update_local_file</a> (self, file_path)</td></tr>
+<tr class="separator:af50bf75e701f606085d500346842cf86"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a993a15489b1328869e1dab5078fa0375"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a993a15489b1328869e1dab5078fa0375">download_file</a> (self, file_to_download)</td></tr>
+<tr class="separator:a993a15489b1328869e1dab5078fa0375"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac8f9a500023910dbfe43d42186253a14"><td class="memItemLeft" align="right" valign="top">str&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac8f9a500023910dbfe43d42186253a14">get_last_modified</a> (self, response)</td></tr>
+<tr class="separator:ac8f9a500023910dbfe43d42186253a14"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5bd24d2f1b9241863904bdd151f3734e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5bd24d2f1b9241863904bdd151f3734e">get_e_tag</a> (self, response)</td></tr>
+<tr class="separator:a5bd24d2f1b9241863904bdd151f3734e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a22d234470cb9f65b8358376c472bc5cb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a22d234470cb9f65b8358376c472bc5cb">write_file_to_disk</a> (self, response, full_path)</td></tr>
+<tr class="separator:a22d234470cb9f65b8358376c472bc5cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac5e6799c8e1e6d5ca11a9181754aa3bb"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac5e6799c8e1e6d5ca11a9181754aa3bb">parse_ssl_feed</a> (self, url, full_path)</td></tr>
+<tr class="separator:ac5e6799c8e1e6d5ca11a9181754aa3bb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5593104f68b4d498e13c25a61de383e3"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5593104f68b4d498e13c25a61de383e3">update_TI_file</a> (self, str link_to_download)</td></tr>
+<tr class="separator:a5593104f68b4d498e13c25a61de383e3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5c5765290f5efd1691f72a7401525c9b"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5c5765290f5efd1691f72a7401525c9b">update_riskiq_feed</a> (self)</td></tr>
+<tr class="separator:a5c5765290f5efd1691f72a7401525c9b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a587d217a4ac2e905c7454839cd467019"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a587d217a4ac2e905c7454839cd467019">parse_ja3_feed</a> (self, url, str ja3_feed_path)</td></tr>
+<tr class="separator:a587d217a4ac2e905c7454839cd467019"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adf350fc405debd8daae2e08a0231a8be"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#adf350fc405debd8daae2e08a0231a8be">parse_json_ti_feed</a> (self, link_to_download, str ti_file_path)</td></tr>
+<tr class="separator:adf350fc405debd8daae2e08a0231a8be"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a0ca81da505641b79c75ea3604ba12962"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a0ca81da505641b79c75ea3604ba12962">get_description_column</a> (self, header)</td></tr>
+<tr class="separator:a0ca81da505641b79c75ea3604ba12962"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a89de8f26e58527e876d87bab065a0cf2"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a89de8f26e58527e876d87bab065a0cf2">is_ignored_line</a> (self, line)</td></tr>
+<tr class="separator:a89de8f26e58527e876d87bab065a0cf2"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5c837131a51ecda1c8670361440f0364"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5c837131a51ecda1c8670361440f0364">parse_line</a> (self, line, file_path)</td></tr>
+<tr class="separator:a5c837131a51ecda1c8670361440f0364"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a15d8d75afe2f5f75707979d61569c2ed"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a15d8d75afe2f5f75707979d61569c2ed">get_data_column</a> (self, amount_of_columns, line_fields, file_path)</td></tr>
+<tr class="separator:a15d8d75afe2f5f75707979d61569c2ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:adf0d07faba25beeba9dc5f4fdb8c841d"><td class="memItemLeft" align="right" valign="top">tuple&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#adf0d07faba25beeba9dc5f4fdb8c841d">extract_ioc_from_line</a> (self, line, line_fields, <a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aea714bbc31a7329692b5cc6f459e70f5">separator</a>, data_column, description_column, file_path)</td></tr>
+<tr class="separator:adf0d07faba25beeba9dc5f4fdb8c841d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a08cec25af3b8f74dd09168267959333e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a08cec25af3b8f74dd09168267959333e">add_to_ip_ctr</a> (self, ip, blacklist)</td></tr>
+<tr class="separator:a08cec25af3b8f74dd09168267959333e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a91706a8da00b044f5122bff4c22f82f9"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a91706a8da00b044f5122bff4c22f82f9">parse_ti_feed</a> (self, link_to_download, str ti_file_path)</td></tr>
+<tr class="separator:a91706a8da00b044f5122bff4c22f82f9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9ff8999d7f9fc89d4f312802f1b7b16e"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a9ff8999d7f9fc89d4f312802f1b7b16e">check_if_update_org</a> (self, file)</td></tr>
+<tr class="separator:a9ff8999d7f9fc89d4f312802f1b7b16e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6491dd01f1bb06315e0a10a864143cb6"><td class="memItemLeft" align="right" valign="top">list&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a6491dd01f1bb06315e0a10a864143cb6">get_whitelisted_orgs</a> (self)</td></tr>
+<tr class="separator:a6491dd01f1bb06315e0a10a864143cb6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9441c3a508e7decb4f99da7ca765713f"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a9441c3a508e7decb4f99da7ca765713f">update_org_files</a> (self)</td></tr>
+<tr class="separator:a9441c3a508e7decb4f99da7ca765713f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab6fd9e8429adc1c5357c74bd51ae965c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ab6fd9e8429adc1c5357c74bd51ae965c">update_ports_info</a> (self)</td></tr>
+<tr class="separator:ab6fd9e8429adc1c5357c74bd51ae965c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a2890f49d3c742563016aff485e990c"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a9a2890f49d3c742563016aff485e990c">print_duplicate_ip_summary</a> (self)</td></tr>
+<tr class="separator:a9a2890f49d3c742563016aff485e990c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a63257c40648d7a2cb8c15fad0f60bf04"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a63257c40648d7a2cb8c15fad0f60bf04">update_mac_db</a> (self)</td></tr>
+<tr class="separator:a63257c40648d7a2cb8c15fad0f60bf04"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab9eeef1da3dc174bdb136e2ba0675079"><td class="memItemLeft" align="right" valign="top">def&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ab9eeef1da3dc174bdb136e2ba0675079">update_online_whitelist</a> (self)</td></tr>
+<tr class="separator:ab9eeef1da3dc174bdb136e2ba0675079"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abc497abe0a789bd76c88e3172398c271"><td class="memItemLeft" align="right" valign="top">bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#abc497abe0a789bd76c88e3172398c271">update</a> (self)</td></tr>
+<tr class="separator:abc497abe0a789bd76c88e3172398c271"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
+Public Attributes</h2></td></tr>
+<tr class="memitem:ac2a57359f97af7798edc73dcf4540a31"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac2a57359f97af7798edc73dcf4540a31">outputqueue</a></td></tr>
+<tr class="separator:ac2a57359f97af7798edc73dcf4540a31"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad463409bf81eb91d7971d92aaf753503"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ad463409bf81eb91d7971d92aaf753503">name</a></td></tr>
+<tr class="separator:ad463409bf81eb91d7971d92aaf753503"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aea714bbc31a7329692b5cc6f459e70f5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aea714bbc31a7329692b5cc6f459e70f5">separator</a></td></tr>
+<tr class="separator:aea714bbc31a7329692b5cc6f459e70f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2c9c2ed67384315fe25f44394f6a1363"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a2c9c2ed67384315fe25f44394f6a1363">loaded_ti_files</a></td></tr>
+<tr class="memdesc:a2c9c2ed67384315fe25f44394f6a1363"><td class="mdescLeft">&#160;</td><td class="mdescRight">in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API check if we have a username and api key and a week has passed since we last updated  <a href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a2c9c2ed67384315fe25f44394f6a1363">More...</a><br /></td></tr>
+<tr class="separator:a2c9c2ed67384315fe25f44394f6a1363"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac4c5909d3f14b1b47ec8f4cf3fa90add"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac4c5909d3f14b1b47ec8f4cf3fa90add">interval</a></td></tr>
+<tr class="separator:ac4c5909d3f14b1b47ec8f4cf3fa90add"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad607a2063f8c1944c4491bba20128a98"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ad607a2063f8c1944c4491bba20128a98">whitelist</a></td></tr>
+<tr class="separator:ad607a2063f8c1944c4491bba20128a98"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a18456006d16163df1300473186429496"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a18456006d16163df1300473186429496">slips_logfile</a></td></tr>
+<tr class="separator:a18456006d16163df1300473186429496"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7889bf9ba4655270b7c2a25f77854c95"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a7889bf9ba4655270b7c2a25f77854c95">org_info_path</a></td></tr>
+<tr class="separator:a7889bf9ba4655270b7c2a25f77854c95"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9e16962cc14a82e68f1211d13a4d97ed"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a9e16962cc14a82e68f1211d13a4d97ed">header_keywords</a></td></tr>
+<tr class="separator:a9e16962cc14a82e68f1211d13a4d97ed"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a19b4a226db13e99e15b2e9c0bbcecfcb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a19b4a226db13e99e15b2e9c0bbcecfcb">ignored_IoCs</a></td></tr>
+<tr class="separator:a19b4a226db13e99e15b2e9c0bbcecfcb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58992608dcf3c060d8bd4dedc7b912ef"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a58992608dcf3c060d8bd4dedc7b912ef">ips_ctr</a></td></tr>
+<tr class="separator:a58992608dcf3c060d8bd4dedc7b912ef"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab7422250dda2fd728b10c8fc80261170"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ab7422250dda2fd728b10c8fc80261170">first_time_reading_files</a></td></tr>
+<tr class="memdesc:ab7422250dda2fd728b10c8fc80261170"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update remote TI files ################ Check if the remote file is newer than our own For each file that we should update`.  <a href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ab7422250dda2fd728b10c8fc80261170">More...</a><br /></td></tr>
+<tr class="separator:ab7422250dda2fd728b10c8fc80261170"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2a97b4aab2d0074d22199adfbe60d9ec"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a2a97b4aab2d0074d22199adfbe60d9ec">responses</a></td></tr>
+<tr class="separator:a2a97b4aab2d0074d22199adfbe60d9ec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa7a8c62aba065a1a7cef4a772a86338b"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aa7a8c62aba065a1a7cef4a772a86338b">riskiq_email</a></td></tr>
+<tr class="separator:aa7a8c62aba065a1a7cef4a772a86338b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a5d61d8d96a595bf8b3feb1f256f2b8f8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a5d61d8d96a595bf8b3feb1f256f2b8f8">riskiq_key</a></td></tr>
+<tr class="separator:a5d61d8d96a595bf8b3feb1f256f2b8f8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7dd58c94b9c79d2bed499d46664837f5"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a7dd58c94b9c79d2bed499d46664837f5">update_period</a></td></tr>
+<tr class="separator:a7dd58c94b9c79d2bed499d46664837f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a95ba2587b6eb4be07864867b69c33ca0"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a95ba2587b6eb4be07864867b69c33ca0">path_to_remote_ti_files</a></td></tr>
+<tr class="separator:a95ba2587b6eb4be07864867b69c33ca0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a90d5e8aad666f48b43a015f675ea816d"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a90d5e8aad666f48b43a015f675ea816d">ti_feeds_path</a></td></tr>
+<tr class="separator:a90d5e8aad666f48b43a015f675ea816d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a723b27524382562eeeb685c4b0876bfe"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a723b27524382562eeeb685c4b0876bfe">url_feeds</a></td></tr>
+<tr class="separator:a723b27524382562eeeb685c4b0876bfe"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac68addffb4c5204a39926bfa363e11c4"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ac68addffb4c5204a39926bfa363e11c4">ja3_feeds_path</a></td></tr>
+<tr class="separator:ac68addffb4c5204a39926bfa363e11c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ae1c82146e0742ea9fd75f57c4146df78"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ae1c82146e0742ea9fd75f57c4146df78">ja3_feeds</a></td></tr>
+<tr class="separator:ae1c82146e0742ea9fd75f57c4146df78"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4c75daf97b310365b25d28b994d1a023"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a4c75daf97b310365b25d28b994d1a023">ssl_feeds_path</a></td></tr>
+<tr class="separator:a4c75daf97b310365b25d28b994d1a023"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acc96e2501ebc231b1fd59be10e3e664c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#acc96e2501ebc231b1fd59be10e3e664c">ssl_feeds</a></td></tr>
+<tr class="separator:acc96e2501ebc231b1fd59be10e3e664c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad20824a4ce25f84294337e83df3c8cc7"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ad20824a4ce25f84294337e83df3c8cc7">riskiq_update_period</a></td></tr>
+<tr class="separator:ad20824a4ce25f84294337e83df3c8cc7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa9b561a68eeecdea4660c331c72d6183"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aa9b561a68eeecdea4660c331c72d6183">mac_db_update_period</a></td></tr>
+<tr class="separator:aa9b561a68eeecdea4660c331c72d6183"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aae4aaf09544f0032e09453c9953db3cb"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#aae4aaf09544f0032e09453c9953db3cb">mac_db_link</a></td></tr>
+<tr class="separator:aae4aaf09544f0032e09453c9953db3cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a67099789765239a49d25e602ffad23d6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a67099789765239a49d25e602ffad23d6">online_whitelist_update_period</a></td></tr>
+<tr class="separator:a67099789765239a49d25e602ffad23d6"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a44de60b893f73bd514819098783e6215"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#a44de60b893f73bd514819098783e6215">online_whitelist</a></td></tr>
+<tr class="separator:a44de60b893f73bd514819098783e6215"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad08301031e971b3cd3871ebf6ab42487"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html#ad08301031e971b3cd3871ebf6ab42487">new_hash</a></td></tr>
+<tr class="separator:ad08301031e971b3cd3871ebf6ab42487"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+<a id="a47ac10f2630678253b37015d7679f1aa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a47ac10f2630678253b37015d7679f1aa">&#9670;&nbsp;</a></span>__init__()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.__init__ </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>outputqueue</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>redis_port</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Function Documentation</h2>
+<a id="a08cec25af3b8f74dd09168267959333e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a08cec25af3b8f74dd09168267959333e">&#9670;&nbsp;</a></span>add_to_ip_ctr()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.add_to_ip_ctr </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ip</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>blacklist</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">keep track of how many times an ip was there in all blacklists
+:param blacklist: t make sure we don't count the ip twice in the same blacklist
+</pre> 
+</div>
+</div>
+<a id="a9ff8999d7f9fc89d4f312802f1b7b16e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9ff8999d7f9fc89d4f312802f1b7b16e">&#9670;&nbsp;</a></span>check_if_update_org()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.check_if_update_org </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a993a15489b1328869e1dab5078fa0375"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a993a15489b1328869e1dab5078fa0375">&#9670;&nbsp;</a></span>download_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.download_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_to_download</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="adf0d07faba25beeba9dc5f4fdb8c841d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf0d07faba25beeba9dc5f4fdb8c841d">&#9670;&nbsp;</a></span>extract_ioc_from_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> tuple StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.extract_ioc_from_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line_fields</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>separator</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>data_column</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>description_column</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns the ip/ip range/domain and it's description from the given line
+</pre> 
+</div>
+</div>
+<a id="a15d8d75afe2f5f75707979d61569c2ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15d8d75afe2f5f75707979d61569c2ed">&#9670;&nbsp;</a></span>get_data_column()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_data_column </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>amount_of_columns</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line_fields</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Get the first column that is an IPv4, IPv6 or domain
+:param file_path: path of the ti file that contains the given fields
+</pre> 
+</div>
+</div>
+<a id="a0ca81da505641b79c75ea3604ba12962"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0ca81da505641b79c75ea3604ba12962">&#9670;&nbsp;</a></span>get_description_column()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_description_column </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>header</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Given the first line of a TI file (header line), try to get the index of the description column
+</pre> 
+</div>
+</div>
+<a id="a5bd24d2f1b9241863904bdd151f3734e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5bd24d2f1b9241863904bdd151f3734e">&#9670;&nbsp;</a></span>get_e_tag()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_e_tag </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>response</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param response: the output of a request done with requests library
+</pre> 
+</div>
+</div>
+<a id="a53cf94dc68bcbac9edb3d6da60b22b5e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a53cf94dc68bcbac9edb3d6da60b22b5e">&#9670;&nbsp;</a></span>get_feed_details()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_feed_details </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>feeds_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Parse links, threat level and tags from the feeds_path file and return a dict with feed info
+</pre> 
+</div>
+</div>
+<a id="ac8f9a500023910dbfe43d42186253a14"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac8f9a500023910dbfe43d42186253a14">&#9670;&nbsp;</a></span>get_last_modified()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> str StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_last_modified </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>response</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">returns Last-Modified field of TI file.
+Called when the file doesn't have an e-tag
+:param response: the output of a request done with requests library
+</pre> 
+</div>
+</div>
+<a id="a6491dd01f1bb06315e0a10a864143cb6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6491dd01f1bb06315e0a10a864143cb6">&#9670;&nbsp;</a></span>get_whitelisted_orgs()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> list StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.get_whitelisted_orgs </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a89de8f26e58527e876d87bab065a0cf2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a89de8f26e58527e876d87bab065a0cf2">&#9670;&nbsp;</a></span>is_ignored_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.is_ignored_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns True if a comment, a blank line, or an unsupported IoC
+</pre> 
+</div>
+</div>
+<a id="a447f69dc00e357d52680cc12ad17fc87"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a447f69dc00e357d52680cc12ad17fc87">&#9670;&nbsp;</a></span>log()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.log </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">sends the text to output process to log it to slips.log without outputting to the terminal
+</pre> 
+</div>
+</div>
+<a id="a587d217a4ac2e905c7454839cd467019"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a587d217a4ac2e905c7454839cd467019">&#9670;&nbsp;</a></span>parse_ja3_feed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.parse_ja3_feed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>url</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>ja3_feed_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Read all ja3 fingerprints in ja3_feed_path and store the info in our db
+:param url: this is the src feed
+:param ja3_feed_path: the file path where a ja3 feed is downloaded
+</pre> 
+</div>
+</div>
+<a id="adf350fc405debd8daae2e08a0231a8be"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#adf350fc405debd8daae2e08a0231a8be">&#9670;&nbsp;</a></span>parse_json_ti_feed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.parse_json_ti_feed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>link_to_download</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>ti_file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c837131a51ecda1c8670361440f0364"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c837131a51ecda1c8670361440f0364">&#9670;&nbsp;</a></span>parse_line()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> tuple StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.parse_line </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>line</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">:param file_path: path of the ti file that contains the given line
+Parse the given line and return the amount of columns it has,
+a list of the line fields, and the separator it's using
+</pre> 
+</div>
+</div>
+<a id="ac5e6799c8e1e6d5ca11a9181754aa3bb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac5e6799c8e1e6d5ca11a9181754aa3bb">&#9670;&nbsp;</a></span>parse_ssl_feed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.parse_ssl_feed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>url</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>full_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Read all ssl fingerprints in full_path and store the info in our db
+:param url: the src feed
+:param full_path: the file path where the SSL feed is downloaded
+</pre> 
+</div>
+</div>
+<a id="a91706a8da00b044f5122bff4c22f82f9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a91706a8da00b044f5122bff4c22f82f9">&#9670;&nbsp;</a></span>parse_ti_feed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.parse_ti_feed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>link_to_download</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str
+    &#160;</td>
+          <td class="paramname"><em>ti_file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Read all the files holding IP addresses and a description and put the
+info in a large dict.
+This also helps in having unique ioc across files
+:param link_to_download: this link that has the IOCs we're currently parsing, used for getting the threat_level
+:param ti_file_path: this is the path where the saved file from the link is downloaded
+</pre> 
+</div>
+</div>
+<a id="aa293687adde6f312bc730fd5410f3344"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa293687adde6f312bc730fd5410f3344">&#9670;&nbsp;</a></span>print()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.print </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>text</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>verbose</em> = <code>1</code>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>debug</em> = <code>0</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Function to use to print text using the outputqueue of slips.
+Slips then decides how, when and where to print this text by taking all the processes into account
+:param verbose:
+    0 - don't print
+    1 - basic operation/proof of work
+    2 - log I/O operations and filenames
+    3 - log database/profile/timewindow changes
+:param debug:
+    0 - don't print
+    1 - print exceptions
+    2 - unsupported and unhandled types (cases that may cause errors)
+    3 - red warnings that needs examination - developer warnings
+:param text: text to print. Can include format like 'Test {}'.format('here')
+</pre> 
+</div>
+</div>
+<a id="a9a2890f49d3c742563016aff485e990c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9a2890f49d3c742563016aff485e990c">&#9670;&nbsp;</a></span>print_duplicate_ip_summary()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.print_duplicate_ip_summary </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a6e6a1c8483819d8b79b1ccf59da6a17f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6e6a1c8483819d8b79b1ccf59da6a17f">&#9670;&nbsp;</a></span>read_configuration()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.read_configuration </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5d843e6bbb9dab4b12be70651bfd0a31"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5d843e6bbb9dab4b12be70651bfd0a31">&#9670;&nbsp;</a></span>read_ports_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> int StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.read_ports_info </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>ports_info_filepath</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Reads port info from slips_files/ports_info/ports_used_by_specific_orgs.csv
+and store it in the db
+</pre> 
+</div>
+</div>
+<a id="abc497abe0a789bd76c88e3172398c271"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abc497abe0a789bd76c88e3172398c271">&#9670;&nbsp;</a></span>update()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Main function. It tries to update the TI files from a remote server
+we update different types of files remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
+</pre> 
+</div>
+</div>
+<a id="af50bf75e701f606085d500346842cf86"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af50bf75e701f606085d500346842cf86">&#9670;&nbsp;</a></span>update_local_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_local_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>file_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Returns True if update was successful
+</pre> 
+</div>
+</div>
+<a id="a63257c40648d7a2cb8c15fad0f60bf04"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a63257c40648d7a2cb8c15fad0f60bf04">&#9670;&nbsp;</a></span>update_mac_db()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_mac_db </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Updates the mac db using the response stored in self.response
+</pre> 
+</div>
+</div>
+<a id="ab9eeef1da3dc174bdb136e2ba0675079"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9eeef1da3dc174bdb136e2ba0675079">&#9670;&nbsp;</a></span>update_online_whitelist()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_online_whitelist </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Updates online tranco whitelist defined in slips.conf online_whitelist key
+</pre> 
+</div>
+</div>
+<a id="a9441c3a508e7decb4f99da7ca765713f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9441c3a508e7decb4f99da7ca765713f">&#9670;&nbsp;</a></span>update_org_files()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_org_files </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ab6fd9e8429adc1c5357c74bd51ae965c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab6fd9e8429adc1c5357c74bd51ae965c">&#9670;&nbsp;</a></span>update_ports_info()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_ports_info </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5c5765290f5efd1691f72a7401525c9b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5c5765290f5efd1691f72a7401525c9b">&#9670;&nbsp;</a></span>update_riskiq_feed()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_riskiq_feed </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Get and parse RiskIQ feed</pre> 
+</div>
+</div>
+<a id="a5593104f68b4d498e13c25a61de383e3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5593104f68b4d498e13c25a61de383e3">&#9670;&nbsp;</a></span>update_TI_file()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname"> bool StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_TI_file </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">str&#160;</td>
+          <td class="paramname"><em>link_to_download</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<pre class="fragment">Update remote TI files, JA3 feeds and SSL feeds by writing them to disk and parsing them
+</pre> 
+</div>
+</div>
+<a id="a22d234470cb9f65b8358376c472bc5cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a22d234470cb9f65b8358376c472bc5cb">&#9670;&nbsp;</a></span>write_file_to_disk()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">def StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.write_file_to_disk </td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>self</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>response</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname"><em>full_path</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<h2 class="groupheader">Member Data Documentation</h2>
+<a id="ab7422250dda2fd728b10c8fc80261170"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7422250dda2fd728b10c8fc80261170">&#9670;&nbsp;</a></span>first_time_reading_files</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.first_time_reading_files</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Update remote TI files ################ Check if the remote file is newer than our own For each file that we should update`. </p>
+
+</div>
+</div>
+<a id="a9e16962cc14a82e68f1211d13a4d97ed"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9e16962cc14a82e68f1211d13a4d97ed">&#9670;&nbsp;</a></span>header_keywords</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.header_keywords</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a19b4a226db13e99e15b2e9c0bbcecfcb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a19b4a226db13e99e15b2e9c0bbcecfcb">&#9670;&nbsp;</a></span>ignored_IoCs</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ignored_IoCs</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac4c5909d3f14b1b47ec8f4cf3fa90add"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac4c5909d3f14b1b47ec8f4cf3fa90add">&#9670;&nbsp;</a></span>interval</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.interval</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a58992608dcf3c060d8bd4dedc7b912ef"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a58992608dcf3c060d8bd4dedc7b912ef">&#9670;&nbsp;</a></span>ips_ctr</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ips_ctr</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ae1c82146e0742ea9fd75f57c4146df78"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ae1c82146e0742ea9fd75f57c4146df78">&#9670;&nbsp;</a></span>ja3_feeds</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ja3_feeds</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac68addffb4c5204a39926bfa363e11c4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac68addffb4c5204a39926bfa363e11c4">&#9670;&nbsp;</a></span>ja3_feeds_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ja3_feeds_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2c9c2ed67384315fe25f44394f6a1363"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2c9c2ed67384315fe25f44394f6a1363">&#9670;&nbsp;</a></span>loaded_ti_files</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.loaded_ti_files</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API check if we have a username and api key and a week has passed since we last updated </p>
+
+</div>
+</div>
+<a id="aae4aaf09544f0032e09453c9953db3cb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aae4aaf09544f0032e09453c9953db3cb">&#9670;&nbsp;</a></span>mac_db_link</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.mac_db_link</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa9b561a68eeecdea4660c331c72d6183"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa9b561a68eeecdea4660c331c72d6183">&#9670;&nbsp;</a></span>mac_db_update_period</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.mac_db_update_period</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad463409bf81eb91d7971d92aaf753503"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad463409bf81eb91d7971d92aaf753503">&#9670;&nbsp;</a></span>name</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.name</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad08301031e971b3cd3871ebf6ab42487"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad08301031e971b3cd3871ebf6ab42487">&#9670;&nbsp;</a></span>new_hash</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.new_hash</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a44de60b893f73bd514819098783e6215"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a44de60b893f73bd514819098783e6215">&#9670;&nbsp;</a></span>online_whitelist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.online_whitelist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a67099789765239a49d25e602ffad23d6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a67099789765239a49d25e602ffad23d6">&#9670;&nbsp;</a></span>online_whitelist_update_period</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.online_whitelist_update_period</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7889bf9ba4655270b7c2a25f77854c95"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7889bf9ba4655270b7c2a25f77854c95">&#9670;&nbsp;</a></span>org_info_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.org_info_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ac2a57359f97af7798edc73dcf4540a31"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac2a57359f97af7798edc73dcf4540a31">&#9670;&nbsp;</a></span>outputqueue</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.outputqueue</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a95ba2587b6eb4be07864867b69c33ca0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a95ba2587b6eb4be07864867b69c33ca0">&#9670;&nbsp;</a></span>path_to_remote_ti_files</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.path_to_remote_ti_files</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a2a97b4aab2d0074d22199adfbe60d9ec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2a97b4aab2d0074d22199adfbe60d9ec">&#9670;&nbsp;</a></span>responses</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.responses</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aa7a8c62aba065a1a7cef4a772a86338b"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa7a8c62aba065a1a7cef4a772a86338b">&#9670;&nbsp;</a></span>riskiq_email</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.riskiq_email</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a5d61d8d96a595bf8b3feb1f256f2b8f8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a5d61d8d96a595bf8b3feb1f256f2b8f8">&#9670;&nbsp;</a></span>riskiq_key</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.riskiq_key</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad20824a4ce25f84294337e83df3c8cc7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad20824a4ce25f84294337e83df3c8cc7">&#9670;&nbsp;</a></span>riskiq_update_period</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.riskiq_update_period</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="aea714bbc31a7329692b5cc6f459e70f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aea714bbc31a7329692b5cc6f459e70f5">&#9670;&nbsp;</a></span>separator</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.separator</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a18456006d16163df1300473186429496"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a18456006d16163df1300473186429496">&#9670;&nbsp;</a></span>slips_logfile</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.slips_logfile</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="acc96e2501ebc231b1fd59be10e3e664c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#acc96e2501ebc231b1fd59be10e3e664c">&#9670;&nbsp;</a></span>ssl_feeds</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ssl_feeds</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a4c75daf97b310365b25d28b994d1a023"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4c75daf97b310365b25d28b994d1a023">&#9670;&nbsp;</a></span>ssl_feeds_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ssl_feeds_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a90d5e8aad666f48b43a015f675ea816d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a90d5e8aad666f48b43a015f675ea816d">&#9670;&nbsp;</a></span>ti_feeds_path</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.ti_feeds_path</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a7dd58c94b9c79d2bed499d46664837f5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7dd58c94b9c79d2bed499d46664837f5">&#9670;&nbsp;</a></span>update_period</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.update_period</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="a723b27524382562eeeb685c4b0876bfe"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a723b27524382562eeeb685c4b0876bfe">&#9670;&nbsp;</a></span>url_feeds</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.url_feeds</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<a id="ad607a2063f8c1944c4491bba20128a98"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad607a2063f8c1944c4491bba20128a98">&#9670;&nbsp;</a></span>whitelist</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">StratosphereLinuxIPS.modules.update_manager.update_file_manager.UpdateFileManager.whitelist</td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+</div>
+</div>
+<hr/>The documentation for this class was generated from the following file:<ul>
+<li>/home/runner/work/StratosphereLinuxIPS/StratosphereLinuxIPS/modules/update_manager/<a class="el" href="update__file__manager_8py.html">update_file_manager.py</a></li>
+</ul>
+</div><!-- contents -->
+</div><!-- doc-content -->
+<!-- start footer part -->
+<div id="nav-path" class="navpath"><!-- id is needed for treeview function! -->
+  <ul>
+    <li class="navelem"><b>StratosphereLinuxIPS</b></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules.html">modules</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager.html">update_manager</a></li><li class="navelem"><a class="el" href="namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager.html">update_file_manager</a></li><li class="navelem"><a class="el" href="class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html">UpdateFileManager</a></li>
+    <li class="footer">Generated by <a href="https://www.doxygen.org/index.html"><img class="footer" src="doxygen.svg" width="104" height="31" alt="doxygen"/></a> 1.9.1 </li>
+  </ul>
+</div>
+</body>
+</html>

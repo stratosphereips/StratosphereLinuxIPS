@@ -1,8 +1,8 @@
 var warden__client_8py =
 [
-    [ "slips.modules.CESNET.warden_client.Error", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ],
-    [ "slips.modules.CESNET.warden_client.Client", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ],
-    [ "format_time", "warden__client_8py.html#a33312e5d3c3884bded3bc3cc4911e53b", null ],
-    [ "read_cfg", "warden__client_8py.html#acbe19f2e8ae483a8a4fe0c73d7a7b0b3", null ],
-    [ "VERSION", "warden__client_8py.html#af4bf774d89b02e4eb957bc5126ac7d93", null ]
+    [ "Error", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ],
+    [ "Client", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ],
+    [ "format_time", "warden__client_8py.html#a644c7d8d98a3c8fa77b958820edede6f", null ],
+    [ "read_cfg", "warden__client_8py.html#a518331e4dcf21a5ff5d449ff11519a5c", null ],
+    [ "VERSION", "warden__client_8py.html#a566628ca677bc77088d9fe76efac3d84", null ]
 ];

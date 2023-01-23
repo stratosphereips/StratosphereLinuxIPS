@@ -1,192 +1,192 @@
 var annotated_dup =
 [
-    [ "slips", "namespaceslips.html", [
-      [ "daemon", "namespaceslips_1_1daemon.html", [
-        [ "Daemon", "classslips_1_1daemon_1_1_daemon.html", "classslips_1_1daemon_1_1_daemon" ]
+    [ "StratosphereLinuxIPS", null, [
+      [ "daemon", "namespace_stratosphere_linux_i_p_s_1_1daemon.html", [
+        [ "Daemon", "class_stratosphere_linux_i_p_s_1_1daemon_1_1_daemon.html", "class_stratosphere_linux_i_p_s_1_1daemon_1_1_daemon" ]
       ] ],
-      [ "modules", "namespaceslips_1_1modules.html", [
-        [ "arp", "namespaceslips_1_1modules_1_1arp.html", [
-          [ "arp", "namespaceslips_1_1modules_1_1arp_1_1arp.html", [
-            [ "Module", "classslips_1_1modules_1_1arp_1_1arp_1_1_module.html", "classslips_1_1modules_1_1arp_1_1arp_1_1_module" ]
+      [ "modules", "namespace_stratosphere_linux_i_p_s_1_1modules.html", [
+        [ "arp", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1arp.html", [
+          [ "arp", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1arp_1_1arp.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1arp_1_1arp_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1arp_1_1arp_1_1_module" ]
           ] ]
         ] ],
-        [ "blocking", "namespaceslips_1_1modules_1_1blocking.html", [
-          [ "blocking", "namespaceslips_1_1modules_1_1blocking_1_1blocking.html", [
-            [ "Module", "classslips_1_1modules_1_1blocking_1_1blocking_1_1_module.html", "classslips_1_1modules_1_1blocking_1_1blocking_1_1_module" ]
+        [ "blocking", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1blocking.html", [
+          [ "blocking", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1blocking_1_1blocking.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1blocking_1_1blocking_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1blocking_1_1blocking_1_1_module" ]
           ] ]
         ] ],
-        [ "CESNET", "namespaceslips_1_1modules_1_1_c_e_s_n_e_t.html", [
-          [ "CESNET", "namespaceslips_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t.html", [
-            [ "Module", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module.html", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module" ]
+        [ "CESNET", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t.html", [
+          [ "CESNET", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1_c_e_s_n_e_t_1_1_module" ]
           ] ],
-          [ "warden_client", "namespaceslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client.html", [
-            [ "Client", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ],
-            [ "Error", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "classslips_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ]
+          [ "warden_client", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client.html", [
+            [ "Error", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_error" ],
+            [ "Client", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_c_e_s_n_e_t_1_1warden__client_1_1_client" ]
           ] ]
         ] ],
-        [ "ensembling", "namespaceslips_1_1modules_1_1ensembling.html", [
-          [ "ensembling", "namespaceslips_1_1modules_1_1ensembling_1_1ensembling.html", [
-            [ "Module", "classslips_1_1modules_1_1ensembling_1_1ensembling_1_1_module.html", "classslips_1_1modules_1_1ensembling_1_1ensembling_1_1_module" ]
+        [ "ensembling", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ensembling.html", [
+          [ "ensembling", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ensembling_1_1ensembling.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1ensembling_1_1ensembling_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1ensembling_1_1ensembling_1_1_module" ]
           ] ]
         ] ],
-        [ "exporting_alerts", "namespaceslips_1_1modules_1_1exporting__alerts.html", [
-          [ "exporting_alerts", "namespaceslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts.html", [
-            [ "Module", "classslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module.html", "classslips_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module" ]
+        [ "exporting_alerts", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1exporting__alerts.html", [
+          [ "exporting_alerts", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1exporting__alerts_1_1exporting__alerts.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1exporting__alerts_1_1exporting__alerts_1_1_module" ]
           ] ]
         ] ],
-        [ "flowalerts", "namespaceslips_1_1modules_1_1flowalerts.html", [
-          [ "flowalerts", "namespaceslips_1_1modules_1_1flowalerts_1_1flowalerts.html", [
-            [ "Module", "classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html", "classslips_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module" ]
+        [ "flowalerts", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts.html", [
+          [ "flowalerts", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1flowalerts_1_1_module" ]
           ] ],
-          [ "set_evidence", "namespaceslips_1_1modules_1_1flowalerts_1_1set__evidence.html", [
-            [ "Helper", "classslips_1_1modules_1_1flowalerts_1_1set__evidence_1_1_helper.html", "classslips_1_1modules_1_1flowalerts_1_1set__evidence_1_1_helper" ]
+          [ "set_evidence", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1set__evidence.html", [
+            [ "Helper", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1set__evidence_1_1_helper.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1set__evidence_1_1_helper" ]
           ] ],
-          [ "TimerThread", "namespaceslips_1_1modules_1_1flowalerts_1_1_timer_thread.html", [
-            [ "TimerThread", "classslips_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread.html", "classslips_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread" ]
+          [ "TimerThread", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1_timer_thread.html", [
+            [ "TimerThread", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowalerts_1_1_timer_thread_1_1_timer_thread" ]
           ] ]
         ] ],
-        [ "flowmldetection", "namespaceslips_1_1modules_1_1flowmldetection.html", [
-          [ "flowmldetection", "namespaceslips_1_1modules_1_1flowmldetection_1_1flowmldetection.html", [
-            [ "Module", "classslips_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module.html", "classslips_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module" ]
+        [ "flowmldetection", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowmldetection.html", [
+          [ "flowmldetection", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1flowmldetection_1_1flowmldetection.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1flowmldetection_1_1flowmldetection_1_1_module" ]
           ] ]
         ] ],
-        [ "http_analyzer", "namespaceslips_1_1modules_1_1http__analyzer.html", [
-          [ "http_analyzer", "namespaceslips_1_1modules_1_1http__analyzer_1_1http__analyzer.html", [
-            [ "Module", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html", "classslips_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module" ]
+        [ "http_analyzer", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer.html", [
+          [ "http_analyzer", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1http__analyzer_1_1http__analyzer_1_1_module" ]
           ] ]
         ] ],
-        [ "ip_info", "namespaceslips_1_1modules_1_1ip__info.html", [
-          [ "asn_info", "namespaceslips_1_1modules_1_1ip__info_1_1asn__info.html", [
-            [ "ASN", "classslips_1_1modules_1_1ip__info_1_1asn__info_1_1_a_s_n.html", "classslips_1_1modules_1_1ip__info_1_1asn__info_1_1_a_s_n" ]
+        [ "ip_info", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ip__info.html", [
+          [ "asn_info", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1asn__info.html", [
+            [ "ASN", "class_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1asn__info_1_1_a_s_n.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1asn__info_1_1_a_s_n" ]
           ] ],
-          [ "ip_info", "namespaceslips_1_1modules_1_1ip__info_1_1ip__info.html", [
-            [ "Module", "classslips_1_1modules_1_1ip__info_1_1ip__info_1_1_module.html", "classslips_1_1modules_1_1ip__info_1_1ip__info_1_1_module" ]
+          [ "ip_info", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1ip__info.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1ip__info_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1ip__info_1_1ip__info_1_1_module" ]
           ] ]
         ] ],
-        [ "leak_detector", "namespaceslips_1_1modules_1_1leak__detector.html", [
-          [ "leak_detector", "namespaceslips_1_1modules_1_1leak__detector_1_1leak__detector.html", [
-            [ "Module", "classslips_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html", "classslips_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module" ]
+        [ "leak_detector", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector.html", [
+          [ "leak_detector", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1leak__detector_1_1leak__detector_1_1_module" ]
           ] ]
         ] ],
-        [ "network_discovery", "namespaceslips_1_1modules_1_1network__discovery.html", [
-          [ "network_discovery", "namespaceslips_1_1modules_1_1network__discovery_1_1network__discovery.html", [
-            [ "PortScanProcess", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html", "classslips_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process" ]
+        [ "network_discovery", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery.html", [
+          [ "network_discovery", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery.html", [
+            [ "PortScanProcess", "class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1network__discovery_1_1network__discovery_1_1_port_scan_process" ]
           ] ]
         ] ],
-        [ "p2ptrust", "namespaceslips_1_1modules_1_1p2ptrust.html", [
-          [ "p2ptrust", "namespaceslips_1_1modules_1_1p2ptrust_1_1p2ptrust.html", [
-            [ "Trust", "classslips_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html", "classslips_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust" ]
+        [ "p2ptrust", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust.html", [
+          [ "p2ptrust", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust.html", [
+            [ "Trust", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1p2ptrust_1_1_trust" ]
           ] ],
-          [ "trust", "namespaceslips_1_1modules_1_1p2ptrust_1_1trust.html", [
-            [ "base_model", "namespaceslips_1_1modules_1_1p2ptrust_1_1trust_1_1base__model.html", [
-              [ "BaseModel", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1base__model_1_1_base_model.html", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1base__model_1_1_base_model" ]
+          [ "trust", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust.html", [
+            [ "base_model", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1base__model.html", [
+              [ "BaseModel", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1base__model_1_1_base_model.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1base__model_1_1_base_model" ]
             ] ],
-            [ "model", "namespaceslips_1_1modules_1_1p2ptrust_1_1trust_1_1model.html", [
-              [ "Model", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1model_1_1_model.html", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1model_1_1_model" ]
+            [ "model", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1model.html", [
+              [ "Model", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1model_1_1_model.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1model_1_1_model" ]
             ] ],
-            [ "trustdb", "namespaceslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb.html", [
-              [ "TrustDB", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html", "classslips_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b" ]
+            [ "trustdb", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb.html", [
+              [ "TrustDB", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1trust_1_1trustdb_1_1_trust_d_b" ]
             ] ]
           ] ],
-          [ "utils", "namespaceslips_1_1modules_1_1p2ptrust_1_1utils.html", [
-            [ "go_director", "namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director.html", [
-              [ "GoDirector", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director" ]
+          [ "utils", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils.html", [
+            [ "go_director", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1go__director.html", [
+              [ "GoDirector", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1go__director_1_1_go_director" ]
             ] ],
-            [ "printer", "namespaceslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer.html", [
-              [ "Printer", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html", "classslips_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer" ]
+            [ "printer", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1printer.html", [
+              [ "Printer", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1p2ptrust_1_1utils_1_1printer_1_1_printer" ]
             ] ]
           ] ]
         ] ],
-        [ "RiskIQ", "namespaceslips_1_1modules_1_1_risk_i_q.html", [
-          [ "RiskIQ", "namespaceslips_1_1modules_1_1_risk_i_q_1_1_risk_i_q.html", [
-            [ "Module", "classslips_1_1modules_1_1_risk_i_q_1_1_risk_i_q_1_1_module.html", "classslips_1_1modules_1_1_risk_i_q_1_1_risk_i_q_1_1_module" ]
+        [ "RiskIQ", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_risk_i_q.html", [
+          [ "RiskIQ", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1_risk_i_q_1_1_risk_i_q.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1_risk_i_q_1_1_risk_i_q_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1_risk_i_q_1_1_risk_i_q_1_1_module" ]
           ] ]
         ] ],
-        [ "rnn-cc-detection", "namespaceslips_1_1modules_1_1rnn-cc-detection.html", [
-          [ "rnn-cc-detection", "namespaceslips_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection.html", [
-            [ "Module", "classslips_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection_1_1_module.html", "classslips_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection_1_1_module" ]
+        [ "rnn-cc-detection", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1rnn-cc-detection.html", [
+          [ "rnn-cc-detection", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1rnn-cc-detection_1_1rnn-cc-detection_1_1_module" ]
           ] ]
         ] ],
-        [ "template", "namespaceslips_1_1modules_1_1template.html", [
-          [ "template", "namespaceslips_1_1modules_1_1template_1_1template.html", [
-            [ "Module", "classslips_1_1modules_1_1template_1_1template_1_1_module.html", "classslips_1_1modules_1_1template_1_1template_1_1_module" ]
+        [ "template", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1template.html", [
+          [ "template", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1template_1_1template.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1template_1_1template_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1template_1_1template_1_1_module" ]
           ] ]
         ] ],
-        [ "threat_intelligence", "namespaceslips_1_1modules_1_1threat__intelligence.html", [
-          [ "threat_intelligence", "namespaceslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence.html", [
-            [ "Module", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html", "classslips_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module" ]
+        [ "threat_intelligence", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence.html", [
+          [ "threat_intelligence", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1threat__intelligence.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1threat__intelligence_1_1_module" ]
           ] ],
-          [ "urlhaus", "namespaceslips_1_1modules_1_1threat__intelligence_1_1urlhaus.html", [
-            [ "URLhaus", "classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html", "classslips_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus" ]
+          [ "urlhaus", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1urlhaus.html", [
+            [ "URLhaus", "class_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1threat__intelligence_1_1urlhaus_1_1_u_r_lhaus" ]
           ] ]
         ] ],
-        [ "timeline", "namespaceslips_1_1modules_1_1timeline.html", [
-          [ "timeline", "namespaceslips_1_1modules_1_1timeline_1_1timeline.html", [
-            [ "Module", "classslips_1_1modules_1_1timeline_1_1timeline_1_1_module.html", "classslips_1_1modules_1_1timeline_1_1timeline_1_1_module" ]
+        [ "timeline", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1timeline.html", [
+          [ "timeline", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1timeline_1_1timeline.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1timeline_1_1timeline_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1timeline_1_1timeline_1_1_module" ]
           ] ]
         ] ],
-        [ "update_manager", "namespaceslips_1_1modules_1_1update__manager.html", [
-          [ "timer_manager", "namespaceslips_1_1modules_1_1update__manager_1_1timer__manager.html", [
-            [ "InfiniteTimer", "classslips_1_1modules_1_1update__manager_1_1timer__manager_1_1_infinite_timer.html", "classslips_1_1modules_1_1update__manager_1_1timer__manager_1_1_infinite_timer" ]
+        [ "update_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager.html", [
+          [ "timer_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1timer__manager.html", [
+            [ "InfiniteTimer", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1timer__manager_1_1_infinite_timer.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1timer__manager_1_1_infinite_timer" ]
           ] ],
-          [ "update_file_manager", "namespaceslips_1_1modules_1_1update__manager_1_1update__file__manager.html", [
-            [ "UpdateFileManager", "classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html", "classslips_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager" ]
+          [ "update_file_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager.html", [
+            [ "UpdateFileManager", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__file__manager_1_1_update_file_manager" ]
           ] ],
-          [ "update_manager", "namespaceslips_1_1modules_1_1update__manager_1_1update__manager.html", [
-            [ "UpdateManager", "classslips_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager.html", "classslips_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager" ]
+          [ "update_manager", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager.html", [
+            [ "UpdateManager", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1update__manager_1_1update__manager_1_1_update_manager" ]
           ] ]
         ] ],
-        [ "virustotal", "namespaceslips_1_1modules_1_1virustotal.html", [
-          [ "virustotal", "namespaceslips_1_1modules_1_1virustotal_1_1virustotal.html", [
-            [ "Module", "classslips_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html", "classslips_1_1modules_1_1virustotal_1_1virustotal_1_1_module" ]
+        [ "virustotal", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1virustotal.html", [
+          [ "virustotal", "namespace_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal.html", [
+            [ "Module", "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html", "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module" ]
           ] ]
         ] ]
       ] ],
-      [ "slips", "namespaceslips_1_1slips.html", [
-        [ "Main", "classslips_1_1slips_1_1_main.html", "classslips_1_1slips_1_1_main" ]
+      [ "slips", "namespace_stratosphere_linux_i_p_s_1_1slips.html", [
+        [ "Main", "class_stratosphere_linux_i_p_s_1_1slips_1_1_main.html", "class_stratosphere_linux_i_p_s_1_1slips_1_1_main" ]
       ] ],
-      [ "slips_files", "namespaceslips_1_1slips__files.html", [
-        [ "common", "namespaceslips_1_1slips__files_1_1common.html", [
-          [ "slips_utils", "namespaceslips_1_1slips__files_1_1common_1_1slips__utils.html", [
-            [ "Utils", "classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html", "classslips_1_1slips__files_1_1common_1_1slips__utils_1_1_utils" ]
+      [ "slips_files", null, [
+        [ "common", null, [
+          [ "slips_utils", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils.html", [
+            [ "Utils", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils_1_1_utils.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1common_1_1slips__utils_1_1_utils" ]
           ] ]
         ] ],
-        [ "core", "namespaceslips_1_1slips__files_1_1core.html", [
-          [ "database", "namespaceslips_1_1slips__files_1_1core_1_1database.html", [
-            [ "_profile_flow", "namespaceslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow.html", [
-              [ "ProfilingFlowsDatabase", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html", "classslips_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database" ]
+        [ "core", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core.html", [
+          [ "database", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database.html", [
+            [ "_profile_flow", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1__profile__flow.html", [
+              [ "ProfilingFlowsDatabase", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1__profile__flow_1_1_profiling_flows_database" ]
             ] ],
-            [ "database", "namespaceslips_1_1slips__files_1_1core_1_1database_1_1database.html", [
-              [ "Database", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html", "classslips_1_1slips__files_1_1core_1_1database_1_1database_1_1_database" ]
+            [ "database", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database.html", [
+              [ "Database", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database" ]
             ] ]
           ] ],
-          [ "evidenceProcess", "namespaceslips_1_1slips__files_1_1core_1_1evidence_process.html", [
-            [ "EvidenceProcess", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html", "classslips_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process" ]
+          [ "evidenceProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process.html", [
+            [ "EvidenceProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1evidence_process_1_1_evidence_process" ]
           ] ],
-          [ "filemonitor", "namespaceslips_1_1slips__files_1_1core_1_1filemonitor.html", [
-            [ "FileEventHandler", "classslips_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html", "classslips_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler" ]
+          [ "filemonitor", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor.html", [
+            [ "FileEventHandler", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1filemonitor_1_1_file_event_handler" ]
           ] ],
-          [ "guiProcess", "namespaceslips_1_1slips__files_1_1core_1_1gui_process.html", [
-            [ "GuiProcess", "classslips_1_1slips__files_1_1core_1_1gui_process_1_1_gui_process.html", "classslips_1_1slips__files_1_1core_1_1gui_process_1_1_gui_process" ]
+          [ "guiProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1gui_process.html", [
+            [ "GuiProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1gui_process_1_1_gui_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1gui_process_1_1_gui_process" ]
           ] ],
-          [ "inputProcess", "namespaceslips_1_1slips__files_1_1core_1_1input_process.html", [
-            [ "InputProcess", "classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html", "classslips_1_1slips__files_1_1core_1_1input_process_1_1_input_process" ]
+          [ "inputProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1input_process.html", [
+            [ "InputProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1input_process_1_1_input_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1input_process_1_1_input_process" ]
           ] ],
-          [ "logsProcess", "namespaceslips_1_1slips__files_1_1core_1_1logs_process.html", [
-            [ "LogsProcess", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process" ],
-            [ "TimerThread", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread.html", "classslips_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread" ]
+          [ "logsProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process.html", [
+            [ "LogsProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_logs_process" ],
+            [ "TimerThread", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1logs_process_1_1_timer_thread" ]
           ] ],
-          [ "notify", "namespaceslips_1_1slips__files_1_1core_1_1notify.html", [
-            [ "Notify", "classslips_1_1slips__files_1_1core_1_1notify_1_1_notify.html", "classslips_1_1slips__files_1_1core_1_1notify_1_1_notify" ]
+          [ "notify", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1notify.html", [
+            [ "Notify", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1notify_1_1_notify.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1notify_1_1_notify" ]
           ] ],
-          [ "outputProcess", "namespaceslips_1_1slips__files_1_1core_1_1output_process.html", [
-            [ "OutputProcess", "classslips_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html", "classslips_1_1slips__files_1_1core_1_1output_process_1_1_output_process" ]
+          [ "outputProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process.html", [
+            [ "OutputProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1output_process_1_1_output_process" ]
           ] ],
-          [ "profilerProcess", "namespaceslips_1_1slips__files_1_1core_1_1profiler_process.html", [
-            [ "ProfilerProcess", "classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html", "classslips_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process" ]
+          [ "profilerProcess", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process.html", [
+            [ "ProfilerProcess", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1profiler_process_1_1_profiler_process" ]
           ] ],
-          [ "whitelist", "namespaceslips_1_1slips__files_1_1core_1_1whitelist.html", [
-            [ "Whitelist", "classslips_1_1slips__files_1_1core_1_1whitelist_1_1_whitelist.html", "classslips_1_1slips__files_1_1core_1_1whitelist_1_1_whitelist" ]
+          [ "whitelist", "namespace_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1whitelist.html", [
+            [ "Whitelist", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1whitelist_1_1_whitelist.html", "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1whitelist_1_1_whitelist" ]
           ] ]
         ] ]
       ] ]
