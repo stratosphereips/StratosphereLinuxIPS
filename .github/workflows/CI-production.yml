@@ -132,25 +132,51 @@ jobs:
 #        docker push $slips_image
 #        docker push stratosphereips/tmp_slips:latest
 
-
-    # Set up Docker Buildx with docker-container driver is required
-    # at the moment to be able to use a subdirectory with Git context
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
-    # build p2p image for ubuntu from dockerfile
-    - name: Build our p2p image from dockerfile
-      id: docker_build_p2p_for_slips
-      uses: docker/build-push-action@v3
-      with:
-        allow: network.host
-        context: ./
-        file: ./docker/P2P-image/Dockerfile
-        tags: |
-          stratosphereips/tmp_slips_p2p:latest
-          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
-        push: true
 #
+#    # Set up Docker Buildx with docker-container driver is required
+#    # at the moment to be able to use a subdirectory with Git context
+#    - name: Set up Docker Buildx
+#      uses: docker/setup-buildx-action@v2
+#
+#    # build p2p image for ubuntu from dockerfile
+#    - name: Build our p2p image from dockerfile
+#      id: docker_build_p2p_for_slips
+#      uses: docker/build-push-action@v3
+#      with:
+#        allow: network.host
+#        context: ./
+#        file: ./docker/P2P-image/Dockerfile
+#        tags: |
+#          stratosphereips/tmp_slips_p2p:latest
+#          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
+#        push: true
+
+  update_code_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'code-docs-branch'
+          fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
+
+      - name: install doxygen and python
+        run: |
+          sudo apt update 
+          sudo apt install python3 doxygen
+
+      # deletes old docs, generates new ones, and adds all new files to git
+      - name: update docs
+        run: python3 docs/generate_docs.py
+
+      # commit and push to code docs branch
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GH_TOKEN_FOR_COMMITTING_AND_PUSHING_CODE_DOCS }}
+          message: '[Github actions] Update code docs'
+          branch: 'code-docs-branch'
+
 #  build_and_push_dependency_image:
 #
 #    runs-on: ubuntu-latest
