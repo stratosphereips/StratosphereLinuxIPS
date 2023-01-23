@@ -866,24 +866,13 @@ In order for this module to run you need:
   <li>tshark</li>
 </ul>
 
-You can compile YARA by running
+You can install YARA by running
 
-`wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz 
-  && tar -zxf v4.1.3.tar.gz 
-  && cd yara-4.1.3 
-  && ./bootstrap.sh 
-  && ./configure 
-  && make 
-  && make install`
-
-You can install yara-python by running
-
-`git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
-python3 setup.py build && python3 setup.py install`
+```sudo apt install yara```
 
 You can install tshark by running
 
-`apt install wireshark`
+`sudo apt install wireshark`
 
 
 #### How it works
