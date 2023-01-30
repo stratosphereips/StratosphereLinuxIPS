@@ -79,7 +79,6 @@ class UpdateFileManager:
 
         self.ti_feeds_path = conf.ti_files()
         self.url_feeds = self.get_feed_details(self.ti_feeds_path)
-
         self.ja3_feeds_path = conf.ja3_feeds()
         self.ja3_feeds = self.get_feed_details(self.ja3_feeds_path)
 
@@ -857,44 +856,75 @@ class UpdateFileManager:
             return False
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
+        """
+        Slips has 2 json TI feeds that are parsed differently. hole.cert.pl and rstcloud
+        """
         # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
         filename = ti_file_path.split('/')[-1]
-        malicious_domains_dict = {}
-        with open(ti_file_path) as feed:
-            self.print(
-                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
-            )
-            try:
-                file = json.loads(feed.read())
-            except json.decoder.JSONDecodeError:
-                # not a json file??
-                return False
 
-            for ioc in file:
-                date = ioc['InsertDate']
-                diff = utils.get_time_diff(
-                    date,
-                    time.time(),
-                    return_type='days'
+        if 'rstcloud' in link_to_download:
+            malicious_ips_dict = {}
+            with open(ti_file_path) as feed:
+                self.print(
+                    f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
                 )
+                for line in feed.read().splitlines():
+                    try:
+                        line: dict = json.loads(line)
+                    except json.decoder.JSONDecodeError:
+                        # invalid json line
+                        continue
+                    # each ip in this file has it's own source and tag
+                    src = line["src"]["name"][0]
+                    malicious_ips_dict[line['ip']['v4']] = json.dumps(
+                        {
+                            'description': '',
+                            'source': f'{filename}, {src}',
+                            'threat_level': threat_level,
+                            'tags': f'{line["tags"]["str"]}, {tags}',
+                        }
+                    )
 
-                if diff > self.interval:
-                    continue
-                domain = ioc['DomainAddress']
-                if not validators.domain(domain):
-                    continue
-                malicious_domains_dict[domain] = json.dumps(
-                    {
-                        'description': '',
-                        'source': filename,
-                        'threat_level': threat_level,
-                        'tags': tags,
-                    }
+            __database__.add_ips_to_IoC(malicious_ips_dict)
+            return True
+
+
+        if 'hole.cert.pl' in link_to_download:
+            malicious_domains_dict = {}
+            with open(ti_file_path) as feed:
+                self.print(
+                    f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
                 )
-            # Add all loaded malicious domains to the database
+                try:
+                    file = json.loads(feed.read())
+                except json.decoder.JSONDecodeError:
+                    # not a json file??
+                    return False
+
+                for ioc in file:
+                    date = ioc['InsertDate']
+                    diff = utils.get_time_diff(
+                        date,
+                        time.time(),
+                        return_type='days'
+                    )
+
+                    if diff > self.interval:
+                        continue
+                    domain = ioc['DomainAddress']
+                    if not validators.domain(domain):
+                        continue
+                    malicious_domains_dict[domain] = json.dumps(
+                        {
+                            'description': '',
+                            'source': filename,
+                            'threat_level': threat_level,
+                            'tags': tags,
+                        }
+                    )
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
@@ -1050,7 +1080,6 @@ class UpdateFileManager:
         :param link_to_download: this link that has the IOCs we're currently parsing, used for getting the threat_level
         :param ti_file_path: this is the path where the saved file from the link is downloaded
         """
-
         try:
             # Check if the file has any content
             try:
@@ -1065,7 +1094,6 @@ class UpdateFileManager:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
-            # to support nsec/full-results-2019-05-15.json
             if 'json' in ti_file_path:
                 return self.parse_json_ti_feed(
                     link_to_download, ti_file_path

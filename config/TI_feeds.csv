@@ -49,3 +49,5 @@ https://www.spamhaus.org/drop/dropv6.txt,medium, ['spam','malicious']
 https://www.spamhaus.org/drop/drop.txt,medium, ['spam','malicious']
 https://raw.githubusercontent.com/Orange-Cyberdefense/russia-ukraine_IOCs/main/OCD-Datalake-russia-ukraine_IOCs-ALL.csv,medium, ['Russia-Ukraine IoCs']
 https://hole.cert.pl/domains/domains.json,medium, ['malicious']
+# this feed is random, not the full version of rstcloud ips
+https://raw.githubusercontent.com/rstcloud/rstthreats/master/feeds/full/random100_ioc_ip_latest.json,medium,['good']
