@@ -1,7 +1,7 @@
 {
   "name": "kalipso",
   "version": "1.0.0",
-  "description": "Kalipso is a graphical user interface based on Nodejs. To create a colorful interface  in the command-line, Kalipso uses two javascript libraries: blessed and blessed-contrib.",
+  "description": "Kalipso is a graphical user interface for Slips IPS based on Nodejs.",
   "main": "kalipso.js",
   "scripts": {
     "start": "node kalipso.js"
