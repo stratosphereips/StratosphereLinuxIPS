@@ -27,6 +27,8 @@
 - Add detection of IPs using multiple SSH server versions
 - Wait 30 mins before the first connection without DNS evidence
 - Optimize code and performance
+- Update Kalispo dependencies to use more secure versions
+
 -1.0.0
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
