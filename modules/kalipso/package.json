@@ -7,16 +7,29 @@
     "start": "node kalipso.js"
   },
   "author": "Stratosphere IPS",
-  "license": "GPL",
+  "license": "GPL-2.0-only",
   "dependencies": {
     "ansi-colors": "^4.1.1",
-    "async": "^3.2.2",
-    "chalk": "~3.0.0",
+    "async": "^3.2.0",
     "blessed": "^0.1.81",
-    "blessed-contrib": "^4.10.1",
+    "blessed-contrib": "^4.10.0",
+    "chalk": "^4.1.2",
+    "clipboardy": "^2.3.0",
     "fs": "^0.0.1-security",
     "redis": "^3.1.2",
     "sorted-array-async": "^0.0.7",
-    "yargs": "^17.2.1"
-  }
+    "strip-ansi": "^6.0.0",
+    "yargs": "^17.0.1"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/stratosphereips/StratosphereLinuxIPS.git"
+  },
+  "bugs": {
+    "url": "https://github.com/stratosphereips/StratosphereLinuxIPS/issues"
+  },
+  "homepage": "https://github.com/stratosphereips/StratosphereLinuxIPS#readme"
 }
+
+
