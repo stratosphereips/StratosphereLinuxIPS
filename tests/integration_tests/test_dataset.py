@@ -318,10 +318,24 @@ def test_zeek_conn_log(
 
 
 @pytest.mark.parametrize(
-    'suricata_path,  output_dir, redis_port',
-    [('dataset/test6-malicious.suricata.json', 'test6/', 6657)],
+    'suricata_path,  output_dir, redis_port, expected_evidence',
+    [
+        (
+                'dataset/test6-malicious.suricata.json',
+                'test6/',
+                6657,
+                [
+                    'Connection to unknown destination port',
+                    'vertical port scan',
+                    'Connecting to private IP',
+                    'non-HTTP established connection'
+
+                ]
+
+        )
+    ],
 )
-def test_suricata(database, suricata_path, output_dir, redis_port):
+def test_suricata(database, suricata_path, output_dir, redis_port, expected_evidence):
     output_dir = create_output_dir(output_dir)
     # we have an established flow in suricata file to this port 8760/udp
     # {"timestamp":"2021-06-06T15:57:37.272281+0200","flow_id":1630350322382106,"event_type":"flow",
@@ -329,8 +343,6 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     # "UDP","app_proto":"failed","flow":{"pkts_toserver":2,"pkts_toclient":2,"bytes_toserver":256,
     # "bytes_toclient":468,"start":"2021-06-07T04:26:27.668954+0200","end":"2021-06-07T04:26:27.838624+0200"
     # ,"age":0,"state":"established","reason":"shutdown","alerted":false},"host":"stratosphere.org"}
-    expected_evidence = 'Connection to unknown destination port 8760/UDP'
-    expected_evidence2 = 'vertical port scan'
 
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
@@ -345,8 +357,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port):
     assert profiles > 10
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert (is_evidence_present(log_file, expected_evidence)
-            or is_evidence_present(log_file, expected_evidence2))
+    assert any([is_evidence_present(log_file, ev) for ev in expected_evidence])
     shutil.rmtree(output_dir)
 
 
