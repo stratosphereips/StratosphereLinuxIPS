@@ -77,14 +77,13 @@ def add_flow(db):
 def test_add_flow(outputQueue):
     database = create_db_instace(outputQueue)
     uid = '1234'
-    assert add_flow(database) ==  True
+    added_flow = {"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88,
+         "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20,
+         "spkts": 20, "sbytes": 20, "appproto": "dhcp", "smac": "", "dmac": "", "label": "", "flow_type": "",
+                  "module_labels": {}}
+    assert add_flow(database) == True
     assert (
-        database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)
-        == '{"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80,'
-        ' "daddr": "8.8.8.8", "dport": 88, "proto": "TCP", "origstate": "established",'
-        ' "state": "Established", "pkts": 20, "allbytes": 20, "spkts": 20,'
-        ' "sbytes": 20, "appproto": "dhcp", "label": "",'
-        ' "flow_type": "", "module_labels": {}}'
+        json.loads(database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)) == added_flow
     )
 
 
@@ -179,28 +178,17 @@ def test_add_port(outputQueue):
 
 def test_setEvidence(outputQueue):
     database = create_db_instace(outputQueue)
-    type_detection = 'ip'
-    detection_info = test_ip
-    type_evidence = f'SSHSuccessful-by-{detection_info}'
+    attacker_direction = 'ip'
+    attacker = test_ip
+    evidence_type = f'SSHSuccessful-by-{attacker}'
     threat_level = 0.01
     confidence = 0.6
     description = 'SSH Successful to IP :' + '8.8.8.8' + '. From IP ' + test_ip
     timestamp = time.time()
     category = 'Infomation'
     uid = '123'
-    database.setEvidence(
-        type_evidence,
-        type_detection,
-        detection_info,
-        threat_level,
-        confidence,
-        description,
-        timestamp,
-        category,
-        profileid=profileid,
-        twid=twid,
-        uid=uid,
-    )
+    database.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                         timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
     added_evidence = database.r.hget('evidence' + profileid, twid)
     added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')

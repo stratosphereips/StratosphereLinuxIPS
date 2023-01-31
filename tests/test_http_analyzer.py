@@ -1,13 +1,22 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 from ..modules.http_analyzer.http_analyzer import Module
-import configparser
+import random
 
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 uid = 'CAeDWs37BipkfP21u8'
 timestamp = 1635765895.037696
+SAFARI_UA = (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
+        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
+        'Version/15.3 Safari/605.1.15'
+    )
 
+def get_random_MAC():
+    return "02:00:00:%02x:%02x:%02x" % (random.randint(0, 255),
+                             random.randint(0, 255),
+                             random.randint(0, 255))
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -54,54 +63,56 @@ def test_check_multiple_google_connections(outputQueue, database):
         )
     assert found_detection == True
 
-
-def test_get_ua_info_online(outputQueue, database):
-    """
-    tests get_user_agent_info and check_incompatible_user_agent
-    """
-    http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
-    ua_info = http_analyzer.get_ua_info_online(safari_ua)
-    assert ua_info != False, 'Connection error'
-
-
-def test_get_user_agent_info(outputQueue, database):
+def test_parsing_online_ua_info(outputQueue, database, mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
+    # use a different profile for this unit test to make sure we don't already have info about
+    # it in the db
+    profileid = 'profile_192.168.99.99'
+    # mock the function that gets info about the given ua from an online db
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.text = """{
+        "agent_name":"Safari",
+        "os_type":"Macintosh",
+        "os_name":"OS X"
+    }"""
+
     # add os_type , os_name and agent_name to the db
-    ua_info = http_analyzer.get_user_agent_info(safari_ua, profileid)
+    ua_info = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
     assert ua_info['os_type'] == 'Macintosh'
     assert ua_info['browser'] == 'Safari'
 
 
-def test_check_incompatible_user_agent(outputQueue, database):
+def test_check_incompatible_user_agent(outputQueue, database, mocker):
+
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
-    # add os_type , os_name and agent_name to the db
-    http_analyzer.get_user_agent_info(safari_ua, profileid)
+    # use a different profile for this unit test to make sure we don't already have info about
+    # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
+    profileid = 'profile_192.168.77.254'
+    # mock the function that gets info about the given ua from an online db
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.text = """{
+        "agent_name":"Safari",
+        "os_type":"Macintosh",
+        "os_name":"OS X"
+    }"""
+
+    # get ua info online, and add os_type , os_name and agent_name anout this profile
+    # to the db
+    ua_added_to_db = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
+    assert ua_added_to_db != None, 'Error getting UA info online'
+    assert ua_added_to_db != False, 'We already have UA info about this profile in the db'
 
     # set this profile's vendor to intel
-    intel_oui = '00:13:20'
     MAC_info = {
         'Vendor': 'Intel Corp',
-        'MAC': 'FF:FF:FF' + intel_oui
+        'MAC': get_random_MAC()
     }
-    database.add_mac_addr_to_profile(profileid, MAC_info)
+    assert database.add_mac_addr_to_profile(profileid, MAC_info) == True
 
     assert (
         http_analyzer.check_incompatible_user_agent(
@@ -109,6 +120,7 @@ def test_check_incompatible_user_agent(outputQueue, database):
         )
         == True
     )
+
 
 def test_extract_info_from_UA(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)
@@ -124,13 +136,7 @@ def test_extract_info_from_UA(outputQueue):
 
 def test_check_multiple_UAs(outputQueue):
     http_analyzer = create_http_analyzer_instance(outputQueue)
-    safari_ua = (
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 12_3_1) '
-        'AppleWebKit/605.1.15 (KHTML, like Gecko) '
-        'Version/15.3 Safari/605.1.15'
-    )
     mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
-
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}
     # current ua
@@ -143,7 +149,7 @@ def test_check_multiple_UAs(outputQueue):
         == False
     )
     # in this case we should alert
-    user_agent = safari_ua
+    user_agent = SAFARI_UA
     assert (
         http_analyzer.check_multiple_UAs(
             cached_ua, user_agent, timestamp, profileid, twid, uid

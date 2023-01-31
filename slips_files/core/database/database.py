@@ -50,6 +50,7 @@ class Database(ProfilingFlowsDatabase, object):
         'new_blame',
         'new_alert',
         'new_dhcp',
+        'new_weird',
         'new_software',
         'p2p_data_request',
         'remove_old_files',
@@ -74,14 +75,15 @@ class Database(ProfilingFlowsDatabase, object):
         self.sudo = 'sudo '
         if self.running_in_docker:
             self.sudo = ''
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
-        self.seen_MACs = {}
         # flag to know if we found the gateway MAC using the most seen MAC method
         self.gateway_MAC_found = False
         self.redis_conf_file = 'redis.conf'
         self.set_redis_options()
         self.our_ips = utils.get_own_IPs()
+        # flag to know which flow is the start of the pcap/file
+        self.first_flow = True
+        # to make sure we only detect and store the user's localnet once
+        self.is_localnet_set = False
 
 
     def set_redis_options(self):
@@ -340,10 +342,9 @@ class Database(ProfilingFlowsDatabase, object):
             if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
-
+            # execlude ips outside of local network is it's set in slips.conf
             if not self.should_add(profileid):
                 return False
-
             # Add the profile to the index. The index is called 'profiles'
             self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
@@ -368,13 +369,30 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
 
+    def was_ip_seen_in_connlog_before(self, ip) -> bool:
+        """
+        returns true if this is not the first flow slip sees of the given ip
+        """
+        # we store every source address seen in a conn.log flow in this key
+        # if the source address is not stored in this key, it means we may have seen it
+        # but not in conn.log yet
+
+        # if the ip's not in the following key, then its the first flow seen of this ip
+        return self.r.sismember("srcips_seen_in_connlog", ip)
+
+    def mark_srcip_as_seen_in_connlog(self, ip):
+        """
+        Marks the given ip as seen in conn.log
+        if an ip is not present in this set, it means we may have seen it but not in conn.log
+        """
+        self.r.sadd("srcips_seen_in_connlog", ip)
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.r.hmset(profileid, {'User-agent': user_agent})
+        self.r.hset(profileid, 'User-agent', user_agent)
 
     def add_software_to_profile(
         self, profileid, software, version_major, version_minor, uid
@@ -383,24 +401,25 @@ class Database(ProfilingFlowsDatabase, object):
         Used to associate this profile with it's used software and version
         :param uid:  uid of the flow using the given versions
         """
-        if cached_sw := self.get_software_from_profile(profileid):
-            if cached_sw['software'] == software:
-                # we already have an ssh client for this proileid.
-                # dont store this one, let flowalerts detect the incompatibility
-                return
-
-        if 'SSH' not in software:
-            return
-
         sw_dict = {
-            'software': software,
-            'version-major': version_major,
-            'version-minor': version_minor,
-            'uid': uid
+            software:{
+                    'version-major': version_major,
+                    'version-minor': version_minor,
+                    'uid': uid
+                }
         }
-        self.r.hmset(profileid, {
-            'used_software': json.dumps(sw_dict)
-        })
+        # cached_sw is {software: {'version-major':x, 'version-minor':y, 'uid':...}}
+        if cached_sw := self.get_software_from_profile(profileid):
+            if software in cached_sw:
+                # we already have this same software for this proileid.
+                # dont store this one
+                return
+            # add this new sw to the list of softwares this profile is using
+            cached_sw.update(sw_dict)
+            self.r.hset(profileid, 'used_software', json.dumps(cached_sw))
+        else:
+            # first time for this profile to use a software
+            self.r.hset(profileid, 'used_software', json.dumps(sw_dict))
 
     def get_software_from_profile(self, profileid):
         """
@@ -412,6 +431,7 @@ class Database(ProfilingFlowsDatabase, object):
         if used_software := self.r.hmget(profileid, 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
+
 
     def get_user_agent_from_profile(self, profileid) -> str:
         """
@@ -444,7 +464,44 @@ class Database(ProfilingFlowsDatabase, object):
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hmset(profileid, {'dhcp': 'true'})
+            self.r.hset(profileid, 'dhcp', 'true')
+
+
+    def set_ipv6_of_profile(self, profileid, ip: list):
+        self.r.hset(profileid, 'IPv6',  json.dumps(ip))
+
+    def set_ipv4_of_profile(self, profileid, ip):
+        self.r.hset(profileid, 'IPv4', json.dumps([ip]))
+
+    def is_gw_mac(self, MAC_info, ip) -> bool:
+        """
+        Detects the MAC of the gateway if 1 mac is seen assigned to 1 public destination IP
+        :param ip: dst ip that should be associated with the given MAC info
+        """
+
+        MAC = MAC_info.get('MAC', '')
+        if not validators.mac_address(MAC):
+            return False
+
+        if self.gateway_MAC_found:
+            # gateway MAC already set using this function
+            return True if __database__.get_gateway_MAC() == MAC else False
+
+        # since we don't have a mac gw in the db, see eif this given mac is the gw mac
+        ip_obj = ipaddress.ip_address(ip)
+        if not ip_obj.is_private:
+            # now we're given a public ip and a MAC that's supposedly belongs to it
+            # we are sure this is the gw mac
+            # set it if we don't already have it in the db
+            # set the ip of the gw, and the mac of the gw
+            for address_type, address in MAC_info.items():
+                # address_type can be 'IP' or 'MAC' or 'Vendor'
+                self.set_default_gateway(address_type, address)
+
+            # mark the gw mac as found so we don't look for it again
+            self.gateway_MAC_found = True
+            return True
+
 
     def get_IP_of_MAC(self, MAC):
         """
@@ -452,60 +509,19 @@ class Database(ProfilingFlowsDatabase, object):
         """
         return self.r.hget('MAC', MAC)
 
-    def set_ipv6_of_profile(self, profileid, ip: list):
-
-        ipv6 = {
-            'IPv6': json.dumps(ip)}
-        self.r.hmset(profileid, ipv6)
-
-    def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hmset(profileid, {'IPv4': json.dumps([ip])})
-
-    def is_gw_mac(self, MAC_info, ip) -> bool:
-        """
-        Detects the MAC of the gateway if the same mac is seen assigned to 3+ public destination IPs
-        """
-
-        MAC = MAC_info.get('MAC','')
-        if not validators.mac_address(MAC):
-            return False
-
-        if self.gateway_MAC_found:
-            # gateway ip already set using this function
-            return True if __database__.get_gateway_MAC() == MAC else False
-
-        # if we saw the same mac assigned to 3+ IPs, we know this is the gw mac
-        if MAC in self.seen_MACs and self.seen_MACs[MAC] >= 3:
-            # we are sure this is the gw mac,
-            # set it if we don't already have it in the db
-            if not self.get_gateway_MAC():
-                for field, mac_info in MAC_info.items():
-                    self.set_default_gateway(field, mac_info)
-
-                # mark the gw mac as found so we don't look for it again
-                self.gateway_MAC_found = True
-                delattr(self, 'seen_MACs')
-                return True
-
-        # the dst MAC of all public IPs is the dst mac of the gw,
-        # we shouldn't be assigning it to the public IPs
-        ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private :
-            try:
-                self.seen_MACs[MAC] += 1
-            except KeyError:
-                self.seen_MACs[MAC] = 1
-            return True
-
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
-        Used to associate this profile with it's MAC addr
+        Used to associate this profile with its MAC addr in the 'MAC' key in the db
+        format of the MAC key is
+            MAC: [ipv4, ipv6, etc.]
         :param MAC_info: dict containing mac address, hostname and vendor info
+        this functions is called for all macs found in dhcp.log, conn.log, arp.log etc.
         """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
+
         if '0.0.0.0' in profileid:
             return False
 
@@ -517,16 +533,21 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         if self.is_gw_mac(MAC_info, incoming_ip):
-            return False
+            if incoming_ip != self.get_gateway_ip():
+                # we're trying to assign the gw mac to an ip that isn't the gateway's
+                return False
+            else:
+                # we're given the gw mac and ip, store them no issue
+                pass
 
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
-        if not cached_ip or cached_ip is None:
+        if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
-            self.r.hmset(profileid, MAC_info)
+            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
             return True
         else:
             # we found another profile that has the same mac as this one
@@ -565,7 +586,6 @@ class Database(ProfilingFlowsDatabase, object):
                     ipv6 = list(ipv6)
                 self.set_ipv6_of_profile(profileid, ipv6)
 
-
                 # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
                 ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
                 if not ipv6:
@@ -584,11 +604,11 @@ class Database(ProfilingFlowsDatabase, object):
                 # will be detected later by the ARP module
                 return False
 
-
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            return True
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -598,7 +618,9 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_info = self.r.hmget(profileid, 'MAC')[0]
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info)['MAC']
         return MAC_info
 
     def get_mac_vendor_from_profile(self, profileid) -> str:
@@ -609,8 +631,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_vendor = self.r.hmget(profileid, 'Vendor')[0]
-        return MAC_vendor
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info)['Vendor']
+        return MAC_info
 
     def get_hostname_from_profile(self, profileid) -> str:
         """
@@ -620,8 +644,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        hostname = self.r.hmget(profileid, 'host_name')[0]
-        return hostname
+        MAC_info = self.r.hget(profileid, 'MAC')
+        if MAC_info:
+            return json.loads(MAC_info).get('host_name', False)
+        return MAC_info
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
@@ -666,9 +692,9 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            temp_id = 'profile' + self.separator + str(daddr_as_obj)
-            if data := self.r.sismember('profiles', temp_id):
-                return temp_id
+            profileid = 'profile' + self.separator + str(daddr_as_obj)
+            if data := self.r.sismember('profiles', profileid):
+                return profileid
             return False
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
@@ -682,18 +708,6 @@ class Database(ProfilingFlowsDatabase, object):
         profiles = self.r.smembers('profiles')
         return profiles if profiles != set() else {}
 
-    def getProfileData(self, profileid):
-        """Get all the data for this particular profile.
-        Returns:
-        A json formated representation of the hashmap with all the data of the profile
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-
-        profile = self.r.hgetall(profileid)
-        return profile if profile != set() else False
 
     def getTWsfromProfile(self, profileid):
         """
@@ -757,7 +771,7 @@ class Database(ProfilingFlowsDatabase, object):
                 f'01|profiler|[Profile] {traceback.format_exc()}'
             )
 
-    def hasProfile(self, profileid):
+    def has_profile(self, profileid):
         """Check if we have the given profile"""
         if not profileid:
             # profileid is None if we're dealing with a profile
@@ -884,10 +898,8 @@ class Database(ProfilingFlowsDatabase, object):
             # The creation of a TW now does not imply that it was modified. You need to put data to mark is at modified
 
             # When a new TW is created for this profile,
-            # change the threat level of the profile to 0 and confidence to 0.05
-            self.r.hset(profileid, 'threat_level', 0)
-            self.r.hset(profileid, 'confidence', 0.5)
-
+            # change the threat level of the profile to 0(info) and confidence to 0.05
+            self.update_threat_level(profileid, 'info',  0.5)
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put('01|database|Error in addNewTW')
@@ -949,26 +961,8 @@ class Database(ProfilingFlowsDatabase, object):
             return False
         return True
 
-    def getModifiedTWTime(self, profileid, twid):
-        """
-        Get the time when this TW was modified
-        """
-        return self.r.zcore(
-            'ModifiedTW',
-            f'{profileid}{self.separator}{twid}'
-        ) or -1
-
     def setSlipsInternalTime(self, timestamp):
         self.r.set('slips_internal_time', timestamp)
-
-
-    def refresh_data_tuples(self):
-        """
-        Go through all the tuples and refresh the data about the ipsinfo
-        TODO
-        """
-        outtuples = self.getOutTuplesfromProfileTW()
-        intuples = self.getInTuplesfromProfileTW()
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -987,10 +981,7 @@ class Database(ProfilingFlowsDatabase, object):
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] Type inst: {}'.format(type(inst))
-            )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(inst))
+            self.outputqueue.put('01|database|[DB] {}'.format(traceback.print_exc()))
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
@@ -1007,7 +998,30 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
-    def update_threat_level(self, profileid, threat_level: str):
+    def get_dhcp_flows(self, profileid, twid) -> dict:
+        """
+        returns a dict of dhcp flows that happaened in this profileid and twid
+        """
+        flows = self.r.hget('DHCP_flows', f'{profileid}_{twid}')
+        if flows:
+            return json.loads(flows)
+
+
+    def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
+        """
+        Stores all dhcp flows sorted by profileid_twid
+        """
+        flow = {requested_addr: uid}
+        cached_flows: dict = self.get_dhcp_flows(profileid, twid)
+        if cached_flows:
+            # we already have flows in this twid, update them
+            cached_flows.update(flow)
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
+        else:
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
+
+
+    def update_threat_level(self, profileid, threat_level: str, confidence):
         """
         Update the threat level of a certain profile
         :param threat_level: available options are 'low', 'medium' 'critical' etc
@@ -1017,39 +1031,74 @@ class Database(ProfilingFlowsDatabase, object):
         now = time.time()
         now = utils.convert_format(now, utils.alerts_format)
         # keep track of old threat levels
+        confidence = f'confidence: {confidence}'
         past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
+        # this is what we'll be storing in the db, tl, ts, and confidence
+        threat_level_data = (threat_level, now, confidence)
         if past_threat_levels:
             # get the lists of ts and past threat levels
             past_threat_levels = json.loads(past_threat_levels)
-            latest_threat_level = past_threat_levels[-1][0]
-            if latest_threat_level == threat_level:
-                # if the past threat level is the same as this one, replace the timestamp only
-                past_threat_levels[-1] = (threat_level, now)
+            latest_threat_level, latest_ts, latest_confidence = past_threat_levels[-1]
+            if (
+                    latest_threat_level == threat_level
+                    and latest_confidence == confidence
+            ):
+                # if the past threat level and confidence are the same as the ones we wanna store,
+                # replace the timestamp only
+                past_threat_levels[-1] = threat_level_data
             else:
                 # add this threat level to the list of past threat levels
-                past_threat_levels.append((threat_level, now))
+                past_threat_levels.append(threat_level_data)
         else:
             # first time setting a threat level for this profile
-            past_threat_levels = [(threat_level, now)]
+            past_threat_levels = [threat_level_data]
             # threat_levels_update_time = [now]
 
         past_threat_levels = json.dumps(past_threat_levels)
         self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
 
+        # set the score and confidence of the given ip in the db when it causes an evidence
+        # these 2 values will be needed when sharing with peers
+        ip = profileid.split('_')[-1]
+        # get the numerical value of this threat level
+        score = utils.threat_levels[threat_level.lower()]
+        score_confidence = {
+            'score': score,
+            'confidence': confidence
+        }
+        cached_ip_data = self.getIPData(ip)
+        if not cached_ip_data:
+            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
+        else:
+            # append the score and conf. to the already existing data
+            cached_ip_data.update(score_confidence)
+            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
 
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
-        When we have a bunch of evidence causing an alert, we associate all evidence IDs with the alert ID in our
-         database
+        When we have a bunch of evidence causing an alert,
+        we associate all evidence IDs with the alert ID in our database
         stores in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """
+        old_profileid_twid_alerts: dict = self.get_profileid_twid_alerts(profileid, twid)
+
         alert = {
             alert_ID: json.dumps(evidence_IDs)
         }
-        alert = json.dumps(alert)
-        self.r.hset(profileid + self.separator + twid, 'alerts', alert)
+
+        if old_profileid_twid_alerts:
+            # update previous alerts for this profileid twid
+            # add the alert we have to the old alerts of this profileid_twid
+            old_profileid_twid_alerts.update(alert)
+            profileid_twid_alerts = json.dumps(old_profileid_twid_alerts)
+        else:
+            # no previous alerts for this profileid twid
+            profileid_twid_alerts = json.dumps(alert)
+
+
+        self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
 
         # the structure of alerts key is
         # alerts {
@@ -1232,7 +1281,7 @@ class Database(ProfilingFlowsDatabase, object):
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if not alerts:
             return {}
         alerts = json.loads(alerts)
@@ -1244,7 +1293,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        alerts = self.r.hget(profileid + self.separator + twid, 'alerts')
+        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if alerts:
             alerts = json.loads(alerts)
             evidence = alerts.get(alert_ID, False)
@@ -1279,45 +1328,31 @@ class Database(ProfilingFlowsDatabase, object):
                 return True
         return False
 
-    def set_flow_causing_evidence(self, uid, evidence_ID):
-        """
-        :param uid: can be a str or a list
-        """
-        if type(uid) == str:
-            uid = [uid]
-        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
-
-    def get_flows_causing_evidence(self, evidence_ID) -> list:
-        uids = self.r.hget("flows_causing_evidence", evidence_ID)
-        if not uids:
-            return []
-        else:
-            return json.loads(uids)
 
     def setEvidence(
-        self,
-        type_evidence,
-        type_detection,
-        detection_info,
-        threat_level,
-        confidence,
-        description,
-        timestamp,
-        category,
-        source_target_tag=False,
-        conn_count=False,
-        port=False,
-        proto=False,
-        profileid='',
-        twid='',
-        uid='',
+            self,
+            evidence_type,
+            attacker_direction,
+            attacker,
+            threat_level,
+            confidence,
+            description,
+            timestamp,
+            category,
+            source_target_tag=False,
+            conn_count=False,
+            port=False,
+            proto=False,
+            profileid='',
+            twid='',
+            uid=''
     ):
         """
         Set the evidence for this Profile and Timewindow.
 
-        type_evidence: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
-        type_detection: the type of value causing the detection e.g. dport, dip, flow
-        detection_info: the actual dstip or dstport. e.g. 1.1.1.1 or 443
+        evidence_type: determine the type of this evidence. e.g. PortScan, ThreatIntelligence
+        attacker_direction: the type of value causing the detection e.g. dstip, srcip, dstdomain, md5, url
+        attacker: the actual srcip or dstdomain. e.g. 1.1.1.1 or abc.com
         threat_level: determine the importance of the evidence, available options are:
                         info, low, medium, high, critical
         confidence: determine the confidence of the detection on a scale from 0 to 1.
@@ -1329,15 +1364,15 @@ class Database(ProfilingFlowsDatabase, object):
 
         source_target_tag:
             this is the IDEA category of the source and dst ip used in the evidence
-            if the type_detection is srcip this describes the source ip,
-            if the type_detection is dstip this describes the dst ip.
+            if the attacker_direction is srcip this describes the source ip,
+            if the attacker_direction is dstip this describes the dst ip.
             supported source and dst types are in the SourceTargetTag section https://idea.cesnet.cz/en/classifications
-            this is a keyword/optional argument because it shouldn't be used with dports and sports type_detection
+            this is a keyword/optional argument because it shouldn't be used with dports and sports attacker_direction
         """
 
 
         # Ignore evidence if it's disabled in the configuration file
-        if self.is_detection_disabled(type_evidence):
+        if self.is_detection_disabled(evidence_type):
             return False
 
         if not twid:
@@ -1346,15 +1381,14 @@ class Database(ProfilingFlowsDatabase, object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
-        self.set_flow_causing_evidence(uid, evidence_ID)
 
         # some evidence are caused by several uids, use the last one only
         if type(uid) == list:
             uid = uid[-1]
 
-        srcip = profileid.split('_')[1]
-
-
+        if type(threat_level) != str:
+            # make sure we always store str threat levels in the db
+            threat_level = utils.threat_level_to_string(threat_level)
 
         if timestamp:
             timestamp = utils.convert_format(timestamp, utils.alerts_format)
@@ -1362,9 +1396,9 @@ class Database(ProfilingFlowsDatabase, object):
         evidence_to_send = {
             'profileid': str(profileid),
             'twid': str(twid),
-            'type_detection': type_detection,
-            'detection_info': detection_info,
-            'type_evidence': type_evidence,
+            'attacker_direction': attacker_direction,
+            'attacker': attacker,
+            'evidence_type': evidence_type,
             'description': description,
             'stime': timestamp,
             'uid': uid,
@@ -1377,7 +1411,7 @@ class Database(ProfilingFlowsDatabase, object):
         if conn_count:
             evidence_to_send.update({'conn_count': conn_count})
 
-        # source_target_tag is defined only if type_detection is srcip or dstip
+        # source_target_tag is defined only if attacker_direction is srcip or dstip
         if source_target_tag:
             evidence_to_send.update({'source_target_tag': source_target_tag})
 
@@ -1418,19 +1452,15 @@ class Database(ProfilingFlowsDatabase, object):
         # note that publishing HAS TO be done after updating the 'Evidence' keys
         if should_publish:
             self.publish('evidence_added', evidence_to_send)
-        # an alert is generated for this profile,
-        # change the score to = 1, and confidence = 1
-        confidence = 1
-        if type_detection in ('sip', 'srcip'):
+
+        # an evidence is generated for this profile
+        # update the threat level of this profile
+        if attacker_direction in ('sip', 'srcip'):
             # the srcip is the malicious one
-            self.set_score_confidence(srcip, 'critical', confidence)
-            # update the threat level of this profile
-            self.update_threat_level(profileid, threat_level)
-        elif type_detection in ('dip', 'dstip'):
+            self.update_threat_level(profileid, threat_level, confidence)
+        elif attacker_direction in ('dip', 'dstip'):
             # the dstip is the malicious one
-            self.set_score_confidence(detection_info, 'critical', confidence)
-            # update the threat level of this profile
-            self.update_threat_level(f'profile_{detection_info}', threat_level)
+            self.update_threat_level(f'profile_{attacker}', threat_level, confidence)
 
 
         return True
@@ -1464,23 +1494,6 @@ class Database(ProfilingFlowsDatabase, object):
         evidence = json.dumps(evidence)
         self.r.sadd('Evidence', evidence)
 
-    def get_evidence_count(self, evidence_type, profileid, twid):
-        """
-        Returns the number of evidence of this type in this profiled and twid
-        :param evidence_type: PortScan, ThreatIntelligence, C&C channels detection etc..
-        """
-        count = 0
-        evidence = self.getEvidenceForTW(profileid, twid)
-        if not evidence:
-            return False
-
-        evidence: dict = json.loads(evidence)
-        # loop through each evidence in this tw
-        for description, evidence_details in evidence.items():
-            evidence_details = json.loads(evidence_details)
-            if evidence_type in evidence_details['type_evidence']:
-                count += 1
-        return count
 
     def deleteEvidence(self, profileid, twid, evidence_ID: str):
         """
@@ -1573,18 +1586,6 @@ class Database(ProfilingFlowsDatabase, object):
         if evidence:
             evidence = self.remove_whitelisted_evidence(evidence)
         return evidence
-
-    def getEvidenceForProfileid(self, profileid):
-        profile_evidence = {}
-        # get all tws for this profileid
-        timewindows = self.getTWsfromProfile(profileid)
-        for twid, ts in timewindows:
-            # get all evidence in this tw
-            tw_evidence = self.getEvidenceForTW(profileid, twid)
-            if tw_evidence:
-                tw_evidence = json.loads(tw_evidence)
-                profile_evidence.update(tw_evidence)
-        return profile_evidence
 
     def checkBlockedProfTW(self, profileid, twid):
         """
@@ -1702,19 +1703,19 @@ class Database(ProfilingFlowsDatabase, object):
                     + ', '
                 )
 
-                tags = current_data['threatintelligence'].get('tags','[]')
+                tags: list = current_data['threatintelligence'].get('tags', False)
                 # remove brackets
-                tags = tags.replace(']','').replace('[','').replace("'",'')
-                tags = tags.split(',')
-
-                identification += (
-                    'tags='
-                    + ", ".join(tags)
-                    + ', '
-                )
+                if tags:
+                    identification += f'tags= {tags} '
 
         identification = identification[:-2]
         return identification
+
+    def get_multiaddr(self):
+        """
+        this is can only be called when p2p is enabled, this value is set by p2p pigeon
+        """
+        return self.r.get('multiAddress')
 
     def getURLData(self, url):
         """
@@ -1735,17 +1736,6 @@ class Database(ProfilingFlowsDatabase, object):
             data = False
         return data
 
-    def getallIPs(self):
-        """Return list of all IPs in the DB"""
-        data = self.rcache.hgetall('IPsInfo')
-        # data = json.loads(data)
-        return data
-
-    def getallURLs(self):
-        """Return list of all URLs in the DB"""
-        data = self.rcache.hgetall('URLsInfo')
-        # data = json.loads(data)
-        return data
 
     def setNewURL(self, url: str):
         """
@@ -1761,34 +1751,6 @@ class Database(ProfilingFlowsDatabase, object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
             self.rcache.hset('URLsInfo', url, '{}')
-
-    def getIP(self, ip):
-        """Check if this ip is the hash of the profiles!"""
-        data = self.rcache.hget('IPsInfo', ip)
-        if data:
-            return True
-        else:
-            return False
-
-    def getURL(self, url):
-        """Check if this url is the hash of the profiles!"""
-        data = self.rcache.hget('URLsInfo', url)
-        if data:
-            return True
-        else:
-            return False
-
-    def setInfoForFile(self, md5: str, filedata: dict):
-        """
-        Store information for this file (only if it's malicious)
-        We receive a dictionary, such as {'virustotal': score} that we are
-        going to store for this IP.
-        If it was not there before we store it. If it was there before, we
-        overwrite it
-        """
-
-        file_info = json.dumps(filedata)
-        self.rcache.hset('FileInfo', md5, file_info)
 
     def setInfoForURLs(self, url: str, urldata: dict):
         """
@@ -1922,7 +1884,7 @@ class Database(ProfilingFlowsDatabase, object):
         return self.r.zrange('labels', 0, -1, withscores=True)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
-        """Given a uid, get the alternative flow realted to it"""
+        """ Given a uid, get the alternative flow realted to it """
         if not profileid:
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
@@ -1953,18 +1915,6 @@ class Database(ProfilingFlowsDatabase, object):
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
-    def get_timeline_last_line(self, profileid, twid):
-        """Add a line to the time line of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-        key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
-        )
-        data = self.r.zrange(key, -1, -1)
-        return data
-
     def get_timeline_last_lines(
         self, profileid, twid, first_index: int
     ) -> Tuple[str, int]:
@@ -1982,17 +1932,6 @@ class Database(ProfilingFlowsDatabase, object):
         data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
-    def get_timeline_all_lines(self, profileid, twid):
-        """Add a line to the time line of this profileid and twid"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return []
-        key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
-        )
-        data = self.r.zrange(key, 0, -1)
-        return data
 
     def set_port_info(self, portproto: str, name):
         """
@@ -2059,7 +1998,11 @@ class Database(ProfilingFlowsDatabase, object):
         :param address_type: can either be 'IP' or 'MAC'
         :param address: can be ip or mac
         """
-        if not self.get_gateway_ip():
+        # make sure the IP or mac aren't already set before re-setting
+        if (
+                address_type == 'IP' and not self.get_gateway_ip()
+                or address_type == 'MAC' and not self.get_gateway_MAC()
+        ):
             self.r.hset('default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
@@ -2158,19 +2101,6 @@ class Database(ProfilingFlowsDatabase, object):
 
         """
         self.rcache.hmset('IoC_SSL', malicious_ssl_certs)
-
-    def add_ip_to_IoC(self, ip: str, description: str) -> None:
-        """
-        Store in the DB 1 IP we read from an IoC source  with its description
-        """
-        self.rcache.hset('IoC_ips', ip, description)
-
-    def add_domain_to_IoC(self, domain: str, description: str) -> None:
-        """
-        Store in the DB 1 domain we read from an IoC source
-        with its description
-        """
-        self.rcache.hset('IoC_domains', domain, description)
 
     def get_malicious_ip_ranges(self) -> dict:
         """
@@ -2276,19 +2206,6 @@ class Database(ProfilingFlowsDatabase, object):
         else:
             return dns_resolutions
 
-    def get_last_dns_ts(self):
-        """returns the timestamp of the last DNS resolution slips read"""
-        dns_resolutions = self.get_all_dns_resolutions()
-        if dns_resolutions:
-            # sort resolutions by ts
-            # k_v is a tuple (key, value) , each value is a serialized json dict.
-            sorted_dns_resolutions = sorted(
-                dns_resolutions.items(),
-                key=lambda k_v: json.loads(k_v[1])['ts'],
-            )
-            # return the ts of the last dns resolution in our db
-            last_dns_ts = json.loads(sorted_dns_resolutions[-1][1])['ts']
-            return last_dns_ts
 
     def set_passive_dns(self, ip, data):
         """
@@ -2300,14 +2217,13 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_passive_dns(self, ip):
         """
-        Get passive DNS from virus total
+        Gets passive DNS from the db
         """
         data = self.rcache.hget('passiveDNS', ip)
         if data:
-            data = json.loads(data)
-            return data
+            return json.loads(data)
         else:
-            return ''
+            return False
 
     def get_IPs_in_IoC(self):
         """
@@ -2361,28 +2277,6 @@ class Database(ProfilingFlowsDatabase, object):
             profileid + self.separator + twid, 'Reconnections', str(data)
         )
 
-    def get_flow_timestamp(self, profileid, twid, uid):
-        """
-        Return the timestamp of the flow
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        timestamp = ''
-        if uid:
-            try:
-                time.sleep(
-                    1
-                )   # it takes time for the binetflow to put the flow into the database
-                flow_information = self.r.hget(
-                    profileid + '_' + twid + '_flows', uid
-                )
-                flow_information = json.loads(flow_information)
-                timestamp = flow_information.get('ts')
-            except:
-                pass
-        return timestamp
 
     def is_domain_malicious(self, domain: str) -> tuple:
         """
@@ -2404,13 +2298,6 @@ class Database(ProfilingFlowsDatabase, object):
         else:
             return domain_description, False
 
-    def get_last_update_time_malicious_file(self):
-        """Return the time of last update of the remote malicious file from the db"""
-        return self.r.get('last_update_malicious_file')
-
-    def set_last_update_time_malicious_file(self, time):
-        """Return the time of last update of the remote malicious file from the db"""
-        self.r.set('last_update_malicious_file', time)
 
     def get_host_ip(self):
         """Get the IP addresses of the host from a db. There can be more than one"""
@@ -2420,25 +2307,6 @@ class Database(ProfilingFlowsDatabase, object):
         """Store the IP address of the host in a db. There can be more than one"""
         self.r.sadd('hostIP', ip)
 
-    def add_all_loaded_malicous_ips(self, ips_and_description: dict) -> None:
-        self.r.hmset('loaded_malicious_ips', ips_and_description)
-
-    def add_loaded_malicious_ip(self, ip: str, description: str) -> None:
-        self.r.hset('loaded_malicious_ips', ip, description)
-
-    def get_loaded_malicious_ip(self, ip: str) -> str:
-        ip_description = self.r.hget('loaded_malicious_ips', ip)
-        return ip_description
-
-    def set_profile_as_malicious(
-        self, profileid: str, description: str
-    ) -> None:
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        # Add description to this malicious ip profile.
-        self.r.hset(profileid, 'labeled_as_malicious', description)
 
     def is_profile_malicious(self, profileid: str) -> str:
         if not profileid:
@@ -2460,6 +2328,21 @@ class Database(ProfilingFlowsDatabase, object):
         data = json.dumps(data)
         self.rcache.hset('TI_files_info', file, data)
 
+    def set_last_update_time(self, file: str, time: float):
+        """
+        sets the 'time' of last update of the given file
+        :param file: ti file
+        """
+        if file_info := self.rcache.hget('TI_files_info', file):
+            # update an existin time
+            file_info = json.loads(file_info)
+            file_info.update({"time": time})
+            self.rcache.hset('TI_files_info', file, json.dumps(file_info))
+            return
+
+        # no cached info about this file
+        self.rcache.hset('TI_files_info', file, json.dumps({"time": time}))
+
     def get_TI_file_info(self, file):
         """
         Get TI file info
@@ -2475,11 +2358,9 @@ class Database(ProfilingFlowsDatabase, object):
     def delete_file_info(self, file):
         self.rcache.hdel('TI_files_info', file)
 
-    def set_asn_cache(self, asn, asn_range) -> None:
+    def set_asn_cache(self, asn: str, asn_range: str) -> None:
         """
         Stores the range of asn in cached_asn hash
-        :param asn: str
-        :param asn_range: str
         """
         self.rcache.hset('cached_asn', asn, asn_range)
 
@@ -2714,24 +2595,6 @@ class Database(ProfilingFlowsDatabase, object):
         :param network_evaluation: a dict with {'score': ..,'confidence': .., 'ts': ..} taken from a blame report
         """
         self.rcache.hset('p2p-received-blame-reports', ip, network_evaluation)
-
-    def set_score_confidence(self, ip: str, threat_level: str, confidence):
-        """
-        Function to set the score and confidence of the given ip in the db when it causes an evidence
-        These 2 values will be needed when sharing with peers
-        :param threat_level: low, medium, high, etc.
-        :apram confidence: from 0 to 1 how sure are we of the score?
-        """
-        # get the numerical value of this threat level
-        score = utils.threat_levels[threat_level.lower()]
-        score_confidence = {'score': score, 'confidence': confidence}
-        cached_ip_data = self.getIPData(ip)
-        if not cached_ip_data:
-            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
-        else:
-            # append the score and conf. to the already existing data
-            cached_ip_data.update(score_confidence)
-            self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
 
     def store_zeek_path(self, path):
         """used to store the path of zeek log files slips is currently using"""

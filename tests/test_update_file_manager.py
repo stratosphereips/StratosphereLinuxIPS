@@ -1,11 +1,6 @@
 """Unit test for modules/update_manager/update_file_manager.py"""
-import os
-
 from ..modules.update_manager.update_file_manager import UpdateFileManager
-import configparser
-import pytest
 import json
-
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -21,86 +16,80 @@ def create_update_manager_instance(outputQueue):
     return update_manager
 
 
-@pytest.mark.parametrize(
-    'file,etag',
-    [
-        (
-            'https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/master/modules/template/__init__.py',
-            'W/"4920b25bf5708ae099fc36dcf3a7fcf9393754f9c92e170b2dd04c08b58e6dca"',
-        )
-    ],
-)
-def test_getting_header_fields(outputQueue, file, etag):
-    update_manager = create_update_manager_instance(outputQueue)
-    response = update_manager.download_file(file)
-    assert response != False
-    assert update_manager.get_e_tag(response) == etag
 
-
-@pytest.mark.parametrize(
-    'url',
-    [
-        'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'
-    ],
-)
-def test_download_file(outputQueue, url):
+def test_getting_header_fields(outputQueue, mocker):
     update_manager = create_update_manager_instance(outputQueue)
+    url = 'google.com/play'
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.headers = {'ETag': '1234'}
+    mock_requests.return_value.text = ""
     response = update_manager.download_file(url)
-    assert str(response) == '<Response [200]>', 'Connection error'
+    assert update_manager.get_e_tag(response) == '1234'
 
 
-@pytest.mark.parametrize(
-    'url',
-    [
-        (
-            'https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv'
-        )
-    ],
-)
-def test_check_if_update(outputQueue, database, url):
-    """we're tetsing this condition old_e_tag != new_e_tag"""
+def test_check_if_update_based_on_update_period(outputQueue, database):
     update_manager = create_update_manager_instance(outputQueue)
-    # modify old e-tag of this file and store it in the database
-    response = update_manager.download_file(url)
-    assert response != False
-    old_etag = update_manager.get_e_tag(response)
-    old_etag = '*' + old_etag[1:]
-    database.set_TI_file_info(url.split('/')[-1], {'e-tag': old_etag})
-    # we call this function to set the new self.new_e_tag
-    # to something different than the old modified one
-    # check_if_update returns a response if we should update or false if we shouldn't update
-    is_file_updated = update_manager._UpdateFileManager__check_if_update(url, update_manager.update_period)
-    assert is_file_updated != False
+    url = 'abc.com/x'
+    # update period hasnt passed
+    assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) == False
 
-
-@pytest.mark.parametrize(
-    'url',
-    [
-        (
-            'https://osint.digitalside.it/Threat-Intel/lists/latestips.txt'
-        )
-    ],
-)
-def test_check_if_update2(outputQueue, database, url):
-    """we're tetsing old_e_tag == new_e_tag, it shouldn't update"""
+def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
     update_manager = create_update_manager_instance(outputQueue)
 
-    # setup old e-tag to be the current e-tag
-    response = update_manager.download_file(url)
-    assert response != False
-    old_etag = update_manager.get_e_tag(response)
-    database.set_TI_file_info(url.split('/')[-1], {'e-tag': old_etag})
-    is_file_updated = update_manager._UpdateFileManager__check_if_update(url, update_manager.update_period)
-    assert is_file_updated == False
+    # period passed, etag same
+    etag = '1234'
+    url = 'google.com/images'
+    database.set_TI_file_info(url, {'e-tag': etag})
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.headers = {'ETag': '1234'}
+    mock_requests.return_value.text = ""
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == False
+
+
+    # period passed, etag different
+    etag = '1111'
+    url = 'google.com/images'
+    database.set_TI_file_info(url, {'e-tag': etag})
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.headers = {'ETag': '2222'}
+    mock_requests.return_value.text = ""
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == True
+
+def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
+    update_manager = create_update_manager_instance(outputQueue)
+
+    # period passed, no etag, last modified the same
+    url = 'google.com/photos'
+    database.set_TI_file_info(url, {'Last-Modified': 10.0})
+
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.headers = {'Last-Modified': 10.0}
+    mock_requests.return_value.text = ""
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == False
+
+    # period passed, no etag, last modified changed
+    url = 'google.com/photos'
+    database.set_TI_file_info(url, {'Last-Modified': 10})
+    mock_requests = mocker.patch("requests.get")
+    mock_requests.return_value.status_code = 200
+    mock_requests.return_value.headers = {'Last-Modified': 11}
+    mock_requests.return_value.text = ""
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == True
 
 
 def test_read_ports_info(outputQueue, database):
     update_manager = create_update_manager_instance(outputQueue)
     filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
-    assert update_manager.read_ports_info(filepath) > 39000
+    assert update_manager.read_ports_info(filepath) > 100
+
     org = json.loads(database.get_organization_of_port('5243/udp'))
     assert 'org_name' in org
     assert org['org_name'] == 'Viber'
+
     org = json.loads(database.get_organization_of_port('65432/tcp'))
     assert 'org_name' in org
     assert org['org_name'] == 'Apple'

@@ -16,28 +16,16 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
-import multiprocessing
-import sys
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database.database import __database__
+import multiprocessing
+import sys
 import os
 import threading
 import time
-from slips_files.core.database.database import __database__
 import json
-
-
-def timing(f):
-    """Function to measure the time another function takes. It should be used as decorator: @timing"""
-
-    def wrap(*args):
-        time1 = time.time()
-        ret = f(*args)
-        time2 = time.time()
-        print('function took {:.3f} ms'.format((time2 - time1) * 1000.0))
-        return ret
-
-    return wrap
+import traceback
 
 
 # Logs output Process
@@ -68,8 +56,6 @@ class LogsProcess(multiprocessing.Process):
         __database__.setOutputQueue(self.outputqueue)
         self.mainfoldername = mainfoldername
         self.timeline_first_index = {}
-        # self.stop_counter = 0
-        self.is_timline_file = False
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -151,8 +137,7 @@ class LogsProcess(multiprocessing.Process):
                 # The timer variable didn't exist, so just end
                 pass
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(type(inst)))
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(inst))
+            self.outputqueue.put('01|logs|\t[Logs] {}'.format(traceback.print_exc()))
             sys.exit(1)
             return True
 
@@ -277,8 +262,7 @@ class LogsProcess(multiprocessing.Process):
             return True
         except Exception as inst:
             self.print('Error in addDataToFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(), 0, 1)
             sys.exit(1)
 
     def create_all_flow_possibilities(self) -> dict:
@@ -617,7 +601,7 @@ class LogsProcess(multiprocessing.Process):
                     for key, evidence_details in evidence.items():
                         evidence_details = json.loads(evidence_details)
                         # example of a key  'dport:32432:PortScanType1'
-                        key = f'{evidence_details["type_detection"]}:{evidence_details["detection_info"]}:{evidence_details["type_evidence"]}'
+                        key = f'{evidence_details["attacker_direction"]}:{evidence_details["attacker"]}:{evidence_details["evidence_type"]}'
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
                             '\tEvidence Description: {}. Confidence: {}. Threat Level: {} (key:{})'.format(
@@ -814,6 +798,7 @@ class TimerThread(threading.Thread):
             )
             self.outputqueue.put(f'01|[Logs] {type(inst)}')
             self.outputqueue.put('01|[Logs] {}'.format(inst))
+            self.outputqueue.put('01|[Logs] {}'.format(traceback))
             sys.exit(1)
             return True
 

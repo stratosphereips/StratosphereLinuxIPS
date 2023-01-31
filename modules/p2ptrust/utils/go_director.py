@@ -429,7 +429,6 @@ class GoDirector:
         # with the width from slips.conf and the starttime as the report time
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
-            # print(f"@@@@@@@@@@@@@@@@@@ created profile for {key} reported by {report_time} .. {report_time} .. {self.width}")
             __database__.addProfile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 
@@ -437,9 +436,9 @@ class GoDirector:
         """
         set evidence for the newly created attacker profile stating that it attacked another peer
         """
-        type_detection = 'srcip'
-        detection_info = ip
-        type_evidence = 'P2PReport'
+        attacker_direction = 'srcip'
+        attacker = ip
+        evidence_type = 'P2PReport'
         threat_level = utils.threat_level_to_string(score)
         category = 'Anomaly.Connection'
 
@@ -465,19 +464,8 @@ class GoDirector:
             twid = __database__.get_timewindow(timestamp, profileid_of_attacker)
 
         uid = ''
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid_of_attacker,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid_of_attacker, twid=twid, uid=uid)
 
 
     def process_go_update(self, data: dict) -> None:

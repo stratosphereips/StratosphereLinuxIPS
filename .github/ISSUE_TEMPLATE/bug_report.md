@@ -24,17 +24,16 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Branch**
+Master or Develop?
 
-**Desktop (please complete the following information):**
+**Environment (please complete the following information):**
  - OS: [e.g. iOS]
- - Browser [e.g. chrome, safari]
  - Version [e.g. 22]
+ - Python version [e.g. 3.8]
+ - Are you running slips in docker or locally? [yes/no]
+ - Docker version (if running slips in docker) [e.g. 20.10.22]
+ - Slips docker image used (if running slips in docker) [e.g. macosm1-image, macosm1-P2P-image, ubuntu-image, dependency-image]
 
-**Smartphone (please complete the following information):**
- - Device: [e.g. iPhone6]
- - OS: [e.g. iOS8.1]
- - Browser [e.g. stock browser, safari]
- - Version [e.g. 22]
 
 **Additional context**
 Add any other context about the problem here.

@@ -1,0 +1,53 @@
+# File format:
+# "Feed","Threat Level", "Tags"
+#         Feed: URL from where to get Threat Intelligence data.
+#               Each of these files will be downloaded and added to slips.
+#         Threat Level: supported values are info, low , medium, high or critical.
+#         Tags: which category is this feed e.g. phishing, adtrackers, etc...
+#               format is ['tag1', 'tag2']
+# TI files commented using # may be processed as they're still in our database.
+# Use ; for commenting TI files instead of # to completely remove it from our database.
+https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_blacklist_for_IPs_seen_last_24_hours.csv,medium, ['phishing','honeypot']
+https://mcfp.felk.cvut.cz/publicDatasets/CTU-AIPP-BlackList/Todays-Blacklists/AIP_historical_blacklist_prioritized_by_newest_attackers.csv,medium, ['phishing','honeypot']
+https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/strangereallintel-cyberthreatintel.csv,medium, ['phishing']
+https://raw.githubusercontent.com/AssoEchap/stalkerware-indicators/master/generated/network.csv,medium, ['stalkerware']
+https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/adserversandtrackers.csv,medium, ['adtrackers']
+https://raw.githubusercontent.com/stratosphereips/Civilsphere/main/threatintel/civilsphereindicators.csv,medium, ['apt']
+https://raw.githubusercontent.com/botherder/targetedthreats/master/targetedthreats.csv,medium, ['apt']
+https://osint.digitalside.it/Threat-Intel/lists/latestdomains.txt,medium, ['honeypot']
+https://osint.digitalside.it/Threat-Intel/lists/latestips.txt,medium, ['honeypot']
+https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt,medium, ['honeypot']
+https://raw.githubusercontent.com/stamparm/ipsum/master/ipsum.txt,medium, ['honeypot']
+https://raw.githubusercontent.com/ktsaou/blocklist-ipsets/master/firehol_level1.netset,low, ['honeypot']
+https://nerd.cesnet.cz/nerd/data/bad_ips.txt,medium, ['honeypot']
+https://lists.blocklist.de/lists/all.txt,medium, ['honeypot']
+https://lists.blocklist.de/lists/ssh.txt,medium, ['honeypot']
+https://lists.blocklist.de/lists/mail.txt,medium, ['honeypot']
+https://lists.blocklist.de/lists/bruteforcelogin.txt,medium, ['honeypot']
+https://feodotracker.abuse.ch/downloads/ipblocklist.csv,medium, ['honeypot']
+https://reputation.alienvault.com/reputation.generic,medium, ['honeypot']
+https://raw.githubusercontent.com/anudeepND/blacklist/master/adservers.txt,medium, ['adtrackers']
+# bigdargon: Hosts block ads of Vietnamese
+https://raw.githubusercontent.com/bigdargon/hostsVN/master/option/domain.txt,medium, ['adtrackers']
+https://raw.githubusercontent.com/SweetSophia/mifitxiaomipiholelist/master/mifitblocklist.txt,medium, ['xiaomi-trackers']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/abuse-ch-ipblocklist.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/alienvault.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/binarydefense.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cobaltstrike_ips.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/compromised-ips.intel,medium, ['hacked']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cps-collected-iocs.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/illuminate.intel,medium, ['honeypot']
+https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/filetransferportals.intel,medium, ['honeypot']
+https://check.torproject.org/torbulkexitlist,medium, ['tor']
+https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/domains.txt,medium, ['spyware']
+https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v2_domains.txt,medium, ['spyware']
+https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v3_domains.txt,medium, ['spyware']
+https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v4_domains.txt,medium, ['spyware']
+https://raw.githubusercontent.com/AmnestyTech/investigations/master/2021-07-18_nso/v4_validation_domains.txt,medium, ['spyware']
+https://www.spamhaus.org/drop/edrop.txt,medium, ['spam','malicious']
+https://www.spamhaus.org/drop/dropv6.txt,medium, ['spam','malicious']
+https://www.spamhaus.org/drop/drop.txt,medium, ['spam','malicious']
+https://raw.githubusercontent.com/Orange-Cyberdefense/russia-ukraine_IOCs/main/OCD-Datalake-russia-ukraine_IOCs-ALL.csv,medium, ['Russia-Ukraine IoCs']
+https://hole.cert.pl/domains/domains.json,medium, ['malicious']
+# this feed is random, not the full version of rstcloud ips
+https://raw.githubusercontent.com/rstcloud/rstthreats/master/feeds/full/random100_ioc_ip_latest.json,medium,['good']

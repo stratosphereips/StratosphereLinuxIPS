@@ -4,7 +4,7 @@
 # Copyright (C) 2011-2015 Cesnet z.s.p.o
 # Use of this source is governed by a 3-clause BSD-style license, see LICENSE file.
 
-import json, ssl, socket, logging, logging.handlers, time
+import json, logging, logging.handlers, time
 import http.client
 from urllib.parse import urlparse
 from urllib.parse import urlencode
@@ -65,7 +65,7 @@ class Error(Exception):
                 kwargs['events'] = []
         if 'events_id' in kwargs:
             try:
-                dummy = iter(kwargs['events_id'])
+                iter(kwargs['events_id'])
             except TypeError:
                 kwargs['events_id'] = [None] * len(kwargs['events'])
         if 'send_events_limit' in kwargs:
@@ -77,7 +77,7 @@ class Error(Exception):
 
     def extend(self, method=None, req_id=None, iterable=[]):
         try:
-            dummy = iter(iterable)
+            iter(iterable)
         except TypeError:
             iterable = []       # Bad joke from server
         for e in iterable:
@@ -363,7 +363,7 @@ class Client(object):
                 data = ''
             else:
                 data = json.dumps(payload)
-        except:
+        except Exception as ex:
             return Error(
                 message='Serialization to JSON failed',
                 exc=exc_info(),
@@ -385,7 +385,7 @@ class Client(object):
         loc = '%s/%s%s' % (self.url.path, func, argurl)
         try:
             conn.request('POST', loc, data, self.headers)
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 message='Sending of request to server failed',
@@ -398,7 +398,7 @@ class Client(object):
 
         try:
             res = conn.getresponse()
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 method=func,
@@ -411,7 +411,7 @@ class Client(object):
 
         try:
             response_data = res.read()
-        except:
+        except Exception as ex:
             conn.close()
             return Error(
                 method=func,
@@ -427,7 +427,7 @@ class Client(object):
         if res.status == http.client.OK:
             try:
                 data = json.loads(response_data)
-            except:
+            except Exception as ex:
                 data = Error(
                     method=func,
                     message='JSON message parsing failed',
@@ -440,7 +440,7 @@ class Client(object):
                 data[
                     'errors'
                 ]   # trigger exception if not dict or no error key
-            except:
+            except Exception as ex:
                 data = Error(
                     method=func,
                     message='Generic server HTTP error',
@@ -488,9 +488,6 @@ class Client(object):
             ).log(self.logger, logging.INFO)
             id = None
         return id
-
-    def getDebug(self):
-        return self.log_err(self.sendRequest('getDebug'))
 
     def getInfo(self):
         res = self.sendRequest('getInfo')
@@ -641,17 +638,6 @@ class Client(object):
     __del__ = close
 
 
-def format_timestamp(epoch=None, utc=True, utcoffset=None):
-    if utcoffset is None:
-        utcoffset = -(time.altzone if time.daylight else time.timezone)
-    if epoch is None:
-        epoch = time.time()
-    if utc:
-        epoch += utcoffset
-    us = int(epoch % 1 * 1000000 + 0.5)
-    return format_time(
-        *time.gmtime(epoch)[:6], microsec=us, utcoffset=utcoffset
-    )
 
 
 def format_time(

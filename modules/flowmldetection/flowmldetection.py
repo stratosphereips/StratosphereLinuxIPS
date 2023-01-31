@@ -1,4 +1,3 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
@@ -10,7 +9,7 @@ import pickle
 import pandas as pd
 import json
 import datetime
-
+import traceback
 # Only for debbuging
 # from matplotlib import pyplot as plt
 
@@ -104,10 +103,9 @@ class Module(Module, multiprocessing.Process):
                 self.clf.partial_fit(
                     X_flow, y_flow, classes=['Malware', 'Normal']
                 )
-            except Exception as inst:
+            except Exception as ex:
                 self.print('Error while calling clf.train()')
-                self.print(type(inst))
-                self.print(inst)
+                self.print(traceback.print_exc())
 
             # See score so far in training
             score = self.clf.score(X_flow, y_flow)
@@ -126,9 +124,9 @@ class Module(Module, multiprocessing.Process):
             self.store_model()
 
         except Exception as inst:
-            self.print('Error in train()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print('Error in train()', 0 , 1)
+            self.print(traceback.print_exc(), 0, 1)
+
 
     def process_features(self, dataset):
         """
@@ -136,37 +134,27 @@ class Module(Module, multiprocessing.Process):
         Clean the dataset
         """
         try:
-            # Discard some type of flows that they dont have ports
-            dataset = dataset[dataset.proto != 'arp']
-            dataset = dataset[dataset.proto != 'ARP']
-            dataset = dataset[dataset.proto != 'icmp']
-            dataset = dataset[dataset.proto != 'igmp']
-            dataset = dataset[dataset.proto != 'ipv6-icmp']
+            # Discard some type of flows that dont have ports
+            to_discard = ['arp', 'ARP', 'icmp', 'igmp', 'ipv6-icmp']
+            for proto in to_discard:
+                dataset = dataset[dataset.proto != proto]
+
             # For now, discard the ports
-            try:
-                dataset = dataset.drop('appproto', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('daddr', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('saddr', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('ts', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('origstate', axis=1)
-            except ValueError:
-                pass
-            try:
-                dataset = dataset.drop('flow_type', axis=1)
-            except ValueError:
-                pass
+            to_drop = [
+                'appproto' ,
+                'daddr',
+                'saddr',
+                'ts',
+                'origstate',
+                'flow_type' ,
+                'smac',
+                'dmac',
+            ]
+            for field in to_drop:
+                try:
+                    dataset = dataset.drop(field, axis=1)
+                except ValueError:
+                    pass
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(
@@ -227,11 +215,10 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
             return dataset
-        except Exception as inst:
+        except Exception as ex:
             # Stop the timer
             self.print('Error in process_features()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def process_flows(self):
         """
@@ -307,11 +294,10 @@ class Module(Module, multiprocessing.Process):
 
             # Update the flow to the processed version
             self.flows = df_flows
-        except Exception as inst:
+        except Exception as ex:
             # Stop the timer
             self.print('Error in process_flows()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def process_flow(self):
         """
@@ -328,8 +314,7 @@ class Module(Module, multiprocessing.Process):
         except Exception as inst:
             # Stop the timer
             self.print('Error in process_flow()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def detect(self):
         """
@@ -350,8 +335,7 @@ class Module(Module, multiprocessing.Process):
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def store_model(self):
         """
@@ -404,27 +388,17 @@ class Module(Module, multiprocessing.Process):
         """
         confidence = 0.1
         threat_level = 'low'
-        type_detection = 'flow'
+        attacker_direction = 'flow'
         category = 'Anomaly.Traffic'
-        detection_info = (
+        attacker = (
             str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
         )
-        type_evidence = 'MaliciousFlow'
+        evidence_type = 'MaliciousFlow'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            profileid=profileid,
-            twid=twid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -501,7 +475,9 @@ class Module(Module, multiprocessing.Process):
                                 # If the user specified a label in test mode, and the label
                                 # is diff from the prediction, print in debug mode
                                 self.print(
-                                    f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                                    f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
                                     0,
                                     3,
                                 )
@@ -517,7 +493,9 @@ class Module(Module, multiprocessing.Process):
                                     uid,
                                 )
                                 self.print(
-                                    f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                                    f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
                                     0,
                                     2,
                                 )
@@ -526,8 +504,6 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
             except Exception as inst:
-                # Stop the timer
                 self.print('Error in run()')
-                self.print(type(inst), 0, 1)
-                self.print(inst, 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

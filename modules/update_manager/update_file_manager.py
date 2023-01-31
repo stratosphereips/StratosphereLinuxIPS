@@ -1,9 +1,9 @@
-import configparser
-import time
-import os
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.whitelist import Whitelist
+import time
+import os
 import json
 import ipaddress
 import validators
@@ -12,7 +12,7 @@ import requests
 import sys
 import asyncio
 import datetime
-from slips_files.core.whitelist import Whitelist
+
 
 class UpdateFileManager:
     def __init__(self, outputqueue, redis_port):
@@ -22,7 +22,6 @@ class UpdateFileManager:
         __database__.start(redis_port)
         # Get a separator from the database
         self.separator = __database__.getFieldSeparator()
-        self.new_update_time = float('-inf')
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0
@@ -50,6 +49,8 @@ class UpdateFileManager:
         # to track how many times an ip is present in different blacklists
         self.ips_ctr = {}
         self.first_time_reading_files = False
+        # store the responses of the files that should be updated when their update period passed
+        self.responses = {}
 
     def read_configuration(self):
         def read_riskiq_creds(RiskIQ_credentials_path):
@@ -76,14 +77,13 @@ class UpdateFileManager:
         if not os.path.exists(self.path_to_remote_ti_files):
             os.mkdir(self.path_to_remote_ti_files)
 
-        self.ti_feed_tuples = conf.ti_files()
-        self.url_feeds = self.get_feed_properties(self.ti_feed_tuples)
+        self.ti_feeds_path = conf.ti_files()
+        self.url_feeds = self.get_feed_details(self.ti_feeds_path)
+        self.ja3_feeds_path = conf.ja3_feeds()
+        self.ja3_feeds = self.get_feed_details(self.ja3_feeds_path)
 
-        self.ja3_feed_tuples = conf.ja3_feeds()
-        self.ja3_feeds = self.get_feed_properties(self.ja3_feed_tuples)
-
-        self.ssl_feed_tuples = conf.ssl_feeds()
-        self.ssl_feeds = self.get_feed_properties(self.ssl_feed_tuples)
+        self.ssl_feeds_path = conf.ssl_feeds()
+        self.ssl_feeds = self.get_feed_details(self.ssl_feeds_path)
 
         RiskIQ_credentials_path = conf.RiskIQ_credentials_path()
         read_riskiq_creds(RiskIQ_credentials_path)
@@ -96,22 +96,33 @@ class UpdateFileManager:
         self.online_whitelist = conf.online_whitelist()
 
 
-    def get_feed_properties(self, feeds):
+    def get_feed_details(self, feeds_path):
         """
-        Parse links, threat level and tags from slips.conf
+        Parse links, threat level and tags from the feeds_path file and return a dict with feed info
         """
+        try:
+            with open(feeds_path, 'r') as feeds_file:
+                feeds = feeds_file.read()
+        except FileNotFoundError:
+            self.print(f"Error finding {feeds_path}. Feeds won't be added to slips.")
+            return {}
+
         # this dict will contain every link and its threat_level
-        url_feeds = {}
-        # Each tuple_ is in turn a url, threat_level and tags
-        for line in feeds:
-            line = line.replace('\n', '')
-            if line == '':
+        parsed_feeds = {}
+
+        for line in feeds.splitlines():
+            if line.startswith("#"):
                 continue
+            # remove all spaces
+            line = line.strip().replace(" ",'')
+            # each line is https://abc.d/e,medium,['tag1','tag2']
+            line = line.split(',')
+            url, threat_level = line[0], line[1]
+            tags: str = " ".join(line[2:])
+            tags = tags.replace('[','').replace(']','').replace('\'',"").replace('\"',"").split(',')
+            url = utils.sanitize(url.strip())
 
-            url, threat_level, tags = line.split(', ')
-            tags = tags.replace('tags=', '')
-            threat_level = threat_level.replace('threat_level=', '').strip()
-
+            threat_level = threat_level.lower()
             # remove commented lines from the cache db
             if url.startswith(';'):
                 feed = url.split('/')[-1]
@@ -121,23 +132,20 @@ class UpdateFileManager:
                     __database__.delete_file_info(feed)
                 continue
 
-            # make sure threat level is a valid value
-            if threat_level.lower() not in (
-                'info',
-                'low',
-                'medium',
-                'high',
-                'critical',
-            ):
+            # make sure the given tl is valid
+            if not utils.is_valid_threat_level(threat_level):
                 # not a valid threat_level
                 self.print(
-                    f'Invalid threat level found in slips.conf: {threat_level} '
-                    f"for TI feed: {url}. Using 'low' instead.", 0, 1,
+                            f'Invalid threat level found in slips.conf: {threat_level} '
+                            f"for TI feed: {url}. Using 'low' instead.", 0, 1
                 )
                 threat_level = 'low'
 
-            url_feeds[url] = {'threat_level': threat_level, 'tags': tags[:30]}
-        return url_feeds
+            parsed_feeds[url] = {
+                'threat_level': threat_level,
+                'tags': tags
+            }
+        return parsed_feeds
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -174,7 +182,6 @@ class UpdateFileManager:
         # there are ports that are by default considered unknown to slips,
         # but if it's known to be used by a specific organization, slips won't consider it 'unknown'.
         # in ports_info_filepath  we have a list of organizations range/ip and the port it's known to use
-
         with open(ports_info_filepath, 'r') as f:
             line_number = 0
             while True:
@@ -186,13 +193,31 @@ class UpdateFileManager:
                 # skip the header and the comments at the begining
                 if line.startswith('#') or line.startswith('"Organization"'):
                     continue
+
                 line = line.split(',')
                 try:
                     organization, ip = line[0], line[1]
-                    portproto = f'{line[2]}/{line[3].lower().strip()}'
-                    __database__.set_organization_of_port(
-                        organization, ip, portproto
-                    )
+                    ports_range = line[2]
+                    proto = line[3].lower().strip()
+
+                    # is it a range of ports or a single port
+                    if '-' in ports_range:
+                        # it's a range of ports
+                        first_port, last_port = ports_range.split('-')
+                        first_port = int(first_port)
+                        last_port = int(last_port)
+
+                        for port in range(first_port, last_port+1):
+                            portproto = f'{port}/{proto}'
+                            __database__.set_organization_of_port(
+                                organization, ip, portproto
+                            )
+                    else:
+                        # it's a single port
+                        portproto = f'{ports_range}/{proto}'
+                        __database__.set_organization_of_port(
+                            organization, ip, portproto
+                        )
 
                 except IndexError:
                     self.print(
@@ -258,16 +283,12 @@ class UpdateFileManager:
         Used for online whitelist specified in slips.conf
         """
         # Get the last time this file was updated
-        data = __database__.get_TI_file_info('tranco_whitelist')
-        try:
-            last_update = data['time']
-            last_update = float(last_update)
-        except (TypeError, KeyError):
-            last_update = float('-inf')
+        ti_file_info = __database__.get_TI_file_info('tranco_whitelist')
+        last_update = ti_file_info.get('time', float('-inf'))
 
         now = time.time()
-
-        if last_update + self.online_whitelist_update_period  > now:
+        if last_update + self.online_whitelist_update_period > now:
+            # update period hasnt passed yet
             return False
 
         # update period passed
@@ -278,12 +299,12 @@ class UpdateFileManager:
             return False
 
         # update the timestamp in the db
-        ti_file_info = {'time': time.time()}
         __database__.set_TI_file_info(
-            'tranco_whitelist', ti_file_info
+            'tranco_whitelist',
+            {'time': time.time()}
         )
-        return response
-
+        self.responses['tranco_whitelist'] = response
+        return True
 
 
     def download_file(self, file_to_download):
@@ -292,7 +313,8 @@ class UpdateFileManager:
             try:
                 response = requests.get(file_to_download, timeout=10)
                 if response.status_code != 200:
-                    error = f'An error occurred while downloading the file {file_to_download}. Aborting'
+                    error = f'An error occurred while downloading the file {file_to_download}.' \
+                            f'status code: {response.status_code}. Aborting'
                 else:
                     return response
             except requests.exceptions.ReadTimeout:
@@ -313,93 +335,86 @@ class UpdateFileManager:
         """
         return response.headers.get('Last-Modified', False)
 
-    def __check_if_update(self, file_to_download: str, update_period):
+    def __check_if_update(self, file_to_download: str, update_period) -> bool:
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
-
-        Returns the response if the file is old and needs to be updated
+        :param file_to_download: url that contains the file to download
         """
-        file_name_to_download = file_to_download.split('/')[-1]
+        # the response will be stored in self.responses if the file is old and needs to be updated
         # Get the last time this file was updated
-        data = __database__.get_TI_file_info(file_name_to_download)
+        ti_file_info = __database__.get_TI_file_info(file_to_download)
+        last_update = ti_file_info.get('time', float('-inf'))
+        if last_update + update_period > time.time():
+            # Update period hasn't passed yet, but the file is in our db
+            self.loaded_ti_files += 1
+            return False
+
+        # update period passed
+        if 'risk' in file_to_download:
+            # updating riskiq TI data does not depend on an e-tag
+            return True
+
+        # Update only if the e-tag is different
         try:
-            last_update = data['time']
-            last_update = float(last_update)
-        except (TypeError, KeyError):
-            last_update = float('-inf')
+            # response will be used to get e-tag, and if the file was updated
+            # the same response will be used to update the content in our db
+            response = self.download_file(file_to_download)
+            if not response:
+                return False
 
-        now = time.time()
-
-        if last_update + update_period < now:
-            if (
-                'risk' in file_to_download
-            ):
-                # updating riskiq TI data does not depend on an e-tag
+            if 'maclookup' in file_to_download:
+                # no need to check the e-tag
+                # we always need to download this file for slips to get info about MACs
+                self.responses['mac_db'] = response
                 return True
 
-            # Update only if the e-tag is different
-            try:
-                file_name_to_download = file_to_download.split('/')[-1]
+            # Get the E-TAG of this file to compare with current files
+            ti_file_info = __database__.get_TI_file_info(file_to_download)
+            old_e_tag = ti_file_info.get('e-tag', '')
+            # Check now if E-TAG of file in github is same as downloaded
+            # file here.
+            new_e_tag = self.get_e_tag(response)
+            if not new_e_tag:
+                # use last modified instead
+                cached_last_modified = ti_file_info.get('Last-Modified', '')
+                new_last_modified = self.get_last_modified(response)
 
-                # response will be used to get e-tag, and if the file was updated
-                # the same response will be used to update the content in our db
-                response = self.download_file(file_to_download)
-                if not response:
+                if not new_last_modified:
+                    self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
                     return False
 
-                if 'maclookup' in file_to_download:
-                    # no need to check the e-tag
-                    return response
-
-                # Get what files are stored in cache db and their E-TAG to compare with current files
-                data = __database__.get_TI_file_info(file_name_to_download)
-                old_e_tag = data.get('e-tag', '')
-                # Check now if E-TAG of file in github is same as downloaded
-                # file here.
-                new_e_tag = self.get_e_tag(response)
-                if not new_e_tag:
-                    # use last modified instead
-                    last_modified = self.get_last_modified(response)
-                    if not last_modified:
-                        self.log(f"Error updating {file_to_download}. Doesn't have an e-tag or Last-Modified field.")
-                        return False
-                    # use last modified date instead of e-tag
-                    new_e_tag = last_modified
-
-                if old_e_tag != new_e_tag:
-                    # Our TI file is old. Download the new one.
-                    # we'll be storing this e-tag in our database
-                    return response
-
+                # use last modified date instead of e-tag
+                if new_last_modified != cached_last_modified:
+                    self.responses[file_to_download] = response
+                    return True
                 else:
-                    # old_e_tag == new_e_tag
-                    # self.print(f'File {file_to_download} is up to date. No download.', 3, 0)
-                    # Store the update time like we downloaded it anyway
-                    self.new_update_time = time.time()
-                    # Store the new etag and time of file in the database
-                    ti_file_info = {
-                        'e-tag': new_e_tag,
-                        'time': self.new_update_time,
-                    }
-                    __database__.set_TI_file_info(
-                        file_name_to_download, ti_file_info
-                    )
+                    # update the time we last checked this file for update
+                    __database__.set_last_update_time(file_to_download, time.time())
                     self.loaded_ti_files += 1
                     return False
 
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(
-                    f'Problem on update_TI_file() line {exception_line}', 0, 1
-                )
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
-        else:
-            # Update period hasn't passed yet, but the file is in our db
-            self.loaded_ti_files += 1
+            if old_e_tag != new_e_tag:
+                # Our TI file is old. Download the new one.
+                # we'll be storing this e-tag in our database
+                self.responses[file_to_download] = response
+                return True
 
+            else:
+                # old_e_tag == new_e_tag
+                # update period passed but the file hasnt changed on the server, no need to update
+                # Store the update time like we downloaded it anyway
+                # Store the new etag and time of file in the database
+                __database__.set_last_update_time(file_to_download, time.time())
+                self.loaded_ti_files += 1
+                return False
+
+        except Exception as inst:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(
+                f'Problem on update_TI_file() line {exception_line}', 0, 1
+            )
+            self.print(traceback.format_exc(), 0, 1)
         return False
 
     def get_e_tag(self, response):
@@ -533,12 +548,13 @@ class UpdateFileManager:
         __database__.add_ssl_sha1_to_IoC(malicious_ssl_certs)
         return True
 
-    async def update_TI_file(self, link_to_download: str, response) -> bool:
+    async def update_TI_file(self, link_to_download: str) -> bool:
         """
-        Update remote TI files and JA3 feeds by downloading and parsing them
-        :param response: the output of a request done with requests library
+        Update remote TI files, JA3 feeds and SSL feeds by writing them to disk and parsing them
         """
         try:
+            self.log(f'Updating the remote file {link_to_download}')
+            response = self.responses[link_to_download]
             file_name_to_download = link_to_download.split('/')[-1]
 
             # first download the file and save it locally
@@ -555,8 +571,8 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing JA3 feed {link_to_download}. Updating '
-                    f'was aborted.', 0, 1,
+                    f'Error parsing JA3 feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
 
@@ -565,8 +581,8 @@ class UpdateFileManager:
                 link_to_download, full_path
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was '
-                    f'aborted.', 0, 1,
+                    f'Error parsing feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
             elif (
@@ -574,18 +590,18 @@ class UpdateFileManager:
                     and not self.parse_ssl_feed(link_to_download, full_path)
             ):
                 self.print(
-                    f'Error parsing feed {link_to_download}. Updating was '
-                    f'aborted.', 0, 1,
+                    f'Error parsing feed {link_to_download}. '
+                    f'Updating was aborted.', 0, 1,
                 )
                 return False
+
             # Store the new etag and time of file in the database
-            self.new_update_time = time.time()
-            new_e_tag = self.get_e_tag(response)
             file_info = {
-                'e-tag': new_e_tag,
-                'time': self.new_update_time
+                'e-tag': self.get_e_tag(response),
+                'time': time.time(),
+                'Last-Modified': self.get_last_modified(response)
             }
-            __database__.set_TI_file_info(file_name_to_download, file_info)
+            __database__.set_TI_file_info(link_to_download, file_info)
 
             self.log(f'Successfully updated in DB the remote file {link_to_download}')
             self.loaded_ti_files += 1
@@ -600,22 +616,24 @@ class UpdateFileManager:
 
             return True
 
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on update_TI_file() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return False
 
     def update_riskiq_feed(self):
         """Get and parse RiskIQ feed"""
+        if not (
+                self.riskiq_email
+                and self.riskiq_key
+        ):
+            return False
         try:
-            base_url = 'https://api.riskiq.net/pt'
-            path = '/v2/articles/indicators'
-            url = base_url + path
+            self.log(f'Updating RiskIQ domains')
+            url = 'https://api.riskiq.net/pt/v2/articles/indicators'
             auth = (self.riskiq_email, self.riskiq_key)
             today = datetime.date.today()
             days_ago = datetime.timedelta(7)
@@ -626,7 +644,7 @@ class UpdateFileManager:
             }
             # Specifying json= here instead of data= ensures that the
             # Content-Type header is application/json, which is necessary.
-            response = requests.get(url, auth=auth, json=data).json()
+            response = requests.get(url, timeout=5, auth=auth, json=data).json()
             # extract domains only from the response
             try:
                 response = response['indicators']
@@ -653,8 +671,10 @@ class UpdateFileManager:
             __database__.set_TI_file_info(
                 'riskiq_domains', malicious_file_info
             )
+            self.log('Successfully updated RiskIQ domains.')
             return True
         except Exception as e:
+            self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
             self.print('An error occurred while updating RiskIQ feed.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
             return False
@@ -832,51 +852,79 @@ class UpdateFileManager:
 
         except Exception as inst:
             self.print('Problem in parse_ja3_feed()', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
             print(traceback.format_exc())
             return False
 
     def parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
+        """
+        Slips has 2 json TI feeds that are parsed differently. hole.cert.pl and rstcloud
+        """
         # to support https://hole.cert.pl/domains/domains.json
         tags = self.url_feeds[link_to_download]['tags']
         # the new threat_level is the max of the 2
         threat_level = self.url_feeds[link_to_download]['threat_level']
         filename = ti_file_path.split('/')[-1]
-        malicious_domains_dict = {}
-        with open(ti_file_path) as feed:
-            self.print(
-                f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
-            )
-            try:
-                file = json.loads(feed.read())
-            except json.decoder.JSONDecodeError:
-                # not a json file??
-                return False
 
-            for ioc in file:
-                date = ioc['InsertDate']
-                diff = utils.get_time_diff(
-                    date,
-                    time.time(),
-                    return_type='days'
+        if 'rstcloud' in link_to_download:
+            malicious_ips_dict = {}
+            with open(ti_file_path) as feed:
+                self.print(
+                    f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
                 )
+                for line in feed.read().splitlines():
+                    try:
+                        line: dict = json.loads(line)
+                    except json.decoder.JSONDecodeError:
+                        # invalid json line
+                        continue
+                    # each ip in this file has it's own source and tag
+                    src = line["src"]["name"][0]
+                    malicious_ips_dict[line['ip']['v4']] = json.dumps(
+                        {
+                            'description': '',
+                            'source': f'{filename}, {src}',
+                            'threat_level': threat_level,
+                            'tags': f'{line["tags"]["str"]}, {tags}',
+                        }
+                    )
 
-                if diff > self.interval:
-                    continue
-                domain = ioc['DomainAddress']
-                if not validators.domain(domain):
-                    continue
-                malicious_domains_dict[domain] = json.dumps(
-                    {
-                        'description': '',
-                        'source': filename,
-                        'threat_level': threat_level,
-                        'tags': tags,
-                    }
+            __database__.add_ips_to_IoC(malicious_ips_dict)
+            return True
+
+
+        if 'hole.cert.pl' in link_to_download:
+            malicious_domains_dict = {}
+            with open(ti_file_path) as feed:
+                self.print(
+                    f'Reading next lines in the file {ti_file_path} for IoC', 3, 0
                 )
-            # Add all loaded malicious domains to the database
+                try:
+                    file = json.loads(feed.read())
+                except json.decoder.JSONDecodeError:
+                    # not a json file??
+                    return False
+
+                for ioc in file:
+                    date = ioc['InsertDate']
+                    diff = utils.get_time_diff(
+                        date,
+                        time.time(),
+                        return_type='days'
+                    )
+
+                    if diff > self.interval:
+                        continue
+                    domain = ioc['DomainAddress']
+                    if not validators.domain(domain):
+                        continue
+                    malicious_domains_dict[domain] = json.dumps(
+                        {
+                            'description': '',
+                            'source': filename,
+                            'threat_level': threat_level,
+                            'tags': tags,
+                        }
+                    )
             __database__.add_domains_to_IoC(malicious_domains_dict)
             return True
 
@@ -1032,7 +1080,6 @@ class UpdateFileManager:
         :param link_to_download: this link that has the IOCs we're currently parsing, used for getting the threat_level
         :param ti_file_path: this is the path where the saved file from the link is downloaded
         """
-
         try:
             # Check if the file has any content
             try:
@@ -1047,7 +1094,6 @@ class UpdateFileManager:
             malicious_ips_dict = {}
             malicious_domains_dict = {}
             malicious_ip_ranges = {}
-            # to support nsec/full-results-2019-05-15.json
             if 'json' in ti_file_path:
                 return self.parse_json_ti_feed(
                     link_to_download, ti_file_path
@@ -1247,10 +1293,11 @@ class UpdateFileManager:
                                     ],
                                 }
                             )
-                            # set the score and confidence of this ip = the same as the ones given in slips.conf
+                            # set the score and confidence of this ip in ipsinfo
+                            # and the profile of this ip to the same as the ones given in slips.conf
                             # todo for now the confidence is 1
-                            __database__.set_score_confidence(
-                                data, threat_level, 1
+                            __database__.update_threat_level(
+                                f'profile_{data}', threat_level, 1
                             )
                     elif data_type == 'ip_range':
                         # make sure we're not blacklisting a private or multicast ip range
@@ -1291,7 +1338,7 @@ class UpdateFileManager:
                                     ),
                                 )
                             )
-                            malicious_ips_dict[str(data)] = json.dumps(
+                            malicious_ip_ranges[str(data)] = json.dumps(
                                 {
                                     'description': old_range_info[
                                         'description'
@@ -1330,9 +1377,6 @@ class UpdateFileManager:
                 f'Problem while updating {link_to_download} line '
                 f'{exception_line}', 0, 1,
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
             self.print(traceback.format_exc(), 0, 1)
             return False
 
@@ -1409,9 +1453,14 @@ class UpdateFileManager:
         self.print(f'Number of repeated IPs in 2 blacklists: {ips_in_2_bl}', 2, 0)
         self.print(f'Number of repeated IPs in 3 blacklists: {ips_in_3_bl}', 2, 0)
 
-    def update_mac_db(self, response):
+    def update_mac_db(self):
+        """
+        Updates the mac db using the response stored in self.response
+        """
+        response = self.responses['mac_db']
         if response.status_code != 200:
-            return
+            return False
+
         self.log(f'Updating the MAC database.')
         path_to_mac_db = 'databases/macaddress-db.json'
 
@@ -1420,49 +1469,54 @@ class UpdateFileManager:
         with open(path_to_mac_db, 'w') as mac_db:
             mac_db.write(mac_info)
 
-        __database__.set_TI_file_info(os.path.basename(self.mac_db_link), {'time': time.time()})
+        __database__.set_TI_file_info(
+            self.mac_db_link,
+            {'time': time.time()}
+        )
+        return True
 
-
-    def update_online_whitelist(self, response):
+    def update_online_whitelist(self):
         """
-        Updates online tranco whitelist defined in slips.conf online_whitelist key in the db
+        Updates online tranco whitelist defined in slips.conf online_whitelist key
         """
+        response = self.responses['tranco_whitelist']
         # write to the file so we don't store the 10k domains in memory
         online_whitelist_download_path = os.path.join(self.path_to_remote_ti_files, 'tranco-top-10000-whitelist')
         with open(online_whitelist_download_path, 'w') as f:
             f.write(response.text)
 
+        # parse the downloaded file and store it in the db
         with open(online_whitelist_download_path, 'r') as f:
             while line := f.readline():
                 domain = line.split(',')[1]
                 __database__.store_tranco_whitelisted_domain(domain)
 
+        os.remove(online_whitelist_download_path)
+
     async def update(self) -> bool:
         """
         Main function. It tries to update the TI files from a remote server
+        we update different types of files remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
         """
+        if self.update_period <= 0:
+            # User does not want to update the malicious IP list.
+            self.print(
+                'Not Updating the remote file of malicious IPs and domains. '
+                'update period is <= 0.', 0, 1,
+            )
+            return False
+
         try:
-            if self.update_period <= 0:
-                # User does not want to update the malicious IP list.
-                self.print(
-                    'Not Updating the remote file of malicious IPs and domains '
-                    'because the update period is <= 0.', 0, 1,
-                )
-                return False
             self.log('Checking if we need to download TI files.')
-            # we update different types of files
-            # remote TI files, remote JA3 feeds, RiskIQ domains and local slips files
-            # ############### Update slips local files ################
+
             # self.update_ports_info()
             # self.update_org_files()
 
-            ############### Update slips local files ################
-            if response := self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
-                self.update_mac_db(response)
+            if self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
+                self.update_mac_db()
 
-            ############### Update online whitelist ################
-            if response := self.__check_if_update_online_whitelist():
-                self.update_online_whitelist(response)
+            if self.__check_if_update_online_whitelist():
+                self.update_online_whitelist()
 
             ############### Update remote TI files ################
             # Check if the remote file is newer than our own
@@ -1473,11 +1527,7 @@ class UpdateFileManager:
             files_to_download.update(self.ssl_feeds)
 
             for file_to_download in files_to_download.keys():
-                file_to_download = file_to_download.strip()
-                file_to_download = utils.sanitize(file_to_download)
-
-                response = self.__check_if_update(file_to_download, self.update_period)
-                if response:
+                if self.__check_if_update(file_to_download, self.update_period):
                     # failed to get the response, either a server problem
                     # or the file is up to date so the response isn't needed
                     # either way __check_if_update handles the error printing
@@ -1485,29 +1535,18 @@ class UpdateFileManager:
                     # this run wasn't started with existing ti files in the db
                     self.first_time_reading_files = True
 
-                    self.log(
-                        f'Downloading the remote file {file_to_download}'
-                    )
                     # every function call to update_TI_file is now running concurrently instead of serially
                     # so when a server's taking a while to give us the TI feed, we proceed
                     # to download the next file instead of being idle
                     task = asyncio.create_task(
-                        self.update_TI_file(file_to_download, response)
+                        self.update_TI_file(file_to_download)
                     )
-
-            ############### Update RiskIQ domains ################
+            #######################################################
             # in case of riskiq files, we don't have a link for them in ti_files, We update these files using their API
             # check if we have a username and api key and a week has passed since we last updated
-            if (
-                self.riskiq_email
-                and self.riskiq_key
-                and self.__check_if_update('riskiq_domains', self.riskiq_update_period)
-            ):
-                self.log(f'Updating RiskIQ domains')
-                if self.update_riskiq_feed():
-                    self.log('Successfully updated RiskIQ domains.')
-                else:
-                    self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
+            if self.__check_if_update('riskiq_domains', self.riskiq_update_period):
+                self.update_riskiq_feed()
+
             # wait for all TI files to update
             try:
                 await task

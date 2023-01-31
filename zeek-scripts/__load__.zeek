@@ -5,7 +5,8 @@
 @load ./icmp-scans.zeek
 @load ./detect_DoH.zeek
 @load protocols/conn/mac-logging.zeek
-
+# Add SHA256 hash for files
+@load ./hash_sha256
 
 ########################################
 ##! Local site policy. Customize as appropriate.

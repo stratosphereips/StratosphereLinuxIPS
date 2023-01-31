@@ -44,7 +44,7 @@ RUN apt update && apt install -y --no-install-recommends \
 
 
 RUN git clone https://github.com/stratosphereips/StratosphereLinuxIPS ${SLIPS_DIR}/
-RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
+RUN (cd ${SLIPS_DIR} && git checkout origin/alya-fix-ci && chmod 774 slips.py)
 
 
 # Upgrade pip3 and install slips requirements
@@ -53,9 +53,11 @@ RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
 
 
 # For Kalipso:
-RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
-RUN apt install -y --no-install-recommends nodejs
-RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
+RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+
+# Switch to kalipso dir to install node dependencies
+WORKDIR ${SLIPS_DIR}/modules/kalipso
+RUN npm install
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
