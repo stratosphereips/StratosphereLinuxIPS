@@ -7,6 +7,7 @@
 @load protocols/conn/mac-logging.zeek
 # Add SHA256 hash for files
 @load ./hash_sha256
+@load ./log_gw.zeek
 
 ########################################
 ##! Local site policy. Customize as appropriate.
