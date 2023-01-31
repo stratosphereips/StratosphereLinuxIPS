@@ -1,8 +1,5 @@
 var NAVTREEINDEX3 =
 {
-"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a3e9c1bc591097c3addd927ac394840e7":[1,0,0,1,18,0,0,0],
-"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a45ba33f830b8b01f7867d4ec47d47aaa":[1,0,0,1,18,0,0,6],
-"class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a4df6c0e140ae9de04b66183df1f8eeb7":[1,0,0,1,18,0,0,20],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a62060f1813d4a7378086d779f4e5b8c0":[1,0,0,1,18,0,0,27],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a76ad14c9f3a757bbff11e672d83e488a":[1,0,0,1,18,0,0,22],
 "class_stratosphere_linux_i_p_s_1_1modules_1_1virustotal_1_1virustotal_1_1_module.html#a7ccb9ba922f57bdc9a570484c1c2faa0":[1,0,0,1,18,0,0,18],
@@ -249,5 +246,8 @@ var NAVTREEINDEX3 =
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5131705f4866ba16e2cd8fa385a944be":[1,0,0,3,1,0,1,0,72],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a51a22653cda0f481a4653e105bcd043c":[1,0,0,3,1,0,1,0,27],
 "class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5330d0fd3b73d3d9c9629bc0ef7cbd1a":[1,0,0,3,1,0,1,0,180],
-"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5521592c596e0022bcf6392bb54574fa":[1,0,0,3,1,0,1,0,44]
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5521592c596e0022bcf6392bb54574fa":[1,0,0,3,1,0,1,0,44],
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5713f6ce17e0169a3a0a4081aa76079b":[1,0,0,3,1,0,1,0,170],
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5d84cee8aaeff122719681eafebd7bf6":[1,0,0,3,1,0,1,0,173],
+"class_stratosphere_linux_i_p_s_1_1slips__files_1_1core_1_1database_1_1database_1_1_database.html#a5e90e3cf7a42210bae0d8c9503405885":[1,0,0,3,1,0,1,0,32]
 };
