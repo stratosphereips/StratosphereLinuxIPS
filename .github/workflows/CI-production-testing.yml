@@ -1,15 +1,8 @@
 name: CI-production
 
 on:
-  push:
-    branches:
-    - 'alya-fix-ci'
-    - 'master'
-    - '!develop'
-
   pull_request:
     branches:
-    - 'alya-fix-ci'
     - 'master'
     - '!develop'
 
@@ -27,9 +20,9 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        ref: 'alya-fix-ci'
-      # Fetch all history for all tags and branches
-      #    fetch-depth: ''
+        ref: 'develop'
+        # Fetch all history for all tags and branches
+        fetch-depth: ''
 
     - name: Install slips dependencies
       run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
@@ -73,7 +66,7 @@ jobs:
     - name: Config file tests
       run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
-     #Reaching this step means all unit tests passed outtside of docker
+     #Reaching this step means all unit tests passed out side of docker
 
   test_slips_in_docker:
     # runs the tests in a docker(built by this job) on stop of a GH VM
@@ -89,14 +82,7 @@ jobs:
     # By default it checks out only one commit
     - uses: actions/checkout@v3
       with:
-        ref: 'alya-fix-ci'
-
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      with:
-        username: stratosphereips
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
+        ref: 'develop'
 
     # build slips from ubuntu dockerfile, but don't push
     - name: Build our ubuntu image from dockerfile
@@ -105,7 +91,7 @@ jobs:
       with:
         context: ./
         file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/tmp_slips:latest, stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: false
 
     # use the built image to run unit tests inside docker
@@ -114,92 +100,13 @@ jobs:
     - name: Run unit tests inside docker
       uses: addnab/docker-run-action@v3
       with:
-        image: stratosphereips/tmp_slips:latest
+        image: stratosphereips/slips:latest
         run: |
-          git pull & git checkout origin/alya-fix-ci
+          git pull & git checkout origin/develop
           redis-server --daemonize yes
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
-
-    # push one with the latest version as the tag, and another one with 'latest' as the tag
-    - name: Push slips images to dockerhub
-      env:
-        slips_image: stratosphereips/tmp_slips:${{ env.SLIPS_VERSION }}
-      run: |
-        docker push $slips_image
-        docker push stratosphereips/tmp_slips:latest
-
-
-    # Set up Docker Buildx with docker-container driver is required
-    # at the moment to be able to use a subdirectory with Git context
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-
-    # build p2p image for ubuntu from dockerfile
-    - name: Build our p2p image from dockerfile
-      id: docker_build_p2p_for_slips
-      uses: docker/build-push-action@v3
-      with:
-        allow: network.host
-        context: ./
-        file: ./docker/P2P-image/Dockerfile
-        tags: |
-          stratosphereips/tmp_slips_p2p:latest
-          stratosphereips/tmp_slips_p2p:${{ env.SLIPS_VERSION }}
-        push: true
-
-  update_code_docs:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-        with:
-          ref: 'code-docs-branch'
-          fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
-
-      - name: install doxygen and python
-        run: |
-          sudo apt update 
-          sudo apt install python3 doxygen
-
-      # deletes old docs, generates new ones, and adds all new files to git
-      - name: update docs
-        run: python3 docs/generate_docs.py
-
-      # commit and push to code docs branch
-      - name: Commit & Push changes
-        uses: actions-js/push@master
-        with:
-          github_token: ${{ secrets.GH_TOKEN_FOR_COMMITTING_AND_PUSHING_CODE_DOCS }}
-          message: '[Github actions] Update code docs'
-          branch: 'code-docs-branch'
-
-  build_and_push_dependency_image:
-
-    runs-on: ubuntu-latest
-
-    steps:
-
-    # clone slips and checkout branch
-    - uses: actions/checkout@v3
-      with:
-        ref: 'alya-fix-ci'
-
-    - name: Login to DockerHub
-      uses: docker/login-action@v2
-      with:
-        username: stratosphereips
-        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-
-    - name: Build and push latest dependency image
-      id: docker_build_dependency_image
-      uses: docker/build-push-action@v2
-      with:
-        context: ./
-        file: ./docker/dependency-image/Dockerfile
-        tags: stratosphereips/tmp_slips_dependencies:latest
-        push: true
 
