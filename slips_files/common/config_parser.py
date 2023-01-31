@@ -242,17 +242,13 @@ class ConfigParser(object):
         delete = self.read_configuration(
             'parameters', 'delete_zeek_files', 'no'
         )
-        return (
-            False if 'no' in delete.lower() else True
-        )
+        return 'yes' in delete.lower()
 
     def store_zeek_files_copy(self):
         store_copy = self.read_configuration(
                 'parameters', 'store_a_copy_of_zeek_files', 'yes'
             )
-        return (
-            False if 'no' in store_copy.lower() else True
-        )
+        return 'yes' in store_copy.lower()
 
     def get_tw_width_as_float(self):
         try:
@@ -276,7 +272,7 @@ class ConfigParser(object):
                 twid_width = 9999999999
         return twid_width
 
-    def disabled_detections(self):
+    def disabled_detections(self) -> list:
         disabled_detections = self.read_configuration(
                 'DisabledAlerts', 'disabled_detections', []
             )

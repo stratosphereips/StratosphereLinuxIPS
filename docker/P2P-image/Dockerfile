@@ -9,6 +9,9 @@ ENV IS_IN_A_DOCKER_CONTAINER True
 # destionation dir for slips inside the container
 ENV SLIPS_DIR /StratosphereLinuxIPS
 
+
+
+
 # Install wget and add Zeek repository to our sources.
 RUN apt update && apt install -y --no-install-recommends \
     wget \
@@ -44,10 +47,14 @@ RUN apt update && apt install -y --no-install-recommends \
     yara \
  && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
 
+
 RUN git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS/ ${SLIPS_DIR}/
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
+RUN git checkout origin/alya-fix-ci
+
 RUN chmod 774 slips.py &&  git submodule init && git submodule update
+
 
 # set use_p2p to yes in the config file
 RUN sed -i 's/use_p2p = no/use_p2p = yes/g' config/slips.conf
@@ -69,6 +76,5 @@ RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y 
 # Switch to kalipso dir to install node dependencies
 WORKDIR ${SLIPS_DIR}/modules/kalipso
 RUN npm install
-
 
 CMD redis-server --daemonize yes && /bin/bash

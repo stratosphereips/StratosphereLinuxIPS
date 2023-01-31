@@ -1,0 +1,3 @@
+{"ts":1632302615.444328,"host":"192.168.1.247","software_type":"SSH::CLIENT","name":"OpenSSH","version.major":8,"version.minor":1,"unparsed_version":"OpenSSH_8.1"}
+{"ts":1632302619.444328,"host":"192.168.1.247","software_type":"SSH::CLIENT","name":"OpenSSH","version.major":9,"version.minor":1,"unparsed_version":"OpenSSH_9.1"}
+{"ts":1632328801.587939,"host":"192.168.1.1","host_p":1900,"software_type":"HTTP::SERVER","name":"Linux","version.major":2,"version.minor":6,"version.minor2":36,"version.addl":"UPnP/1","unparsed_version":"Linux/2.6.36, UPnP/1.0, Portable SDK for UPnP devices/1.6.19"}

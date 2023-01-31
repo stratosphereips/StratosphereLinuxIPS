@@ -279,8 +279,6 @@ class Module(Module, multiprocessing.Process):
                 if vendor:= response.text:
                     return vendor
             return False
-                # If there is no match in the online database,
-                # you will receive an empty response with a status code of HTTP/1.1 204 No Content
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,

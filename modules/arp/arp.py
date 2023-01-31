@@ -52,6 +52,12 @@ class Module(Module, multiprocessing.Process):
         # wait 10s for mmore arp scan evidence to come
         self.time_to_wait = 10
 
+
+    def test(self):
+        """test function """
+        pass
+
+
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.
