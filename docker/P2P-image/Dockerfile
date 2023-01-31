@@ -77,4 +77,5 @@ RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y 
 WORKDIR ${SLIPS_DIR}/modules/kalipso
 RUN npm install
 
+WORKDIR ${SLIPS_DIR}
 CMD redis-server --daemonize yes && /bin/bash
