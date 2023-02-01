@@ -2084,6 +2084,16 @@ class Database(ProfilingFlowsDatabase, object):
         if malicious_ip_ranges:
             self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
 
+    def add_asn_to_IoC(self, malicious_ASNs: dict):
+        """
+        Store a group of ASN in the db as they were obtained from an IoC source
+        :param malicious_ip_ranges: is {range: json.dumps{'source':..,'tags':..,
+                                                            'threat_level':... ,'description'}}
+        """
+        if malicious_ASNs:
+            self.rcache.hmset('IoC_ASNs', malicious_ASNs)
+
+
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
         Store a group of ja3 in the db
