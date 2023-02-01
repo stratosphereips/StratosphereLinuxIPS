@@ -253,6 +253,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         data_file_name = ti_file_path.split('/')[-1]
         malicious_ips = {}
+        malicious_asns = {}
         malicious_domains = {}
         malicious_ip_ranges = {}
         # used for debugging
@@ -279,7 +280,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 ioc, threat_level, description, = (
                     data[0],
                     data[1].lower(),
-                    data[2],
+                    data[2].strip(),
                 )
 
                 # validate the threat level taken from the user
@@ -328,11 +329,20 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             'tags': 'local TI file',
                         }
                     )
+                elif data_type == 'asn':
+                    malicious_asns[ioc] = json.dumps(
+                            {
+                                'description': description,
+                                'source': data_file_name,
+                                'threat_level': threat_level,
+                                'tags': 'local TI file',
+                            }
+                        )
 
                 else:
                     # invalid ioc, skip it
                     self.print(
-                        f'Error while reading the TI file {local_ti_file}.'
+                        f'Error while reading the TI file {ti_file_path}.'
                         f' Line {line_number} has invalid data: {ioc}',
                         0, 1,
                     )
@@ -342,6 +352,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # Add all loaded malicious domains to the database
         __database__.add_domains_to_IoC(malicious_domains)
         __database__.add_ip_range_to_IoC(malicious_ip_ranges)
+        __database__.add_asn_to_IoC(malicious_asns)
         return True
 
     def __delete_old_source_IPs(self, file):
