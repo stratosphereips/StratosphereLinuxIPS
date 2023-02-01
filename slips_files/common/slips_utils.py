@@ -94,7 +94,9 @@ class Utils(object):
         return string
 
     def detect_data_type(self, data):
-        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
+        """
+        Detects the type of incoming data: ipv4, ipv6, domain, ip range, asn, md5, etc
+        """
         data = data.strip()
         try:
             ipaddress.ip_address(data)
@@ -119,7 +121,6 @@ class Utils(object):
             data = data[:-1]
 
         domain = data
-
         if domain.startswith('http://'):
             data = data[7:]
         elif domain.startswith('https://'):
@@ -132,6 +133,9 @@ class Utils(object):
 
         if validators.sha256(data):
             return 'sha256'
+
+        if data.startswith("AS"):
+            return 'asn'
 
 
 
