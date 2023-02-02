@@ -1,18 +1,11 @@
-# Must imports
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
-
-
-# Your imports
+from slips_files.common.slips_utils import utils
 import time
 import ipaddress
 import ipwhois
 import json
 import requests
 import maxminddb
-
-# from dns.resolver import NoResolverConfiguration
-
 
 class ASN:
     def __init__(self):
@@ -25,26 +18,28 @@ class ASN:
             # errors are printed in IP_info
             pass
 
-    def get_cached_asn(self, ip):
+    def get_cached_asn(self, ip) -> dict:
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
         :param ip: str
+        if teh range of this ip was found, this function returns a dict with {'number' , 'org'}
         """
-        cached_asn = __database__.get_asn_cache()
-        try:
-            for asn, asn_range in cached_asn.items():
-                # convert to objects
-                ip_range = ipaddress.ip_network(asn_range)
-                try:
-                    ip = ipaddress.ip_address(ip)
-                except ValueError:
-                    # not a valid ip
-                    break
-                if ip in ip_range:
-                    return asn
-        except AttributeError:
-            # cached_asn is not found
+        cached_asn: dict = __database__.get_asn_cache()
+        first_octet: str = utils.get_first_octet(ip)
+
+        if not cached_asn or not first_octet:
+            # invalid ip or no cached asns
             return False
+
+        if first_octet not in cached_asn:
+            return False
+
+        for range, range_info in cached_asn[first_octet]:
+            # convert to objects
+            ip_range = ipaddress.ip_network(range)
+            ip = ipaddress.ip_address(ip)
+            if ip in ip_range:
+                return range_info
 
     def update_asn(self, cached_data, update_period) -> bool:
         """
@@ -69,20 +64,25 @@ class ASN:
         :param ip: str
         return a dict with {'asn': {'asnorg':asnorg}}
         """
+        ip_info = {}
         if not hasattr(self, 'asn_db'):
-            return {'asn': {'asnorg': 'Unknown'}}
+            return ip_info
 
         asninfo = self.asn_db.get(ip)
-        data = {}
+
         try:
             # found info in geolite
-            asnorg = asninfo['autonomous_system_organization']
-            data['asn'] = {'asnorg': asnorg}
+            org = asninfo['autonomous_system_organization']
+            number = f'AS{asninfo["autonomous_system_number"]}'
+            ip_info['asn'] = {
+                'org': org,
+                'number': number
+            }
         except (KeyError, TypeError):
             # asn info not found in geolite
-            data['asn'] = {'asnorg': 'Unknown'}
+            pass
 
-        return data
+        return ip_info
 
     def cache_ip_range(self, ip) -> bool:
         """
@@ -94,8 +94,10 @@ class ASN:
             whois_info = ipwhois.IPWhois(address=ip).lookup_rdap()
             asnorg = whois_info.get('asn_description', False)
             asn_cidr = whois_info.get('asn_cidr', False)
+            asn_number = whois_info.get('as', False)
+
             if asnorg and asn_cidr not in ('', 'NA'):
-                __database__.set_asn_cache(asnorg, asn_cidr)
+                __database__.set_asn_cache(asnorg, asn_cidr, asn_number)
             return True
         except (
             ipwhois.exceptions.IPDefinedError,
@@ -113,18 +115,30 @@ class ASN:
         Get asn of an ip using ip-api.com only if the asn wasn't found in our offline db
         """
 
-        asn = {'asn': {'asnorg': 'Unknown'}}
-        ip_obj = ipaddress.ip_address(ip)
-        if ip_obj.is_private or ip_obj.is_multicast:
+        asn = {}
+        if utils.is_ignored_ip(ip):
             return asn
 
         url = 'http://ip-api.com/json/'
         try:
             response = requests.get(f'{url}/{ip}', timeout=5)
-            if response.status_code == 200:
-                ip_info = json.loads(response.text)
-                if ip_info.get('as', '') != '':
-                    asn['asn']['asnorg'] = ip_info['as']
+            if response.status_code != 200:
+                return asn
+
+            ip_info = json.loads(response.text)
+            if 'as' not in ip_info:
+                return asn
+
+            asn_info = ip_info['as'].split()
+            # usually it's somthing like AS15169 Google LLC
+            # separate the org name
+            asn.update({
+                'asn': {
+                    'number': asn_info[0],
+                    'org': " ".join(asn_info[1:])
+                }
+            })
+            return asn
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
@@ -136,23 +150,32 @@ class ASN:
 
     def get_asn(self, ip, cached_ip_info):
         """Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com"""
-
         # do we have asn cached for this range?
-        cached_asn = self.get_cached_asn(ip)
-        if not cached_asn:
-            # we don't have it cached in our db, get it from geolite
-            asn = self.get_asn_info_from_geolite(ip)
-            if asn['asn']['asnorg'] == 'Unknown':
-                # can't find asn in mmdb
-                asn = self.get_asn_online(ip)
-            cached_ip_info.update(asn)
-            # cache this range in our redis db
-            self.cache_ip_range(ip)
-        else:
+        cached_asn: dict = self.get_cached_asn(ip)
+        if cached_asn:
             # found cached asn for this ip range, store it
-            cached_ip_info.update({'asn': {'asnorg': cached_asn}})
+            cached_ip_info.update({
+                'asn': {
+                    'org': cached_asn['org'],
+                    'number': cached_asn['number'],
+                    'timestamp': time.time()
+                }
+            })
+            __database__.setInfoForIPs(ip, cached_ip_info)
 
-        # store asn info in the db
-        cached_ip_info['asn'].update({'timestamp': time.time()})
-
-        __database__.setInfoForIPs(ip, cached_ip_info)
+        # else:
+        #     # we don't have it cached in our db, get it from geolite
+        #     asn = self.get_asn_info_from_geolite(ip)
+        #     if not asn:
+        #         # can't find asn in mmdb
+        #         asn = self.get_asn_online(ip)
+        #         if asn:
+        #             cached_ip_info.update(asn)
+        #             # cache this range in our redis db
+        #             self.cache_ip_range(ip)
+        #
+        #
+        #     # store asn info in the db
+        #     cached_ip_info['asn'].update({'timestamp': time.time()})
+        #
+        #     __database__.setInfoForIPs(ip, cached_ip_info)
