@@ -42,12 +42,10 @@ def test_get_asn_info_from_geolite(database):
     ASN_info = create_ASN_Info_instance()
     # check an ip that we know is in the db
     assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == {
-        'asn': {'asnorg': 'ATT-INTERNET4'}
+        'asn': {'org': 'ATT-INTERNET4'}
     }
     # test  asn info not found in geolite
-    assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {
-        'asn': {'asnorg': 'Unknown'}
-    }
+    assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {}
 
 def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
