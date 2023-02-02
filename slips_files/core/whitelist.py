@@ -602,22 +602,24 @@ class Whitelist:
         """
         # Check if the IP in the content of the alert has ASN info in the db
         ip_data = __database__.getIPData(ip)
-        if ip_data:
-            ip_asn = ip_data.get('asn', {'asnorg': ''})[
-                'asnorg'
-            ]
-            org_asn = json.loads(
-                __database__.get_org_info(org, 'asn')
-            )
-            # make sure the asn field contains a value
-            if ip_asn not in ('', 'Unknown') and (
-                org.lower() in ip_asn.lower()
-                or ip_asn in org_asn
-            ):
-                # this ip belongs to a whitelisted org, ignore alert
-                # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip}
-                # related to {org}. {data} in {description}')
-                return True
+        if not ip_data:
+            return
+        try:
+            ip_asn = ip_data['asn']['number']
+        except KeyError:
+            return
+
+        org_asn: list = json.loads(__database__.get_org_info(org, 'asn'))
+
+        # make sure the asn field contains a value
+        if (
+            org.lower() in ip_asn.lower()
+            or ip_asn in org_asn
+        ):
+            # this ip belongs to a whitelisted org, ignore alert
+            # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip}
+            # related to {org}. {data} in {description}')
+            return True
 
     def is_srcip(self, attacker_direction):
         return attacker_direction in ('sip', 'srcip', 'sport', 'inTuple')
@@ -864,10 +866,11 @@ class Whitelist:
         except (FileNotFoundError, IOError):
             # theres no slips_files/organizations_info/{org}_asn for this org
             # see if the org has asn cached in our db
-            asn_cache = __database__.get_asn_cache()
+            asn_cache: dict = __database__.get_asn_cache()
             org_asn = []
+            # asn_cache is a dict sorted by first octet
             for octet, range_info in asn_cache.items:
-                # asn_info is a dict of ranges
+                # range_info is a serialized dict of ranges
                 range_info = json.loads(range_info)
                 for range, asn_info in range_info.items():
                     # we have the asn of this given org cached
