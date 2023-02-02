@@ -2084,14 +2084,6 @@ class Database(ProfilingFlowsDatabase, object):
         if malicious_ip_ranges:
             self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
 
-    def add_asn_to_IoC(self, malicious_ASNs: dict):
-        """
-        Store a group of ASN in the db as they were obtained from an IoC source
-        :param malicious_ip_ranges: is {range: json.dumps{'source':..,'tags':..,
-                                                            'threat_level':... ,'description'}}
-        """
-        if malicious_ASNs:
-            self.rcache.hmset('IoC_ASNs', malicious_ASNs)
 
 
     def add_ja3_to_IoC(self, ja3_dict) -> None:
@@ -2368,11 +2360,48 @@ class Database(ProfilingFlowsDatabase, object):
     def delete_file_info(self, file):
         self.rcache.hdel('TI_files_info', file)
 
-    def set_asn_cache(self, asn: str, asn_range: str) -> None:
+    def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """
         Stores the range of asn in cached_asn hash
         """
-        self.rcache.hset('cached_asn', asn, asn_range)
+
+        range_info = {
+            asn_range: {
+                'number': f'AS{asn_number}',
+                'org': org
+            }
+        }
+
+        # the ranges stored are sorted by first octet
+        if '.' in asn_range:
+            first_octet = asn_range.split('.')[0]
+        elif ':' in asn_range:
+            first_octet = asn_range.split(':')[0]
+        else:
+            # invalid ip
+            return
+
+        # this is how we store ASNs; sorted by first octet
+        """
+        {
+            '192' : {
+                '192.168.1.0/x': {'number': 'AS123', 'org':'Test'},
+                '192.168.1.0/x': {'number': 'AS123', 'org':'Test'},
+            },
+            '10': {
+                '10.0.0.0/x': {'number': 'AS123', 'org':'Test'},
+            }
+            
+        }
+        """
+        cached_asn:dict = json.loads(self.get_asn_cache())
+        if first_octet in cached_asn:
+            # we already have a mcached asn of a range that starts with the same first octet
+            cached_asn[first_octet].update(range_info)
+            self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn[first_octet]))
+        else:
+            # first time storing a range starting with the same first octet
+            self.rcache.hset('cached_asn', first_octet, json.dumps(range_info))
 
     def get_asn_cache(self):
         """
