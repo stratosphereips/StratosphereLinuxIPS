@@ -140,9 +140,9 @@ class Utils(object):
     def get_first_octet(self, ip):
         # the ranges stored are sorted by first octet
         if '.' in ip:
-            first_octet = ip.split('.')[0]
+            return ip.split('.')[0]
         elif ':' in ip:
-            first_octet = ip.split(':')[0]
+            return ip.split(':')[0]
         else:
             # invalid ip
             return

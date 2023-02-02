@@ -577,12 +577,6 @@ class Module(Module, multiprocessing.Process):
 
         ip_data = __database__.getIPData(ip)
         try:
-            ip_asn = ip_data['asn']['asnorg']
-        except (KeyError, TypeError):
-            # No asn data for this ip
-            ip_asn = False
-
-        try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
                 # SNI is a list of dicts, each dict contains the 'server_name' and 'port'
