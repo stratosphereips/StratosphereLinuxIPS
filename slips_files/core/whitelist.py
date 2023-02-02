@@ -866,9 +866,13 @@ class Whitelist:
             # see if the org has asn cached in our db
             asn_cache = __database__.get_asn_cache()
             org_asn = []
-            for asn in asn_cache:
-                if org in asn.lower():
-                    org_asn.append(org)
+            for octet, range_info in asn_cache.items:
+                # asn_info is a dict of ranges
+                range_info = json.loads(range_info)
+                for range, asn_info in range_info.items():
+                    # we have the asn of this given org cached
+                    if org in asn_info['org'].lower():
+                        org_asn.append(org)
 
         __database__.set_org_info(org, json.dumps(org_asn), 'asn')
         return org_asn
@@ -924,8 +928,9 @@ class Whitelist:
 
                     first_octet = utils.get_first_octet(line)
                     if not first_octet:
-                        # not ipv4 or opv6
+                        line = f.readline()
                         continue
+
                     try:
                         org_subnets[first_octet].append(line)
                     except KeyError:

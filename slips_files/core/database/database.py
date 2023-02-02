@@ -2364,7 +2364,6 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Stores the range of asn in cached_asn hash
         """
-
         range_info = {
             asn_range: {
                 'number': f'AS{asn_number}',
@@ -2372,13 +2371,8 @@ class Database(ProfilingFlowsDatabase, object):
             }
         }
 
-        # the ranges stored are sorted by first octet
-        if '.' in asn_range:
-            first_octet = asn_range.split('.')[0]
-        elif ':' in asn_range:
-            first_octet = asn_range.split(':')[0]
-        else:
-            # invalid ip
+        first_octet = utils.get_first_octet(asn_range)
+        if not first_octet:
             return
 
         # this is how we store ASNs; sorted by first octet
@@ -2394,10 +2388,11 @@ class Database(ProfilingFlowsDatabase, object):
             
         }
         """
-        cached_asn:dict = json.loads(self.get_asn_cache())
+        cached_asn:dict = self.get_asn_cache()
+
         if first_octet in cached_asn:
             # we already have a mcached asn of a range that starts with the same first octet
-            cached_asn[first_octet].update(range_info)
+            json.loads(cached_asn[first_octet]).update(range_info)
             self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn[first_octet]))
         else:
             # first time storing a range starting with the same first octet
