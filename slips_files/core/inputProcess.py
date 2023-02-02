@@ -691,6 +691,7 @@ class InputProcess(multiprocessing.Process):
         command += rotation
         command += packet_filter
 
+
         self.print(f'Zeek command: {" ".join(command)}', 3, 0)
 
         zeek = subprocess.Popen(
