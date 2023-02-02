@@ -548,12 +548,9 @@ class Whitelist:
         try:
             org_subnets: dict = __database__.get_org_IPs(org)
 
-            if '.' in ip:
-                first_octet = ip.split('.')[0]
-            elif ':' in ip:
-                first_octet = ip.split(':')[0]
-            else:
-                return False
+            first_octet:str = utils.get_first_octet(ip)
+            if not first_octet:
+                return
             ip_obj = ipaddress.ip_address(ip)
             # organization IPs are sorted by first octet for faster search
             for range in org_subnets.get(first_octet, []):
@@ -925,11 +922,8 @@ class Whitelist:
                         # not a valid line, ignore it
                         continue
 
-                    if '.' in line:
-                        first_octet = line.split('.')[0]
-                    elif ':' in line:
-                        first_octet = line.split(':')[0]
-                    else:
+                    first_octet = utils.get_first_octet(line)
+                    if not first_octet:
                         # not ipv4 or opv6
                         continue
                     try:

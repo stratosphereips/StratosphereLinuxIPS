@@ -137,6 +137,15 @@ class Utils(object):
         if data.startswith("AS"):
             return 'asn'
 
+    def get_first_octet(self, ip):
+        # the ranges stored are sorted by first octet
+        if '.' in ip:
+            first_octet = ip.split('.')[0]
+        elif ':' in ip:
+            first_octet = ip.split(':')[0]
+        else:
+            # invalid ip
+            return
 
 
     def drop_root_privs(self):
