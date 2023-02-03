@@ -1,4 +1,5 @@
-##! gateway identification and extraction for DHCP traffic.
+###! This script adds the gateway IP information to the dhcp logs
+## it adds a is_gw_dst parameter to each dhcp flow that is set to true when the server_addr is the gateway
 
 @load policy/protocols/conn/known-hosts
 @load base/protocols/dhcp
@@ -7,25 +8,23 @@
 
 module Log_gw;
 
+
 export {
-
-        # Add a field to the known hosts log record.
-        redef record Known::HostsInfo += {
-            ## Indicate if the Dst of the connection is the gw address
-            is_gw: bool &default=F &log;
+        redef record DHCP::Info +=
+{
+                # The name of the new field will be orig_mac_oui
+                is_gw_dst: bool &default=F &log;
         };
+}
 
+# Add the giaddr to DHCP::Info
 
-};
+# DHCP::aggregate_msgs is used to distribute data around clusters.
+# In this case, this event is used to extend the DHCP logs.
 
-event DHCP::aggregate_msgs(ts: time, id: conn_id, uid: string, is_orig: bool, msg: DHCP::Msg, options: DHCP::Options) &priority=5
-	{
-
-	# The ?$ operator can be used to check if a record field has a value or not
-    #(it returns  T if the field has a value, and F if not).
-	if ( msg?$giaddr )
-		{
-        Log::write(Known::HostsInfo, [ts=ts, $host=msg?$giaddr, is_gw=T]);
-
-		}
-    }
+event DHCP::aggregate_msgs(ts: time, id: conn_id, uid: string,
+	is_orig: bool, msg: DHCP::Msg, options: DHCP::Options) {
+	if ( msg?$giaddr ) {
+		    DHCP::log_info$is_gw_dst = T;
+    	}
+	}
