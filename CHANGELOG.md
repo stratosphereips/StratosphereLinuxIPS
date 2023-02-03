@@ -1,5 +1,6 @@
 -1.0.2 (Feb 2023)
 - Support ASNs in our own_malicious_iocs.csv file
+- Add a zeek script to recognize the gateway IP from dhcp.log
 -1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts

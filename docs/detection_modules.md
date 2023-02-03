@@ -698,3 +698,10 @@ We detect a scan every threshold. So we generate an evidence when there is
 5,10,15, .. etc. ICMP established connections to different IPs.
 
 
+### Detect the Gateway address
+
+
+In the ```zeek-scripts/log_gw.zeek``` script, we add a param called ```is_gw_dst``` to each generated dhcp flow.
+the param will be set to true if the dhcp server is the same as the gateway
+
+
