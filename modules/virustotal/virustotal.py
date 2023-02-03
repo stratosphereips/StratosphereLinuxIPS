@@ -113,6 +113,7 @@ class Module(Module, multiprocessing.Process):
         Function to set VirusTotal data of the IP in the IPInfo.
         It also sets asn data if it is unknown or does not exist.
         It also set passive dns retrieved from VirusTotal.
+        :param cached_data: info about this ip from IPsInfo key in the db
         """
         vt_scores, passive_dns, as_owner = self.get_ip_vt_data(ip)
 
@@ -127,13 +128,10 @@ class Module(Module, multiprocessing.Process):
 
         data = {'VirusTotal': vtdata}
 
-        # Add asn if it is unknown or not in the IP info
-        if cached_data and (
-            'asn' not in cached_data
-            or cached_data['asn']['asnorg'] == 'Unknown'
-        ):
+        if as_owner and cached_data and 'asn' not in cached_data:
+            # we dont have ASN info about this ip
             data['asn'] = {
-                'asnorg': as_owner,
+                'number': f'AS{as_owner}',
                 'timestamp': ts
             }
 
@@ -197,10 +195,10 @@ class Module(Module, multiprocessing.Process):
         data = {'VirusTotal': vtdata}
 
         # Add asn (autonomous system number) if it is unknown or not in the Domain info
-        if cached_data and (
-            'asn' not in cached_data or cached_data['asn'] == 'Unknown'
-        ):
-            data['asn'] = as_owner
+        if cached_data and 'asn' not in cached_data:
+            data['asn'] = {
+                'number': f'AS{as_owner}'
+            }
         __database__.setInfoForDomains(domain, data)
 
     def API_calls_thread(self):
@@ -253,8 +251,8 @@ class Module(Module, multiprocessing.Process):
         Get as (autonomous system) owner of the IP
         :param response: json dictionary with response data
         """
-        response_key = 'as_owner'
-        return response[response_key] if response_key in response else ''
+        response_key = 'asn'
+        return response[response_key] if response_key in response else False
 
     def get_passive_dns(self, response):
         """

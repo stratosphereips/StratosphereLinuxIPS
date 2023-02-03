@@ -1683,9 +1683,9 @@ class Database(ProfilingFlowsDatabase, object):
         identification = ''
         if current_data:
             if 'asn' in current_data:
-                asn = current_data['asn']['asnorg']
-                if 'Unknown' not in asn and asn != '':
-                    identification += 'AS: ' + asn + ', '
+                asnorg = current_data['asn']['org']
+                number = current_data['asn'].get('number', '')
+                identification += f'AS: {asnorg} {number}, '
 
             if 'SNI' in current_data:
                 SNI = current_data['SNI']
@@ -2084,6 +2084,19 @@ class Database(ProfilingFlowsDatabase, object):
         if malicious_ip_ranges:
             self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
 
+    def add_asn_to_IoC(self, blacklisted_ASNs: dict):
+        """
+        Store a group of ASN in the db as they were obtained from an IoC source
+        :param blacklisted_ASNs: is {asn: json.dumps{'source':..,'tags':..,
+                                                     'threat_level':... ,'description'}}
+        """
+        if blacklisted_ASNs:
+            self.rcache.hmset('IoC_ASNs', blacklisted_ASNs)
+
+    def is_blacklisted_ASN(self, ASN) -> bool:
+        return self.rcache.hget('IoC_ASNs', ASN)
+
+
     def add_ja3_to_IoC(self, ja3_dict) -> None:
         """
         Store a group of ja3 in the db
@@ -2358,17 +2371,57 @@ class Database(ProfilingFlowsDatabase, object):
     def delete_file_info(self, file):
         self.rcache.hdel('TI_files_info', file)
 
-    def set_asn_cache(self, asn: str, asn_range: str) -> None:
+    def set_asn_cache(self, org: str, asn_range: str, asn_number: str) -> None:
         """
         Stores the range of asn in cached_asn hash
         """
-        self.rcache.hset('cached_asn', asn, asn_range)
 
-    def get_asn_cache(self):
+        range_info = {
+            asn_range: {
+                'org': org
+            }
+        }
+        if asn_number:
+            range_info[asn_range].update(
+                {'number': f'AS{asn_number}'}
+            )
+
+        first_octet = utils.get_first_octet(asn_range)
+        if not first_octet:
+            return
+
+        # this is how we store ASNs; sorted by first octet
         """
+        {
+            '192' : {
+                '192.168.1.0/x': {'number': 'AS123', 'org':'Test'},
+                '192.168.1.0/x': {'number': 'AS123', 'org':'Test'},
+            },
+            '10': {
+                '10.0.0.0/x': {'number': 'AS123', 'org':'Test'},
+            }
+            
+        }
+        """
+        cached_asn:dict = self.get_asn_cache()
+        if cached_asn and first_octet in cached_asn:
+            # we already have a mcached asn of a range that starts with the same first octet
+            json.loads(cached_asn[first_octet]).update(range_info)
+            self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn[first_octet]))
+        else:
+            # first time storing a range starting with the same first octet
+            self.rcache.hset('cached_asn', first_octet, json.dumps(range_info))
+
+    def get_asn_cache(self, first_octet=False):
+        """
+         cached ASNs are sorted by first octet
         Returns cached asn of ip if present, or False.
         """
-        return self.rcache.hgetall('cached_asn')
+        if first_octet:
+            return self.rcache.hget('cached_asn', first_octet)
+        else:
+            return self.rcache.hgetall('cached_asn')
+
 
     def store_process_PID(self, process, pid):
         """

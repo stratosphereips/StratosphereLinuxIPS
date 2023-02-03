@@ -97,6 +97,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
 
+    def set_evidence_malicious_asn(
+            self,
+            ip,
+            uid,
+            timestamp,
+            ip_info,
+            profileid,
+            twid,
+            asn,
+            asn_info,
+        ):
+        """
+        :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
+        """
+        attacker_direction = 'dstip'
+        attacker = ip
+        category = 'Anomaly.Traffic'
+        evidence_type = 'ThreatIntelligenceBlacklistedASN'
+        confidence = 0.8
+
+        # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
+        threat_level = asn_info.get('threat_level', 'medium')
+
+        tags = asn_info.get('tags', False)
+        source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
+        identification = __database__.getIPIdentification(ip)
+
+        description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
+                      f'Description: {asn_info["description"]}, ' \
+                      f'Found in feed: {asn_info["source"]}, ' \
+                      f'Confidence: {confidence}.'\
+                      f'Tags: {tags} ' \
+                      f'{identification}'
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
+
+
     def set_evidence_malicious_ip(
         self,
         ip,
@@ -253,6 +292,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         data_file_name = ti_file_path.split('/')[-1]
         malicious_ips = {}
+        malicious_asns = {}
         malicious_domains = {}
         malicious_ip_ranges = {}
         # used for debugging
@@ -279,7 +319,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 ioc, threat_level, description, = (
                     data[0],
                     data[1].lower(),
-                    data[2],
+                    data[2].strip(),
                 )
 
                 # validate the threat level taken from the user
@@ -328,11 +368,20 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             'tags': 'local TI file',
                         }
                     )
+                elif data_type == 'asn':
+                    malicious_asns[ioc] = json.dumps(
+                            {
+                                'description': description,
+                                'source': data_file_name,
+                                'threat_level': threat_level,
+                                'tags': 'local TI file',
+                            }
+                        )
 
                 else:
                     # invalid ioc, skip it
                     self.print(
-                        f'Error while reading the TI file {local_ti_file}.'
+                        f'Error while reading the TI file {ti_file_path}.'
                         f' Line {line_number} has invalid data: {ioc}',
                         0, 1,
                     )
@@ -342,6 +391,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # Add all loaded malicious domains to the database
         __database__.add_domains_to_IoC(malicious_domains)
         __database__.add_ip_range_to_IoC(malicious_ip_ranges)
+        __database__.add_asn_to_IoC(malicious_asns)
         return True
 
     def __delete_old_source_IPs(self, file):
@@ -679,6 +729,37 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if spamhaus_res:
             return spamhaus_res
 
+    def ip_has_blacklisted_ASN(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
+        """
+        Check if this ip has any of our blacklisted ASNs.
+        blacklisted asns are taken from own_malicious_iocs.csv
+        """
+        ip_info = __database__.getIPData(ip)
+        if not ip_info:
+            # we dont know the asn of this ip
+            return
+
+        if 'asn' not in ip_info:
+            return
+
+        asn = ip_info['asn'].get('number','')
+        if not asn:
+            return
+
+        if asn_info := __database__.is_blacklisted_ASN(asn):
+            asn_info = json.loads(asn_info)
+            self.set_evidence_malicious_asn(
+                ip,
+                uid,
+                timestamp,
+                ip_info,
+                profileid,
+                twid,
+                asn,
+                asn_info,
+            )
 
     def ip_belongs_to_blacklisted_range(
             self, ip, uid, timestamp, profileid, twid, ip_state
@@ -901,6 +982,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             ):
                             self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(
                             to_lookup,

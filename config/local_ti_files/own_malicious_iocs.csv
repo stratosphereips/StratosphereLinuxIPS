@@ -1,6 +1,6 @@
 # This file is for you to add your own IPs or domains to the list to detect
 # Format of this file: 
-# IP/domain/ip range, Threat level, Description, Tag
+# IP/domain/ip range/ASN, Threat level, Description, Tag
 # Threat level available options: info, low, medium, high, critical
 23.253.126.58,high,Simda CC
 bncv00.no-ip.info, critical, Variant.Zusy
@@ -12,3 +12,7 @@ softwareplayertop.com, high, Rana Malware IRAN
 saveingone.com, high, Rana Malware IRAN
 facedomainpc.com, high, Rana Malware IRAN
 facedomaintv.com, high, Rana Malware IRAN
+AS39770, high, ELITETEAM bulletproof hosting provider
+AS60424, high, ELITETEAM bulletproof hosting provider
+AS56873, high, ELITETEAM bulletproof hosting provider
+AS51381, high, ELITETEAM bulletproof hosting provider
