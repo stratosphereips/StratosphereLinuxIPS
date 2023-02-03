@@ -18,28 +18,24 @@ class ASN:
             # errors are printed in IP_info
             pass
 
-    def get_cached_asn(self, ip) -> dict:
+    def get_cached_asn(self, ip) :
         """
         If this ip belongs to a cached ip range, return the cached asn info of it
         :param ip: str
         if teh range of this ip was found, this function returns a dict with {'number' , 'org'}
         """
-        cached_asn: dict = __database__.get_asn_cache()
-        first_octet: str = utils.get_first_octet(ip)
-
-        if not cached_asn or not first_octet:
-            # invalid ip or no cached asns
-            return False
-
-        if first_octet not in cached_asn:
-            return False
-
-        cached_asn = json.loads(cached_asn[first_octet])
-
-        try:
-            cached_asn = json.loads(cached_asn)
-        except TypeError:
+        if ip.startswith('185'):
             pass
+        first_octet: str = utils.get_first_octet(ip)
+        if not first_octet:
+            # invalid ip or no cached asns
+            return
+
+        cached_asn: str = __database__.get_asn_cache(first_octet=first_octet)
+        if not cached_asn:
+            return
+
+        cached_asn: dict = json.loads(cached_asn)
 
         for range, range_info in cached_asn.items():
             # convert to objects
