@@ -277,13 +277,21 @@ Slips is shipped with the Abuse.ch SSL feed by default,
 
 You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf```
 
+### Matching of ASNs
+
+Every time Slips sees a new IP, it stores info about it in the db, for example its organization, RDNs, and ASN.
+If the ASN of an IP matches a blacklisted ASN, slips alerts.
+
+Blacklisted ASNs are read from out local TI file ```config/local_data_files/own_malicious_iocs.csv```, 
+so you can update them or add your own.
+
 ### Local Threat Intelligence files
 
 Slips has a local file for adding IoCs of your own, 
 it's located in ```config/local_data_files/own_malicious_iocs.csv``` by default,
 this path can be changed by changing ```download_path_for_local_threat_intelligence``` in ```config/slips.conf```.
 
-The format of the file is "IP address/IP Range/domain","Threat level", "Description"
+The format of the file is "IP address/IP Range/domain/ASN","Threat level", "Description"
 
 Threat level available options: info, low, medium, high, critical
 
