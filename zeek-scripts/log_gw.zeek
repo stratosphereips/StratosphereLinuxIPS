@@ -24,7 +24,7 @@ export {
 
 event DHCP::aggregate_msgs(ts: time, id: conn_id, uid: string,
 	is_orig: bool, msg: DHCP::Msg, options: DHCP::Options) {
-	if ( msg?$giaddr ) {
+	if ( fmt("%s", msg?$giaddr) == fmt("%s", DHCP::log_info$server_addr) ) {
 		    DHCP::log_info$is_gw_dst = T;
     	}
 	}
