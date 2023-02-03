@@ -41,15 +41,14 @@ def test_get_asn_info_from_geolite(database):
     """
     ASN_info = create_ASN_Info_instance()
     # check an ip that we know is in the db
-    assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == {
-        'asn': {'org': 'ATT-INTERNET4'}
-    }
+    expected_asn_info = {'asn': {'number': 'AS7018', 'org': 'ATT-INTERNET4'}}
+    assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == expected_asn_info
     # test  asn info not found in geolite
     assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {}
 
 def test_cache_ip_range(database):
     ASN_info = create_ASN_Info_instance()
-    assert ASN_info.cache_ip_range('8.8.8.8') == True
+    assert ASN_info.cache_ip_range('8.8.8.8') == {'asn': {'number': 'AS15169', 'org': 'GOOGLE, US'}}
 
 # GEOIP unit tests
 def test_get_geocountry(outputQueue, database):
