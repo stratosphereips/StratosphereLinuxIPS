@@ -1644,11 +1644,7 @@ class ProfilerProcess(multiprocessing.Process):
             'ts': epoch_time
         }
         __database__.publish('new_dhcp', json.dumps(to_send))
-        if is_gw_dst := self.column_values.get('is_gw_dst', False):
-            # when this param is set, it means the server addr is the gateway address
-            server_addr = self.column_values.get('server_addr', False)
-            if server_addr and is_gw_dst in ('T' , 'true'):
-                __database__.set_default_gateway(server_addr ,"IP")
+
 
     def publish_to_new_software(self):
         """
@@ -1945,11 +1941,15 @@ class ProfilerProcess(multiprocessing.Process):
                 host_name=(self.column_values.get('host_name', False))
             )
         server_addr = self.column_values.get('server_addr', False)
+        is_gw_dst = self.column_values.get('is_gw_dst', False)
         if server_addr:
             __database__.store_dhcp_server(server_addr)
-            # override the gw IP in the db since we have a dhcp
-            __database__.set_default_gateway("IP", server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
+
+            if is_gw_dst in ('T', 'true'):
+                # when this param is true, it means he gw addr is the same same as the dhcp server addr
+                __database__.set_default_gateway(server_addr, "IP")
+                __database__.mark_profile_as_gateway(self.profileid)
 
         self.publish_to_new_dhcp()
 

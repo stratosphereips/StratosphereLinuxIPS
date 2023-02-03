@@ -467,6 +467,18 @@ class Database(ProfilingFlowsDatabase, object):
             self.r.hset(profileid, 'dhcp', 'true')
 
 
+    def mark_profile_as_gateway(self, profileid):
+        """
+        Used to mark this profile as dhcp server
+        """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
+
+        self.r.hset(profileid, 'gateway', 'true')
+
+
     def set_ipv6_of_profile(self, profileid, ip: list):
         self.r.hset(profileid, 'IPv6',  json.dumps(ip))
 
