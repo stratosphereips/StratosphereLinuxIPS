@@ -48,7 +48,15 @@ def get_ip_info(ip):
         # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
         geocountry = ip_info.get('geocountry', '-')
         asn = ip_info.get('asn', False)
-        asnorg = [asn.get('asnorg', '-') if asn else '-']
+        if asn:
+            # we have the asn key, do we have the org to display?
+            if 'org' in asn:
+                asnorg = asn['org']
+            elif 'number' in asn:
+                asnorg = asn['number']
+            else:
+                asnorg = '-'
+
         reverse_dns = ip_info.get('reverse_dns', '-')
 
         threatintel = ip_info.get('threatintelligence', False)
