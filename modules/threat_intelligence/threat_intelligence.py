@@ -97,6 +97,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
 
+    def set_evidence_malicious_asn(
+            self,
+            ip,
+            uid,
+            timestamp,
+            ip_info,
+            profileid,
+            twid,
+            asn,
+            asn_info,
+        ):
+        """
+        :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
+        """
+        attacker_direction = 'dstip'
+        attacker = ip
+        category = 'Anomaly.Traffic'
+        evidence_type = 'ThreatIntelligenceBlacklistedASN'
+        confidence = 0.8
+
+        # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
+        threat_level = asn_info.get('threat_level', 'medium')
+
+        tags = asn_info.get('tags', False)
+        source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
+        identification = __database__.getIPIdentification(ip)
+
+        description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
+                      f'Description: {asn_info["description"]}, ' \
+                      f'Found in feed: {asn_info["source"]}, ' \
+                      f'Confidence: {confidence}.'\
+                      f'Tags: {tags} ' \
+                      f'{identification}'
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
+
+
     def set_evidence_malicious_ip(
         self,
         ip,
