@@ -2403,15 +2403,13 @@ class Database(ProfilingFlowsDatabase, object):
             
         }
         """
-        cached_asn:dict = self.get_asn_cache()
-        if cached_asn and first_octet in cached_asn:
-            # we already have a mcached asn of a range that starts with the same first octet
-            try:
-                json.loads(cached_asn[first_octet]).update(range_info)
-            except AttributeError:
-                json.loads(json.loads(cached_asn[first_octet])).update(range_info)
-
-            self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn[first_octet]))
+        # get all the ranges in our cache that start witht hte same octet
+        cached_asn:str = self.get_asn_cache(first_octet=first_octet)
+        if cached_asn:
+            # we already have a cached asn of a range that starts with the same first octet
+            cached_asn: dict = json.loads(cached_asn)
+            cached_asn.update(range_info)
+            self.rcache.hset('cached_asn', first_octet, json.dumps(cached_asn))
         else:
             # first time storing a range starting with the same first octet
             self.rcache.hset('cached_asn', first_octet, json.dumps(range_info))

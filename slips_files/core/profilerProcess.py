@@ -1647,7 +1647,7 @@ class ProfilerProcess(multiprocessing.Process):
         if is_gw_dst := self.column_values.get('is_gw_dst', False):
             # when this param is set, it means the server addr is the gateway address
             server_addr = self.column_values.get('server_addr', False)
-            if server_addr and is_gw_dst in ('T' or 'true'):
+            if server_addr and is_gw_dst in ('T' , 'true'):
                 __database__.set_default_gateway(server_addr ,"IP")
 
     def publish_to_new_software(self):
