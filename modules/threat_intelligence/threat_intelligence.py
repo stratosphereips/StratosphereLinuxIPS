@@ -690,6 +690,37 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if spamhaus_res:
             return spamhaus_res
 
+    def ip_has_blacklisted_ASN(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
+        """
+        Check if this ip has any of our blacklisted ASNs.
+        blacklisted asns are taken from own_malicious_iocs.csv
+        """
+        ip_info = __database__.getIPData(ip)
+        if not ip_info:
+            # we dont know the asn of this ip
+            return
+
+        if 'asn' not in ip_info:
+            return
+
+        asn = ip_info['asn'].get('number','')
+        if not asn:
+            return
+
+        if asn_info := __database__.is_blacklisted_ASN(asn):
+            asn_info = json.loads(asn_info)
+            self.set_evidence_malicious_asn(
+                ip,
+                uid,
+                timestamp,
+                ip_info,
+                profileid,
+                twid,
+                asn,
+                asn_info,
+            )
 
     def ip_belongs_to_blacklisted_range(
             self, ip, uid, timestamp, profileid, twid, ip_state
@@ -912,6 +943,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             ):
                             self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(
                             to_lookup,
