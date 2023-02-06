@@ -10,27 +10,29 @@ module Log_gw;
 
 
 export {
-        redef record DHCP::Info +=
-{
-                # The name of the new field will be orig_mac_oui
-                is_gw_dst: bool &default=F &log;
-        };
+        redef enum Notice::Type += {
+            Gateway_addr_identified,
+    };
 }
-
-# Add the giaddr to DHCP::Info
 
 # DHCP::aggregate_msgs is used to distribute data around clusters.
 # In this case, this event is used to extend the DHCP logs.
 
 event DHCP::aggregate_msgs(ts: time, id: conn_id, uid: string,
 	is_orig: bool, msg: DHCP::Msg, options: DHCP::Options) {
-        if (DHCP::log_info?$server_addr) {
-            #print fmt("server addr: %s", DHCP::log_info$server_addr);
-            #print fmt("giaddr: %s", msg$giaddr);
 
-            if ( fmt("%s", msg$giaddr) == fmt("%s", DHCP::log_info$server_addr) ) {
-                DHCP::log_info$is_gw_dst = T;
+	    # make sure that there is a giaddr field in the dhcp msg
+	    if (msg?$giaddr){
+
+	        # make sure the addr isn't 0.0.0.0
+            if ( fmt("%s", msg$giaddr) != "0.0.0.0" ) {
+
+                NOTICE([$note=Gateway_addr_identified,
+                        $msg=fmt("Gateway address identified: %s ", msg$giaddr),
+                        $id=id,
+                        $uid=uid]);
+
             }
         }
+    }
 
-	}
