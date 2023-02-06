@@ -129,6 +129,7 @@ class Module(Module, multiprocessing.Process):
             self,
             daddr,
             dport,
+            proto,
             saddr,
             profileid,
             twid,
@@ -136,8 +137,13 @@ class Module(Module, multiprocessing.Process):
             timestamp,
     ):
         """
-        Alerts when there's a connection from a local IP to another local IP
+        Alerts when there's a connection from a private IP to another private IP
+        except for DNS connecions to the gateway
         """
+        if int(dport) == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip():
+            # skip DNS conns to the gw to avoid having tons of this evidence
+            return
+
         # make sure the 2 ips are private
         if not (
                 ipaddress.ip_address(saddr).is_private
@@ -1886,6 +1892,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_connection_to_local_ip(
                         daddr,
                         dport,
+                        proto,
                         saddr,
                         profileid,
                         twid,
