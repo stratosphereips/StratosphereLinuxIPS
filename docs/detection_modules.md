@@ -700,8 +700,7 @@ We detect a scan every threshold. So we generate an evidence when there is
 
 ### Detect the Gateway address
 
-
-In the ```zeek-scripts/log_gw.zeek``` script, we add a param called ```is_gw_dst``` to each generated dhcp flow.
-the param will be set to true if the dhcp server is the same as the gateway
+The ```zeek-scripts/log_gw.zeek``` script is responsible for recognizing the gateway address using zeek, and logging it to
+notice.log
 
 
