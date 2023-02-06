@@ -467,6 +467,18 @@ class Database(ProfilingFlowsDatabase, object):
             self.r.hset(profileid, 'dhcp', 'true')
 
 
+    def mark_profile_as_gateway(self, profileid):
+        """
+        Used to mark this profile as dhcp server
+        """
+        if not profileid:
+            # profileid is None if we're dealing with a profile
+            # outside of home_network when this param is given
+            return False
+
+        self.r.hset(profileid, 'gateway', 'true')
+
+
     def set_ipv6_of_profile(self, profileid, ip: list):
         self.r.hset(profileid, 'IPv6',  json.dumps(ip))
 
@@ -1993,6 +2005,9 @@ class Database(ProfilingFlowsDatabase, object):
     def get_gateway_MAC(self):
         return self.r.hget('default_gateway', 'MAC')
 
+    def get_gateway_MAC_Vendor(self):
+        return self.r.hget('default_gateway', 'Vendor')
+
     def set_default_gateway(self, address_type:str, address:str):
         """
         :param address_type: can either be 'IP' or 'MAC'
@@ -2002,6 +2017,7 @@ class Database(ProfilingFlowsDatabase, object):
         if (
                 address_type == 'IP' and not self.get_gateway_ip()
                 or address_type == 'MAC' and not self.get_gateway_MAC()
+                or address_type == 'Vendor' and not self.get_gateway_MAC_Vendor()
         ):
             self.r.hset('default_gateway', address_type, address)
 

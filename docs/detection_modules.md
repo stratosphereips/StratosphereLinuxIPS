@@ -698,3 +698,9 @@ We detect a scan every threshold. So we generate an evidence when there is
 5,10,15, .. etc. ICMP established connections to different IPs.
 
 
+### Detect the Gateway address
+
+The ```zeek-scripts/log_gw.zeek``` script is responsible for recognizing the gateway address using zeek, and logging it to
+notice.log
+
+

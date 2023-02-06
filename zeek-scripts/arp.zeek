@@ -1,32 +1,32 @@
 module ARP;
 
 export {
-redef enum Log::ID += { LOG };
+    redef enum Log::ID += { LOG };
 
-type Info: record {
-				## Timestamp
-				ts: time &log;
-				## The requestor's MAC address.
-                ## The type of operation: request or reply
-                operation: string &log &optional;
-				src_mac: string &log &optional;
-                ## The responder's MAC address.
-				dst_mac: string &log &optional;
-                ## Source Protocol Address
-                orig_h:            addr        &log &optional;
-                ## Source Hardware Address
-                resp_h:            addr        &log &optional;
-                # the src arp mac addr
-                orig_hw: string &log &optional;
-                # the dst arp mac addr
-                resp_hw: string &log &optional;
-};
+    type Info: record {
+                    ## Timestamp
+                    ts: time &log;
+                    ## The requestor's MAC address.
+                    ## The type of operation: request or reply
+                    operation: string &log &optional;
+                    src_mac: string &log &optional;
+                    ## The responder's MAC address.
+                    dst_mac: string &log &optional;
+                    ## Source Protocol Address
+                    orig_h:            addr        &log &optional;
+                    ## Source Hardware Address
+                    resp_h:            addr        &log &optional;
+                    # the src arp mac addr
+                    orig_hw: string &log &optional;
+                    # the dst arp mac addr
+                    resp_hw: string &log &optional;
+    };
 
-global log_sensato_combined: event(rec: Info);
+    global log_sensato_combined: event(rec: Info);
 }
 
 redef record connection += {
-arp: Info &optional;
+    arp: Info &optional;
 };
 
 event zeek_init() &priority=5
