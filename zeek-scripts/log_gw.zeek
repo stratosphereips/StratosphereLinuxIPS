@@ -1,5 +1,5 @@
-###! This script adds the gateway IP information to the dhcp logs
-## it adds a is_gw_dst parameter to each dhcp flow that is set to true when the server_addr is the gateway
+# This script adds the gateway IP information to the dhcp logs, it adds a is_gw_dst parameter
+# to each dhcp flow that is set to true when the server_addr is the gateway
 
 @load policy/protocols/conn/known-hosts
 @load base/protocols/dhcp
@@ -24,10 +24,13 @@ export {
 
 event DHCP::aggregate_msgs(ts: time, id: conn_id, uid: string,
 	is_orig: bool, msg: DHCP::Msg, options: DHCP::Options) {
-	#print fmt("server addr: %s", DHCP::log_info$server_addr);
-	#print fmt("giaddr: %s", msg$giaddr);
+        if (DHCP::log_info?$server_addr) {
+            #print fmt("server addr: %s", DHCP::log_info$server_addr);
+            #print fmt("giaddr: %s", msg$giaddr);
 
-	if ( fmt("%s", msg$giaddr) == fmt("%s", DHCP::log_info$server_addr) ) {
-		    DHCP::log_info$is_gw_dst = T;
-    	}
+            if ( fmt("%s", msg$giaddr) == fmt("%s", DHCP::log_info$server_addr) ) {
+                DHCP::log_info$is_gw_dst = T;
+            }
+        }
+
 	}
