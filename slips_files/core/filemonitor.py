@@ -41,12 +41,12 @@ class FileEventHandler(RegexMatchingEventHandler):
 
     def on_moved(self, event):
         """this will be triggered everytime zeek renames all log files"""
-        # tell inputProcess to delete old files
+        # tell inputProcess to change open handles
         if event.dest_path != 'True':
             to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
             to_send = json.dumps(to_send)
             __database__.publish('remove_old_files', to_send)
-            # give inputProc.py time to close the handle and delete the file
+            # give inputProc.py time to close the handle or delete the file
             time.sleep(1)
 
     def on_modified(self, event):

@@ -29,6 +29,7 @@ import os
 from .whitelist import Whitelist
 import time
 import platform
+import traceback
 
 
 # Evidence Process
@@ -132,41 +133,19 @@ class EvidenceProcess(multiprocessing.Process):
         if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
             self.popup_alerts = False
 
-    def format_blocked_srcip_evidence(self, ip, twid, flow_datetime, now):
-        """
-        Function to prepare evidence about the blocked profileid and twid
-        This evidence will be written in alerts.log, it won't be displayed in the terminal
-        """
-        try:
-            return
 
-        except Exception as inst:
-            self.print('Error in print_alert()')
-            self.print(type(inst))
-            self.print(inst)
-
-
-    def format_evidence_string(
-        self,
-        profileid,
-        twid,
-        ip,
-        detection_module,
-        detection_type,
-        detection_info,
-        description,
-    ):
+    def format_evidence_string(self, ip, detection_module, attacker, description):
         """
         Function to format each evidence and enrich it with more data, to be displayed according to each detection module.
         :return : string with a correct evidence displacement
         """
         evidence_string = ''
-        dns_resolution_detection_info = __database__.get_dns_resolution(detection_info)
-        dns_resolution_detection_info = dns_resolution_detection_info.get(
+        dns_resolution_attacker = __database__.get_dns_resolution(attacker)
+        dns_resolution_attacker = dns_resolution_attacker.get(
             'domains', []
         )
-        dns_resolution_detection_info = dns_resolution_detection_info[
-                                        :3] if dns_resolution_detection_info else ''
+        dns_resolution_attacker = dns_resolution_attacker[
+                                        :3] if dns_resolution_attacker else ''
 
         dns_resolution_ip = __database__.get_dns_resolution(ip)
         dns_resolution_ip = dns_resolution_ip.get('domains', [])
@@ -174,29 +153,20 @@ class EvidenceProcess(multiprocessing.Process):
             dns_resolution_ip = dns_resolution_ip[0]
         elif len(dns_resolution_ip) == 0:
             dns_resolution_ip = ''
-        dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_detection_info and len(
-            dns_resolution_ip[:3]
-            ) > 0 else '. '
-
-        srcip = profileid.split('_')[1]
+        # dns_resolution_ip_final = f' DNS: {dns_resolution_ip[:3]}. ' if dns_resolution_attacker and len(
+        #     dns_resolution_ip[:3]
+        #     ) > 0 else '. '
 
         if detection_module == 'ThreatIntelligenceBlacklistIP':
             evidence_string = f'Detected {description}'
-            # if detection_type == 'srcip':
-            #     ip = srcip
 
         elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            # ip = srcip
             evidence_string = f'Detected {description}'
 
         elif detection_module == 'SSHSuccessful':
             evidence_string = f'Did a successful SSH. {description}'
         else:
             evidence_string = f'Detected {description}'
-
-        # Add the srcip to the evidence
-        # evidence_string = f'IP: {ip} (DNS:{dns_resolution_ip}). ' + evidence_string
-        # evidence_string = f'Src IP {ip:15}. ' + evidence_string
 
 
         return f'{evidence_string}'
@@ -254,10 +224,9 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.flush()
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
+        except Exception as ex:
             self.print('Error in addDataToJSONFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def addDataToLogFile(self, data):
         """
@@ -277,10 +246,9 @@ class EvidenceProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
+        except Exception as ex:
             self.print('Error in addDataToLogFile()')
-            self.print(type(inst))
-            self.print(inst)
+            self.print(traceback.print_exc(),0,1)
 
     def get_domains_of_flow(self, flow: dict):
         """Returns the domains of each ip (src and dst) that appeared in this flow"""
@@ -391,36 +359,26 @@ class EvidenceProcess(multiprocessing.Process):
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
                 f'given the following evidence:{Style.RESET_ALL}\n'
             )
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return True
 
         for evidence in all_evidence.values():
             # Deserialize evidence
             evidence = json.loads(evidence)
-            type_detection = evidence.get('type_detection')
-            detection_info = evidence.get('detection_info')
-            type_evidence = evidence.get('type_evidence')
+            attacker_direction = evidence.get('attacker_direction')
+            attacker = evidence.get('attacker')
+            evidence_type = evidence.get('evidence_type')
             description = evidence.get('description')
             evidence_ID = evidence.get('ID')
 
             # format the string of this evidence only: for example Detected C&C
             # channels detection, destination IP:xyz
-            evidence_string = self.format_evidence_string(
-                profileid,
-                twid,
-                srcip,
-                type_evidence,
-                type_detection,
-                detection_info,
-                description,
-            )
+            evidence_string = self.format_evidence_string(srcip, evidence_type, attacker, description)
             evidence_string = self.line_wrap(evidence_string)
 
             alert_to_print += (
@@ -542,11 +500,11 @@ class EvidenceProcess(multiprocessing.Process):
         res = {}
         for evidence_ID, evidence_info in tw_evidence.items():
             evidence_info = json.loads(evidence_info)
-            type_detection = evidence_info.get('type_detection', '')
+            attacker_direction = evidence_info.get('attacker_direction', '')
             # the following type detections are the ones
             # expected to be seen when we are attacking others
             # marking this profileid (srcip) as malicious
-            if type_detection in ('srcip', 'sport', 'srcport'):
+            if attacker_direction in ('srcip', 'sport', 'srcport'):
                 res[evidence_ID] = json.dumps(evidence_info)
 
         return res
@@ -573,9 +531,9 @@ class EvidenceProcess(multiprocessing.Process):
         self.IDs_causing_an_alert = []
         for evidence in tw_evidence.values():
             evidence = json.loads(evidence)
-            # type_detection = evidence.get('type_detection')
-            # detection_info = evidence.get('detection_info')
-            type_evidence = evidence.get('type_evidence')
+            # attacker_direction = evidence.get('attacker_direction')
+            # attacker = evidence.get('attacker')
+            evidence_type = evidence.get('evidence_type')
             confidence = float(evidence.get('confidence'))
             threat_level = evidence.get('threat_level')
             description = evidence.get('description')
@@ -588,7 +546,7 @@ class EvidenceProcess(multiprocessing.Process):
                 ]
             except KeyError:
                 self.print(
-                    f'Error: Evidence of type {type_evidence} has '
+                    f'Error: Evidence of type {evidence_type} has '
                     f'an invalid threat level {threat_level}', 0, 1
                 )
                 self.print(f'Description: {description}', 0, 1)
@@ -635,14 +593,14 @@ class EvidenceProcess(multiprocessing.Process):
                     profileid = data.get('profileid')
                     srcip = profileid.split(self.separator)[1]
                     twid = data.get('twid')
-                    type_detection = data.get(
-                        'type_detection'
+                    attacker_direction = data.get(
+                        'attacker_direction'
                     )   # example: dstip srcip dport sport dstdomain
-                    detection_info = data.get(
-                        'detection_info'
+                    attacker = data.get(
+                        'attacker'
                     )   # example: ip, port, inTuple, outTuple, domain
-                    type_evidence = data.get(
-                        'type_evidence'
+                    evidence_type = data.get(
+                        'evidence_type'
                     )   # example: PortScan, ThreatIntelligence, etc..
                     description = data.get('description')
                     timestamp = data.get('stime')
@@ -665,7 +623,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                     # Ignore alert if IP is whitelisted
                     if flow and self.whitelist.is_whitelisted_evidence(
-                        srcip, detection_info, type_detection, description
+                        srcip, attacker, attacker_direction, description
                     ):
                         __database__.cache_whitelisted_evidence_ID(evidence_ID)
                         # Modules add evidence to the db before reaching this point, now
@@ -680,21 +638,13 @@ class EvidenceProcess(multiprocessing.Process):
                     flow_datetime = utils.convert_format(timestamp, 'iso')
 
                     # prepare evidence for text log file
-                    evidence = self.format_evidence_string(
-                        profileid,
-                        twid,
-                        srcip,
-                        type_evidence,
-                        type_detection,
-                        detection_info,
-                        description,
-                    )
+                    evidence = self.format_evidence_string(srcip, evidence_type, attacker, description)
                     # prepare evidence for json log file
                     IDEA_dict = utils.IDEA_format(
                         srcip,
-                        type_evidence,
-                        type_detection,
-                        detection_info,
+                        evidence_type,
+                        attacker_direction,
+                        attacker,
                         description,
                         confidence,
                         category,
@@ -875,6 +825,5 @@ class EvidenceProcess(multiprocessing.Process):
                 self.outputqueue.put(
                     f'01|[Evidence] Error in the Evidence Process line {exception_line}'
                 )
-                self.outputqueue.put('01|[Evidence] {}'.format(type(inst)))
-                self.outputqueue.put('01|[Evidence] {}'.format(inst))
+                self.outputqueue.put('01|[Evidence] {}'.format(traceback.print_exc()))
                 return True

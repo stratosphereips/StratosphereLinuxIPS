@@ -30,16 +30,19 @@ to follow when contributing to Slips:
 
 ## What branch should you base your contribution to Slips?
 
-As a general rule, base your contributions on the `develop` branch.
+As a general rule, base your contributions to the `develop` branch.
 
 ## Creating a pull request
 
 Commits:
 - Commits should follow the KISS principle: do one thing, and do it well (keep it simple, stupid).
 - Commit messages should be easily readable, imperative style ("Fix memory leak in...", not "FixES mem...")
+
 Pull Requests:
 - If you have developed multiple features and/or bugfixes, create separate
     branches for each one of them, and request merges for each branch;
+- Each PR to develop will trigger the develop Github checks, these checks will run Slips unit tests and integration tests locally in a ubuntu VM and in docker to make sure the branch is ready to merge.
+- PRs won't be merged unless the checks pass.
 - The cleaner you code/change/changeset is, the faster it will be merged.
 
 ***

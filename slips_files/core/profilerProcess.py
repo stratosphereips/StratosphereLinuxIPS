@@ -15,20 +15,20 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-import multiprocessing
-import json
-from datetime import datetime, timedelta
-import sys
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from datetime import datetime, timedelta
+from .whitelist import Whitelist
+import multiprocessing
+import json
+import sys
 import ipaddress
 import traceback
 import os
 import binascii
 import base64
 from re import split
-from .whitelist import Whitelist
 
 
 # Profiler Process
@@ -42,7 +42,6 @@ class ProfilerProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.columns_defined = False
         self.timeformat = None
         self.input_type = False
         self.whitelist = Whitelist(outputqueue, redis_port)
@@ -51,14 +50,11 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.start(redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
-        # 1st. Get the data from the interpreted columns
-        self.id_separator = __database__.getFieldSeparator()
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
-        self.gw_set = False
         self.separators = {
             'zeek': '',
             'suricata': '',
@@ -66,7 +62,6 @@ class ProfilerProcess(multiprocessing.Process):
             'argus': ',',
             'zeek-tabs': '\t',
             'argus-tabs': '\t'
-
         }
 
     def print(self, text, verbose=1, debug=0):
@@ -173,13 +168,12 @@ class ProfilerProcess(multiprocessing.Process):
             self.separator = self.separators[self.input_type]
             return self.input_type
 
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_type() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             sys.exit(1)
 
     def define_columns(self, new_line):
@@ -253,13 +247,12 @@ class ProfilerProcess(multiprocessing.Process):
                 temp_dict[k] = e
             self.column_idx = temp_dict
             return self.column_idx
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_columns() line {exception_line}', 0, 1
             )
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             sys.exit(1)
 
     def process_zeek_tabs_input(self, new_line: str) -> None:
@@ -614,9 +607,9 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['server_addr'] = line[3]
             self.column_values['mac'] = line[4]   # this is the client mac
             self.column_values['host_name'] = line[5]
+            self.column_values['requested_addr'] = line[8]
             self.column_values['saddr'] = self.column_values['client_addr']
             self.column_values['daddr'] = self.column_values['server_addr']
-
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in new_line['type']:
@@ -742,7 +735,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.column_values = {}
         # We need to set it to empty at the beginning so any new flow has the key 'type'
         self.column_values['type'] = ''
-
         # to set the default value to '' if ts isn't found
         ts = line.get('ts', False)
         if ts:
@@ -881,9 +873,9 @@ class ProfilerProcess(multiprocessing.Process):
                     'mac': line.get('mac', ''),  # this is the client mac
                     'saddr': line.get('client_addr', ''),
                     'daddr': line.get('server_addr', ''),
+                    'requested_addr': line.get('requested_addr', ''),
                 }
             )
-
             # self.column_values['domain'] = line.get('domain','')
             # self.column_values['assigned_addr'] = line.get('assigned_addr','')
 
@@ -1637,12 +1629,13 @@ class ProfilerProcess(multiprocessing.Process):
             'uid': self.uid,
             'server_addr': self.column_values.get('server_addr', False),
             'client_addr': self.column_values.get('client_addr', False),
+            'requested_addr': self.column_values.get('requested_addr', False),
             'profileid': self.profileid,
             'twid': __database__.get_timewindow(epoch_time, self.profileid),
             'ts': epoch_time
         }
         __database__.publish('new_dhcp', json.dumps(to_send))
-        self.gw_set = True
+
 
     def publish_to_new_software(self):
         """
@@ -1703,6 +1696,7 @@ class ProfilerProcess(multiprocessing.Process):
                 # Home network is defined in slips.conf. Create profiles for home IPs only
                 for network in self.home_net:
                     if self.saddr_as_obj in network:
+                        # if a new profile is added for this saddr
                         __database__.addProfile(
                             self.profileid, self.starttime, self.width
                         )
@@ -1713,22 +1707,20 @@ class ProfilerProcess(multiprocessing.Process):
                         if self.daddr_as_obj in network:
                             self.handle_in_flows()
             else:
-
-                # home_network param wasn't set in slips.conf.
-                # Create profiles for everybody
+                # home_network param wasn't set in slips.conf
+                # Create profiles for all ips we see
                 __database__.addProfile(self.profileid, self.starttime, self.width)
                 self.store_features_going_out()
                 if self.analysis_direction == 'all':
                     # No home. Store all
                     self.handle_in_flows()
             return True
-        except Exception as inst:
+        except Exception as ex:
             # For some reason we can not use the output queue here.. check
             self.print(
                 f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
             ,0,1)
-            self.print('{}'.format(type(inst)), 0, 1)
-            self.print('{}'.format(inst), 0, 1)
+            self.print(traceback.print_exc(),0,1)
             return False
 
     def handle_conn(self):
@@ -1784,6 +1776,8 @@ class ProfilerProcess(multiprocessing.Process):
             spkts=self.column_values['spkts'],
             sbytes=self.column_values['sbytes'],
             appproto=self.column_values['appproto'],
+            smac=self.column_values.get('smac',''),
+            dmac=self.column_values.get('dmac',''),
             uid=self.uid,
             label=self.label,
             flow_type=self.flow_type,
@@ -1889,6 +1883,11 @@ class ProfilerProcess(multiprocessing.Process):
                 self.uid,
         )
 
+        if 'Gateway_addr_identified' in self.column_values['note']:
+            # get the gw addr form the msg
+            gw_addr = self.column_values['msg'].split(': ')[-1].strip()
+            __database__.set_default_gateway("IP", gw_addr)
+
     def handle_ftp(self):
         used_port = self.column_values['used_port']
         if used_port:
@@ -1908,6 +1907,9 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_smtp', to_send)
 
     def handle_in_flows(self):
+        """
+        Adds a flow for the daddr <- saddr connection
+        """
         # they are not actual flows to add in slips,
         # they are info about some ips derived by zeek from the flows
         execluded_flows = ('software')
@@ -1934,13 +1936,13 @@ class ProfilerProcess(multiprocessing.Process):
                 self.saddr,
                 host_name=(self.column_values.get('host_name', False))
             )
+        server_addr = self.column_values.get('server_addr', False)
 
-        if self.column_values.get('server_addr', False):
-            __database__.store_dhcp_server(self.column_values.get('server_addr', False))
+        if server_addr:
+            __database__.store_dhcp_server(server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
-            if not self.gw_set and self.column_values.get('client_addr', False):
-                self.publish_to_new_dhcp()
+        self.publish_to_new_dhcp()
 
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
@@ -1995,6 +1997,7 @@ class ProfilerProcess(multiprocessing.Process):
             daddr=str(self.daddr_as_obj),
             proto='ARP',
             uid=self.uid,
+            flow_type='arp'
         )
 
     def handle_weird(self):
@@ -2054,7 +2057,9 @@ class ProfilerProcess(multiprocessing.Process):
 
     def store_features_going_in(self, profileid, twid):
         """
-        This is an internal function in the add_flow_to_profile function for adding the features going in of the profile
+        If we have the all direction set , slips creates profiles for each IP, the src and dst
+        store features going our adds the conn in the profileA from IP A -> IP B in the db
+        this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
         """
         role = 'Server'
 
@@ -2118,6 +2123,7 @@ class ProfilerProcess(multiprocessing.Process):
             appproto=self.column_values['appproto'],
             uid=self.uid,
             label=self.label,
+            flow_type=self.flow_type
         )
         __database__.markProfileTWAsModified(profileid, twid, '')
 
@@ -2355,11 +2361,9 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
-        except Exception as inst:
+        except Exception as ex:
             # For some reason we can not use the output queue here.. check
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
-            self.print('{}'.format(type(inst)), 0, 1)
-            self.print('{}'.format(inst), 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
 
 
@@ -2470,7 +2474,7 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception as ex:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(
                     f'Error. Stopped Profiler Process. Received {rec_lines} '
@@ -2480,8 +2484,5 @@ class ProfilerProcess(multiprocessing.Process):
                     f'\tProblem with Profiler Process. line '
                     f'{exception_line}', 0, 1,
                 )
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
                 self.print(traceback.format_exc())
                 return True

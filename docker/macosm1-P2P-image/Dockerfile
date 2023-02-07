@@ -63,9 +63,11 @@ RUN pip3 install --upgrade pip
 RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-P2P-image/requirements-macos-m1-docker.txt
 
 # For Kalipso:
-RUN curl -sL https://deb.nodesource.com/setup_12.x  | bash -
-RUN apt install -y --no-install-recommends nodejs
-RUN npm install blessed@0.1.81 blessed-contrib@4.10.0 redis@3.1.2 async@3.2.0 chalk@4.1.2 strip-ansi@6.0.0  clipboardy@2.3.0 fs@0.0.1-security sorted-array-async@0.0.7 yargs@17.0.1
+RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
+
+# Switch to kalipso dir to install node dependencies
+WORKDIR ${SLIPS_DIR}/modules/kalipso
+RUN npm install
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}

@@ -1,4 +1,8 @@
--1.0.1
+-1.0.2 (Feb 2023)
+- Support ASNs in our own_malicious_iocs.csv file
+- Add a zeek script to recognize the gateway IP and add it to notice.log 
+- Don't alert "Connection to Private IP" when there's a DNS connection on port 53 UDP to the gateway
+-1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
 - Fix FP urlhaus detetcions, now we use it to check urls only, not domains.
@@ -9,7 +13,28 @@
 - Fix having multiple port scan alerts with the same timestamp
 - Add detection for non-SSL connections on port 443
 - Add detection for non-HTTP connections on port 80
--1.0.0
+- P2P can now work without adding the p2p4slips binary to PATH
+- Add detection for connections to private IPs from private IPs
+- Add detection of high entropy DNS TXT answers 
+- Add detection of connections to/from IPs outside the used local network.
+- Add detection for DHCP scans
+- Add detection for devices changing IPs.
+- Support having IP ranges in your own local TI file own_malicious_iocs.csv
+- Remove rstcloud TI file from slips.conf
+- Add the option to change pastebin download detection threshold in slips.conf
+- Add the option to change shannon entropy threshold detection threshold in slips.conf
+- Store zeek files in the output directory by default
+- Portscan detector is now called network service discovery
+- Move all TI feeds to their separate files in the config/ directory for easier use
+- Add the option to start slips web interface automatically using -w
+- Fix multiple SSH client versions detection
+- Add detection of IPs using multiple SSH server versions
+- Wait 30 mins before the first connection without DNS evidence
+- Optimize code and performance
+- Update Kalispo dependencies to use more secure versions
+- Change the rstcloud feed to https://raw.githubusercontent.com/rstcloud/rstthreats/master/feeds/full/random100_ioc_ip_latest.json
+
+-1.0.0 (November 2022)
 - ignore NXDOMAINs dns resolution when checking for 'dns without resolutions'
 - Keep track of old peer reports about the same ip
 - Add a new log file p2p_reports.log, for logging peer reports only  
@@ -31,7 +56,9 @@
 - Take p2p reports into consideration when deciding to block an IP
 - Add Dockerfiles for MacOS M1
 - Fix P2P and ubutnu-image Dockerfiles 
--0.9.6
+
+
+-0.9.6 (October 2022)
 - Detect DNS answers that have a blacklisted IP or CNAME
 - Fix problem detecting SSH logins by zeek
 - Make rotating zeek files configurable. how many days you want to keep the rotated files and how often to rotate 
@@ -57,7 +84,8 @@
 - Don't alert ARP scans from the gateway
 - Add an option to store the zeek log files inside the output dir  
 
--0.9.5
+
+-0.9.5 (AUgust 2022)
 * Slips
 - Fix the way we update TI files
 - Add a new web interface
@@ -87,7 +115,7 @@
 - Fix 'multiple reconnections attempts' detection to detect 5 or more rejected reconnection attempts to the same IP on the same destination port 
 
 
--0.9.3
+-0.9.3 (July 2022)
 * Slips
 - Run multiple slips instances on demand using (-m), and use redis port 6379 by default.
 - Fix false positive 'DNS resolution without connection' alerts 
@@ -105,7 +133,7 @@
 - Whitelist the connections made by slips, so now you won't be alerted when Slips is using virustotal.com or macvendors.com
 
 
--0.9.2
+-0.9.2 (June 2022)
 * Slips
 - Fix saving the database in MacOS and Linux
 - Add a MacOS dockerfile to be able run Docker in MacOS
@@ -115,7 +143,7 @@
 - Fix problem stopping slips when using whitelists
 - Fix problem opening unused redis ports
 
--0.9.1
+-0.9.1 (May 2022)
 * Slips
 
 - Drop root privileges in modules that don't need them
@@ -130,7 +158,7 @@
 - Added a new TI file https://hole.cert.pl/domains/domains.json
 - Update the docs and added instructions for contributing and creating a new module
 
--0.9.0
+-0.9.0 (April 2022)
 * Slips
  - P2P module: Added the support for sharing and receiving IPs' info with other peers. Can be run using docker or locally.
  - Parse zeek software.log and extract software type, version and user agent from it
@@ -144,7 +172,7 @@
  - Reduce p2p.log file size
  - Rotate p2p.log every 1 day and keep only the last day by default
  - Don't create p2p.log by default, unless create_p2p_log is set to yes in slips.conf
--0.8.5
+-0.8.5 (March 2022)
 * Slips
   - Detect young domains that was registered less than 60 days ago.
   - Detect bad SMTP logins
@@ -168,7 +196,7 @@
   - Document all the internet connections made by slips
   - Fix install.sh
   - Add errors.log to output/ dir to log errors encountered by slips.
--0.8.4
+-0.8.4 (Feb 2022)
 * Slips
   - Add support for local JA3 feeds
   - Improve CESNET Module
@@ -193,10 +221,10 @@
   - Fix Kalipso in docker issue
   - Associate IPs with their hostname
 
--0.8.3
+-0.8.3 (Jan 2022)
 * Slips
   - More accurate threat levels, now they're strings instead of values
-  - Add CESNET sharing moddule, which supports exporting and importing event to and from warden servers
+  - Add CESNET sharing module, which supports exporting and importing event to and from warden servers
   - Improve Unknown ports alerts, now we don't have false positive alerts when apple devices are talking to each other using unknown ports
   - Added support for continuous integrations using Github Actions
   - Improvements in printing alerts, we now print each alert with it's timestamp and the evidence caused it

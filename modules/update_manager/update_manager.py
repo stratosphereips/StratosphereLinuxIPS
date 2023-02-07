@@ -1,12 +1,10 @@
-# Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 import sys
-
-# Your imports
+import traceback
 import asyncio
 from exclusiveprocess import Lock, CannotAcquireLock
 from modules.update_manager.timer_manager import InfiniteTimer
@@ -111,12 +109,10 @@ class UpdateManager(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
+            self.print(traceback, 0, 1)
             return True
 
         # Main loop function
@@ -134,7 +130,5 @@ class UpdateManager(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

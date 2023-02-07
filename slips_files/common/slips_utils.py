@@ -3,14 +3,13 @@ from datetime import datetime, timezone, timedelta
 import validators
 from git import Repo
 import socket
-import subprocess
+import requests
 import json
 import time
 import platform
 import os
 import sys
 import ipaddress
-import configparser
 
 
 class Utils(object):
@@ -20,12 +19,13 @@ class Utils(object):
 
 
     def __init__(self):
-        self.home_network_ranges = (
+        self.home_network_ranges_str = (
             '192.168.0.0/16',
             '172.16.0.0/12',
             '10.0.0.0/8',
         )
-        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges))
+        # IPv4Network objs
+        self.home_network_ranges = list(map(ipaddress.ip_network, self.home_network_ranges_str))
         self.supported_orgs = (
             'google',
             'microsoft',
@@ -59,12 +59,27 @@ class Utils(object):
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
 
+    def get_cidr_of_ip(self, ip):
+        """
+        returns the cidr/range of the given private ip
+        :param ip: should be  a private ips
+        """
+        if validators.ipv4(ip):
+            first_octet = ip.split('.')[0]
+            # see if the first octet of the given ip matches any of the
+            # home network ranges
+            for network_range in self.home_network_ranges_str:
+                if first_octet in network_range:
+                    return network_range
+
+
     def threat_level_to_string(self, threat_level: float):
         for str_lvl, int_value in self.threat_levels.items():
             if float(threat_level) <= int_value:
                 return str_lvl
 
-
+    def is_valid_threat_level(self, threat_level):
+        return threat_level in self.threat_levels
 
     def sanitize(self, string):
         """
@@ -79,7 +94,9 @@ class Utils(object):
         return string
 
     def detect_data_type(self, data):
-        """Detects if incoming data is ipv4, ipv6, domain or ip range"""
+        """
+        Detects the type of incoming data: ipv4, ipv6, domain, ip range, asn, md5, etc
+        """
         data = data.strip()
         try:
             ipaddress.ip_address(data)
@@ -104,7 +121,6 @@ class Utils(object):
             data = data[:-1]
 
         domain = data
-
         if domain.startswith('http://'):
             data = data[7:]
         elif domain.startswith('https://'):
@@ -118,6 +134,18 @@ class Utils(object):
         if validators.sha256(data):
             return 'sha256'
 
+        if data.startswith("AS"):
+            return 'asn'
+
+    def get_first_octet(self, ip):
+        # the ranges stored are sorted by first octet
+        if '.' in ip:
+            return ip.split('.')[0]
+        elif ':' in ip:
+            return ip.split(':')[0]
+        else:
+            # invalid ip
+            return
 
 
     def drop_root_privs(self):
@@ -140,22 +168,6 @@ class Utils(object):
         os.setresgid(sudo_gid, sudo_gid, -1)
         os.setresuid(sudo_uid, sudo_uid, -1)
         return
-
-    def timeit(method):
-        def timed(*args, **kw):
-            ts = time.time()
-            result = method(*args, **kw)
-            te = time.time()
-            if 'log_time' in kw:
-                name = kw.get('log_name', method.__name__.upper())
-                kw['log_time'][name] = int((te - ts) * 1000)
-            else:
-                print(
-                    f'\t\033[1;32;40mFunction {method.__name__}() took {(te - ts) * 1000:2.2f}ms\033[00m'
-                )
-            return result
-
-        return timed
 
 
     def convert_format(self, ts, required_format: str):
@@ -250,13 +262,28 @@ class Utils(object):
             s.close()
 
         # get public ip
-        command = f'curl -m 5 -s http://ipinfo.io/json'
-        result = subprocess.run(command.split(), capture_output=True)
-        text_output = result.stdout.decode('utf-8').replace('\n', '')
-        if not text_output or 'Connection timed out' in text_output:
+
+        try:
+            response = requests.get(
+                f'http://ipinfo.io/json',
+                timeout=5,
+            )
+        except (
+                requests.exceptions.ConnectionError,
+                requests.exceptions.ChunkedEncodingError,
+                requests.exceptions.ReadTimeout
+        ):
             return IPs
 
-        public_ip = json.loads(text_output)['ip']
+        if response.status_code != 200:
+            return IPs
+        if 'Connection timed out' in response.text:
+            return IPs
+        try:
+            response = json.loads(response.text)
+        except json.decoder.JSONDecodeError:
+            return IPs
+        public_ip = response['ip']
         IPs.append(public_ip)
         return IPs
 
@@ -327,7 +354,7 @@ class Utils(object):
             branch = repo.active_branch.name
             commit = repo.active_branch.commit.hexsha
             return (commit, branch)
-        except:
+        except Exception as ex:
             # when in docker, we copy the repo instead of clone it so there's no .git files
             # we can't add repo metadata
             return False
@@ -372,9 +399,9 @@ class Utils(object):
     def IDEA_format(
         self,
         srcip,
-        type_evidence,
-        type_detection,
-        detection_info,
+        evidence_type,
+        attacker_direction,
+        attacker,
         description,
         confidence,
         category,
@@ -415,7 +442,7 @@ class Utils(object):
 
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
-        if type_evidence == 'Command-and-Control-channels-detection':
+        if evidence_type == 'Command-and-Control-channels-detection':
             # get the destination IP
             dstip = description.split('destination IP: ')[1].split(' ')[0]
 
@@ -427,14 +454,14 @@ class Utils(object):
             IDEA_dict['Source'].append({ip_version: [dstip], 'Type': ['CC']})
 
         # some evidence have a dst ip
-        if 'dstip' in type_detection or 'dip' in type_detection:
+        if 'dstip' in attacker_direction or 'dip' in attacker_direction:
             # is the dstip ipv4/ipv6 or mac?
-            if validators.ipv4(detection_info):
-                IDEA_dict['Target'] = [{'IP4': [detection_info]}]
-            elif validators.ipv6(detection_info):
-                IDEA_dict['Target'] = [{'IP6': [detection_info]}]
-            elif validators.mac_address(detection_info):
-                IDEA_dict['Target'] = [{'MAC': [detection_info]}]
+            if validators.ipv4(attacker):
+                IDEA_dict['Target'] = [{'IP4': [attacker]}]
+            elif validators.ipv6(attacker):
+                IDEA_dict['Target'] = [{'IP6': [attacker]}]
+            elif validators.mac_address(attacker):
+                IDEA_dict['Target'] = [{'MAC': [attacker]}]
 
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
@@ -452,9 +479,9 @@ class Utils(object):
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
-        elif 'domain' in type_detection:
+        elif 'domain' in attacker_direction:
             # the ioc is a domain
-            target_info = {'Hostname': [detection_info]}
+            target_info = {'Hostname': [attacker]}
             IDEA_dict['Target'] = [target_info]
 
             # update the dstdomain description if specified in the evidence
@@ -473,7 +500,7 @@ class Utils(object):
             idx = 0
 
         # for C&C alerts IDEA_dict['Source'][0] is the Botnet aka srcip and IDEA_dict['Source'][1] is the C&C aka dstip
-        if type_evidence == 'Command-and-Control-channels-detection':
+        if evidence_type == 'Command-and-Control-channels-detection':
             # idx of the dict containing the dstip, we'll use this to add the port and proto to this dict
             key = 'Source'
             idx = 1
@@ -498,13 +525,13 @@ class Utils(object):
         if conn_count:
             IDEA_dict.update({'ConnCount': conn_count})
 
-        if 'MaliciousDownloadedFile' in type_evidence:
+        if 'MaliciousDownloadedFile' in evidence_type:
             IDEA_dict.update(
                 {
                     'Attach': [
                         {
                             'Type': ['Malware'],
-                            'Hash': [f'md5:{detection_info}'],
+                            'Hash': [f'md5:{attacker}'],
                             'Size': int(
                                 description.split('size:')[1].split('from')[0]
                             ),
@@ -514,17 +541,5 @@ class Utils(object):
             )
 
         return IDEA_dict
-
-    def timing(f):
-        """Function to measure the time another function takes."""
-
-        def wrap(*args):
-            time1 = time.time()
-            ret = f(*args)
-            time2 = time.time()
-            print('[DB] Function took {:.3f} ms'.format((time2 - time1) * 1000.0))
-            return ret
-
-        return wrap
 
 utils = Utils()

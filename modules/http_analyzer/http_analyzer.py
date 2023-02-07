@@ -1,12 +1,11 @@
-# Must imports
+
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import sys
-
-# Your imports
+import traceback
 import json
 import urllib
 import requests
@@ -29,6 +28,7 @@ class Module(Module, multiprocessing.Process):
         # this is a list of hosts known to be resolved by malware
         # to check your internet connection
         self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
+        self.read_configuration()
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -50,6 +50,10 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+
     def check_suspicious_user_agents(
         self, uid, host, uri, timestamp, user_agent, profileid, twid
     ):
@@ -64,28 +68,17 @@ class Module(Module, multiprocessing.Process):
         )
         for suspicious_ua in suspicious_user_agents:
             if suspicious_ua.lower() in user_agent.lower():
-                type_detection = 'srcip'
+                attacker_direction = 'srcip'
                 source_target_tag = 'SuspiciousUserAgent'
-                detection_info = profileid.split('_')[1]
-                type_evidence = 'SuspiciousUserAgent'
+                attacker = profileid.split('_')[1]
+                evidence_type = 'SuspiciousUserAgent'
                 threat_level = 'high'
                 category = 'Anomaly.Behaviour'
                 confidence = 1
                 description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
-                __database__.setEvidence(
-                    type_evidence,
-                    type_detection,
-                    detection_info,
-                    threat_level,
-                    confidence,
-                    description,
-                    timestamp,
-                    category,
-                    source_target_tag=source_target_tag,
-                    profileid=profileid,
-                    twid=twid,
-                    uid=uid,
-                )
+                __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                         description, timestamp, category, source_target_tag=source_target_tag,
+                                         profileid=profileid, twid=twid, uid=uid)
                 return True
         return False
 
@@ -123,26 +116,15 @@ class Module(Module, multiprocessing.Process):
 
         uids, connections = self.connections_counter[host]
         if connections == self.empty_connections_threshold:
-            type_evidence = 'EmptyConnections'
-            type_detection = 'srcip'
-            detection_info = profileid.split('_')[0]
+            evidence_type = 'EmptyConnections'
+            attacker_direction = 'srcip'
+            attacker = profileid.split('_')[0]
             threat_level = 'medium'
             category = 'Anomaly.Connection'
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                timestamp,
-                category,
-                profileid=profileid,
-                twid=twid,
-                uid=uids,
-            )
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uids)
             # reset the counter
             self.connections_counter[host] = ([], 0)
             return True
@@ -151,10 +133,10 @@ class Module(Module, multiprocessing.Process):
     def set_evidence_incompatible_user_agent(
         self, host, uri, vendor, user_agent, timestamp, profileid, twid, uid
     ):
-        type_detection = 'srcip'
+        attacker_direction = 'srcip'
         source_target_tag = 'IncompatibleUserAgent'
-        detection_info = profileid.split('_')[1]
-        type_evidence = 'IncompatibleUserAgent'
+        attacker = profileid.split('_')[1]
+        evidence_type = 'IncompatibleUserAgent'
         threat_level = 'high'
         category = 'Anomaly.Behaviour'
         confidence = 1
@@ -167,20 +149,9 @@ class Module(Module, multiprocessing.Process):
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
 
 
@@ -282,8 +253,7 @@ class Module(Module, multiprocessing.Process):
         # "os_producer":"","os_producerURL":"","linux_distibution":"Null","agent_language":"","agent_languageTag":""}
         try:
             # responses from this domain are broken for now. so this is a temp fix until they fix it from their side
-            response = response.text.replace("<br />",'').replace("Connection could not be established !!",'')
-            json_response = json.loads(response)
+            json_response = json.loads(response.text)
         except json.decoder.JSONDecodeError:
             # unexpected server response
             return False
@@ -397,10 +367,10 @@ class Module(Module, multiprocessing.Process):
                 # we will find the keyword 'Linux' in both UAs, so we shouldn't alert
                 return False
 
-        type_detection = 'srcip'
+        attacker_direction = 'srcip'
         source_target_tag = 'MultipleUserAgent'
-        detection_info = profileid.split('_')[1]
-        type_evidence = 'IncompatibleUserAgent'
+        attacker = profileid.split('_')[1]
+        evidence_type = 'IncompatibleUserAgent'
         threat_level = 'info'
         category = 'Anomaly.Behaviour'
         confidence = 1
@@ -408,20 +378,9 @@ class Module(Module, multiprocessing.Process):
         description = (
             f'using multiple user-agents: {ua} then {user_agent}'
         )
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
         return True
 
     def check_pastebin_downloads(
@@ -441,12 +400,12 @@ class Module(Module, multiprocessing.Process):
 
         ip_identification = __database__.getIPIdentification(daddr)
         if ('pastebin' in ip_identification
-            and response_body_len > 12000
+            and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):
-            type_detection = 'dstip'
+            attacker_direction = 'dstip'
             source_target_tag = 'Malware'
-            detection_info = daddr
-            type_evidence = 'PastebinDownload'
+            attacker = daddr
+            evidence_type = 'PastebinDownload'
             threat_level = 'info'
             category = 'Anomaly.Behaviour'
             confidence = 1
@@ -454,20 +413,9 @@ class Module(Module, multiprocessing.Process):
             description = (
                f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
             )
-            __database__.setEvidence(
-                type_evidence,
-                type_detection,
-                detection_info,
-                threat_level,
-                confidence,
-                description,
-                timestamp,
-                category,
-                source_target_tag=source_target_tag,
-                profileid=profileid,
-                twid=twid,
-                uid=uid,
-            )
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, timestamp, category, source_target_tag=source_target_tag,
+                                     profileid=profileid, twid=twid, uid=uid)
             return True
 
     def detect_binary_downloads(
@@ -484,30 +432,19 @@ class Module(Module, multiprocessing.Process):
         if not resp_mime_types or not ('application/x-dosexec' in resp_mime_types):
             return False
 
-        type_detection = 'dstdomain'
+        attacker_direction = 'dstdomain'
         source_target_tag = 'Malware'
-        detection_info = f'{host}{uri}'
-        type_evidence = 'DOSExecutableDownload'
+        attacker = f'{host}{uri}'
+        evidence_type = 'DOSExecutableDownload'
         threat_level = 'low'
         category = 'Information'
         confidence = 1
         description = (
-            f'DOS executable binary download from IP: {daddr} {detection_info}'
+            f'DOS executable binary download from IP: {daddr} {attacker}'
         )
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
         return True
 
 
@@ -615,7 +552,5 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
                 return True

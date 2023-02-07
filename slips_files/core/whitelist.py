@@ -4,7 +4,7 @@ from slips_files.common.config_parser import ConfigParser
 import ipaddress
 import validators
 from slips_files.common.slips_utils import utils
-import re
+import tld
 import os
 
 
@@ -188,7 +188,7 @@ class Whitelist:
                 from_ = whitelisted_IPs[saddr]['from']
                 what_to_ignore = whitelisted_IPs[saddr]['what_to_ignore']
                 if ('src' in from_ or 'both' in from_) and (
-                        'flows' in what_to_ignore or 'both' in what_to_ignore
+                        self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the src IP {column_values['saddr']}")
                     return True
@@ -198,7 +198,7 @@ class Whitelist:
                 from_ = whitelisted_IPs[daddr]['from']
                 what_to_ignore = whitelisted_IPs[daddr]['what_to_ignore']
                 if ('dst' in from_ or 'both' in from_) and (
-                    'flows' in what_to_ignore or 'both' in what_to_ignore
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"Whitelisting the dst IP {column_values['daddr']}")
                     return True
@@ -224,7 +224,7 @@ class Whitelist:
                 if (
                     ('src' in from_ or 'both' in from_)
                     and
-                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                    (self.should_ignore_flows(what_to_ignore))
                 ):
                     # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
                     return True
@@ -238,7 +238,7 @@ class Whitelist:
                 if (
                     ('dst' in from_ or 'both' in from_)
                     and
-                    ('flows' in what_to_ignore or 'both' in what_to_ignore)
+                    (self.should_ignore_flows(what_to_ignore))
                 ):
                     # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
                     return True
@@ -258,9 +258,7 @@ class Whitelist:
                 ]  # flows, alerts or both
                 # self.print(f'Checking {org}, from:{from_} type {what_to_ignore}')
 
-
-
-                if 'flows' in what_to_ignore or 'both' in what_to_ignore:
+                if self.should_ignore_flows(what_to_ignore):
                     # We want to block flows from this org. get the domains of this flow based on the direction.
                     if 'both' in from_:
                         domains_to_check = (
@@ -324,9 +322,17 @@ class Whitelist:
                 # self.print(f"The domain of this flow ({domain}) belongs to the domains of {org}")
                 return True
 
-            flow_TLD = domain.split('.')[-1]
+            try:
+                flow_TLD = tld.get_tld(domain, as_object=True)
+            except tld.exceptions.TldBadUrl:
+                flow_TLD = domain.split('.')[-1]
+
             for org_domain in org_domains:
-                org_domain_TLD = org_domain.split('.')[-1]
+                try:
+                    org_domain_TLD = tld.get_tld(org_domain, as_object=True)
+                except tld.exceptions.TldBadUrl:
+                    org_domain_TLD = org_domain.split('.')[-1]
+
                 # make sure the 2 domains have the same same top level domain
                 if flow_TLD != org_domain_TLD:
                     continue
@@ -471,7 +477,7 @@ class Whitelist:
 
                         else:
                             self.print(f'{data} is not a valid {type_}.', 1, 0)
-                    except:
+                    except Exception as ex:
                         self.print(
                             f'Line {line_number} in whitelist.conf is invalid. Skipping. '
                         )
@@ -542,12 +548,9 @@ class Whitelist:
         try:
             org_subnets: dict = __database__.get_org_IPs(org)
 
-            if '.' in ip:
-                first_octet = ip.split('.')[0]
-            elif ':' in ip:
-                first_octet = ip.split(':')[0]
-            else:
-                return False
+            first_octet:str = utils.get_first_octet(ip)
+            if not first_octet:
+                return
             ip_obj = ipaddress.ip_address(ip)
             # organization IPs are sorted by first octet for faster search
             for range in org_subnets.get(first_octet, []):
@@ -599,28 +602,30 @@ class Whitelist:
         """
         # Check if the IP in the content of the alert has ASN info in the db
         ip_data = __database__.getIPData(ip)
-        if ip_data:
-            ip_asn = ip_data.get('asn', {'asnorg': ''})[
-                'asnorg'
-            ]
-            org_asn = json.loads(
-                __database__.get_org_info(org, 'asn')
-            )
-            # make sure the asn field contains a value
-            if ip_asn not in ('', 'Unknown') and (
-                org.lower() in ip_asn.lower()
-                or ip_asn in org_asn
-            ):
-                # this ip belongs to a whitelisted org, ignore alert
-                # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip}
-                # related to {org}. {data} in {description}')
-                return True
+        if not ip_data:
+            return
+        try:
+            ip_asn = ip_data['asn']['number']
+        except KeyError:
+            return
 
-    def is_srcip(self, type_detection):
-        return type_detection in ('sip', 'srcip', 'sport', 'inTuple')
+        org_asn: list = json.loads(__database__.get_org_info(org, 'asn'))
 
-    def is_dstip(self, type_detection):
-        return type_detection in ('dip', 'dstip', 'dport', 'outTuple')
+        # make sure the asn field contains a value
+        if (
+            org.lower() in ip_asn.lower()
+            or ip_asn in org_asn
+        ):
+            # this ip belongs to a whitelisted org, ignore alert
+            # self.print(f'Whitelisting evidence sent by {srcip} about {ip} due to ASN of {ip}
+            # related to {org}. {data} in {description}')
+            return True
+
+    def is_srcip(self, attacker_direction):
+        return attacker_direction in ('sip', 'srcip', 'sport', 'inTuple')
+
+    def is_dstip(self, attacker_direction):
+        return attacker_direction in ('dip', 'dstip', 'dport', 'outTuple')
 
     def should_ignore_from(self, direction) -> bool:
         """
@@ -670,18 +675,19 @@ class Whitelist:
             whitelisted_macs = {}
         return whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs
 
+
     def is_whitelisted_evidence(
-            self, srcip, data, type_detection, description
+            self, srcip, data, attacker_direction, description
         ) -> bool:
             """
             Checks if IP is whitelisted
             :param srcip: Src IP that generated the evidence
-            :param data: This is what was detected in the evidence. (detection_info) can be ip, domain, tuple(ip:port:proto).
-            :param type_detection: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
+            :param data: This is what was detected in the evidence. (attacker) can be ip, domain, tuple(ip:port:proto).
+            :param attacker_direction: 'sip', 'dip', 'sport', 'dport', 'inTuple', 'outTuple', 'dstdomain'
             :param description: may contain IPs if the evidence is coming from portscan module
             """
 
-            # self.print(f'Checking the whitelist of {srcip}: {data} {type_detection} {description} ')
+            # self.print(f'Checking the whitelist of {srcip}: {data} {attacker_direction} {description} ')
 
             whitelist = __database__.get_all_whitelist()
             max_tries = 10
@@ -700,9 +706,9 @@ class Whitelist:
             whitelisted_IPs, whitelisted_domains, whitelisted_orgs, whitelisted_macs = self.parse_whitelist(whitelist)
 
             # Set data type
-            if 'domain' in type_detection:
+            if 'domain' in attacker_direction:
                 data_type = 'domain'
-            elif 'outTuple' in type_detection:
+            elif 'outTuple' in attacker_direction:
                 # for example: ip:port:proto
                 data = data.split('-')[0]
                 data_type = 'ip'
@@ -715,8 +721,8 @@ class Whitelist:
                 # Check that the IP in the content of the alert is whitelisted
                 # Was the evidence coming as a src or dst?
                 ip = data
-                is_srcip = self.is_srcip(type_detection)
-                is_dstip = self.is_dstip(type_detection)
+                is_srcip = self.is_srcip(attacker_direction)
+                is_dstip = self.is_dstip(attacker_direction)
                 if ip in whitelisted_IPs:
                     # Check if we should ignore src or dst alerts from this ip
                     # from_ can be: src, dst, both
@@ -755,9 +761,15 @@ class Whitelist:
                         
             # Check domains
             if data_type == 'domain':
-                is_srcdomain = type_detection in ('srcdomain')
-                is_dstdomain = type_detection in ('dstdomain')
-                domain = data
+                is_srcdomain = attacker_direction in ('srcdomain')
+                is_dstdomain = attacker_direction in ('dstdomain')
+                # extract the top level domain
+                try:
+                    domain = tld.get_fld(data, fix_protocol=True)
+                except tld.exceptions.TldBadUrl:
+                    domain = data
+                    for str_ in ('http://', 'https://','www'):
+                        domain = domain.replace(str_, "")
                 # is domain in whitelisted domains?
                 for domain_in_whitelist in whitelisted_domains:
                     # We go one by one so we can match substrings in the domains
@@ -786,8 +798,6 @@ class Whitelist:
                             #            f'related to {data} in {description}')
                             return True
 
-                # remove the www. because no tranco whitelist entry has it
-                domain = domain.replace('www.','')
                 if __database__.is_whitelisted_tranco_domain(domain):
                     # tranco list contains the top 10k known benign domains
                     # https://tranco-list.eu/list/X5QNN/1000000
@@ -795,8 +805,8 @@ class Whitelist:
 
             # Check orgs
             if whitelisted_orgs:
-                is_src = self.is_srcip(type_detection) or type_detection in 'srcdomain'
-                is_dst = self.is_dstip(type_detection) or type_detection in 'dstdomain'
+                is_src = self.is_srcip(attacker_direction) or attacker_direction in 'srcdomain'
+                is_dst = self.is_dstip(attacker_direction) or attacker_direction in 'dstdomain'
 
                 for org in whitelisted_orgs:
                     from_ = whitelisted_orgs[org]['from']
@@ -856,11 +866,16 @@ class Whitelist:
         except (FileNotFoundError, IOError):
             # theres no slips_files/organizations_info/{org}_asn for this org
             # see if the org has asn cached in our db
-            asn_cache = __database__.get_asn_cache()
+            asn_cache: dict = __database__.get_asn_cache()
             org_asn = []
-            for asn in asn_cache:
-                if org in asn.lower():
-                    org_asn.append(org)
+            # asn_cache is a dict sorted by first octet
+            for octet, range_info in asn_cache.items:
+                # range_info is a serialized dict of ranges
+                range_info = json.loads(range_info)
+                for range, asn_info in range_info.items():
+                    # we have the asn of this given org cached
+                    if org in asn_info['org'].lower():
+                        org_asn.append(org)
 
         __database__.set_org_info(org, json.dumps(org_asn), 'asn')
         return org_asn
@@ -914,13 +929,11 @@ class Whitelist:
                         # not a valid line, ignore it
                         continue
 
-                    if '.' in line:
-                        first_octet = line.split('.')[0]
-                    elif ':' in line:
-                        first_octet = line.split(':')[0]
-                    else:
-                        # not ipv4 or opv6
+                    first_octet = utils.get_first_octet(line)
+                    if not first_octet:
+                        line = f.readline()
                         continue
+
                     try:
                         org_subnets[first_octet].append(line)
                     except KeyError:

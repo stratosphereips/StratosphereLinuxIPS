@@ -30,6 +30,15 @@ The detection techniques are:
 - SMTP login bruteforce
 - DNS ARPA Scans
 - Multiple SSH versions
+- Incompatible CN
+- Weird HTTP methods
+- Non-SSL connections on port 443
+- Non-HTTP connections on port 80
+- Connection to private IPs 
+- Connection to private IPs outside the current local network
+- High entropy DNS TXT answers 
+- Devices changeing IPs
+- SSH version changing
 
 The details of each detection follows.
 
@@ -41,16 +50,62 @@ By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minut
 
 This threshold can be changed ```config/slips.conf``` by changing the value of  ```long_connection_threshold```  
 
+### Incompatible CN
 
-## Weird HTTP methods
+Zeek logs each Certificate CN in ssl.log
+
+When slips enccounters a cn that claims to belong to any of Slips supported orgs (Google, Microsoft, Apple or Twitter)
+Slips checks if the destination address or the destination server name belongs to these org. 
+
+If not, slips generates an alert.
+
+### High entropy DNS TXT answers 
+
+Slips check every DNS answer with TXT record for high entropy
+strings. 
+Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
+and alerted by slips.
+
+the entropy threshold can be changed in slips.conf by changing the value of ```entropy_threshold```
+
+
+
+### Devices changing IPs
+
+Slips stores the MAC of each new IP it sees in conn.log.
+
+Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
+
+If so, it alerts "Device changing IPs".
+
+
+### SMTP login bruteforce
+
+Slips alerts when 3+ invalid SMTP login attempts occurs within 10s
+
+
+### Connection to private IPs
+
+Slips detects when a private IP is connected to another private IP with threat level info.
+
+But it skips this alert when it's a DNS connection on port 53 UDP to the gateway
+
+### Connection to private IPs outside the current local network
+
+Slips detects the currently used local network and alerts if it find a
+connection to/from a private IP that doesn't belong to it.
+
+For example if the currently used local network is: 192.168.1.0/24
+
+and slips sees a forged packet going from 192.168.1.2 to 10.0.0.1, it will alert
+
+### Weird HTTP methods
 
 Slips uses zeek's weird.log where zeek logs weird HTTP methods seen in http.log
 
 When there's a weird HTTP method, slips detects it as well.
 
-
-
-##Non-SSL connections on port 443 
+### Non-SSL connections on port 443 
 
 Slips detects established connections on port 443 that are not using HTTP
 using zeek's conn.log flows
@@ -58,7 +113,7 @@ using zeek's conn.log flows
 if slips finds a flow using destination port 443 and the 'service' field 
 in conn.log isn't set to 'ssl', it alerts
 
-##Non-HTTP connections on port 80.
+## Non-HTTP connections on port 80.
 
 Slips detects established connections on port 80 that are not using SSL
 using zeek's conn.log flows
@@ -115,7 +170,6 @@ The domains that are excepted are:
 - Subdomains of cymru.com, since it is used by the ipwhois library to get the ASN of an IP and its range.
 - Ignore WPAD domain from Windows
 - Ignore domains without a TLD such as the Chrome test domains.
-
 
 
 ### Connection to unknown ports
@@ -251,16 +305,16 @@ Then, if the source IP is seen doing 10 or more ARPA queries within 2 seconds,
 slips generates an ARPA scan detection.
 
 
-### Multiple SSH versions
+### SSH version changing
 
-Zeek logs the used software and software versions in software.log, so slips knows from this file the software used by different IPs, like whether it's an SSH::CLIENT, an HTTP::BROWSER, or an HTTP::SERVER
+Zeek logs the used software and software versions in software.log, so slips knows from this file the software used by different IPs,
+like whether it's an SSH::CLIENT, an HTTP::BROWSER, or an HTTP::SERVER
 
-When slips detects an SSH client, it stores it with the IP and the SSH client versions used in the database
+When slips detects an SSH client or an SSH server, it stores it with the IP and the SSH versions used in the database
 
-Then whenever slips sees the same IP using another SSH client, it compares the stored SSH versions with the current SSH versions
+Then whenever slips sees the same IP using another SSH version, it compares the stored SSH versions with the current SSH versions
 
 If they are different, slips generates an alert
-
 
 
 ## Detection modules
@@ -522,7 +576,8 @@ Every time Slips encounters an TLS flow,
 it compares each JA3 and JA3s with the feeds of malicious JA3 and alerts when
 there’s a match.
 Slips is shipped with the Abuse.ch JA3 feed by default
-You can add your own SSL feed by appending to the ```ja3_feeds``` key in ```config/slips.conf```
+You can add your own SSL feed by appending to the file defined by the ```ja3_feeds``` key in
+```config/slips.conf```, which is by default ```config/JA3_feeds.csv```
 
 #### Matching of SSL SHA1 Hashes
 
@@ -531,7 +586,8 @@ then it compares the hash with our list of blacklisted SSL certificates
 
 Slips is shipped with the Abuse.ch SSL feed by default,
 
-You can add your own SSL feed by appending to the ```ssl_feeds``` key in ```config/slips.conf```
+You can add your own SSL feed by appending to the file defined by the ```ssl_feeds``` key in ```config/slips.conf```, which is by default 
+```config/SSL_feeds.csv```
 
 #### Local Threat Intelligence files
 
@@ -582,11 +638,6 @@ Threat level available options: info, low, medium, high, critical
 
 Refer to the [architecture section of the docs](https://stratospherelinuxips.readthedocs.io/en/develop/architecture.html) for detailed explanation of Slips threat levels.
 
-
-Be sure the format is:
-
-link, threat_level=0-1, tags=['tag1','tag2']
-
 TI files commented using # may be processed as they're still in our database. 
 
 Use ```;``` for commenting TI files in ```config/slips.conf``` instead of ```#```.
@@ -603,11 +654,11 @@ If you have a remote file link that you wish to comment and remove from the data
 you can do so by adding ';' to the line that contains the feed link in ```config/slips.conf```, don't use the '#'
 for example to comment the ```bruteforcelogin``` feed you should do the following:
     
-    ;https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    ;https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 instead of:
 
-    #https://lists.blocklist.de/lists/bruteforcelogin.txt, threat_level=medium, tags=['honeypot']
+    #https://lists.blocklist.de/lists/bruteforcelogin.txt,medium,['honeypot']
 
 ### Update Manager Module
 
@@ -615,7 +666,7 @@ To make sure Slips is up to date with the most recent IoCs in all feeds,
 all feeds are loaded, parsed and updated periodically and automatically by 
 Slips every 24 hours, which requires no user interaction.
 
-The 24 hours interval can be changed by changing the ```malicious_data_update_period``` key in ```config/slips.conf```
+The 24 hours interval can be changed by changing the ```TI_files_update_period``` key in ```config/slips.conf```
 
 Update manager is responsible for updating all remote TI files (including SSL and JA3 etc.)
 
@@ -790,7 +841,9 @@ slips detects this with 'low' threat level
 
 Some malware use pastebin as the host of their malicious payloads. 
 
-Slips detects downloads of files from pastebin with size > 12000. 
+Slips detects downloads of files from pastebin with size >= 700 bytes. 
+
+This value can be customized in slips.conf by changing ```pastebin_download_threshold```
 
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
@@ -815,24 +868,13 @@ In order for this module to run you need:
   <li>tshark</li>
 </ul>
 
-You can compile YARA by running
+You can install YARA by running
 
-`wget https://github.com/VirusTotal/yara/archive/refs/tags/v4.1.3.tar.gz 
-  && tar -zxf v4.1.3.tar.gz 
-  && cd yara-4.1.3 
-  && ./bootstrap.sh 
-  && ./configure 
-  && make 
-  && make install`
-
-You can install yara-python by running
-
-`git clone https://github.com/VirusTotal/yara-python yara-python && cd yara-python
-python3 setup.py build && python3 setup.py install`
+```sudo apt install yara```
 
 You can install tshark by running
 
-`apt install wireshark`
+`sudo apt install wireshark`
 
 
 #### How it works
@@ -854,12 +896,13 @@ The rules will be automatically detected, compiled and run on the given PCAP.
 If you want to contribute, improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
 
 
-### Portscan Detector Module
+### Network service discovery Module
 
 This module is responsibe for detecting scans such as:
 - Vertical port scans
 - Horizontal port scans
 - PING sweeps
+- DHCP scans
 
 
 #### Vertical port scans
@@ -979,3 +1022,4 @@ We detect a scan every threshold. So we generate an evidence when there is
 ---
 
 If you want to contribute: improve existing Slips detection modules or implement your own detection modules, see section :doc:`Contributing <contributing>`.
+

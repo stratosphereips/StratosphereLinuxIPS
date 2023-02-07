@@ -1,12 +1,9 @@
-# Must imports
 from slips_files.common.abstracts import Module
 from slips_files.common.config_parser import ConfigParser
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 import multiprocessing
 import sys
-
-# Your imports
 from ..CESNET.warden_client import Client, read_cfg
 import os
 import json
@@ -15,6 +12,7 @@ import threading
 import queue
 import ipaddress
 import validators
+import traceback
 
 
 class Module(Module, multiprocessing.Process):
@@ -131,9 +129,9 @@ class Module(Module, multiprocessing.Process):
         profileid = evidence['profileid']
         twid = evidence['twid']
         srcip = profileid.split('_')[1]
-        type_evidence = evidence['type_evidence']
-        type_detection = evidence['type_detection']
-        detection_info = evidence['detection_info']
+        evidence_type = evidence['evidence_type']
+        attacker_direction = evidence['attacker_direction']
+        attacker = evidence['attacker']
         ID = evidence['ID']
         confidence = evidence.get('confidence')
         category = evidence.get('category')
@@ -144,9 +142,9 @@ class Module(Module, multiprocessing.Process):
 
         evidence_in_IDEA = utils.IDEA_format(
             srcip,
-            type_evidence,
-            type_detection,
-            detection_info,
+            evidence_type,
+            attacker_direction,
+            attacker,
             description,
             confidence,
             category,
@@ -350,7 +348,6 @@ class Module(Module, multiprocessing.Process):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
+                self.print(traceback.format_exc(), 0, 1)
+
                 return True

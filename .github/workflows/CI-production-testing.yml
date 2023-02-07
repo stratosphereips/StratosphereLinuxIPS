@@ -1,0 +1,112 @@
+name: CI-production
+
+on:
+  pull_request:
+    branches:
+    - 'master'
+    - '!develop'
+
+jobs:
+
+  test_slips_locally:
+    # runs the tests on a GH VM
+    runs-on: ubuntu-20.04
+    # 2 hours timeout
+    timeout-minutes: 7200
+
+    env:
+      SLIPS_VERSION: v1.0.1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: 'develop'
+        # Fetch all history for all tags and branches
+        fetch-depth: ''
+
+    - name: Install slips dependencies
+      run: sudo apt-get -y --no-install-recommends install python3 redis-server python3-pip python3-certifi python3-dev build-essential file lsof net-tools iproute2 iptables python3-tzlocal nfdump tshark git whois golang nodejs notify-osd yara libnotify-bin
+
+    - name: Install Zeek
+      run: |
+        sudo echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_20.04/ /' | sudo tee /etc/apt/sources.list.d/security:zeek.list
+        curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_20.04/Release.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null
+        sudo apt update
+        sudo apt install -y --no-install-recommends zeek
+        sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
+
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
+      with:
+        python-version: "3.8"
+
+    - name: Install Python dependencies
+      run:
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Start redis server
+      run: redis-server --daemonize yes
+
+    - name: Run unit tests
+      run: python3  -m pytest tests/  --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+
+    - name: Run database unit tests
+      run: python3  -m pytest tests/test_database.py -p no:warnings -vv
+
+    - name: Run daemon unit tests
+      run: python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+
+    - name: Clear redis cache
+      run: ./slips.py -cc
+
+    - name: Integration tests
+      run: python3 -m pytest -s tests/integration_tests/test_dataset.py -n 3 -p no:warnings -vv
+
+    - name: Config file tests
+      run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+
+     #Reaching this step means all unit tests passed out side of docker
+
+  test_slips_in_docker:
+    # runs the tests in a docker(built by this job) on stop of a GH VM
+    runs-on: ubuntu-20.04
+    # 2 hours timeout
+    timeout-minutes: 7200
+    env:
+      SLIPS_VERSION: v1.0.1
+
+    steps:
+
+    # clone slips and checkout branch
+    # By default it checks out only one commit
+    - uses: actions/checkout@v3
+      with:
+        ref: 'develop'
+
+    # build slips from ubuntu dockerfile, but don't push
+    - name: Build our ubuntu image from dockerfile
+      id: docker_build_slips
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/ubuntu-image/Dockerfile
+        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        push: false
+
+    # use the built image to run unit tests inside docker
+    # we ignore the blocking module unit tests because we cannot run
+    # docker with -cap-add=NET_ADMIN and use iptables in GH actions
+    - name: Run unit tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        run: |
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
+          python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+          python3  -m pytest tests/test_database.py -p no:warnings -vv
+          python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+

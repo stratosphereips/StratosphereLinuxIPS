@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             time.sleep(120)
             try:
                 flow_info = self.circllu_queue.get(timeout=0.5)
-            except:
+            except Exception as ex:
                 # queue is empty wait extra 2 min
                 continue
 
@@ -97,6 +97,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not os.path.exists(self.path_to_local_ti_files):
             os.mkdir(self.path_to_local_ti_files)
 
+    def set_evidence_malicious_asn(
+            self,
+            ip,
+            uid,
+            timestamp,
+            ip_info,
+            profileid,
+            twid,
+            asn,
+            asn_info,
+        ):
+        """
+        :param asn_info: the malicious asn info taken from own_malicious_iocs.csv
+        """
+        attacker_direction = 'dstip'
+        attacker = ip
+        category = 'Anomaly.Traffic'
+        evidence_type = 'ThreatIntelligenceBlacklistedASN'
+        confidence = 0.8
+
+        # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
+        threat_level = asn_info.get('threat_level', 'medium')
+
+        tags = asn_info.get('tags', False)
+        source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
+        identification = __database__.getIPIdentification(ip)
+
+        description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
+                      f'Description: {asn_info["description"]}, ' \
+                      f'Found in feed: {asn_info["source"]}, ' \
+                      f'Confidence: {confidence}.'\
+                      f'Tags: {tags} ' \
+                      f'{identification}'
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
+
+
     def set_evidence_malicious_ip(
         self,
         ip,
@@ -118,17 +157,17 @@ class Module(Module, multiprocessing.Process, URLhaus):
         :param ip_state: can be 'srcip' or 'dstip'
         """
 
-        type_detection = ip_state
-        detection_info = ip
-        type_evidence = 'ThreatIntelligenceBlacklistIP'
+        attacker_direction = ip_state
+        attacker = ip
+        evidence_type = 'ThreatIntelligenceBlacklistIP'
 
         threat_level = ip_info.get('threat_level', 'medium')
 
         confidence = 1
         category = 'Anomaly.Traffic'
-        if 'src' in type_detection:
+        if 'src' in attacker_direction:
             direction = 'from'
-        elif 'dst' in type_detection:
+        elif 'dst' in attacker_direction:
             direction = 'to'
 
         # getting the ip identification adds ti description and tags to the returned str
@@ -153,31 +192,14 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
-        tags = ''
-        if tags_temp := ip_info.get('tags', False):
-            # We need tags_temp so we avoid doing a replace on a bool.
-            tags = tags_temp.replace('[', '').replace(']', '').replace("'", '')
-
-        if tags != '':
-            # description += f' tags={tags}'
-            source_target_tag = tags.capitalize()
+        if tags := ip_info.get('tags', False):
+            source_target_tag = tags[0].capitalize()
         else:
             source_target_tag = 'BlacklistedIP'
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
@@ -205,10 +227,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not domain_info:
             return
 
-        type_detection = 'dstdomain'
-        detection_info = domain
+        attacker_direction = 'dstdomain'
+        attacker = domain
         category = 'Anomaly.Traffic'
-        type_evidence = 'ThreatIntelligenceBlacklistDomain'
+        evidence_type = 'ThreatIntelligenceBlacklistDomain'
         # in case of finding a subdomain in our blacklists
         # print that in the description of the alert and change the confidence accordingly
         # in case of a domain, confidence=1
@@ -217,13 +239,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # when we comment ti_files and run slips, we get the error of not being able to get feed threat_level
         threat_level = domain_info.get('threat_level', 'high')
 
-        tags = (
-            domain_info.get('tags', '')
-                .replace('[', '')
-                .replace(']', '')
-                .replace("'", '')
-        )
-        source_target_tag = tags.capitalize() if tags else 'BlacklistedDomain'
+        tags = domain_info.get('tags', False)
+        source_target_tag = tags[0].capitalize() if tags else 'BlacklistedDomain'
 
         if self.is_dns_response:
             description = f'DNS answer with a blacklisted CNAME: {domain} ' \
@@ -233,24 +250,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'Description: {domain_info.get("description", "")}, '\
                        f'Found in feed: {domain_info["source"]}, '\
-                       f'with tags: {tags}. '\
                        f'Confidence: {confidence}.'
+        if tags:
+            description += f'with tags: {tags}. '
 
-
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            timestamp,
-            category,
-            source_target_tag=source_target_tag,
-            profileid=profileid,
-            twid=twid,
-            uid=uid,
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -285,8 +291,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         :param ti_file_path: full path_to local threat intel file
         """
         data_file_name = ti_file_path.split('/')[-1]
-        malicious_ips_dict = {}
-        malicious_domains_dict = {}
+        malicious_ips = {}
+        malicious_asns = {}
+        malicious_domains = {}
+        malicious_ip_ranges = {}
         # used for debugging
         line_number = 0
         with open(ti_file_path) as local_ti_file:
@@ -311,7 +319,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 ioc, threat_level, description, = (
                     data[0],
                     data[1].lower(),
-                    data[2],
+                    data[2].strip(),
                 )
 
                 # validate the threat level taken from the user
@@ -325,7 +333,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     # Only use global addresses. Ignore multicast, broadcast, private, reserved and undefined
                     if ip_address.is_global:
                         # Store the ip in our local dict
-                        malicious_ips_dict[str(ip_address)] = json.dumps(
+                        malicious_ips[str(ip_address)] = json.dumps(
                             {
                                 'description': description,
                                 'source': data_file_name,
@@ -334,7 +342,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             }
                         )
                 elif data_type == 'domain':
-                    malicious_domains_dict[ioc] = json.dumps(
+                    malicious_domains[ioc] = json.dumps(
                         {
                             'description': description,
                             'source': data_file_name,
@@ -342,18 +350,48 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             'tags': 'local TI file',
                         }
                     )
+                elif data_type == 'ip_range':
+                    net_addr = ioc[: ioc.index('/')]
+                    ip_obj = ipaddress.ip_address(net_addr)
+                    if (
+                        ip_obj.is_multicast
+                        or ip_obj.is_private
+                        or ip_obj.is_link_local
+                        or net_addr in utils.home_networks
+                    ):
+                        continue
+                    malicious_ip_ranges[ioc] = json.dumps(
+                        {
+                            'description': description,
+                            'source': data_file_name,
+                            'threat_level': threat_level,
+                            'tags': 'local TI file',
+                        }
+                    )
+                elif data_type == 'asn':
+                    malicious_asns[ioc] = json.dumps(
+                            {
+                                'description': description,
+                                'source': data_file_name,
+                                'threat_level': threat_level,
+                                'tags': 'local TI file',
+                            }
+                        )
+
                 else:
                     # invalid ioc, skip it
                     self.print(
-                        f'Error while reading the TI file {local_ti_file}.'
+                        f'Error while reading the TI file {ti_file_path}.'
                         f' Line {line_number} has invalid data: {ioc}',
                         0, 1,
                     )
 
         # Add all loaded malicious ips to the database
-        __database__.add_ips_to_IoC(malicious_ips_dict)
+        __database__.add_ips_to_IoC(malicious_ips)
         # Add all loaded malicious domains to the database
-        __database__.add_domains_to_IoC(malicious_domains_dict)
+        __database__.add_domains_to_IoC(malicious_domains)
+        __database__.add_ip_range_to_IoC(malicious_ip_ranges)
+        __database__.add_asn_to_IoC(malicious_asns)
         return True
 
     def __delete_old_source_IPs(self, file):
@@ -399,7 +437,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         Returns nothing, but the dictionary should be filled
         :param path: full path_to local threat intel file
         """
-        data_file_name = path.split('/')[-1]
+        filename = os.path.basename(path)
         ja3_dict = {}
         # used for debugging
         line_number = 0
@@ -423,19 +461,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 # the column order is hardcoded because it's owr own ti file and we know the format,
                 # we shouldn't be trying to find it
                 ja3, threat_level, description = (
-                    data[0],
-                    data[1].lower(),
+                    data[0].strip(),
+                    data[1].lower().strip(),
                     data[2],
                 )
 
                 # validate the threat level taken from the user
-                if threat_level not in (
-                    'info',
-                    'low',
-                    'medium',
-                    'high',
-                    'critical',
-                ):
+                if utils.is_valid_threat_level(threat_level):
                     # default value
                     threat_level = 'medium'
 
@@ -446,7 +478,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 ja3_dict[ja3] = json.dumps(
                     {
                         'description': description,
-                        'source': data_file_name,
+                        'source': filename,
                         'threat_level': threat_level,
                     }
                 )
@@ -454,63 +486,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.add_ja3_to_IoC(ja3_dict)
         return True
 
-    def check_local_ti_files_for_update(self, path_to_files: str) -> bool:
+    def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
-        Checks if a local TI file was changed based
-        on it's hash. if so, update its content and delete old data
+        Checks if a local TI file was changed based on it's hash.
+        If the file should be updated, its hash will be returned
+        :param path_to_local_ti_file: full path to a local ti file in our config/local_ti_files
         """
-        local_ti_files = os.listdir(path_to_files)
-        for localfile in local_ti_files:
-            self.print(f'Loading local TI file {localfile}', 2, 0)
-            # Get what files are stored in cache db and their E-TAG to comapre with current files
-            data = __database__.get_TI_file_info(localfile)
-            old_hash = data.get('hash', False)
+        filename = os.path.basename(path_to_local_ti_file)
 
-            # In the case of the local file, we dont store the e-tag
-            # we calculate the hash
-            new_hash = utils.get_hash_from_file(f'{path_to_files}/{localfile}')
+        self.print(f'Loading local TI file {path_to_local_ti_file}', 2, 0)
+        # Get what files are stored in cache db and their E-TAG to comapre with current files
+        data = __database__.get_TI_file_info(filename)
+        old_hash = data.get('hash', False)
 
-            if not new_hash:
-                # Something failed. Do not download
-                self.print(
-                    f'Some error ocurred on calculating file hash.'
-                    f' Not loading the file {localfile}', 0, 3,
-                )
-                return False
+        # In the case of the local file, we dont store the e-tag
+        # we calculate the hash
+        new_hash = utils.get_hash_from_file(path_to_local_ti_file)
 
-            if old_hash == new_hash:
-                # The 2 hashes are identical. File is up to date.
-                self.print(f'File {localfile} is up to date.', 2, 0)
+        if not new_hash:
+            # Something failed. Do not download
+            self.print(
+                f'Some error ocurred on calculating file hash.'
+                f' Not loading the file {path_to_local_ti_file}', 0, 3,
+            )
+            return False
 
-            else:
-                # Our TI file was changed. Load the new one
-                self.print(f'Updating the local TI file {localfile}', 2, 0)
-                if old_hash:
-                    # File is updated and was in database.
-                    # Delete previous data of this file.
-                    self.__delete_old_source_data_from_database(localfile)
-                full_path_to_file = os.path.join(path_to_files, localfile)
-                # we have 2 types of local files, TI and JA3 files
-                if 'ja3' in localfile.lower():
-                    self.parse_ja3_file(full_path_to_file)
-                else:
-                    # Load updated data to the database
-                    self.parse_local_ti_file(full_path_to_file)
+        if old_hash == new_hash:
+            # The 2 hashes are identical. File is up to date.
+            self.print(f'File {path_to_local_ti_file} is up to date.', 2, 0)
+            return False
 
-                # Store the new etag and time of file in the database
-                malicious_file_info = {'hash': new_hash}
-                __database__.set_TI_file_info(localfile, malicious_file_info)
-        return True
+        else:
+            # Our TI file was changed. Load the new one
+            self.print(f'Updating the local TI file {path_to_local_ti_file}', 2, 0)
 
-    def set_maliciousIP_to_IPInfo(self, ip, ip_description):
-        """
-        Set malicious IP in IPsInfo.
-        """
-
-        ip_data = {'threatintelligence': ip_description}
-        __database__.setInfoForIPs(
-            ip, ip_data
-        )  # Set in the IP info that IP is blacklisted
+            if old_hash:
+                # File is updated and was in database.
+                # Delete previous data of this file from the db.
+                self.__delete_old_source_data_from_database(filename)
+            return new_hash
 
     def is_outgoing_icmp_packet(self, protocol: str, ip_state: str) -> bool:
         """
@@ -561,7 +575,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         try:
             spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
-        except:
+        except Exception as ex:
             spamhaus_result = 0
 
         if not spamhaus_result:
@@ -611,10 +625,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
         """
-        type_detection = 'md5'
+        attacker_direction = 'md5'
         category = 'Malware'
-        type_evidence = 'MaliciousDownloadedFile'
-        detection_info = file_info["md5"]
+        evidence_type = 'MaliciousDownloadedFile'
+        attacker = file_info["md5"]
         threat_level = file_info["threat_level"]
         daddr = file_info["daddr"]
         ip_identification = __database__.getIPIdentification(daddr)
@@ -622,25 +636,15 @@ class Module(Module, multiprocessing.Process, URLhaus):
         threat_level = utils.threat_level_to_string(threat_level)
 
         description = (
-            f'Malicious downloaded file {detection_info}. '
+            f'Malicious downloaded file {attacker}. '
             f'size: {file_info["size"]} '
             f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
 
-        __database__.setEvidence(
-            type_evidence,
-            type_detection,
-            detection_info,
-            threat_level,
-            confidence,
-            description,
-            file_info["ts"],
-            category,
-            profileid=file_info["profileid"],
-            twid=file_info["twid"],
-            uid=file_info["uid"],
-        )
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
+                                 uid=file_info["uid"])
 
     def circl_lu(self, flow_info):
         """
@@ -678,7 +682,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 f"{circl_base_url}/md5/{md5}",
                headers=self.circl_session.headers
             )
-        except:
+        except Exception as ex:
             # add the hash to the cirllu queue and ask for it later
             self.circllu_queue.put(flow_info)
             return
@@ -725,10 +729,45 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if spamhaus_res:
             return spamhaus_res
 
+    def ip_has_blacklisted_ASN(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
+        """
+        Check if this ip has any of our blacklisted ASNs.
+        blacklisted asns are taken from own_malicious_iocs.csv
+        """
+        ip_info = __database__.getIPData(ip)
+        if not ip_info:
+            # we dont know the asn of this ip
+            return
 
-    def ip_belongs_to_blacklisted_range(self, ip, uid, timestamp, profileid, twid, ip_state):
+        if 'asn' not in ip_info:
+            return
+
+        asn = ip_info['asn'].get('number','')
+        if not asn:
+            return
+
+        if asn_info := __database__.is_blacklisted_ASN(asn):
+            asn_info = json.loads(asn_info)
+            self.set_evidence_malicious_asn(
+                ip,
+                uid,
+                timestamp,
+                ip_info,
+                profileid,
+                twid,
+                asn,
+                asn_info,
+            )
+
+    def ip_belongs_to_blacklisted_range(
+            self, ip, uid, timestamp, profileid, twid, ip_state
+    ):
         """ check if this ip belongs to any of our blacklisted ranges"""
         ip_obj = ipaddress.ip_address(ip)
+        # Malicious IP ranges are stored in slips sorted by the first octet
+        # so get the ranges that match the fist octet of the given IP
         if validators.ipv4(ip):
             first_octet = ip.split('.')[0]
             ranges_starting_with_octet = self.cached_ipv4_ranges.get(first_octet, [])
@@ -737,7 +776,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
             ranges_starting_with_octet = self.cached_ipv6_ranges.get(first_octet, [])
         else:
             return False
-
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges
@@ -869,27 +907,37 @@ class Module(Module, multiprocessing.Process, URLhaus):
             domain, profileid, twid
         )
 
+    def update_local_file(self, filename):
+        """
+        Updates the given local ti file if the hash of it has changed
+        : param filename: local ti file, has to be plased in config/local_ti_files/ dir
+        """
+        fullpath = os.path.join(self.path_to_local_ti_files, filename)
+        if filehash := self.should_update_local_ti_file(fullpath):
+            if 'JA3' in filename:
+                # Load updated data to the database
+                self.parse_ja3_file(fullpath)
+            else:
+                # Load updated data to the database
+                self.parse_local_ti_file(fullpath)
+            # Store the new etag and time of file in the database
+            malicious_file_info = {'hash': filehash}
+            __database__.set_TI_file_info(filename, malicious_file_info)
+            return True
 
     def run(self):
         try:
             utils.drop_root_privs()
-            # Load the local Threat Intelligence files that are stored in the local folder
+            # Load the local Threat Intelligence files that are
+            # stored in the local folder self.path_to_local_ti_files
             # The remote files are being loaded by the update_manager
-            # check if we should update the files
-            if not self.check_local_ti_files_for_update(
-                self.path_to_local_ti_files
-            ):
-                self.print(
-                    f'Could not load the local TI files {self.path_to_local_ti_files}'
-                )
+            self.update_local_file('own_malicious_iocs.csv')
+            self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
-        except Exception as inst:
+        except Exception as ex:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(str(type(inst)), 0, 1)
-            self.print(str(inst.args), 0, 1)
-            self.print(str(inst), 0, 1)
-            self.print(traceback.format_exc())
+            self.print(traceback.print_exc(),0,1)
             return True
 
         while True:
@@ -934,6 +982,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             ):
                             self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
                             self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(
                             to_lookup,
@@ -968,7 +1017,4 @@ class Module(Module, multiprocessing.Process, URLhaus):
             except Exception as inst:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(str(type(inst)), 0, 1)
-                self.print(str(inst.args), 0, 1)
-                self.print(str(inst), 0, 1)
                 self.print(traceback.format_exc())
