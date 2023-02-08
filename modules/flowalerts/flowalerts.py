@@ -138,7 +138,7 @@ class Module(Module, multiprocessing.Process):
     ):
         """
         Alerts when there's a connection from a private IP to another private IP
-        except for DNS connecions to the gateway
+        except for DNS connections to the gateway
         """
         if int(dport) == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip():
             # skip DNS conns to the gw to avoid having tons of this evidence
