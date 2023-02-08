@@ -7,6 +7,7 @@ on:
     - '!develop'
 
 jobs:
+  # auto add release tag
   create_tag:
     runs-on: ubuntu-latest
     env:
