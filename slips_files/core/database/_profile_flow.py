@@ -63,20 +63,42 @@ class ProfilingFlowsDatabase(object):
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
-    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state):
+    def give_threat_intelligence(self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False):
         data_to_send = {
-                'to_lookup': str(ip),
+                'to_lookup': str(lookup),
                 'profileid': str(profileid),
                 'twid': str(twid),
                 'proto': str(proto),
                 'ip_state': ip_state,
                 'stime': starttime,
                 'uid': uid,
-            }
+                'daddr': daddr
+        }
+        if extra_info:
+            # sometimes we want to send teh dns query/answer to check it for blacklisted ips/domains
+            data_to_send.update(extra_info)
+
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
+        return data_to_send
 
+    def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state, daddr=False):
+        """
+        is the ip param src or dst
+        """
+        daddr = daddr if daddr else ip
+        data_to_send = self.give_threat_intelligence(
+            profileid,
+            twid, 
+            ip_state,
+            starttime, 
+            uid,
+            daddr,
+            proto=proto, 
+            lookup=ip
+        )
+            
         if ip in self.our_ips:
             # dont ask p2p about your own ip
             return
@@ -371,7 +393,7 @@ class ProfilingFlowsDatabase(object):
 
         # OTH means that we didnt see the true src ip and dst ip
         if columns['state'] != 'OTH':
-            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip')
+            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip', daddr=daddr)
             self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid, 'dstip')
 
 
@@ -1018,16 +1040,8 @@ class ProfilingFlowsDatabase(object):
             return False
 
         # We are giving only new server_name to the threat_intelligence module.
-        data_to_send = {
-            'to_lookup': server_name,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-            'ip_state': 'dstip'
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, str(daddr_as_obj), lookup=server_name)
+
 
         # Save new server name in the IPInfo. There might be several server_name per IP.
         ipdata = self.getIPData(str(daddr_as_obj))
@@ -1204,37 +1218,14 @@ class ProfilingFlowsDatabase(object):
             }
         )
 
-        # Check if the host domain is detected by the threat intelligence.
+        # Check if the host domain AND the url is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
         if len(host) > 2:
-            data_to_send = {
-                'to_lookup': host,
-                'profileid': str(profileid),
-                'twid': str(twid),
-                'stime': stime,
-                'uid': uid,
-                'ip_state': 'dstip'
-            }
-            data_to_send = json.dumps(data_to_send)
-            self.publish('give_threat_intelligence', data_to_send)
-
-            self.give_url_to_ti(host, uri, http_flow, uid)
+            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=host)
+            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=f'http://{host}{uri}')
         else:
             # use the daddr since there's no host
-            self.give_url_to_ti(daddr, uri, http_flow, uid)
-
-    def give_url_to_ti(self, host, uri, http_flow, uid):
-        """
-        :param host: can be an ip or a domain
-        """
-        # give the url to ti module
-        http_flow.update(
-            {
-                'to_lookup': f'http://{host}{uri}'
-            }
-        )
-        to_send = json.dumps(http_flow)
-        self.publish('give_threat_intelligence', to_send)
+            self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=f'http://{daddr}{uri}')
 
 
     def add_out_ssh(
@@ -1302,17 +1293,8 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_ssh', to_send)
         self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        data_to_send = {
-            'to_lookup': daddr,
-            'profileid': str(profileid),
-            'twid': str(twid),
-            'stime': stime,
-            'uid': uid,
-            'ip_state': 'dstip'
+        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
 
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
 
     def add_out_notice(
         self,
@@ -1358,16 +1340,7 @@ class ProfilingFlowsDatabase(object):
         )
         self.publish('new_notice', to_send)
         self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
-        data_to_send = {
-            'to_lookup': daddr,
-            'profileid': profileid,
-            'twid': twid,
-            'stime': stime,
-            'uid': uid,
-            'ip_state': 'dstip'
-        }
-        data_to_send = json.dumps(data_to_send)
-        self.publish('give_threat_intelligence', data_to_send)
+        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
 
     def get_dns_resolution(self, ip):
         """
@@ -1692,15 +1665,16 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_dns_flow', to_send)
         self.print('Adding DNS flow to DB: {}'.format(data), 3, 0)
         # Check if the dns is detected by the threat intelligence.
-        data_to_send = {
-            'to_lookup': query,
-            'profileid': profileid,
-            'twid': twid,
-            'stime': stime,
-            'uid': uid,
-            'ip_state': 'dstip',
-        }
-        self.publish('give_threat_intelligence', json.dumps(data_to_send))
+        self.give_threat_intelligence(
+            profileid,
+            twid,
+            'dstip',
+            stime,
+            uid,
+            daddr,
+            lookup=query
+        )
+
 
         # Add DNS resolution to the db if there are answers for the query
         if answers and answers !=  ['-'] :
@@ -1709,13 +1683,23 @@ class ProfilingFlowsDatabase(object):
                 query, answers, stime, uid, qtype_name, srcip, twid
             )
             # send each dns response to TI module
-            data_to_send['is_dns_response'] = True
-            data_to_send['ip_state'] = 'dstip'
-            data_to_send['dns_query'] = query
             for answer in answers:
                 if 'TXT' in answer:
                     continue
 
-                data_to_send['domain'] = answer
-                self.publish('give_threat_intelligence', json.dumps(data_to_send))
+                extra_info = {
+                    'is_dns_response': True,
+                    'dns_query': query,
+                    'domain': answer,
+                }
+                self.give_threat_intelligence(
+                    profileid,
+                    twid,
+                    'dstip',
+                    stime,
+                    uid,
+                    daddr,
+                    lookup=query,
+                    extra_info=extra_info
+                )
 

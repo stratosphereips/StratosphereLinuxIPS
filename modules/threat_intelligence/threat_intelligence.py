@@ -140,6 +140,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self,
         ip,
         uid,
+        daddr,
         timestamp,
         ip_info: dict,
         profileid='',
@@ -167,8 +168,16 @@ class Module(Module, multiprocessing.Process, URLhaus):
         category = 'Anomaly.Traffic'
         if 'src' in attacker_direction:
             direction = 'from'
+            opposite_dir = 'to'
+            other_ip = daddr
         elif 'dst' in attacker_direction:
             direction = 'to'
+            opposite_dir = 'from'
+            other_ip = profileid.split("_")[-1]
+        else:
+            # attacker_dir is not specified?
+            return
+
 
         # getting the ip identification adds ti description and tags to the returned str
         # in this alert, we only want the description and tags of the TI feed that has
@@ -183,14 +192,14 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 f'for query: {self.dns_query} '
             )
         else:
-            other_direction = 'to' if 'from' in direction else 'from'
+
             # this will be 'blacklisted conn from x to y'
-            # or 'blacklisted conn tox from y'
+            # or 'blacklisted conn to x from y'
             description = f'connection {direction} blacklisted IP {ip} ' \
-                          f'{other_direction} {profileid.split("_")[-1]}'
+                          f'{opposite_dir} {other_ip}. '
 
 
-        description += f'{ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
+        description += f'blacklisted IP {ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
         if tags := ip_info.get('tags', False):
             source_target_tag = tags[0].capitalize()
@@ -762,7 +771,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             )
 
     def ip_belongs_to_blacklisted_range(
-            self, ip, uid, timestamp, profileid, twid, ip_state
+            self, ip, uid, daddr, timestamp, profileid, twid, ip_state
     ):
         """ check if this ip belongs to any of our blacklisted ranges"""
         ip_obj = ipaddress.ip_address(ip)
@@ -784,6 +793,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 self.set_evidence_malicious_ip(
                     ip,
                     uid,
+                    daddr,
                     timestamp,
                     ip_info,
                     profileid,
@@ -809,7 +819,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
     def search_online_for_url(self, url):
         return self.urlhaus.urlhaus_lookup(url, 'url')
 
-    def is_malicious_ip(self, ip,  uid, timestamp, profileid, twid, ip_state) -> bool:
+    def is_malicious_ip(self, ip, uid, daddr, timestamp, profileid, twid, ip_state) -> bool:
         """Search for this IP in our database of IoC"""
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
@@ -823,6 +833,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.set_evidence_malicious_ip(
             ip,
             uid,
+            daddr,
             timestamp,
             ip_info,
             profileid,
@@ -958,6 +969,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     timestamp = data.get('stime')
                     uid = data.get('uid')
                     protocol = data.get('proto')
+                    daddr = data.get('daddr')
                     # these 2 are only available when looking up dns answers
                     # the query is needed when a malicious answer is found,
                     # for more detailed description of the evidence
@@ -980,8 +992,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                                 utils.is_ignored_ip(ip)
                                 or self.is_outgoing_icmp_packet(protocol, ip_state)
                             ):
-                            self.is_malicious_ip(ip, uid, timestamp, profileid, twid, ip_state)
-                            self.ip_belongs_to_blacklisted_range(ip, uid, timestamp, profileid, twid, ip_state)
+                            self.is_malicious_ip(ip, uid, daddr, timestamp, profileid, twid, ip_state)
+                            self.ip_belongs_to_blacklisted_range(ip, uid, daddr, timestamp, profileid, twid, ip_state)
                             self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
                     elif type_ == 'domain':
                         self.is_malicious_domain(

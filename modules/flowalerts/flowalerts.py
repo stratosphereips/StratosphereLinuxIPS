@@ -138,7 +138,7 @@ class Module(Module, multiprocessing.Process):
     ):
         """
         Alerts when there's a connection from a private IP to another private IP
-        except for DNS connecions to the gateway
+        except for DNS connections to the gateway
         """
         try:
             dport = int(dport)
