@@ -1341,6 +1341,22 @@ class Database(ProfilingFlowsDatabase, object):
         return False
 
 
+    def set_flow_causing_evidence(self, uid, evidence_ID):
+        """
+        :param uid: can be a str or a list
+        """
+        if type(uid) == str:
+            uid = [uid]
+        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
+
+    def get_flows_causing_evidence(self, evidence_ID) -> list:
+        uids = self.r.hget("flows_causing_evidence", evidence_ID)
+        if not uids:
+            return []
+        else:
+            return json.loads(uids)
+
+
     def setEvidence(
             self,
             evidence_type,
@@ -1393,6 +1409,7 @@ class Database(ProfilingFlowsDatabase, object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
+        self.set_flow_causing_evidence(uid, evidence_ID)
 
         # some evidence are caused by several uids, use the last one only
         if type(uid) == list:
