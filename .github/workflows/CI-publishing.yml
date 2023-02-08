@@ -7,12 +7,21 @@ on:
     - '!develop'
 
 jobs:
+  create_tag:
+    runs-on: ubuntu-latest
+    env:
+      SLIPS_VERSION: v1.0.1
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ env.SLIPS_VERSION }}
+          message: ""
 
   publish_ubuntu_image:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
-    # 2 hours timeout
-    timeout-minutes: 7200
     env:
       SLIPS_VERSION: v1.0.1
 
