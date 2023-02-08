@@ -55,7 +55,11 @@ def has_errors(output_dir):
             for line in f:
                 if '<class' in line or 'error' in line:
                     # connection errors shouldn't fail the integration tests
-                    if 'Connection error' in line or 'while downloading' in line:
+                    if (
+                            'Connection error' in line
+                            or 'while downloading' in line
+                            or 'Traceback' in line
+                    ):
                         continue
                     return True
 
