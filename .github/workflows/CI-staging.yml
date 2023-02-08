@@ -5,7 +5,8 @@ name: CI-staging
 on:
     push:
         branches:
-            - 'develop'
+            # features will be added to this branch using PRs, not need to re-run the tests on push
+            - '!develop'
             - '!master'
     pull_request:
         branches:
