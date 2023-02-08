@@ -1,6 +1,6 @@
 <div class="row top-buffer flex-nowrap">
-  <div class="col-auto px-2">
-    <div id="sidebar" class="collapse collapse-horizontal show border-end">
+  <div class="col-2" id="col_profiles">
+    <div id="profiles">
       <table id="table_profiles" class="table table-hover">
         <thead>
           <tr>
@@ -11,15 +11,13 @@
     </div>
   </div>
 
-  <div class="col-auto">
+  <div class="col-10" id="col_analysis">
 
     <div class="row">
       <div class="col-auto">
-        <a href="#" data-bs-target="#sidebar" data-bs-toggle="collapse"
-          class="border rounded-3 p-1 text-decoration-none"><i class="bi bi-list bi-lg py-2 p-1"></i>
-          </a>
+        <button type="button" class="btn btn-outline-primary btn-sm pull-right" id="profile-tw-hide-btn">&lt;</button>
       </div>
-      <div class="col-2 px-2">
+      <div class="col-auto px-2">
         <p class="fw-bold" id="active_profile_tw"></p>
       </div>
     </div>
@@ -41,6 +39,7 @@
         </thead>
       </table>
     </div>
+
 
     <div class="row">
       <nav class="navbar mt navbar-light bg-light">
