@@ -47,7 +47,7 @@ let analysisTableDefs = {
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
-        searching: false,
+        searching: true,
         columns: [
             { data: 'timestamp' },
             { data: 'dport_name' },
@@ -75,6 +75,7 @@ let analysisTableDefs = {
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
+        searching: true,
         columns: [
             { data: 'tuple' },
             { data: 'string' },
@@ -93,6 +94,7 @@ let analysisTableDefs = {
         destroy: true,
         dom: custom_dom,
         buttons: ['colvis'],
+        searching: true,
         scrollX: true,
         columns: [
             { data: 'tuple' },
@@ -113,6 +115,7 @@ let analysisTableDefs = {
         dom: custom_dom,
         buttons: ['colvis'],
         scrollX: true,
+        searching: true,
         columns: [
             { data: 'ts' },
             { data: 'dur' },
@@ -137,6 +140,7 @@ let analysisTableDefs = {
         select: true,
         dom: custom_dom,
         scrollX: false,
+        searching: true,
         columns: [
             { data: 'alert' ,
             "className":"r"},
@@ -196,8 +200,8 @@ let analysisTableDefs = {
         dom: custom_dom,
         bInfo: false,
         paging: true,
-        searching: false,
         scrollX: false,
+        searching: true,
         columns: [
             { data: 'stime'},
             { data: 'confidence'},

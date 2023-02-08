@@ -1,178 +1,186 @@
-
-<div class="row mt-3 flex-nowrap">
-    <div class="col-auto px-2">
-        <div id="sidebar" class="collapse collapse-horizontal show border-end">
-          <table id="table_profiles" class="table table-hover">
-              <thead>
-              <tr>
-              <th> IPs </th>
-              </tr>
-              </thead>
-          </table>
-        </div>
+<div class="row top-buffer flex-nowrap">
+  <div class="col-2" id="col_profiles">
+    <div id="profiles">
+      <table id="table_profiles" class="table table-hover">
+        <thead>
+          <tr>
+            <th> Profiles </th>
+          </tr>
+        </thead>
+      </table>
     </div>
-    <main class="col">
-      <div class="row">
-            <div class="col-auto">
-              <a href="#" data-bs-target="#sidebar" data-bs-toggle="collapse" class="border rounded-3 p-1 text-decoration-none"><i class="bi bi-list bi-lg py-2 p-1"></i>Hide IPs</a>
-            </div>
-            <div class="col-auto px-2">
-              <p class="fw-bold" id="active_profile_tw"></p>
-            </div>
+  </div>
+
+  <div class="col-10" id="col_analysis">
+
+    <div class="row">
+      <div class="col-auto">
+        <button type="button" class="btn btn-outline-primary btn-sm pull-right" id="profile-tw-hide-btn">&lt;</button>
+      </div>
+      <div class="col-auto px-2">
+        <p class="fw-bold" id="active_profile_tw"></p>
+      </div>
+    </div>
+
+    <div class="row">
+      <table id="table_ipinfo" class="table">
+        <thead>
+          <tr>
+            <th>IP</th>
+            <th>Country</th>
+            <th>Reverse DNS</th>
+            <th>ASN</th>
+            <th>Threat Intel</th>
+            <th>URL score</th>
+            <th>Download score</th>
+            <th>Reference score</th>
+            <th>Communication score</th>
+          </tr>
+        </thead>
+      </table>
+    </div>
+
+
+    <div class="row">
+      <nav class="navbar mt navbar-light bg-light">
+        <form class="form-inline">
+          <div id="buttons">
+            <button class="btn btn-outline-primary active" type="button" id="button_timeline"
+              data-tableid="timeline">Timeline</button>
+            <button class="btn btn-outline-warning" type="button" id="button_timeline_flows"
+              data-tableid="timeline_flows">Flows</button>
+            <button class="btn btn-outline-danger" type="button" id="button_outtuples"
+              data-tableid="outtuples">Outgoing</button>
+            <button class="btn btn-outline-success" type="button" id="button_intuples"
+              data-tableid="intuples">Incoming</button>
+            <button class="btn btn-outline-info" type="button" id="button_alerts" data-tableid="alerts">Alerts</button>
+            <button class="btn btn-outline-info" type="button" id="button_evidence"
+              data-tableid="evidence">Evidence</button>
+          </div>
+        </form>
+      </nav>
+    </div>
+
+
+    <div class="row">
+      <div id="timeline" class="mt-4">
+        <!--                <table border="0" cellspacing="5" cellpadding="5">-->
+        <!--                    <tbody><tr>-->
+        <!--                        <td><input type="text" id="table_timeline_filter_input" size="30"></td>-->
+        <!--                        <td><button class="btn btn-outline-success" id="table_timeline_filter_button">Search</button></td>-->
+        <!--                    </tr>-->
+        <!--                  </tbody>-->
+        <!--                </table>-->
+
+        <table id="table_timeline" class="table table-hover mt-2 table-striped display nowrap" style="width:100%">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Destination port name</th>
+              <th>Preposition</th>
+              <th>Address</th>
+              <th>DNS resolution</th>
+              <th>Port/protocol</th>
+              <th>State</th>
+              <th>Sent bytes</th>
+              <th>Received bytes</th>
+              <th>Total bytes</th>
+              <th>Duration</th>
+              <th>Warning</th>
+              <th>Critical warning</th>
+            </tr>
+          </thead>
+        </table>
       </div>
 
-      <div class="row">
-            <div class="col-12">
-              <table id="table_ipinfo" class="table mt-2">
-                <thead>
-                  <tr>
-                    <th>IP</th>
-                    <th>Country</th>
-                    <th>Reverse DNS</th>
-                    <th>ASN</th>
-                    <th>Threat Intel</th>
-                    <th>URL score</th>
-                    <th>Download score</th>
-                    <th>Reference score</th>
-                    <th>Communication score</th>
-                  </tr>
-                </thead>
-              </table>
+      <div id="alerts" class="mt-4" style="display:none;">
+        <table id="table_alerts" class="table table-striped display  nowrap" style="width:100%">
+          <thead>
+            <tr>
+              <th>Alert</th>
+              <th>Profile</th>
+              <th>Timewindow</th>
+              <th>Evidence Count</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
 
-              <nav class="navbar mt-2 navbar-light bg-light">
-                <form class="form-inline">
-                  <div id="buttons">
-                    <button class="btn btn-outline-primary active" type="button" id="button_timeline" data-tableid="timeline" >Timeline</button>
-                    <button class="btn btn-outline-warning" type="button" id="button_timeline_flows" data-tableid="timeline_flows">Flows</button>
-                    <button class="btn btn-outline-danger" type="button" id="button_outtuples" data-tableid="outtuples">Outgoing</button>
-                    <button class="btn btn-outline-success" type="button" id="button_intuples" data-tableid="intuples">Incoming</button>
-                    <button class="btn btn-outline-info" type="button" id="button_alerts" data-tableid="alerts">Alerts</button>
-                    <button class="btn btn-outline-info" type="button" id="button_evidence" data-tableid="evidence">Evidence</button>
-                  </div>
-                </form>
-              </nav>
+      <div id="evidence" class="mt-4" style="display:none;">
+        <table id="table_evidence" class="table table-striped display " style="width:100%">
+          <thead>
+            <tr>
+              <th>Evidence</th>
+              <th>Confidence</th>
+              <th>Threat Level</th>
+              <th>Category</th>
+              <th>Tag</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
 
+      <div id="timeline_flows" class="mt-4" style="display:none;">
+        <table id="table_timeline_flows" class="table table-striped display  nowrap" style="width:100%">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Duration</th>
+              <th>Source address</th>
+              <th>Source port</th>
+              <th>Dest address</th>
+              <th>Dest port</th>
+              <th>Protocol</th>
+              <th>Origin state</th>
+              <th>State</th>
+              <th>Packets</th>
+              <th>Total bytes</th>
+              <th>Source packets</th>
+              <th>Source bytes</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
 
-              <div id="timeline" class="mt-2">
-                <table border="0" cellspacing="5" cellpadding="5">
-                    <tbody><tr>
-                        <td>Custom search:</td>
-                        <td><input type="text" id="table_timeline_filter_input" size="30"></td>
-                        <td><button class="btn btn-outline-success" id="table_timeline_filter_button">Search</button></td>
-                    </tr>
-                  </tbody>
-                </table>
-
-                <table id="table_timeline" class="table table-hover mt-2 table-striped display nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                      <th>Timestamp</th>
-                      <th>Destination port name</th>
-                      <th>Preposition</th>
-                      <th>Address</th>
-                      <th>DNS resolution</th>
-                      <th>Port/protocol</th>
-                      <th>State</th>
-                      <th>Sent bytes</th>
-                      <th>Received bytes</th>
-                      <th>Total bytes</th>
-                      <th>Duration</th>
-                      <th>Warning</th>
-                      <th>Critical warning</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <div id="alerts" class="mt-4" style="display:none;">
-                <table id="table_alerts" class="table table-striped display  nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                      <th>Alert</th>
-                      <th>Profile</th>
-                      <th>Timewindow</th>
-                      <th>Evidence Count</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <div id="evidence" class="mt-4" style="display:none;">
-                <table id="table_evidence" class="table table-striped display  nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                     <th>Evidence</th>
-                     <th>Confidence</th>
-                     <th>Threat Level</th>
-                     <th>Category</th>
-                     <th>Tag</th>
-                     <th>Description</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <div id="timeline_flows" class="mt-4" style="display:none;">
-                <table id="table_timeline_flows" class="table table-striped display  nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                      <th>Timestamp</th>
-                      <th>Duration</th>
-                      <th>Source address</th>
-                      <th>Source port</th>
-                      <th>Dest address</th>
-                      <th>Dest port</th>
-                      <th>Protocol</th>
-                      <th>Origin state</th>
-                      <th>State</th>
-                      <th>Packets</th>
-                      <th>Total bytes</th>
-                      <th>Source packets</th>
-                      <th>Source bytes</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-
-              <div id="outtuples" class="mt-4" style="display:none;">
-                <table id="table_outtuples" class="table table-striped display  nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                      <th>OutTuple</th>
-                      <th>Behaviour</th>
-                      <th>Country</th>
-                      <th>Reverse DNS</th>
-                      <th>ASN</th>
-                      <th>Threat Intel</th>
-                      <th>URL score</th>
-                      <th>Download score</th>
-                      <th>Reference score</th>
-                      <th>Communication score</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
+      <div id="outtuples" class="mt-4" style="display:none;">
+        <table id="table_outtuples" class="table table-striped display" style="width:100%">
+          <thead>
+            <tr>
+              <th>OutTuple</th>
+              <th>Behaviour</th>
+              <th>Country</th>
+              <th>Reverse DNS</th>
+              <th>ASN</th>
+              <th>Threat Intel</th>
+              <th>URL score</th>
+              <th>Download score</th>
+              <th>Reference score</th>
+              <th>Communication score</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
 
 
-              <div id="intuples" class="mt-4" style="display:none;">
-                <table id="table_intuples" class="table table-striped display  nowrap" style="width:100%">
-                  <thead>
-                    <tr>
-                      <th>InTuple</th>
-                      <th>Behaviour</th>
-                      <th>Country</th>
-                      <th>Reverse DNS</th>
-                      <th>ASN</th>
-                      <th>Threat Intel</th>
-                      <th>URL score</th>
-                      <th>Download score</th>
-                      <th>Reference score</th>
-                      <th>Communication score</th>
-                    </tr>
-                  </thead>
-                </table>
-              </div>
-            </div>
-        </div>
-    </main>
+      <div id="intuples" class="mt-4" style="display:none;">
+        <table id="table_intuples" class="table table-striped display  nowrap" style="width:100%">
+          <thead>
+            <tr>
+              <th>InTuple</th>
+              <th>Behaviour</th>
+              <th>Country</th>
+              <th>Reverse DNS</th>
+              <th>ASN</th>
+              <th>Threat Intel</th>
+              <th>URL score</th>
+              <th>Download score</th>
+              <th>Reference score</th>
+              <th>Communication score</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+    </div>
+  </div>
 </div>
