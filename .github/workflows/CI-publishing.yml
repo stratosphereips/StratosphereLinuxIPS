@@ -123,7 +123,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
     # clone slips and checkout branch
     - uses: actions/checkout@v3
       with:
@@ -143,4 +142,22 @@ jobs:
         file: ./docker/dependency-image/Dockerfile
         tags: stratosphereips/slips_dependencies:latest
         push: true
+
+
+  tweet_about_the_new_release:
+    runs-on: ubuntu-latest
+    env:
+      SLIPS_VERSION: v1.0.1
+      # same as the above without the v and the dots
+      SLIPS_URL_VERSION: 101
+
+    steps:
+      - name: Tweet-trigger-publish-release
+        uses: mugi111/tweet-trigger-release@v1.2
+        with:
+          consumer_key: ${{ secrets.CONSUMER_KEY }}
+          consumer_secret: ${{ secrets.CONSUMER_SECRET }}
+          access_token_key: ${{ secrets.ACCESS_KEY }}
+          access_token_secret: ${{ secrets.ACCESS_SECRET }}
+          tweet_body: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: www.stratosphereips.org/blog/2022/8/30/new-slips-version-${{ env.SLIPS_URL_VERSION }}-is-here '
 
