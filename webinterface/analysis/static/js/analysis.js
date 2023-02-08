@@ -140,6 +140,7 @@ function initHideProfileTWButtonListener() {
         } else {
             document.getElementById('profiles').style.display = "none";
             document.getElementById('profile-tw-hide-btn').innerHTML = ">";
+            
             $('#col_profiles').removeClass('col-2');
             $('#col_profiles').addClass('col-0');
             $('#col_analysis').removeClass('col-10');
