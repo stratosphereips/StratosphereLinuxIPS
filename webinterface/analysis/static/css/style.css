@@ -1,37 +1,60 @@
-#profiles tr
-{
+#profiles tr {
     cursor: pointer;
 }
+
+.top-buffer {
+    margin-top: 20px;
+}
+
+.left-buffer {
+    margin-left: 20px;
+}
+
+.col-xs-0,
+.col-sm-0,
+.col-md-0,
+.col-lg-0,
+.col-0 {
+    flex: 0 0 0;
+    max-width: 0;
+    padding-right: 0;
+    padding-left: 0;
+}
+
 #table_timeline_flows tr td:nth-child(3):hover,
-table tr th:nth-child(3):hover
-{cursor:pointer;}
+table tr th:nth-child(3):hover {
+    cursor: pointer;
+}
 
 #table_timeline_flows tr td:nth-child(5):hover,
-table tr th:nth-child(5):hover
-{cursor:pointer;}
+table tr th:nth-child(5):hover {
+    cursor: pointer;
+}
 
 #table_timeline tr td:nth-child(4):hover,
-table tr th:nth-child(4):hover
-{cursor:pointer;}
+table tr th:nth-child(4):hover {
+    cursor: pointer;
+}
 
-.dataTables_wrapper .dataTables_filter{
+.dataTables_wrapper .dataTables_filter {
     float: left;
 }
-.dataTables_wrapper .dataTables_length{
+
+.dataTables_wrapper .dataTables_length {
     float: right;
 }
 
-#table_ipinfo{
+#table_ipinfo {
     border-radius: 15px;
     border-style: solid;
 }
 
-tr.row_selected td{
-    background-color:#ECFEE8 !important;
+tr.row_selected td {
+    background-color: #ECFEE8 !important;
 }
 
-.table-hover > tbody > tr:hover > td,
-.table-hover > tbody > tr:hover > th {
+.table-hover>tbody>tr:hover>td,
+.table-hover>tbody>tr:hover>th {
     background-color: #C2F0FF;
 }
 
