@@ -160,7 +160,7 @@ class ASN:
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
-            json.decoder.JSONDecodeError
+            json.decoder.JSONDecodeError, KeyError
         ):
             pass
 
