@@ -383,7 +383,6 @@ class EvidenceProcess(multiprocessing.Process):
             attacker = evidence.get('attacker')
             evidence_type = evidence.get('evidence_type')
             description = evidence.get('description')
-            uid = evidence.get('uid')
             # evidence_ID = evidence.get('ID')
             # attacker_direction = evidence.get('attacker_direction')
 
@@ -393,7 +392,7 @@ class EvidenceProcess(multiprocessing.Process):
             evidence_string = self.line_wrap(evidence_string)
 
             alert_to_print += (
-                f'\t{Fore.CYAN}- {evidence_string}  {uid} {Style.RESET_ALL}\n'
+                f'\t{Fore.CYAN}- {evidence_string}{Style.RESET_ALL}\n'
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
