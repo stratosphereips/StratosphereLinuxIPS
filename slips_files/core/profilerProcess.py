@@ -1220,7 +1220,7 @@ class ProfilerProcess(multiprocessing.Process):
             pass
 
     def process_suricata_input(self, line) -> None:
-        """Read suricata json input"""
+        """Read suricata json input and store it in column_values"""
 
         # convert to dict if it's not a dict already
         if type(line) == str:
@@ -1258,7 +1258,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         if self.column_values['type']:
             """
-            event_type:
+            suricata available event_type values:
             -flow
             -tls
             -http
@@ -2379,6 +2379,10 @@ class ProfilerProcess(multiprocessing.Process):
         while True:
             try:
                 line = self.inputqueue.get()
+                if '139.59.214.229' in str(line):
+                    y = self.inputqueue.qsize()
+                    print(f"@@@@@@@@@@@@@@@@@@ read a line with srcip  '139.59.214.229' q size: {y} ")
+
                 if 'stop' in line:
                     # if timewindows are not updated for a long time (see at logsProcess.py),
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.

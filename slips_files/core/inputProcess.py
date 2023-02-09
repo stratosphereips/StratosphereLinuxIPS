@@ -470,6 +470,8 @@ class InputProcess(multiprocessing.Process):
                     line['data'] = t_line
                     self.print(f'	> Sent Line: {line}', 0, 3)
                     if len(t_line.strip()) != 0:
+                        if '139.59.214.229' in t_line:
+                            print(f"@@@@@@@@@@@@@@@@@@ SEDING t_line WITH 139.59.214.229 to profilerprocess {t_line}")
                         self.profilerqueue.put(line)
                     self.lines += 1
                     if self.testing: break
