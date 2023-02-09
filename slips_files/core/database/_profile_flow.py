@@ -1689,7 +1689,7 @@ class ProfilingFlowsDatabase(object):
             self.set_dns_resolution(
                 query, answers, stime, uid, qtype_name, srcip, twid
             )
-            # send each dns response to TI module
+            # send each dns answer to TI module
             for answer in answers:
                 if 'TXT' in answer:
                     continue
@@ -1706,7 +1706,7 @@ class ProfilingFlowsDatabase(object):
                     stime,
                     uid,
                     daddr,
-                    lookup=query,
+                    lookup=answer,
                     extra_info=extra_info
                 )
 
