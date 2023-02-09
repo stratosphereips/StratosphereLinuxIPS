@@ -896,22 +896,29 @@ class ProfilingFlowsDatabase(object):
             self.set_input_metadata({'file_start': stime})
             self.first_flow = False
 
-        # set the local network used in the db
-        if not self.is_localnet_set:
-            if (
-                    validators.ipv4(saddr)
-                    and ipaddress.ip_address(saddr).is_private
-            ):
-                # get the local network of this saddr
-                if network_range := utils.get_cidr_of_ip(saddr):
-                    self.r.set("local_network", network_range)
-                    self.is_localnet_set = True
+        self.set_local_network(saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
         if flow_type != 'arp':
             self.publish('new_flow', to_send)
         return True
+    def set_local_network(self, saddr):
+        # set the local network used in the db
+        if self.is_localnet_set:
+            return
 
+        if saddr in ('0.0.0.0', '255.255.255.255'):
+            return
+
+        if not (
+                validators.ipv4(saddr)
+                and ipaddress.ip_address(saddr).is_private
+        ):
+            return
+        # get the local network of this saddr
+        if network_range := utils.get_cidr_of_ip(saddr):
+            self.r.set("local_network", network_range)
+            self.is_localnet_set = True
     def get_local_network(self):
          return self.r.get("local_network")
 
