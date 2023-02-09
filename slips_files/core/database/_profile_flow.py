@@ -87,18 +87,19 @@ class ProfilingFlowsDatabase(object):
         """
         is the ip param src or dst
         """
+        # if the daddr key arg is not given, we know for sure that the ip given is the daddr
         daddr = daddr if daddr else ip
         data_to_send = self.give_threat_intelligence(
             profileid,
-            twid, 
+            twid,
             ip_state,
-            starttime, 
+            starttime,
             uid,
             daddr,
-            proto=proto, 
+            proto=proto,
             lookup=ip
         )
-            
+
         if ip in self.our_ips:
             # dont ask p2p about your own ip
             return

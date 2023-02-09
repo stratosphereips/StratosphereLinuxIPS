@@ -585,9 +585,6 @@ class EvidenceProcess(multiprocessing.Process):
             __database__.publish('export_evidence', evidence)
 
     def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
-        """
-        Adds the hostname of the srcip to the evidence description
-        """
         # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
         # there's nothing we can do about it
         hostname = __database__.get_hostname_from_profile(

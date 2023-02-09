@@ -465,13 +465,11 @@ class InputProcess(multiprocessing.Process):
             with open(self.given_path) as file_stream:
                 line = {'type': 'suricata'}
                 self.read_lines_delay = 0.02
-                for t_line in file_stream:
+                while str_line := file_stream.readline():
                     time.sleep(self.read_lines_delay)
-                    line['data'] = t_line
+                    line['data'] = str_line
                     self.print(f'	> Sent Line: {line}', 0, 3)
-                    if len(t_line.strip()) != 0:
-                        if '139.59.214.229' in t_line:
-                            print(f"@@@@@@@@@@@@@@@@@@ SEDING t_line WITH 139.59.214.229 to profilerprocess {t_line}")
+                    if len(str_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
                     if self.testing: break

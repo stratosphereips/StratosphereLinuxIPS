@@ -44,6 +44,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
+        self.last_processed_line = ''
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -2379,10 +2380,6 @@ class ProfilerProcess(multiprocessing.Process):
         while True:
             try:
                 line = self.inputqueue.get()
-                if '139.59.214.229' in str(line):
-                    y = self.inputqueue.qsize()
-                    print(f"@@@@@@@@@@@@@@@@@@ read a line with srcip  '139.59.214.229' q size: {y} ")
-
                 if 'stop' in line:
                     # if timewindows are not updated for a long time (see at logsProcess.py),
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
@@ -2445,10 +2442,15 @@ class ProfilerProcess(multiprocessing.Process):
                         # When the columns are not there. Not sure if it works
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    # self.print('Suricata line')
+                    # make sure that we haven't processed this line before
+                    if line == self.last_processed_line:
+                        # temporary fix for slips processing the last line of suricata files 2000+ times in a row!
+                        continue
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.last_processed_line = line
+
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
