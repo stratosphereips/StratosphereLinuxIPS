@@ -47,7 +47,7 @@ class Helper:
     def set_evidence_different_localnet_usage(
             self,
             daddr,
-            dport,
+            portproto,
             profileid,
             timestamp,
             twid,
@@ -81,7 +81,10 @@ class Helper:
                       f' {rev_direction} IP: {victim} '\
 
         if ip_outside_localnet == 'dstip':
-            description += f'on port: {dport}'
+            if 'arp' in portproto:
+                description += f'using ARP'
+            else:
+                description += f'on port: {portproto}'
 
         __database__.setEvidence(
             evidence_type,
