@@ -584,6 +584,25 @@ class EvidenceProcess(multiprocessing.Process):
         for evidence in tw_evidence.values():
             __database__.publish('export_evidence', evidence)
 
+    def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
+        """
+        Adds the hostname of the srcip to the evidence description
+        """
+        # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
+        # there's nothing we can do about it
+        hostname = __database__.get_hostname_from_profile(
+            profileid
+        )
+        if hostname:
+            srcip = profileid.split("_")[-1]
+            srcip = f'{srcip} ({hostname})'
+            # fill the rest of the 26 characters with spaces to keep the alignment
+            srcip = f'{srcip}{" "*(26-len(srcip))}'
+            alert_to_log = (
+                f'{flow_datetime}: Src IP {srcip}. {evidence}'
+            )
+        return alert_to_log
+
     def run(self):
         # add metadata to alerts.log
         branch_info = utils.get_branch_info()
