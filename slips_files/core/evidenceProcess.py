@@ -208,6 +208,17 @@ class EvidenceProcess(multiprocessing.Process):
         :param IDEA_dict: dict containing 1 alert
         """
         try:
+            # add to alerts.json
+            if self.is_first_alert and hasattr(self, 'commit'):
+                # only add commit and hash to the firs alert in alerts.json
+                self.is_first_alert = False
+                IDEA_dict.update(
+                    {
+                        'commit': self.commit,
+                        'branch': self.branch
+                    }
+                )
+
             json_alert = '{ '
             for key_, val in IDEA_dict.items():
                 if type(val) == str:
@@ -226,7 +237,7 @@ class EvidenceProcess(multiprocessing.Process):
             return True
         except Exception as ex:
             self.print('Error in addDataToJSONFile()')
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_exc(), 0, 1)
 
     def addDataToLogFile(self, data):
         """
@@ -368,13 +379,13 @@ class EvidenceProcess(multiprocessing.Process):
             return True
 
         for evidence in all_evidence.values():
-            # Deserialize evidence
             evidence = json.loads(evidence)
-            attacker_direction = evidence.get('attacker_direction')
             attacker = evidence.get('attacker')
             evidence_type = evidence.get('evidence_type')
             description = evidence.get('description')
-            evidence_ID = evidence.get('ID')
+            uid = evidence.get('uid')
+            # evidence_ID = evidence.get('ID')
+            # attacker_direction = evidence.get('attacker_direction')
 
             # format the string of this evidence only: for example Detected C&C
             # channels detection, destination IP:xyz
@@ -382,7 +393,7 @@ class EvidenceProcess(multiprocessing.Process):
             evidence_string = self.line_wrap(evidence_string)
 
             alert_to_print += (
-                f'\t{Fore.CYAN}- {evidence_string}{Style.RESET_ALL}\n'
+                f'\t{Fore.CYAN}- {evidence_string}  {uid} {Style.RESET_ALL}\n'
             )
 
         # Add the timestamp to the alert. The datetime printed will be of the last evidence only
@@ -423,23 +434,26 @@ class EvidenceProcess(multiprocessing.Process):
             self, profileid, twid, flow_datetime, accumulated_threat_level, blocked=False
     ):
         """
-        :param blocked: bool. if the ip was blocked by the blocked modules, we should say so
+        Marks the profileid and twid as blocked and logs it to alerts.log
+        we don't block when running slips on files, we log it in alerts.log only
+        :param blocked: bool. if the ip was blocked by the blocking module, we should say so
                     in alerts.log, if not, we should say that we generated an alert
         """
-
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
         ip = profileid.split('_')[-1].strip()
+        msg = f'{flow_datetime}: Src IP {ip:26}. '
         if blocked:
             __database__.markProfileTWAsBlocked(profileid, twid)
             # Add to log files that this srcip is being blocked
-            msg = (
-                f'{flow_datetime}: Src IP {ip:26}. Blocked given enough evidence '
-                f'on timewindow {twid.split("timewindow")[1]}. (real time {now})'
-            )
+            msg += 'Blocked '
         else:
-            msg = f'{flow_datetime}: Src IP {ip:26}. Generated an alert given enough evidence ' \
-                   f'on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+            msg += 'Generated an alert '
+
+        msg += f'given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
+
+        # log in alerts.log
+        self.addDataToLogFile(msg)
 
         # log the alert
         blocked_srcip_dict = {
@@ -450,8 +464,7 @@ class EvidenceProcess(multiprocessing.Process):
         }
         self.add_to_log_folder(blocked_srcip_dict)
 
-        # log in alerts.log
-        self.addDataToLogFile(msg)
+
 
     def shutdown_gracefully(self):
         self.logfile.close()
@@ -576,17 +589,13 @@ class EvidenceProcess(multiprocessing.Process):
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
+            self.commit, self.branch = branch_info[0], branch_info[1]
             now = datetime.now()
-            self.logfile.write(f'Using {branch} - {commit} - {now}\n\n')
+            self.logfile.write(f'Using {self.branch} - {self.commit} - {now}\n\n')
 
         while True:
             try:
-                # Adapt this process to process evidence from only IPs and not profileid or twid
-
-                # Wait for a message from the channel that a TW was modified
                 message = __database__.get_message(self.c1)
-
                 if utils.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
@@ -656,35 +665,16 @@ class EvidenceProcess(multiprocessing.Process):
                     )
 
                     # to keep the alignment of alerts.json ip + hostname combined should take no more than 26 chars
-                    alert_to_log = (
-                        f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
-                    )
-                    # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
-                    # there's nothing we can do about it
-                    hostname = __database__.get_hostname_from_profile(
-                        profileid
-                    )
-                    if hostname:
-                        srcip = f'{srcip} ({hostname})'
-                        # fill the rest of the 26 characters with spaces to keep the alignment
-                        srcip = f'{srcip}{" "*(26-len(srcip))}'
-                        alert_to_log = (
-                            f'{flow_datetime}: Src IP {srcip}. {evidence}'
-                        )
+                    alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
+                    alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
+
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
-                    if self.is_first_alert and branch_info != False:
-                        # only add commit and hash to the firs alert in alerts.json
-                        self.is_first_alert = False
-                        IDEA_dict.update(
-                            {
-                                'commit': commit,
-                                'branch': branch
-                            }
-                        )
                     self.addDataToJSONFile(IDEA_dict)
+                    # if -l is given
                     self.add_to_log_folder(IDEA_dict)
+
                     __database__.set_evidence_for_profileid(IDEA_dict)
                     __database__.publish('report_to_peers', json.dumps(data))
 
@@ -705,16 +695,16 @@ class EvidenceProcess(multiprocessing.Process):
 
                         ID = self.get_last_evidence_ID(tw_evidence)
 
+                        # if the profile was already blocked in this twid, we shouldn't alert
+                        profile_already_blocked = __database__.checkBlockedProfTW(profileid, twid)
+
                         # This is the part to detect if the accumulated evidence was enough for generating a detection
                         # The detection should be done in attacks per minute. The parameter in the configuration
                         # is attacks per minute
                         # So find out how many attacks corresponds to the width we are using
                         if (
-                            accumulated_threat_level
-                            >= self.detection_threshold_in_this_width
-                            and not __database__.checkBlockedProfTW(
-                                profileid, twid
-                            )
+                            accumulated_threat_level >= self.detection_threshold_in_this_width
+                            and not profile_already_blocked
                         ):
                             # store the alert in our database
                             # the alert ID is profileid_twid + the ID of the last evidence causing this alert
@@ -740,10 +730,6 @@ class EvidenceProcess(multiprocessing.Process):
                             )
                             self.print(f'{alert_to_print}', 1, 0)
 
-                            # alerts.json should only contain alerts in idea format,
-                            # blocked srcips should only be printed in alerts.log
-                            # self.addDataToJSONFile(blocked_srcip_dict)
-
                             if self.popup_alerts:
                                 # remove the colors from the alerts before printing
                                 alert_to_print = (
@@ -753,19 +739,13 @@ class EvidenceProcess(multiprocessing.Process):
                                 )
                                 self.notify.show_popup(alert_to_print)
 
-
-
+                            # todo if it's already blocked, we shouldn't decide blocking
                             blocked = False
                             if self.is_interface and '-p' in sys.argv:
                                 # send ip to the blocking module
                                 if self.decide_blocking(profileid):
                                     blocked = True
 
-                            # since we don't block when running slips on files,
-                            # log this in alerts.log
-
-                            # running on an interface and slips should block
-                            # mark ip as blocked and add it to alerts.log
                             self.mark_as_blocked(
                                 profileid,
                                 twid,
