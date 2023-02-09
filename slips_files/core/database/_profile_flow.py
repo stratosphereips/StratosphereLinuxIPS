@@ -87,18 +87,19 @@ class ProfilingFlowsDatabase(object):
         """
         is the ip param src or dst
         """
+        # if the daddr key arg is not given, we know for sure that the ip given is the daddr
         daddr = daddr if daddr else ip
         data_to_send = self.give_threat_intelligence(
             profileid,
-            twid, 
+            twid,
             ip_state,
-            starttime, 
+            starttime,
             uid,
             daddr,
-            proto=proto, 
+            proto=proto,
             lookup=ip
         )
-            
+
         if ip in self.our_ips:
             # dont ask p2p about your own ip
             return
@@ -896,22 +897,29 @@ class ProfilingFlowsDatabase(object):
             self.set_input_metadata({'file_start': stime})
             self.first_flow = False
 
-        # set the local network used in the db
-        if not self.is_localnet_set:
-            if (
-                    validators.ipv4(saddr)
-                    and ipaddress.ip_address(saddr).is_private
-            ):
-                # get the local network of this saddr
-                if network_range := utils.get_cidr_of_ip(saddr):
-                    self.r.set("local_network", network_range)
-                    self.is_localnet_set = True
+        self.set_local_network(saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
         if flow_type != 'arp':
             self.publish('new_flow', to_send)
         return True
+    def set_local_network(self, saddr):
+        # set the local network used in the db
+        if self.is_localnet_set:
+            return
 
+        if saddr in ('0.0.0.0', '255.255.255.255'):
+            return
+
+        if not (
+                validators.ipv4(saddr)
+                and ipaddress.ip_address(saddr).is_private
+        ):
+            return
+        # get the local network of this saddr
+        if network_range := utils.get_cidr_of_ip(saddr):
+            self.r.set("local_network", network_range)
+            self.is_localnet_set = True
     def get_local_network(self):
          return self.r.get("local_network")
 
@@ -1682,7 +1690,7 @@ class ProfilingFlowsDatabase(object):
             self.set_dns_resolution(
                 query, answers, stime, uid, qtype_name, srcip, twid
             )
-            # send each dns response to TI module
+            # send each dns answer to TI module
             for answer in answers:
                 if 'TXT' in answer:
                     continue
@@ -1699,7 +1707,7 @@ class ProfilingFlowsDatabase(object):
                     stime,
                     uid,
                     daddr,
-                    lookup=query,
+                    lookup=answer,
                     extra_info=extra_info
                 )
 
