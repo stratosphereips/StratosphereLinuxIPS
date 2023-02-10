@@ -1657,7 +1657,7 @@ class Main:
             self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
             self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
             self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
-            self.print('Starting modules', 0, 1)
+            self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
