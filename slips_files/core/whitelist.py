@@ -766,7 +766,7 @@ class Whitelist:
                 # extract the top level domain
                 try:
                     domain = tld.get_fld(data, fix_protocol=True)
-                except tld.exceptions.TldBadUrl:
+                except (tld.exceptions.TldBadUrl, tld.exceptions.TldDomainNotFound):
                     domain = data
                     for str_ in ('http://', 'https://','www'):
                         domain = domain.replace(str_, "")
