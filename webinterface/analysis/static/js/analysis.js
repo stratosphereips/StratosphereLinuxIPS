@@ -5,6 +5,7 @@ let active_profile = "";
 let active_timewindow = "";
 let active_timewindow_index = 0;
 let active_tw_id = "";
+let clicked_profile_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
@@ -190,6 +191,7 @@ function initProfileTwListeners() {
 
         let profile_id = row.data()['profile']
         let profile_id_dash = convertDotToDash(profile_id)
+        clicked_profile_id = profile_id_dash
 
         if (row.child.isShown()) {
             $("#" + profile_id_dash).DataTable().clear().destroy();
@@ -293,11 +295,26 @@ function initAllAnalysisTables() {
 
 }
 
+function update(){
+    console.log("UPDATE")
+    if (active_profile && active_timewindow) {
+        // let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
+        $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); }
+    $('#table_profiles').DataTable().ajax.reload(null, false);
+    // $('#' + clicked_profile_id).DataTable().ajax.reload();
+}
+
+function automaticUpdate() {
+    setInterval(update, 2000);
+
+}
+
 function initAnalysisPage() {
     initAllAnalysisTables();  // Initialize all analysis tables
     initProfileTwListeners(); // Initialize all profile and tw tables' listeners
     initAnalysisTagListeners(); //Initialize analysisTags listeners
     initHideProfileTWButtonListener();
+    automaticUpdate();
 }
 
 $(document).ready(function () {
