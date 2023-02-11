@@ -106,7 +106,7 @@ function hotkeyPress(e) {
 }
 
 function convertDotToDash(string) {
-    return string.replace(/\./g, '_');
+    return string.replace(/\.|\:/g, '_');
 }
 
 
