@@ -1,5 +1,6 @@
 import redis
 from .signals import message_sent
+from utils import *
 
 
 class Database(object):
@@ -14,6 +15,12 @@ class Database(object):
         self.cachedb = self.connect_to_database(port, db_number)
 
     def connect_to_database(self, port=6379, db_number=0):
+        available_dbs = read_db_file()
+   
+        if len(available_dbs) == 1:
+            print(available_dbs)
+            port = available_dbs[0]["redis_port"]
+
         return redis.StrictRedis(host='localhost',
                                  port=port,
                                  db=db_number,
