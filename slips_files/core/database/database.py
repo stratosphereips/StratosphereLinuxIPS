@@ -1090,7 +1090,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         When we have a bunch of evidence causing an alert,
         we associate all evidence IDs with the alert ID in our database
-        stores in 'alerts' key only
+        this function stores evidence in 'alerts' key only
         :param alert ID: the profileid_twid_ID of the last evidence causing this alert
         :param evidence_IDs: all IDs of the evidence causing this alert
         """

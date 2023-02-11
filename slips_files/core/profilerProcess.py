@@ -44,6 +44,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
+        self.last_processed_line = ''
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -1220,7 +1221,7 @@ class ProfilerProcess(multiprocessing.Process):
             pass
 
     def process_suricata_input(self, line) -> None:
-        """Read suricata json input"""
+        """Read suricata json input and store it in column_values"""
 
         # convert to dict if it's not a dict already
         if type(line) == str:
@@ -1258,7 +1259,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         if self.column_values['type']:
             """
-            event_type:
+            suricata available event_type values:
             -flow
             -tls
             -http
@@ -2441,10 +2442,15 @@ class ProfilerProcess(multiprocessing.Process):
                         # When the columns are not there. Not sure if it works
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    # self.print('Suricata line')
+                    # make sure that we haven't processed this line before
+                    if line == self.last_processed_line:
+                        # temporary fix for slips processing the last line of suricata files 2000+ times in a row!
+                        continue
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.last_processed_line = line
+
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)

@@ -982,7 +982,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
                     # ip_state will say if it is a srcip or if it was a dst_ip
                     ip_state = data.get('ip_state')
-                    # self.print(ip)
 
                     # If given an IP, ask for it
                     # Block only if the traffic isn't outgoing ICMP port unreachable packet
