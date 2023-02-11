@@ -25,10 +25,7 @@ $("#table_choose_redis").DataTable({
     columns: [
         { data: 'filename' },
         { data: 'redis_port' }
-    ],
-    "fnInitComplete": function( settings, json ) {
-        $('#table_choose_redis tbody tr:eq(0)').click();
-    }
+    ]
 })
 
 
