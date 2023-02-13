@@ -5,7 +5,6 @@ ftp,21,tcp,File Transfer Protocol [Control]
 ftp,21,udp,File Transfer Protocol [Control]
 ftp,21,sctp,FTP
 ssh,22,tcp,Secure Shell (SSH) Protocol
-ssh,22,udp,Secure Shell (SSH) Protocol
 ssh,22,sctp,SSH
 telnet,23,tcp,Telnet
 telnet,23,udp,Telnet
