@@ -1152,7 +1152,7 @@ class Module(Module, multiprocessing.Process):
         Alerts on connections to or from port 0 using protocols other than
         igmp, icmp
         """
-        if proto in ('igmp', 'icmp', 'ipv6-icmp'):
+        if proto.lower() in ('igmp', 'icmp', 'ipv6-icmp', 'arp'):
             return
 
         if not (sport == 0 or dport == 0):
