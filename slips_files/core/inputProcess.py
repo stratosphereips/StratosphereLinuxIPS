@@ -152,7 +152,8 @@ class InputProcess(multiprocessing.Process):
                 # The nfdump command returned nothing
                 self.print('Error reading nfdump output ', 1, 3)
             else:
-                self.total_flows = len(self.nfdump_output.splitlines())
+                total_flows = len(self.nfdump_output.splitlines())
+                __database__.set_input_metadata({'total_flows': total_flows})
 
                 for nfdump_line in self.nfdump_output.splitlines():
                     # this line is taken from stdout we need to remove whitespaces
@@ -169,7 +170,7 @@ class InputProcess(multiprocessing.Process):
                     self.profilerqueue.put(line)
                     if self.testing: break
 
-            return self.total_flows
+            return total_flows
         except KeyboardInterrupt:
             return True
 
@@ -388,11 +389,11 @@ class InputProcess(multiprocessing.Process):
 
             self.zeek_folder = self.given_path
             self.start_observer()
-
+            total_flows = 0
             for file in os.listdir(self.given_path):
                 if not __database__.is_growing_zeek_dir():
-                    # get the total number of flows slips is going to read
-                    self.total_flows += self.get_flows_number(os.path.join(self.given_path, file))
+                    # get the total number of flows slips is going to read (used later for the progress bar)
+                    total_flows += self.get_flows_number(os.path.join(self.given_path, file))
 
                 # Remove .log extension and add file name to database.
                 extension = file[-4:]
@@ -405,6 +406,7 @@ class InputProcess(multiprocessing.Process):
                 # in testing mode, we only need to read one zeek file to know
                 # that this function is working correctly
                 if self.testing: break
+            __database__.get_total_flows({'total_flows': total_flows})
 
             lines = self.read_zeek_files()
 
@@ -451,7 +453,9 @@ class InputProcess(multiprocessing.Process):
 
     def handle_binetflow(self):
         try:
-            self.total_flows = self.get_flows_number(self.given_path)
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
+
             self.lines = 0
             with open(self.given_path) as file_stream:
                 # read first line to determine the type of line, tab or comma separated
@@ -487,18 +491,20 @@ class InputProcess(multiprocessing.Process):
 
     def handle_suricata(self):
         try:
-            self.total_flows = self.get_flows_number(self.given_path)
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
             with open(self.given_path) as file_stream:
                 for t_line in file_stream:
                     line = {
                         'type': 'suricata',
-                        'data': t_line
+                        'data': t_line,
                     }
                     self.print(f'	> Sent Line: {line}', 0, 3)
                     if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
-                    if self.testing: break
+                    if self.testing:
+                        break
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -506,7 +512,8 @@ class InputProcess(multiprocessing.Process):
 
     def handle_zeek_log_file(self):
         try:
-            self.total_flows = self.get_flows_number(self.given_path)
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
 
             try:
                 file_name_without_extension = self.given_path[: self.given_path.index('.log')]
