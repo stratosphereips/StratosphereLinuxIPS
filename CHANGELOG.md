@@ -3,6 +3,7 @@
 - Add a zeek script to recognize the gateway IP and add it to notice.log 
 - Don't alert "Connection to Private IP" when there's a DNS connection on port 53 UDP to the gateway
 - Faster reading of netflow and suricata files
+- Add a progress bar to slips showing the number of processed flows
 - Fix having duplicate alerts
 - 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections

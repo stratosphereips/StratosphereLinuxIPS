@@ -1801,10 +1801,9 @@ class Main:
                         last_modified_tw_time
                     )
 
-                if self.mode != 'daemonized':
+                if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface')):
                     # How many profiles we have?
                     profilesLen = str(__database__.getProfilesLen())
-
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
