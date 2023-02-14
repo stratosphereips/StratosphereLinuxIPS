@@ -29,7 +29,7 @@ import os
 import binascii
 import base64
 from re import split
-
+from tqdm import tqdm
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -44,7 +44,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
-        self.last_processed_line = ''
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -2370,8 +2369,23 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
+        self.progress_bar.close()
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
+
+    def init_progress_bar(self):
+        # the bar_format arg is to disable ETA and unit display
+        self.progress_bar = tqdm(
+            total= int(__database__.get_total_flows()),
+            leave=True,
+            colour="green",
+            desc="Flows processed",
+            mininterval=0,
+            unit=' flow',
+            ncols=100,
+            smoothing=1,
+            bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}"
+        )
 
     def run(self):
         utils.drop_root_privs()
@@ -2399,9 +2413,11 @@ class ProfilerProcess(multiprocessing.Process):
 
                 if not self.input_type:
                     # Find the type of input received
-                    # This line will be discarded because
                     self.define_type(line)
-                    # We should do this before checking the type of input so we don't lose the first line of input
+                    # Find the number of flows we're going to receive of input received
+                    # todo make sure it's no called on pcaps and interface and -g
+                    # todo why do we have 1 extra progress bar printed when pressing ctrl +c
+                    self.init_progress_bar()
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -2442,15 +2458,11 @@ class ProfilerProcess(multiprocessing.Process):
                         # When the columns are not there. Not sure if it works
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    # make sure that we haven't processed this line before
-                    if line == self.last_processed_line:
-                        # temporary fix for slips processing the last line of suricata files 2000+ times in a row!
-                        continue
+                    tqdm.write(f'{rec_lines}', end='\r')
+
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.last_processed_line = line
-
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
@@ -2461,6 +2473,11 @@ class ProfilerProcess(multiprocessing.Process):
                     self.add_flow_to_profile()
                 else:
                     self.print("Can't recognize input file type.")
+                    return False
+
+                self.progress_bar.update(1)
+                # self.progress_bar.refresh()
+
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = __database__.get_message(self.c1)
