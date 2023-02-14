@@ -194,6 +194,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.r.set("mode", slips_mode)
 
+    def get_slips_mode(self):
+        """
+        function to get the current mode (daemonized/interactive)
+        in the db
+        """
+        self.r.get("mode")
+
     def close_redis_server(self, redis_port):
         server_pid = self.get_redis_server_PID( redis_port)
         if server_pid:
