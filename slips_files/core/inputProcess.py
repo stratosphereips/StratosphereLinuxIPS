@@ -430,7 +430,6 @@ class InputProcess(multiprocessing.Process):
     def handle_binetflow(self):
         try:
             self.lines = 0
-            self.read_lines_delay = 0.02
             with open(self.given_path) as file_stream:
                 line = {'type': 'argus'}
                 # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,
@@ -448,7 +447,6 @@ class InputProcess(multiprocessing.Process):
 
                 # go through the rest of the file
                 for t_line in file_stream:
-                    time.sleep(self.read_lines_delay)
                     line['data'] = t_line
                     # argus files are either tab separated orr comma separated
                     if len(t_line.strip()) != 0:
@@ -464,9 +462,7 @@ class InputProcess(multiprocessing.Process):
         try:
             with open(self.given_path) as file_stream:
                 line = {'type': 'suricata'}
-                self.read_lines_delay = 0.02
                 while str_line := file_stream.readline():
-                    time.sleep(self.read_lines_delay)
                     line['data'] = str_line
                     self.print(f'	> Sent Line: {line}', 0, 3)
                     if len(str_line.strip()) != 0:
