@@ -1718,6 +1718,11 @@ class Main:
             )
 
             self.c1 = __database__.subscribe('finished_modules')
+            self.enable_metadata = self.conf.enable_metadata()
+
+            if self.enable_metadata:
+                self.info_path = self.add_metadata()
+
             inputProcess = InputProcess(
                 self.outputqueue,
                 self.profilerProcessQueue,
@@ -1753,10 +1758,7 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-            self.enable_metadata = self.conf.enable_metadata()
 
-            if self.enable_metadata:
-                self.info_path = self.add_metadata()
 
             hostIP = self.store_host_ip()
 
