@@ -147,7 +147,7 @@ class InputProcess(multiprocessing.Process):
             The task for this function is to send nfdump output line by line to profilerProcess.py for processing
             """
 
-            line = {'type': 'nfdump'}
+
             if not self.nfdump_output:
                 # The nfdump command returned nothing
                 self.print('Error reading nfdump output ', 1, 3)
@@ -161,7 +161,10 @@ class InputProcess(multiprocessing.Process):
                         # The first letter is not digit -> not valid line.
                         # TODO: What is this valid line check?? explain
                         continue
-                    line['data'] = nfdump_line
+                    line = {
+                        'type': 'nfdump',
+                        'data': nfdump_line
+                    }
                     self.profilerqueue.put(line)
                     if self.testing: break
 
@@ -402,10 +405,7 @@ class InputProcess(multiprocessing.Process):
         sys.stdin = os.fdopen(0, 'r')
         file_stream = sys.stdin
         # tell profilerprocess the type of line the user gave slips
-        line_info = {
-            'type': 'stdin',
-            'line_type': self.line_type
-        }
+
         for line in file_stream:
             if line == '\n':
                 continue
@@ -417,8 +417,11 @@ class InputProcess(multiprocessing.Process):
                 except json.decoder.JSONDecodeError:
                     self.print(f'Invalid json line')
                     continue
-
-            line_info['data'] = line
+            line_info = {
+                'type': 'stdin',
+                'line_type': self.line_type,
+                'data' : line
+            }
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.profilerqueue.put(line_info)
             self.lines += 1
@@ -430,26 +433,28 @@ class InputProcess(multiprocessing.Process):
     def handle_binetflow(self):
         try:
             self.lines = 0
-            self.read_lines_delay = 0.02
             with open(self.given_path) as file_stream:
-                line = {'type': 'argus'}
-                # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,
-                # Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
-                # self.profilerqueue.put(fake)
-
                 # read first line to determine the type of line, tab or comma separated
                 t_line = file_stream.readline()
                 if '\t' in t_line:
                     # this is the header line
-                    line['type'] = 'argus-tabs'
-                line['data'] = t_line
+                    type_ = 'argus-tabs'
+                else:
+                    type_ = 'argus'
+
+                line = {
+                    'type': type_,
+                    'data': t_line
+                }
                 self.profilerqueue.put(line)
                 self.lines += 1
 
                 # go through the rest of the file
                 for t_line in file_stream:
-                    time.sleep(self.read_lines_delay)
-                    line['data'] = t_line
+                    line = {
+                        'type': type_,
+                        'data': t_line
+                    }
                     # argus files are either tab separated orr comma separated
                     if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
@@ -463,13 +468,13 @@ class InputProcess(multiprocessing.Process):
     def handle_suricata(self):
         try:
             with open(self.given_path) as file_stream:
-                line = {'type': 'suricata'}
-                self.read_lines_delay = 0.02
-                while str_line := file_stream.readline():
-                    time.sleep(self.read_lines_delay)
-                    line['data'] = str_line
+                for t_line in file_stream:
+                    line = {
+                        'type': 'suricata',
+                        'data': t_line
+                    }
                     self.print(f'	> Sent Line: {line}', 0, 3)
-                    if len(str_line.strip()) != 0:
+                    if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
                     if self.testing: break
