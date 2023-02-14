@@ -54,6 +54,8 @@ class ProfilerProcess(multiprocessing.Process):
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
+        # are we in daemon of interactive mode
+        self.slips_mode = __database__.get_slips_mode()
         self.c1 = __database__.subscribe('reload_whitelist')
         self.separators = {
             'zeek': '',
@@ -92,6 +94,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.label = conf.label()
         self.home_net = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
+        self.printable_twid_width = conf.get_tw_width()
 
     def define_type(self, line):
         """
@@ -2486,8 +2489,35 @@ class ProfilerProcess(multiprocessing.Process):
 
                 if hasattr(self, 'progress_bar'):
                     # this module wont have the progress_bar set if it's running on pcap or interface
+                    # todo try the daemon after this feature is done
+                    # todo try reloading the whitelist
+                    if (
+                            self.slips_mode != 'daemonized'
+                    ):
+                        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
+
+                        # Get the amount of modified profiles since we last checked
+                        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
+                            slips_internal_time
+                        )
+                        modified_ips_in_the_last_tw = len(modified_profiles)
+
+                        # todo print this in profilerprocess not sure if every x seconds
+                        profilesLen = str(__database__.getProfilesLen())
+                        now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
+
+                        # if (self.input_type in ('pcap', 'interface') or __database__.is_growing_zeek_dir()):
+                        # if hasattr(self, 'progress_bar'):
+                        self.progress_bar.set_postfix_str(
+                            f'Total analyzed IPs so '
+                            f'far: {profilesLen}. '
+                            f'IPs sending traffic in the last {self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
+                            f'({now})',
+                            refresh=True
+                            # end='\r',
+                        )
                     self.progress_bar.update(1)
-                # self.progress_bar.refresh()
+                    # self.progress_bar.refresh()
 
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
@@ -2495,13 +2525,9 @@ class ProfilerProcess(multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if (
-                        message
-                        and message['channel'] == 'reload_whitelist'
-                        and type(message['data']) == str
-                ):
+                if utils.is_msg_intended_for(message, 'reload_whitelist'):
                     # if whitelist.conf is edited using pycharm
-                    # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
+                    # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
                     self.whitelist.read_whitelist()
 
