@@ -1803,7 +1803,9 @@ class Main:
                         last_modified_tw_time
                     )
 
-                if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface')):
+                # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
+                # for other files, we prin a progress bar + the stats using profilerprocess
+                if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
                     profilesLen = str(__database__.getProfilesLen())
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
