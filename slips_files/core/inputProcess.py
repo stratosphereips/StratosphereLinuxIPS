@@ -461,11 +461,13 @@ class InputProcess(multiprocessing.Process):
     def handle_suricata(self):
         try:
             with open(self.given_path) as file_stream:
-                line = {'type': 'suricata'}
-                while str_line := file_stream.readline():
-                    line['data'] = str_line
+                for t_line in file_stream:
+                    line = {
+                        'type': 'suricata',
+                        'data': t_line
+                    }
                     self.print(f'	> Sent Line: {line}', 0, 3)
-                    if len(str_line.strip()) != 0:
+                    if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
                     if self.testing: break
