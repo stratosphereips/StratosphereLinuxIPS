@@ -2369,14 +2369,23 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
-        self.progress_bar.close()
+        if hasattr(self, 'progress_bar'):
+            self.progress_bar.close()
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
 
     def init_progress_bar(self):
+        """
+        initializes the progress bar when slips is runnning on a file or a zeek dir
+        ignores pcaps, interface and dirs given to slips if -g is enabled
+        """
+        if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
+            # we don't know how to get the total number of flows slips is going to process, because they're growing
+            return
+        total_flows = __database__.get_total_flows()
         # the bar_format arg is to disable ETA and unit display
         self.progress_bar = tqdm(
-            total= int(__database__.get_total_flows()),
+            total= int(total_flows),
             leave=True,
             colour="green",
             desc="Flows processed",
@@ -2475,7 +2484,9 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("Can't recognize input file type.")
                     return False
 
-                self.progress_bar.update(1)
+                if hasattr(self, 'progress_bar'):
+                    # this module wont have the progress_bar set if it's running on pcap or interface
+                    self.progress_bar.update(1)
                 # self.progress_bar.refresh()
 
 

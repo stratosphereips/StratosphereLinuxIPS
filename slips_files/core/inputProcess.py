@@ -406,7 +406,7 @@ class InputProcess(multiprocessing.Process):
                 # in testing mode, we only need to read one zeek file to know
                 # that this function is working correctly
                 if self.testing: break
-            __database__.get_total_flows({'total_flows': total_flows})
+            __database__.set_input_metadata({'total_flows': total_flows})
 
             lines = self.read_zeek_files()
 
