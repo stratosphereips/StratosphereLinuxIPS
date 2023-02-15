@@ -9,6 +9,13 @@ let clicked_profile_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
+var childEditors = {};  // Globally track created chid editors
+var childTable;
+var childTable2;
+// Global var to track shown child rows
+var childRows = null;
+var childRowsData = {};
+
 function capitalizeFirstLetter(data) {
     return data.charAt(0).toUpperCase() + data.slice(1);
 }
@@ -295,18 +302,66 @@ function initAllAnalysisTables() {
 
 }
 
+function initListenerReload(){
+    $('#table_profiles').on('xhr', function () {
+        $('#table_profiles').one('draw', function () {
+          // If reloading table then show previously shown rows
+          console.log('childRows', childRows)
+            if (childRows) {
+                childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
+                    let profile_id = this.data().profile; 
+                    let profile_id_dash = convertDotToDash(profile_id)
+                    // Get corresponding child DT API
+                    let childDataTable = $('#' + profile_id_dash).DataTable();
+
+
+                    // Get saved child row data by ID
+                    var childData = childRowsData[profile_id_dash];
+                    console.log(childData)
+                    childDataTable.destroy();
+                    this.child($(addTableTWs(profile_id_dash))).show();
+                    
+                    this.nodes().to$().addClass('shown');
+                    $(row).addClass('shown');
+                });
+            }
+            // Reset childRows so loop is not executed each draw
+            childRows = null;
+        });       
+    });             
+}
+
 function update(){
-    console.log("UPDATE")
-    if (active_profile && active_timewindow) {
-        // let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
-        $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); }
+    // Get shown rows of datatable
+    childRows = $('#table_profiles').rows($('.shown'));
+
+    childRowsData = {};
+    childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
+        // Get clientID of parent
+        let profile_id = this.data().profile; 
+        let profile_id_dash = convertDotToDash(profile_id)
+        // Get corresponding child DT API
+        let childDataTable = $('#' + profile_id_dash).DataTable();
+
+        // Save in global object using parent ID as key
+        childRowsData[profile_id_dash] = childDataTable.data().toArray();
+    });
+                
     $('#table_profiles').DataTable().ajax.reload(null, false);
-    // $('#' + clicked_profile_id).DataTable().ajax.reload();
+
+    // console.log("UPDATE")
+    // if (active_profile && active_timewindow) {
+    //     // let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
+    //     $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); }
+    
+    // childRows = $('#table_profiles').DataTable().rows($('.shown'));
+
+    // $('#table_profiles').DataTable().ajax.reload(null, false);
+    // // $('#' + clicked_profile_id).DataTable().ajax.reload();
 }
 
 function automaticUpdate() {
     setInterval(update, 2000);
-
 }
 
 function initAnalysisPage() {
