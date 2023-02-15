@@ -258,7 +258,7 @@ class OutputProcess(multiprocessing.Process):
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
-            total=total_flows+1,
+            total=total_flows,
             leave=True,
             colour="green",
             desc="Flows processed",
@@ -282,21 +282,7 @@ class OutputProcess(multiprocessing.Process):
         if self.slips_mode == 'daemonized':
             return
 
-        now = datetime.now()
-        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') >= 5:
-            # only update the stats if 5 seconds passed
-            self.last_updated_stats_time = now
-            now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
-            modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
-            profilesLen = str(__database__.getProfilesLen())
-            self.progress_bar.set_postfix_str(
-                f'Total analyzed IPs: '
-                f'{profilesLen}. '
-                f'IPs sending traffic in the last '
-                f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
-                f'({now})',
-                refresh=True
-            )
+
         self.progress_bar.update(1)
         # self.progress_bar.refresh()
 
@@ -307,9 +293,32 @@ class OutputProcess(multiprocessing.Process):
                                         'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
+    def update_progress_bar_stats(self):
+        if not hasattr(self, 'progress_bar'):
+            return
+
+        now = datetime.now()
+        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') < 5:
+            return
+
+        # only update the stats if 5 seconds passed
+        self.last_updated_stats_time = now
+        now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
+        modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
+        profilesLen = __database__.getProfilesLen()
+        self.progress_bar.set_postfix_str(
+            f'Total analyzed IPs: '
+            f'{profilesLen}. '
+            f'IPs sending traffic in the last '
+            f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
+            f'({now})',
+            refresh=True
+        )
+
     def run(self):
         while True:
             try:
+                self.update_progress_bar_stats()
                 line = self.queue.get()
                 if line == 'quiet':
                     self.quiet = True
