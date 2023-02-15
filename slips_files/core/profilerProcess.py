@@ -2400,7 +2400,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Find the type of input received
                     self.define_type(line)
                     # Find the number of flows we're going to receive of input received
-                    # todo make sure it's no called on pcaps and interface and -g
+                    # todo make sure it's not called on pcaps and interface and -g
                     # todo why do we have 1 extra progress bar printed when pressing ctrl +c
                     # todo the printing should be done using outputprocess
                     self.outputqueue.put(f"initialize progress bar")

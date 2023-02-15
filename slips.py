@@ -1561,6 +1561,24 @@ class Main:
                   f"Or kill your open redis ports using: ./slips.py -k ")
             self.terminate_slips()
 
+    def update_slips_running_stats(self):
+        """
+        updates the number of processed ips, slips internal time, and modified tws so far in the db
+        """
+        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
+
+        # Get the amount of modified profiles since we last checked
+        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
+            slips_internal_time
+        )
+        modified_ips_in_the_last_tw = len(modified_profiles)
+        __database__.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
+        # Get the time of last modified timewindow and set it as a new
+        if last_modified_tw_time != 0:
+            __database__.setSlipsInternalTime(
+                last_modified_tw_time
+            )
+        return modified_ips_in_the_last_tw, modified_profiles
 
     def start(self):
         """Main Slips Function"""
@@ -1758,8 +1776,6 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-
-
             hostIP = self.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
@@ -1785,26 +1801,10 @@ class Main:
 
                 # Sleep some time to do routine checks
                 time.sleep(sleep_time)
-                slips_internal_time = (
-                    float(__database__.getSlipsInternalTime()) + 1
-                )
-                # Get the amount of modified profiles since we last checked
-                (
-                    modified_profiles,
-                    last_modified_tw_time,
-                ) = __database__.getModifiedProfilesSince(
-                    slips_internal_time
-                )
-                modified_ips_in_the_last_tw = len(modified_profiles)
 
-                # Get the time of last modified timewindow and set it as a new
-                if last_modified_tw_time != 0:
-                    __database__.setSlipsInternalTime(
-                        last_modified_tw_time
-                    )
-
+                modified_ips_in_the_last_tw, modified_profiles = self.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
-                # for other files, we prin a progress bar + the stats using profilerprocess
+                # for other files, we prin a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
                     profilesLen = str(__database__.getProfilesLen())
