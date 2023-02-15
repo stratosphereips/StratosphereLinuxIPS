@@ -1752,7 +1752,7 @@ class Database(ProfilingFlowsDatabase, object):
                 tags: list = current_data['threatintelligence'].get('tags', False)
                 # remove brackets
                 if tags:
-                    identification += f'tags= {tags} '
+                    identification += f'tags= {tags}  '
 
         identification = identification[:-2]
         return identification
