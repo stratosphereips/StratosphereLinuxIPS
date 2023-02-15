@@ -68,6 +68,9 @@ class OutputProcess(multiprocessing.Process):
         # are we in daemon of interactive mode
         #todo is this set yet?
         self.slips_mode = __database__.get_slips_mode()
+        # we update the stats printed by slips every 5seconds
+        # this is the last time the stats was printed
+        self.last_updated_stats_time = float("-inf")
 
 
     def read_configuration(self):
@@ -228,6 +231,8 @@ class OutputProcess(multiprocessing.Process):
             and debug_level <= self.debug
         )):
             if 'Start' in msg:
+                # we use tqdm.write() instead of print() to make sure we
+                # don't get progress bar duplicates in the cli
                 tqdm.write(f'{msg}')
                 # print(f'{msg}')
                 return
@@ -275,31 +280,29 @@ class OutputProcess(multiprocessing.Process):
 
         # this module wont have the progress_bar set if it's running on pcap or interface
         # todo try the daemon after this feature is done
-        #todo output process shouldn calculate the stats, it should only print them
+        # todo output process shouldn calculate the stats, it should only print them
+        # todo profile slips with and without the bar !
         if self.slips_mode == 'daemonized':
             return
 
-        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
-
-        # Get the amount of modified profiles since we last checked
-        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
-            slips_internal_time
-        )
-        modified_ips_in_the_last_tw = len(modified_profiles)
 
         # todo print this in profilerprocess not sure if every x seconds
-        profilesLen = str(__database__.getProfilesLen())
-        now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
-
-        #todo update postfix every 5s, but update progress bar every flow
-        self.progress_bar.set_postfix_str(
-            f'Total analyzed IPs: '
-            f'{profilesLen}. '
-            f'IPs sending traffic in the last {self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
-            f'({now})',
-            refresh=True
-            # end='\r',
-        )
+        #todo move this to utils since we're using it from many files
+        now = datetime.now()
+        if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') >= 5:
+            # only update the stats if 5 seconds passed
+            self.last_updated_stats_time = now
+            now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
+            modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
+            profilesLen = str(__database__.getProfilesLen())
+            self.progress_bar.set_postfix_str(
+                f'Total analyzed IPs: '
+                f'{profilesLen}. '
+                f'IPs sending traffic in the last '
+                f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
+                f'({now})',
+                refresh=True
+            )
 
         self.progress_bar.update(1)
         # self.progress_bar.refresh()
