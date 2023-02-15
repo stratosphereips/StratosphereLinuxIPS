@@ -2412,6 +2412,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.process_zeek_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 elif (
                     self.input_type == 'argus'
                     or self.input_type == 'argus-tabs'
@@ -2434,30 +2435,30 @@ class ProfilerProcess(multiprocessing.Process):
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                    except AttributeError:
-                        # No. Define columns. Do not add this line to profile, its only headers
-                        self.define_columns(line)
-                    except KeyError:
-                        # When the columns are not there. Not sure if it works
+                        self.outputqueue.put(f"update progress bar")
+                    except (AttributeError, KeyError):
+                        # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 elif self.input_type == 'nfdump':
                     self.process_nfdump_input(line)
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
                     return False
 
-                self.outputqueue.put(f"update progress bar")
-                # todo try reloading the whitelist
+
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = __database__.get_message(self.c1)
