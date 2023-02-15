@@ -66,7 +66,6 @@ class OutputProcess(multiprocessing.Process):
         # Start the DB
         __database__.start(redis_port)
         # are we in daemon of interactive mode
-        #todo is this set yet?
         self.slips_mode = __database__.get_slips_mode()
         # we update the stats printed by slips every 5seconds
         # this is the last time the stats was printed
@@ -280,10 +279,8 @@ class OutputProcess(multiprocessing.Process):
             return
 
         # todo profile slips with and without the bar !
-        # todo why do we have 1 extra progress bar printed when pressing ctrl +c
         if self.slips_mode == 'daemonized':
             return
-
 
         now = datetime.now()
         if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') >= 5:
@@ -306,8 +303,6 @@ class OutputProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
-        if hasattr(self, 'progress_bar'):
-            self.progress_bar.close()
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
