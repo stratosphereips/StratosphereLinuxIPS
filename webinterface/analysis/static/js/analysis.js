@@ -194,9 +194,9 @@ function initProfileTwListeners() {
         clicked_profile_id = profile_id_dash
 
         if (row.child.isShown()) {
-            $("#" + profile_id_dash).DataTable().clear().destroy();
             row.child.hide();
             tr.removeClass('shown');
+            $("#" + profile_id_dash).DataTable().clear().destroy();
         }
         else {
             row.child(addTableTWs(profile_id_dash)).show();
