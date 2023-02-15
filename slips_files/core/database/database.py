@@ -194,8 +194,25 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.r.set("mode", slips_mode)
 
+    def get_slips_mode(self):
+        """
+        function to get the current mode (daemonized/interactive)
+        in the db
+        """
+        self.r.get("mode")
+    
+    def get_modified_ips_in_the_last_tw(self):
+        """
+        this number is updated in the db every 5s by slips.py
+        used for printing running stats in slips.py or outputprocess
+        """
+        if modified_ips := self.r.hget('analysis', 'modified_ips_in_the_last_tw'):
+            return modified_ips
+        else:
+            return 0
+    
     def close_redis_server(self, redis_port):
-        server_pid = self.get_redis_server_PID( redis_port)
+        server_pid = self.get_redis_server_PID(redis_port)
         if server_pid:
             os.kill(int(server_pid), signal.SIGKILL)
 
