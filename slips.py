@@ -30,7 +30,6 @@ import os
 import time
 import shutil
 import psutil
-from datetime import datetime
 import socket
 import warnings
 import json
@@ -41,6 +40,7 @@ import importlib
 import errno
 import subprocess
 import re
+from datetime import datetime
 from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon

@@ -257,6 +257,7 @@ class OutputProcess(multiprocessing.Process):
 
         total_flows = int(__database__.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
+        # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
             total=total_flows,
             leave=True,
@@ -264,7 +265,6 @@ class OutputProcess(multiprocessing.Process):
             desc="Flows processed",
             mininterval=0,
             unit=' flow',
-            ncols=200,
             smoothing=1,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
             position=0,
@@ -276,18 +276,15 @@ class OutputProcess(multiprocessing.Process):
         wrapper for tqdm.update()
         """
         if not hasattr(self, 'progress_bar'):
+            # this module wont have the progress_bar set if it's running on pcap or interface
             return
 
-        # this module wont have the progress_bar set if it's running on pcap or interface
-        # todo try the daemon after this feature is done
-        # todo output process shouldn calculate the stats, it should only print them
         # todo profile slips with and without the bar !
+        # todo why do we have 1 extra progress bar printed when pressing ctrl +c
         if self.slips_mode == 'daemonized':
             return
 
 
-        # todo print this in profilerprocess not sure if every x seconds
-        #todo move this to utils since we're using it from many files
         now = datetime.now()
         if utils.get_time_diff(self.last_updated_stats_time, now, 'seconds') >= 5:
             # only update the stats if 5 seconds passed

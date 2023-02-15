@@ -206,7 +206,10 @@ class Database(ProfilingFlowsDatabase, object):
         this number is updated in the db every 5s by slips.py
         used for printing running stats in slips.py or outputprocess
         """
-        return self.r.hget('analysis', 'modified_ips_in_the_last_tw')
+        if modified_ips := self.r.hget('analysis', 'modified_ips_in_the_last_tw'):
+            return modified_ips
+        else:
+            return 0
     
     def close_redis_server(self, redis_port):
         server_pid = self.get_redis_server_PID(redis_port)
