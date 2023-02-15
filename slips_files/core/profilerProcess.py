@@ -54,8 +54,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
-        # are we in daemon of interactive mode
-        self.slips_mode = __database__.get_slips_mode()
         self.c1 = __database__.subscribe('reload_whitelist')
         self.separators = {
             'zeek': '',
@@ -94,7 +92,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.label = conf.label()
         self.home_net = conf.get_home_network()
         self.width = conf.get_tw_width_as_float()
-        self.printable_twid_width = conf.get_tw_width()
 
     def define_type(self, line):
         """
@@ -2372,32 +2369,8 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
-        if hasattr(self, 'progress_bar'):
-            self.progress_bar.close()
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
-
-    def init_progress_bar(self):
-        """
-        initializes the progress bar when slips is runnning on a file or a zeek dir
-        ignores pcaps, interface and dirs given to slips if -g is enabled
-        """
-        if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
-            # we don't know how to get the total number of flows slips is going to process, because they're growing
-            return
-        total_flows = __database__.get_total_flows()
-        # the bar_format arg is to disable ETA and unit display
-        self.progress_bar = tqdm(
-            total= int(total_flows),
-            leave=True,
-            colour="green",
-            desc="Flows processed",
-            mininterval=0,
-            unit=' flow',
-            ncols=100,
-            smoothing=1,
-            bar_format = "{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}"
-        )
 
     def run(self):
         utils.drop_root_privs()
@@ -2429,7 +2402,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Find the number of flows we're going to receive of input received
                     # todo make sure it's no called on pcaps and interface and -g
                     # todo why do we have 1 extra progress bar printed when pressing ctrl +c
-                    self.init_progress_bar()
+                    # todo the printing should be done using outputprocess
+                    self.outputqueue.put(f"initialize progress bar")
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -2470,8 +2444,6 @@ class ProfilerProcess(multiprocessing.Process):
                         # When the columns are not there. Not sure if it works
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    tqdm.write(f'{rec_lines}', end='\r')
-
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
@@ -2487,38 +2459,8 @@ class ProfilerProcess(multiprocessing.Process):
                     self.print("Can't recognize input file type.")
                     return False
 
-                if hasattr(self, 'progress_bar'):
-                    # this module wont have the progress_bar set if it's running on pcap or interface
-                    # todo try the daemon after this feature is done
-                    # todo try reloading the whitelist
-                    if (
-                            self.slips_mode != 'daemonized'
-                    ):
-                        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
-
-                        # Get the amount of modified profiles since we last checked
-                        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
-                            slips_internal_time
-                        )
-                        modified_ips_in_the_last_tw = len(modified_profiles)
-
-                        # todo print this in profilerprocess not sure if every x seconds
-                        profilesLen = str(__database__.getProfilesLen())
-                        now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
-
-                        # if (self.input_type in ('pcap', 'interface') or __database__.is_growing_zeek_dir()):
-                        # if hasattr(self, 'progress_bar'):
-                        self.progress_bar.set_postfix_str(
-                            f'Total analyzed IPs so '
-                            f'far: {profilesLen}. '
-                            f'IPs sending traffic in the last {self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
-                            f'({now})',
-                            refresh=True
-                            # end='\r',
-                        )
-                    self.progress_bar.update(1)
-                    # self.progress_bar.refresh()
-
+                self.outputqueue.put(f"update progress bar")
+                # todo try reloading the whitelist
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = __database__.get_message(self.c1)

@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import io
@@ -24,8 +25,8 @@ from pathlib import Path
 from datetime import datetime
 import os
 import traceback
+from tqdm.auto import tqdm
 
-# Output Process
 class OutputProcess(multiprocessing.Process):
     """
     A class to process the output of everything Slips need. Manages all the output
@@ -47,6 +48,7 @@ class OutputProcess(multiprocessing.Process):
         self.verbose = verbose
         self.debug = debug
         ####### create the log files
+        self.read_configuration()
         self.errors_logfile = stderr
         self.slips_logfile = slips_logfile
         self.name = 'Output'
@@ -63,7 +65,14 @@ class OutputProcess(multiprocessing.Process):
             )
         # Start the DB
         __database__.start(redis_port)
+        # are we in daemon of interactive mode
+        #todo is this set yet?
+        self.slips_mode = __database__.get_slips_mode()
 
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.printable_twid_width = conf.get_tw_width()
 
     def log_branch_info(self, logfile):
         branch_info = utils.get_branch_info()
@@ -102,6 +111,7 @@ class OutputProcess(multiprocessing.Process):
             date_time = datetime.now()
             date_time = utils.convert_format(date_time, utils.alerts_format)
             slips_logfile.write(f'{date_time} {sender}{msg}\n')
+
 
 
     def change_stdout(self, file):
@@ -218,9 +228,12 @@ class OutputProcess(multiprocessing.Process):
             and debug_level <= self.debug
         )):
             if 'Start' in msg:
-                print(f'{msg}')
+                tqdm.write(f'{msg}')
+                # print(f'{msg}')
                 return
-            print(f'{sender}{msg}')
+
+            tqdm.write(f'{sender}{msg}')
+            # print(f'{sender}{msg}')
             self.log_line(sender, msg)
 
         # if the line is an error and we're running slips without -e 1 , we should log the error to output/errors.log
@@ -228,20 +241,89 @@ class OutputProcess(multiprocessing.Process):
         if debug_level == 1:
             self.log_error(sender, msg)
 
+    def init_progress_bar(self):
+        """
+        initializes the progress bar when slips is runnning on a file or a zeek dir
+        ignores pcaps, interface and dirs given to slips if -g is enabled
+        """
+        if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
+            # we don't know how to get the total number of flows slips is going to process, because they're growing
+            return
+
+        total_flows = int(__database__.get_total_flows())
+        # the bar_format arg is to disable ETA and unit display
+        self.progress_bar = tqdm(
+            total=total_flows,
+            leave=True,
+            colour="green",
+            desc="Flows processed",
+            mininterval=0,
+            unit=' flow',
+            ncols=200,
+            smoothing=1,
+            bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
+            position=0,
+            file=sys.stdout
+        )
+
+    def update_progress_bar(self):
+        """
+        wrapper for tqdm.update()
+        """
+        if not hasattr(self, 'progress_bar'):
+            return
+
+        # this module wont have the progress_bar set if it's running on pcap or interface
+        # todo try the daemon after this feature is done
+        #todo output process shouldn calculate the stats, it should only print them
+        if self.slips_mode == 'daemonized':
+            return
+
+        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
+
+        # Get the amount of modified profiles since we last checked
+        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
+            slips_internal_time
+        )
+        modified_ips_in_the_last_tw = len(modified_profiles)
+
+        # todo print this in profilerprocess not sure if every x seconds
+        profilesLen = str(__database__.getProfilesLen())
+        now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
+
+        #todo update postfix every 5s, but update progress bar every flow
+        self.progress_bar.set_postfix_str(
+            f'Total analyzed IPs: '
+            f'{profilesLen}. '
+            f'IPs sending traffic in the last {self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
+            f'({now})',
+            refresh=True
+            # end='\r',
+        )
+
+        self.progress_bar.update(1)
+        # self.progress_bar.refresh()
+
+
     def shutdown_gracefully(self):
+        if hasattr(self, 'progress_bar'):
+            self.progress_bar.close()
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
     def run(self):
-
-
         while True:
             try:
                 line = self.queue.get()
                 if line == 'quiet':
                     self.quiet = True
+                elif 'initialize progress bar' in line:
+                    self.init_progress_bar()
+                elif 'update progress bar' in line:
+                    self.update_progress_bar()
+
                 elif 'stop_process' in line or line == 'stop':
                     self.shutdown_gracefully()
                     return True
