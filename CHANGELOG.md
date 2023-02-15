@@ -5,6 +5,8 @@
 - Faster reading of netflow and suricata files
 - Add a progress bar to slips showing the number of processed flows
 - Fix having duplicate alerts
+- Fix vertical and horizontal portscan errors
+- 
 - 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
