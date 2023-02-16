@@ -353,12 +353,11 @@ class Helper:
             description += f'on destination port: {dport}'
 
         evidence_type = 'ConnectionToPrivateIP'
-        category = 'Recon.Scanning'
+        category = 'Recon'
         attacker_direction = 'srcip'
-        source_target_tag = 'Info'
         attacker = saddr
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 timestamp, category, profileid=profileid,
                                  twid=twid, uid=uid)
 
 
