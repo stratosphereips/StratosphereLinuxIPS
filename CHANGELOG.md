@@ -6,6 +6,9 @@
 - Add a progress bar to slips showing the number of processed flows
 - Fix having duplicate alerts
 - Fix vertical and horizontal portscan errors
+- Add the uids that caused an evidence to the evidence description in alerts.json
+- Add a blocking indicator in alerts.json
+- Fix wrong Source/Target type in alerts.json
 - 
 - 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
