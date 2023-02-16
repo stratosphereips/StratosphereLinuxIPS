@@ -202,10 +202,11 @@ class EvidenceProcess(multiprocessing.Process):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
 
-    def addDataToJSONFile(self, IDEA_dict: dict):
+    def addDataToJSONFile(self, IDEA_dict: dict, all_uids):
         """
         Add a new evidence line to our alerts.json file in json IDEA format.
         :param IDEA_dict: dict containing 1 alert
+        :param all_uids: the uids of the flows causing this evidence
         """
         try:
             # add to alerts.json
@@ -218,7 +219,10 @@ class EvidenceProcess(multiprocessing.Process):
                         'branch': self.branch
                     }
                 )
-
+            # we add extra fields to alerts.json that are not in the IDEA format
+            IDEA_dict.update(
+                {'uids': all_uids}
+            )
             json_alert = '{ '
             for key_, val in IDEA_dict.items():
                 if type(val) == str:
@@ -628,7 +632,8 @@ class EvidenceProcess(multiprocessing.Process):
                     )   # example: PortScan, ThreatIntelligence, etc..
                     description = data.get('description')
                     timestamp = data.get('stime')
-                    uid = data.get('uid')
+                    # this is all the uids of the flows that cause this evidence
+                    all_uids = data.get('uid')
                     # tags = data.get('tags', False)
                     confidence = data.get('confidence', False)
                     threat_level = data.get('threat_level', False)
@@ -638,6 +643,13 @@ class EvidenceProcess(multiprocessing.Process):
                     proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
                     evidence_ID = data.get('ID', False)
+                    if type(all_uids) == list:
+                        # more than 1 flow caused the evidence
+                        uid = all_uids[-1]
+                    else:
+                        # all_uids is just 1 str uid
+                        uid = all_uids
+
                     flow = __database__.get_flow(profileid, twid, uid)
 
                     # FP whitelisted alerts happen when the db returns an evidence
@@ -686,7 +698,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
-                    self.addDataToJSONFile(IDEA_dict)
+                    self.addDataToJSONFile(IDEA_dict, all_uids)
                     # if -l is given
                     self.add_to_log_folder(IDEA_dict)
 
