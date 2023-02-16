@@ -1358,13 +1358,8 @@ class Database(ProfilingFlowsDatabase, object):
         return False
 
 
-    def set_flow_causing_evidence(self, uid, evidence_ID):
-        """
-        :param uid: can be a str or a list
-        """
-        if type(uid) == str:
-            uid = [uid]
-        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
+    def set_flow_causing_evidence(self, uids: list, evidence_ID):
+        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uids))
 
     def get_flows_causing_evidence(self, evidence_ID) -> list:
         uids = self.r.hget("flows_causing_evidence", evidence_ID)
@@ -1426,11 +1421,15 @@ class Database(ProfilingFlowsDatabase, object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
-        self.set_flow_causing_evidence(uid, evidence_ID)
-
-        # some evidence are caused by several uids, use the last one only
         if type(uid) == list:
-            uid = uid[-1]
+            # some evidence are caused by several uids, use the last one only
+            # todo check we we have duplicates in the first place
+            # remove duplicate uids
+            uids = list(dict.fromkeys(uid))
+        else:
+            uids = [uid]
+
+        self.set_flow_causing_evidence(uids, evidence_ID)
 
         if type(threat_level) != str:
             # make sure we always store str threat levels in the db
@@ -1447,7 +1446,7 @@ class Database(ProfilingFlowsDatabase, object):
             'evidence_type': evidence_type,
             'description': description,
             'stime': timestamp,
-            'uid': uid,
+            'uid': uids,
             'confidence': confidence,
             'threat_level': threat_level,
             'category': category,
