@@ -470,6 +470,9 @@ class EvidenceProcess(multiprocessing.Process):
 
         # Add a json field stating that this ip is blocked in alerts.json
         # replace the evidence description with slip msg that this is a blocked profile
+
+        IDEA_dict['Format'] = 'Json'
+        IDEA_dict['Category'] = 'Alert'
         IDEA_dict['Attach'][0]['Content'] = msg
         # add to alerts.json
         self.addDataToJSONFile(IDEA_dict, [])
