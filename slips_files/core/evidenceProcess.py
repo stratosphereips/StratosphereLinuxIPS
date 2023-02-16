@@ -434,13 +434,14 @@ class EvidenceProcess(multiprocessing.Process):
         return True
 
     def mark_as_blocked(
-            self, profileid, twid, flow_datetime, accumulated_threat_level, blocked=False
+            self, profileid, twid, flow_datetime, accumulated_threat_level, IDEA_dict, blocked=False
     ):
         """
         Marks the profileid and twid as blocked and logs it to alerts.log
         we don't block when running slips on files, we log it in alerts.log only
         :param blocked: bool. if the ip was blocked by the blocking module, we should say so
                     in alerts.log, if not, we should say that we generated an alert
+        :param IDEA_dict: the last evidence of this alert, used for logging the blocking
         """
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
@@ -467,6 +468,11 @@ class EvidenceProcess(multiprocessing.Process):
         }
         self.add_to_log_folder(blocked_srcip_dict)
 
+        # Add a json field stating that this ip is blocked in alerts.json
+        # replace the evidence description with slip msg that this is a blocked profile
+        IDEA_dict['Attach'][0]['Content'] = msg
+        # add to alerts.json
+        self.addDataToJSONFile(IDEA_dict, [])
 
 
     def shutdown_gracefully(self):
@@ -778,6 +784,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 twid,
                                 flow_datetime,
                                 accumulated_threat_level,
+                                IDEA_dict,
                                 blocked=blocked
                             )
 
