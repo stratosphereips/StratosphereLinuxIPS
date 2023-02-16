@@ -438,12 +438,6 @@ class Utils(object):
         elif validators.mac_address(srcip):
             IDEA_dict['Source'][0].update({'MAC': [srcip]})
 
-        # update the srcip description if specified in the evidence
-        if source_target_tag:   # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            # for example: this will be 'Botnet' in case of C&C alerts not C&C,
-            # because it describes the source ip
-            IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
-
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
         if evidence_type == 'Command-and-Control-channels-detection':
@@ -480,7 +474,7 @@ class Utils(object):
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
             # update the dstip description if specified in the evidence
-            if source_target_tag:
+            if source_target_tag:    # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
         elif 'domain' in attacker_direction:
@@ -491,6 +485,12 @@ class Utils(object):
             # update the dstdomain description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
+        else:
+            # the ioc is the srcip, therefore the tag is desscribing the source
+            if source_target_tag:
+                IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
+
+
 
         # add the port/proto
         # for all alerts, the srcip is in IDEA_dict['Source'][0] and the dstip is in IDEA_dict['Target'][0]
