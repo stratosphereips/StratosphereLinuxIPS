@@ -110,6 +110,7 @@ class Main:
         """
         Returns the PID of the process using the given port or False if no process is using it
         """
+        # todo why is this function printing to stdout?
         port = str(port)
         cmd = f'netstat -plten | grep {port}'
         cmd_output = os.popen(cmd).read()
@@ -134,7 +135,9 @@ class Main:
             os.setpgrp()
 
         def run_webinterface():
-            command = ['./webinterface.sh']
+            # starting the wbeinterface using the shell script results in slips not being able to
+            # get the PID of the python proc started by the .sh scrip
+            command = ['python3', 'webinterface/app.py']
             webinterface = subprocess.Popen(
                 command,
                 stdout=subprocess.DEVNULL,
@@ -143,7 +146,7 @@ class Main:
                 preexec_fn=detach_child
             )
             # self.webinterface_pid = webinterface.pid
-            __database__.store_process_PID('WebInterface', webinterface.pid)
+            __database__.store_process_PID('Web Interface', webinterface.pid)
             error = webinterface.communicate()[1]
             if error:
                 pid = self.get_pid_using_port('55000')
