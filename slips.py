@@ -146,8 +146,10 @@ class Main:
             __database__.store_process_PID('WebInterface', webinterface.pid)
             error = webinterface.communicate()[1]
             if error:
+                pid = self.get_pid_using_port('55000')
                 self.print (f"Web interface error.\n"
-                            f"error: {error.strip().decode()}\n")
+                            f"error: {error.strip().decode()}\n"
+                            f"Port 55000 is used by PID {pid}")
 
 
         self.webinterface_thread = threading.Thread(
