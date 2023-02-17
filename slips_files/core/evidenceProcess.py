@@ -627,7 +627,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # FP whitelisted alerts happen when the db returns an evidence
                     # that isn't processed in this channel, in the tw_evidence below
                     # to avoid this, we only alert on processed evidence
-                    __database__.mark_evidence_as_processed(profileid, twid, evidence_ID)
+                    __database__.mark_evidence_as_processed(evidence_ID)
 
                     # Ignore alert if IP is whitelisted
                     if flow and self.whitelist.is_whitelisted_evidence(

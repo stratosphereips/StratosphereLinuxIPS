@@ -1510,7 +1510,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         return True
 
-    def mark_evidence_as_processed(self, profileid, twid, evidence_ID):
+    def mark_evidence_as_processed(self, evidence_ID):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """

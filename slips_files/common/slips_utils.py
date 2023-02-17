@@ -442,8 +442,8 @@ class Utils(object):
             'Format': 'IDEA0',
             'ID': evidence_id,
             # both times represet the time of the detection, we probably don't need flow_datetime
-            'DetectTime': datetime.now(timezone.utc).isoformat(),
-            'EventTime': datetime.now(timezone.utc).isoformat(),
+            'DetectTime': datetime.now(self.local_tz).isoformat(),
+            'EventTime': datetime.now(self.local_tz).isoformat(),
             'Category': [category],
             'Confidence': confidence,
             'Source': [{}],
