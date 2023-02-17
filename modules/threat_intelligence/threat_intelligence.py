@@ -202,7 +202,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         description += f'blacklisted IP {ip_identification} Description: {ip_info["description"]}. Source: {ip_info["source"]}.'
 
         if tags := ip_info.get('tags', False):
-            source_target_tag = tags[0].capitalize()
+            if type(tags) == list:
+                source_target_tag = tags[0].capitalize()
+            else:
+                source_target_tag = tags.capitalize()
         else:
             source_target_tag = 'BlacklistedIP'
 
@@ -259,7 +262,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'Description: {domain_info.get("description", "")}, '\
                        f'Found in feed: {domain_info["source"]}, '\
-                       f'Confidence: {confidence}.'
+                       f'Confidence: {confidence}. '
         if tags:
             description += f'with tags: {tags}. '
 

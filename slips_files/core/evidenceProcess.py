@@ -68,7 +68,6 @@ class EvidenceProcess(multiprocessing.Process):
             else:
                 self.popup_alerts = False
 
-        # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
         # clear alerts.log
@@ -79,12 +78,6 @@ class EvidenceProcess(multiprocessing.Process):
         self.print(f'Storing Slips logs in {output_folder}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-
-        # all evidence slips detects has threat levels of strings
-        # each string should have a corresponding int value to be able to calculate
-        # the accumulated threat level and alert
-        # flag to only add commit and hash to the firs alert in alerts.json
-        self.is_first_alert = True
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -202,37 +195,19 @@ class EvidenceProcess(multiprocessing.Process):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
 
-    def addDataToJSONFile(self, IDEA_dict: dict):
+    def addDataToJSONFile(self, IDEA_dict: dict, all_uids):
         """
         Add a new evidence line to our alerts.json file in json IDEA format.
         :param IDEA_dict: dict containing 1 alert
+        :param all_uids: the uids of the flows causing this evidence
         """
         try:
-            # add to alerts.json
-            if self.is_first_alert and hasattr(self, 'commit'):
-                # only add commit and hash to the firs alert in alerts.json
-                self.is_first_alert = False
-                IDEA_dict.update(
-                    {
-                        'commit': self.commit,
-                        'branch': self.branch
-                    }
-                )
-
-            json_alert = '{ '
-            for key_, val in IDEA_dict.items():
-                if type(val) == str:
-                    # strings in json should be in double quotes instead of single quotes
-                    json_alert += f'"{key_}": "{val}", '
-                else:
-                    # int and float values should be printed as they are
-                    json_alert += f'"{key_}": {val}, '
-            # remove the last comma and close the dict
-            json_alert = json_alert[:-2] + ' }\n'
-            # make sure all alerts are in json format (using double quotes)
-            json_alert = json_alert.replace("'", '"')
-            self.jsonfile.write(json_alert)
-            self.jsonfile.flush()
+            # we add extra fields to alerts.json that are not in the IDEA format
+            IDEA_dict.update(
+                {'uids': all_uids}
+            )
+            json.dump(IDEA_dict, self.jsonfile)
+            self.jsonfile.write('\n')
         except KeyboardInterrupt:
             return True
         except Exception as ex:
@@ -430,13 +405,14 @@ class EvidenceProcess(multiprocessing.Process):
         return True
 
     def mark_as_blocked(
-            self, profileid, twid, flow_datetime, accumulated_threat_level, blocked=False
+            self, profileid, twid, flow_datetime, accumulated_threat_level, IDEA_dict, blocked=False
     ):
         """
         Marks the profileid and twid as blocked and logs it to alerts.log
         we don't block when running slips on files, we log it in alerts.log only
         :param blocked: bool. if the ip was blocked by the blocking module, we should say so
                     in alerts.log, if not, we should say that we generated an alert
+        :param IDEA_dict: the last evidence of this alert, used for logging the blocking
         """
         now = datetime.now()
         now = utils.convert_format(now, utils.alerts_format)
@@ -463,6 +439,14 @@ class EvidenceProcess(multiprocessing.Process):
         }
         self.add_to_log_folder(blocked_srcip_dict)
 
+        # Add a json field stating that this ip is blocked in alerts.json
+        # replace the evidence description with slip msg that this is a blocked profile
+
+        IDEA_dict['Format'] = 'Json'
+        IDEA_dict['Category'] = 'Alert'
+        IDEA_dict['Attach'][0]['Content'] = msg
+        # add to alerts.json
+        self.addDataToJSONFile(IDEA_dict, [])
 
 
     def shutdown_gracefully(self):
@@ -600,14 +584,6 @@ class EvidenceProcess(multiprocessing.Process):
         return alert_to_log
 
     def run(self):
-        # add metadata to alerts.log
-        branch_info = utils.get_branch_info()
-        if branch_info != False:
-            # it's false when we're in docker because there's no .git/ there
-            self.commit, self.branch = branch_info[0], branch_info[1]
-            now = datetime.now()
-            self.logfile.write(f'Using {self.branch} - {self.commit} - {now}\n\n')
-
         while True:
             try:
                 message = __database__.get_message(self.c1)
@@ -628,7 +604,8 @@ class EvidenceProcess(multiprocessing.Process):
                     )   # example: PortScan, ThreatIntelligence, etc..
                     description = data.get('description')
                     timestamp = data.get('stime')
-                    uid = data.get('uid')
+                    # this is all the uids of the flows that cause this evidence
+                    all_uids = data.get('uid')
                     # tags = data.get('tags', False)
                     confidence = data.get('confidence', False)
                     threat_level = data.get('threat_level', False)
@@ -638,6 +615,13 @@ class EvidenceProcess(multiprocessing.Process):
                     proto = data.get('proto', False)
                     source_target_tag = data.get('source_target_tag', False)
                     evidence_ID = data.get('ID', False)
+                    if type(all_uids) == list:
+                        # more than 1 flow caused the evidence
+                        uid = all_uids[-1]
+                    else:
+                        # all_uids is just 1 str uid
+                        uid = all_uids
+
                     flow = __database__.get_flow(profileid, twid, uid)
 
                     # FP whitelisted alerts happen when the db returns an evidence
@@ -686,7 +670,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # Add the evidence to the log files
                     self.addDataToLogFile(alert_to_log)
                     # add to alerts.json
-                    self.addDataToJSONFile(IDEA_dict)
+                    self.addDataToJSONFile(IDEA_dict, all_uids)
                     # if -l is given
                     self.add_to_log_folder(IDEA_dict)
 
@@ -766,6 +750,7 @@ class EvidenceProcess(multiprocessing.Process):
                                 twid,
                                 flow_datetime,
                                 accumulated_threat_level,
+                                IDEA_dict,
                                 blocked=blocked
                             )
 
