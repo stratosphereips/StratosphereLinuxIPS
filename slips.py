@@ -23,6 +23,7 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
 
+import threading
 import signal
 import sys
 import redis
@@ -105,17 +106,87 @@ class Main:
             return None
         return ipaddr_check
 
+    def get_pid_using_port(self, port):
+        """
+        Returns the PID of the process using the given port or False if no process is using it
+        """
+        port = int(port)
+        for conn in psutil.net_connections():
+            if conn.laddr.port == port:
+                return psutil.Process(conn.pid).pid #.name()
+        return None
+
+    def check_if_webinterface_started(self):
+        if not hasattr(self, 'webinterface_return_value'):
+            return
+
+        # now that the web interface had enough time to start,
+        # check if it successfully started or not
+        if self.webinterface_return_value.empty():
+            # to make sure this function is only executed once
+            delattr(self, 'webinterface_return_value')
+            return
+        if self.webinterface_return_value.get() != True:
+            # to make sure this function is only executed once
+            delattr(self, 'webinterface_return_value')
+            return
+
+        self.print(f"Slips {self.green('web interface')} running on "
+                   f"http://localhost:55000/")
+        delattr(self, 'webinterface_return_value')
+
     def start_webinterface(self):
         """
         Starts the web interface shell script if -w is given
         """
-        # The parentheses creates a subshell, detached from the current parent process.
-        # Without them, flask doesn't release the terminal and we get requests logs in slips cli
-        # tried pop with subprocess.devnull, 2>&1, nohup, but this is the only way to completely run it in the bg
-        cmd = '( ./webinterface.sh > /dev/null 2> /dev/null  & )'
-        os.system(cmd)
-        self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
-        # todo we won't be seeing the logs, so if anything fails no msg will be printed
+        def detach_child():
+            """
+            Detach the web interface from the parent process group(slips.py), the child(web interface)
+             will no longer receive signals and should be manually killed in shutdown_gracefully()
+            """
+            os.setpgrp()
+
+        def run_webinterface():
+            # starting the wbeinterface using the shell script results in slips not being able to
+            # get the PID of the python proc started by the .sh scrip
+            command = ['python3', 'webinterface/app.py']
+            webinterface = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                preexec_fn=detach_child
+            )
+            # self.webinterface_pid = webinterface.pid
+            __database__.store_process_PID('Web Interface', webinterface.pid)
+            # we'll assume that it started, and if not, the return value will immidiately change and this thread will
+            # print an error
+            self.webinterface_return_value.put(True)
+
+            # waits for process to terminate, so if no errors occur
+            # we will never get the return value of this thread
+            error = webinterface.communicate()[1]
+            if error:
+                # pop the True we just added
+                self.webinterface_return_value.get()
+                # set false as the return value of this thread
+                self.webinterface_return_value.put(False)
+
+                pid = self.get_pid_using_port(55000)
+                self.print (f"Web interface error:\n"
+                            f"{error.strip().decode()}\n"
+                            f"Port 55000 is used by PID {pid}")
+
+        # if theres's an error, this will be set to false, and the error will be printed
+        # otherwise we assume that the inetrface started
+        # self.webinterface_started = True
+        self.webinterface_return_value = Queue()
+        self.webinterface_thread = threading.Thread(
+            target=run_webinterface,
+            daemon=True,
+        )
+        self.webinterface_thread.start()
+        # we'll be checking the return value of this thread later
 
     def store_host_ip(self):
         """
@@ -612,6 +683,7 @@ class Main:
         GREEN_s = '\033[1;32;40m'
         GREEN_e = '\033[00m'
         return f'{GREEN_s}{txt}{GREEN_e}'
+
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
@@ -1584,7 +1656,6 @@ class Main:
         """Main Slips Function"""
         try:
             self.print_version()
-
             print('https://stratosphereips.org')
             print('-' * 27)
 
@@ -1801,6 +1872,11 @@ class Main:
 
                 # Sleep some time to do routine checks
                 time.sleep(sleep_time)
+
+                # if you remove the below logic anywhere before the above sleep() statement
+                # it will try to get the return value very quickly before
+                # the webinterface thread sets it
+                self.check_if_webinterface_started()
 
                 modified_ips_in_the_last_tw, modified_profiles = self.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py

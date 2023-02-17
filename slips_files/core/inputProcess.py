@@ -29,8 +29,6 @@ import json
 import traceback
 import threading
 import subprocess
-import signal
-
 
 # Input Process
 class InputProcess(multiprocessing.Process):
