@@ -206,20 +206,8 @@ class EvidenceProcess(multiprocessing.Process):
             IDEA_dict.update(
                 {'uids': all_uids}
             )
-            json_alert = '{ '
-            for key_, val in IDEA_dict.items():
-                if type(val) == str:
-                    # strings in json should be in double quotes instead of single quotes
-                    json_alert += f'"{key_}": "{val}", '
-                else:
-                    # int and float values should be printed as they are
-                    json_alert += f'"{key_}": {val}, '
-            # remove the last comma and close the dict
-            json_alert = json_alert[:-2] + ' }\n'
-            # make sure all alerts are in json format (using double quotes)
-            json_alert = json_alert.replace("'", '"')
-            self.jsonfile.write(json_alert)
-            self.jsonfile.flush()
+            json.dump(IDEA_dict, self.jsonfile)
+            self.jsonfile.write('\n')
         except KeyboardInterrupt:
             return True
         except Exception as ex:

@@ -262,7 +262,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         description += f'Description: {domain_info.get("description", "")}, '\
                        f'Found in feed: {domain_info["source"]}, '\
-                       f'Confidence: {confidence}.'
+                       f'Confidence: {confidence}. '
         if tags:
             description += f'with tags: {tags}. '
 
