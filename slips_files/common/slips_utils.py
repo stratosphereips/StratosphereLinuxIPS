@@ -437,6 +437,9 @@ class Utils(object):
             IDEA_dict['Source'][0].update({'IP6': [srcip]})
         elif validators.mac_address(srcip):
             IDEA_dict['Source'][0].update({'MAC': [srcip]})
+        elif validators.url(srcip):
+            IDEA_dict['Source'][0].update({'URL': [srcip]})
+
 
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
@@ -460,6 +463,8 @@ class Utils(object):
                 IDEA_dict['Target'] = [{'IP6': [attacker]}]
             elif validators.mac_address(attacker):
                 IDEA_dict['Target'] = [{'MAC': [attacker]}]
+            elif validators.url(attacker):
+                IDEA_dict['Target'][0].update({'URL': [srcip]})
 
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
@@ -473,13 +478,19 @@ class Utils(object):
                 pass
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
+
             # update the dstip description if specified in the evidence
             if source_target_tag:    # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
         elif 'domain' in attacker_direction:
             # the ioc is a domain
-            target_info = {'Hostname': [attacker]}
+            if validators.domain(attacker):
+                attacker_type = 'Hostname'
+            else:
+                attacker_type = 'URL'
+
+            target_info = {attacker_type: [attacker]}
             IDEA_dict['Target'] = [target_info]
 
             # update the dstdomain description if specified in the evidence
