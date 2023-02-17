@@ -23,6 +23,7 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
 
+import threading
 import signal
 import sys
 import redis
@@ -132,21 +133,28 @@ class Main:
             """
             os.setpgrp()
 
-        command = ['./webinterface.sh']
-        webinterface = subprocess.Popen(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            preexec_fn=detach_child
-        )
-        # self.webinterface_pid = webinterface.pid
-        __database__.store_process_PID('WebInterface', webinterface.pid)
-        error = webinterface.communicate()[1]
-        if error:
-            self.print (f"Web interface error.\n"
-                        f"error: {error.strip().decode()}\n")
+        def run_webinterface():
+            command = ['./webinterface.sh']
+            webinterface = subprocess.Popen(
+                command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                stdin=subprocess.DEVNULL,
+                preexec_fn=detach_child
+            )
+            # self.webinterface_pid = webinterface.pid
+            __database__.store_process_PID('WebInterface', webinterface.pid)
+            error = webinterface.communicate()[1]
+            if error:
+                self.print (f"Web interface error.\n"
+                            f"error: {error.strip().decode()}\n")
 
+
+        self.webinterface_thread = threading.Thread(
+            target=run_webinterface,
+            daemon=True
+        )
+        self.webinterface_thread.start()
         self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
         # todo we won't be seeing the logs, so if anything fails no msg will be printed
 
