@@ -125,11 +125,28 @@ class Main:
         """
         Starts the web interface shell script if -w is given
         """
-        # The parentheses creates a subshell, detached from the current parent process.
-        # Without them, flask doesn't release the terminal and we get requests logs in slips cli
-        # tried pop with subprocess.devnull, 2>&1, nohup, but this is the only way to completely run it in the bg
-        cmd = '( ./webinterface.sh > /dev/null 2> /dev/null  & )'
-        os.system(cmd)
+        def detach_child():
+            """
+            Detach the web interface from the parent process group(slips.py), the child(web interface)
+             will no longer receive signals and should be manually killed in shutdown_gracefully()
+            """
+            os.setpgrp()
+
+        command = ['./webinterface.sh']
+        webinterface = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            preexec_fn=detach_child
+        )
+        # self.webinterface_pid = webinterface.pid
+        __database__.store_process_PID('WebInterface', webinterface.pid)
+        error = webinterface.communicate()[1]
+        if error:
+            self.print (f"Web interface error.\n"
+                        f"error: {error.strip().decode()}\n")
+
         self.print(f"Slips {self.green('web interface')} running on http://localhost:55000/")
         # todo we won't be seeing the logs, so if anything fails no msg will be printed
 
