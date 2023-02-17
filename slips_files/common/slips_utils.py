@@ -58,6 +58,7 @@ class Utils(object):
          )
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+        self.local_tz = self.get_local_timezone()
 
     def get_cidr_of_ip(self, ip):
         """
@@ -193,6 +194,24 @@ class Utils(object):
             result = datetime_obj.strftime(required_format)
 
         return result
+
+    def get_local_timezone(self):
+        """
+        Returns the current user local timezone
+        """
+        now = datetime.now()
+        local_now = now.astimezone()
+        local_tz = local_now.tzinfo
+        # local_tzname = local_tz.tzname(local_now)
+        return local_tz
+
+    def convert_to_local_timezone(self, ts):
+        """
+        puts the given ts in the local timezone of the current user
+        :parapm ts: any format
+        """
+        datetime_obj = self.convert_to_datetime(ts)
+        return datetime_obj.astimezone(self.local_tz)
 
     def is_datetime_obj(self, ts):
         """
@@ -423,8 +442,8 @@ class Utils(object):
             'Format': 'IDEA0',
             'ID': evidence_id,
             # both times represet the time of the detection, we probably don't need flow_datetime
-            'DetectTime': datetime.now(timezone.utc).isoformat(),
-            'EventTime': datetime.now(timezone.utc).isoformat(),
+            'DetectTime': datetime.now(self.local_tz).isoformat(),
+            'EventTime': datetime.now(self.local_tz).isoformat(),
             'Category': [category],
             'Confidence': confidence,
             'Source': [{}],

@@ -627,7 +627,7 @@ class EvidenceProcess(multiprocessing.Process):
                     # FP whitelisted alerts happen when the db returns an evidence
                     # that isn't processed in this channel, in the tw_evidence below
                     # to avoid this, we only alert on processed evidence
-                    __database__.mark_evidence_as_processed(profileid, twid, evidence_ID)
+                    __database__.mark_evidence_as_processed(evidence_ID)
 
                     # Ignore alert if IP is whitelisted
                     if flow and self.whitelist.is_whitelisted_evidence(
@@ -642,7 +642,8 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     # Format the time to a common style given multiple type of time variables
-                    # flow_datetime = utils.format_timestamp(timestamp)
+                    if self.is_running_on_interface():
+                        timestamp: datetime = utils.convert_to_local_timezone(timestamp)
                     flow_datetime = utils.convert_format(timestamp, 'iso')
 
                     # prepare evidence for text log file
@@ -740,7 +741,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # todo if it's already blocked, we shouldn't decide blocking
                             blocked = False
-                            if self.is_interface and '-p' in sys.argv:
+                            if self.is_running_on_interface() and '-p' in sys.argv:
                                 # send ip to the blocking module
                                 if self.decide_blocking(profileid):
                                     blocked = True
