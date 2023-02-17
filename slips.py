@@ -105,6 +105,22 @@ class Main:
             return None
         return ipaddr_check
 
+    def get_pid_using_port(self, port):
+        """
+        Returns the PID of the process using the given port or False if no process is using it
+        """
+        port = str(port)
+        cmd = f'netstat -plten | grep {port}'
+        cmd_output = os.popen(cmd).read()
+        for line in cmd_output.splitlines():
+            # make sure we have the exact port in this line, not a substr of it
+            line = line.split()
+            if f":{port}" in line[3]:
+                pid = line[-1].split("/")[0]
+                return pid
+
+
+
     def start_webinterface(self):
         """
         Starts the web interface shell script if -w is given
@@ -612,6 +628,7 @@ class Main:
         GREEN_s = '\033[1;32;40m'
         GREEN_e = '\033[00m'
         return f'{GREEN_s}{txt}{GREEN_e}'
+
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
@@ -1584,7 +1601,6 @@ class Main:
         """Main Slips Function"""
         try:
             self.print_version()
-
             print('https://stratosphereips.org')
             print('-' * 27)
 
