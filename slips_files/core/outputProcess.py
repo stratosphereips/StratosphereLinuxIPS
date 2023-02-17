@@ -258,7 +258,7 @@ class OutputProcess(multiprocessing.Process):
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
-            total=total_flows,
+            total=total_flows+1,
             leave=True,
             colour="green",
             desc="Flows processed",
