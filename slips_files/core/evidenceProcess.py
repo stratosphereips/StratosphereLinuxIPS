@@ -642,7 +642,8 @@ class EvidenceProcess(multiprocessing.Process):
                         continue
 
                     # Format the time to a common style given multiple type of time variables
-                    # flow_datetime = utils.format_timestamp(timestamp)
+                    if self.is_running_on_interface():
+                        timestamp: datetime = utils.convert_to_local_timezone(timestamp)
                     flow_datetime = utils.convert_format(timestamp, 'iso')
 
                     # prepare evidence for text log file
@@ -740,7 +741,7 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # todo if it's already blocked, we shouldn't decide blocking
                             blocked = False
-                            if self.is_interface and '-p' in sys.argv:
+                            if self.is_running_on_interface() and '-p' in sys.argv:
                                 # send ip to the blocking module
                                 if self.decide_blocking(profileid):
                                     blocked = True
