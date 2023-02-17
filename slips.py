@@ -110,16 +110,11 @@ class Main:
         """
         Returns the PID of the process using the given port or False if no process is using it
         """
-        # todo why is this function printing to stdout?
-        port = str(port)
-        cmd = f'netstat -plten | grep {port}'
-        cmd_output = os.popen(cmd).read()
-        for line in cmd_output.splitlines():
-            # make sure we have the exact port in this line, not a substr of it
-            line = line.split()
-            if f":{port}" in line[3]:
-                pid = line[-1].split("/")[0]
-                return pid
+        port = int(port)
+        for conn in psutil.net_connections():
+            if conn.laddr.port == port:
+                return psutil.Process(conn.pid).pid #.name()
+        return None
 
 
 
