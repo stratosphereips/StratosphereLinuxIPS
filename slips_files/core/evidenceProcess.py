@@ -68,7 +68,6 @@ class EvidenceProcess(multiprocessing.Process):
             else:
                 self.popup_alerts = False
 
-        # Subscribe to channel 'evidence_added'
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
         # clear alerts.log
@@ -79,12 +78,6 @@ class EvidenceProcess(multiprocessing.Process):
         self.print(f'Storing Slips logs in {output_folder}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-
-        # all evidence slips detects has threat levels of strings
-        # each string should have a corresponding int value to be able to calculate
-        # the accumulated threat level and alert
-        # flag to only add commit and hash to the firs alert in alerts.json
-        self.is_first_alert = True
 
     def clear_logs_dir(self, logs_folder):
         self.logs_logfile = False
@@ -209,16 +202,6 @@ class EvidenceProcess(multiprocessing.Process):
         :param all_uids: the uids of the flows causing this evidence
         """
         try:
-            # add to alerts.json
-            if self.is_first_alert and hasattr(self, 'commit'):
-                # only add commit and hash to the firs alert in alerts.json
-                self.is_first_alert = False
-                IDEA_dict.update(
-                    {
-                        'commit': self.commit,
-                        'branch': self.branch
-                    }
-                )
             # we add extra fields to alerts.json that are not in the IDEA format
             IDEA_dict.update(
                 {'uids': all_uids}
@@ -613,14 +596,6 @@ class EvidenceProcess(multiprocessing.Process):
         return alert_to_log
 
     def run(self):
-        # add metadata to alerts.log
-        branch_info = utils.get_branch_info()
-        if branch_info != False:
-            # it's false when we're in docker because there's no .git/ there
-            self.commit, self.branch = branch_info[0], branch_info[1]
-            now = datetime.now()
-            self.logfile.write(f'Using {self.branch} - {self.commit} - {now}\n\n')
-
         while True:
             try:
                 message = __database__.get_message(self.c1)
