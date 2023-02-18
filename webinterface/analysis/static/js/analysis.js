@@ -5,16 +5,11 @@ let active_profile = "";
 let active_timewindow = "";
 let active_timewindow_index = 0;
 let active_tw_id = "";
-let clicked_profile_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
-var childEditors = {};  // Globally track created chid editors
-var childTable;
-var childTable2;
 // Global var to track shown child rows
 var childRows = null;
-var childRowsData = {};
 
 function capitalizeFirstLetter(data) {
     return data.charAt(0).toUpperCase() + data.slice(1);
@@ -198,7 +193,6 @@ function initProfileTwListeners() {
 
         let profile_id = row.data()['profile']
         let profile_id_dash = convertDotToDash(profile_id)
-        clicked_profile_id = profile_id_dash
 
         if (row.child.isShown()) {
             row.child.hide();
