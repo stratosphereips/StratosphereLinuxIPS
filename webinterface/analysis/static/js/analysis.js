@@ -302,51 +302,38 @@ function initAllAnalysisTables() {
 
 }
 
-function initListenerReload(){
-    $('#table_profiles').on('xhr', function () {
-        $('#table_profiles').one('draw', function () {
-          // If reloading table then show previously shown rows
-          console.log('childRows', childRows)
-            if (childRows) {
-                childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
-                    let profile_id = this.data().profile; 
-                    let profile_id_dash = convertDotToDash(profile_id)
-                    // Get corresponding child DT API
-                    let childDataTable = $('#' + profile_id_dash).DataTable();
 
+function initListenerReloadAnalysisTable(){
+    let t_analysis = $("#table_" + active_analysisTable).DataTable();
 
-                    // Get saved child row data by ID
-                    var childData = childRowsData[profile_id_dash];
-                    console.log(childData)
-                    childDataTable.destroy();
-                    this.child($(addTableTWs(profile_id_dash))).show();
-                    
-                    this.nodes().to$().addClass('shown');
-                    $(row).addClass('shown');
-                });
+}
+function initListenerReloadProfiles(){
+    let t_profile = $('#table_profiles').DataTable();
+    t_profile.on('xhr', function () {
+        t_profile.one('draw', function () {
+
+            if(correct_update){
+                correct_update = false;
+                if (childRows != null) {
+                    childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
+                        let profile_id = this.data().profile; 
+                        let profile_id_dash = convertDotToDash(profile_id)
+                        $("#" + profile_id_dash).DataTable().clear().destroy();
+                        this.child(addTableTWs(profile_id_dash)).show();
+                        let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
+                        table_tws.ajax.url('/analysis/tws/' + profile_id).load();
+                        addTableTWsListener(profile_id_dash, this)
+                        this.nodes().to$().addClass('shown');
+                    });
+                }
+                childRows = null;
             }
-            // Reset childRows so loop is not executed each draw
-            childRows = null;
+
         });       
-    });             
+    });          
 }
 
 function update(){
-    // Get shown rows of datatable
-    childRows = $('#table_profiles').rows($('.shown'));
-
-    childRowsData = {};
-    childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
-        // Get clientID of parent
-        let profile_id = this.data().profile; 
-        let profile_id_dash = convertDotToDash(profile_id)
-        // Get corresponding child DT API
-        let childDataTable = $('#' + profile_id_dash).DataTable();
-
-        // Save in global object using parent ID as key
-        childRowsData[profile_id_dash] = childDataTable.data().toArray();
-    });
-                
     $('#table_profiles').DataTable().ajax.reload(null, false);
 
     // console.log("UPDATE")
