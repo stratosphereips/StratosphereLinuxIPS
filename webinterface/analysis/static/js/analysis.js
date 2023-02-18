@@ -9,8 +9,9 @@ let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
 // Global var to track shown child rows
-var childRows = null;
-let correct_update = false;
+let childRowsProfile = null;
+let childRowsAnalysis = null;
+
 
 function capitalizeFirstLetter(data) {
     return data.charAt(0).toUpperCase() + data.slice(1);
@@ -209,6 +210,25 @@ function initProfileTwListeners() {
             tr.addClass('shown');
         }
     });
+
+    let t_profile = $('#table_profiles').DataTable();
+    t_profile.on('xhr', function () {
+        t_profile.one('draw', function () {
+            if (childRowsProfile != null) {
+                childRowsProfile.every(function ( rowIdx, tableLoop, rowLoop ) {
+                    let profile_id = this.data().profile; 
+                    let profile_id_dash = convertDotToDash(profile_id)
+                    $("#" + profile_id_dash).DataTable().clear().destroy();
+                    this.child(addTableTWs(profile_id_dash)).show();
+                    let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
+                    table_tws.ajax.url('/analysis/tws/' + profile_id).load();
+                    addTableTWsListener(profile_id_dash, this)
+                    this.nodes().to$().addClass('shown');
+                });
+            }
+            childRowsProfile = null;
+        });       
+    });
 }
 
 function initTimelineFlowsListeners() {
@@ -224,6 +244,8 @@ function initTimelineFlowsListeners() {
 }
 
 function initTimelineListeners() {
+    let t_analysis = $("#table_timeline").DataTable();
+
     $('#table_timeline').on('click', 'tbody td.daddr', function () {
         let row = $("#table_timeline").DataTable().row($(this).parents('tr'));
         updateIPInfo(row, "daddr")
@@ -249,6 +271,19 @@ function initTimelineListeners() {
             }
         }
     });
+
+    t_analysis.on('xhr', function () {
+        t_analysis.one('draw', function () {
+            if (childRowsAnalysis != null) {
+                childRowsAnalysis.every(function ( rowIdx, tableLoop, rowLoop ) {
+                    let info = this.data().info;
+                    this.child(addTableAltFlows(info)).show();
+                    this.nodes().to$().addClass('shown');
+                });
+            }
+            childRowsAnalysis = null;
+        })
+    })
 }
 
 function initAlertListeners() {
@@ -263,10 +298,29 @@ function initAlertListeners() {
             let tableEvidenceID = "table_" + alertID
             row.child(addTableEvidence(tableEvidenceID)).show();
             let evidence = $("#" + tableEvidenceID).DataTable(analysisSubTableDefs["evidence"]);
-            let link = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + alertID
-            evidence.ajax.url(link).load();
+            let url = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + alertID
+            evidence.ajax.url(url).load();
             tr.addClass('shown');
         }
+    });
+
+    let t_alerts = $('#table_alerts').DataTable();
+    t_alerts.on('xhr', function () {
+        t_alerts.one('draw', function () {
+            if (childRowsAnalysis != null) {
+                childRowsAnalysis.every(function ( rowIdx, tableLoop, rowLoop ) {
+                    let alertID = row.data()["alert_id"]
+                    let tableEvidenceID = "table_" + alertID;
+                    $("#" + tableEvidenceID).DataTable().clear().destroy();
+                    this.child(addTableEvidence(tableEvidenceID)).show();
+                    let evidence = $("#" + tableEvidenceID).DataTable(analysisSubTableDefs["evidence"]);
+                    let url = "/analysis/evidence/" + active_profile + "/" + active_timewindow + "/" + alertID
+                    evidence.ajax.url(url).load();
+                    this.nodes().to$().addClass('shown');
+                });
+            }
+            childRowsAnalysis = null;
+        });       
     });
 }
 /*--------------------------------------------------------------*/
@@ -297,50 +351,23 @@ function initAllAnalysisTables() {
 
 }
 
-
-function initListenerReloadAnalysisTable(){
-    let t_analysis = $("#table_" + active_analysisTable).DataTable();
-
-}
-function initListenerReloadProfiles(){
-    let t_profile = $('#table_profiles').DataTable();
-    t_profile.on('xhr', function () {
-        t_profile.one('draw', function () {
-
-            if(correct_update){
-                correct_update = false;
-                if (childRows != null) {
-                    childRows.every(function ( rowIdx, tableLoop, rowLoop ) {
-                        let profile_id = this.data().profile; 
-                        let profile_id_dash = convertDotToDash(profile_id)
-                        $("#" + profile_id_dash).DataTable().clear().destroy();
-                        this.child(addTableTWs(profile_id_dash)).show();
-                        let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
-                        table_tws.ajax.url('/analysis/tws/' + profile_id).load();
-                        addTableTWsListener(profile_id_dash, this)
-                        this.nodes().to$().addClass('shown');
-                    });
-                }
-                childRows = null;
-            }
-
-        });       
-    });          
-}
-
 function update(){
+
     // Update profiles/tws
-    correct_update = true
-    childRows = $('#table_profiles').DataTable().rows('.shown');
+    childRowsProfile = $('#table_profiles').DataTable().rows('.shown');
     $('#table_profiles').DataTable().ajax.reload(null, false);
 
     // Update analysis table
     if (active_profile && active_timewindow) {
+        childRowsAnalysis = $("#table_" + active_analysisTable).DataTable().rows('.shown');
         $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); 
     }
 
     // Update IpInfo
-    $("#table_ipinfo").DataTable().ajax.reload(null, false);
+    if($("#table_ipinfo").DataTable().ajax.url() != null){
+        $("#table_ipinfo").DataTable().ajax.reload(null, false);
+    }
+    
 }
 
 function automaticUpdate() {
@@ -352,7 +379,6 @@ function initAnalysisPage() {
     initProfileTwListeners(); // Initialize all profile and tw tables' listeners
     initAnalysisTagListeners(); //Initialize analysisTags listeners
     initHideProfileTWButtonListener();
-    initListenerReloadProfiles();
     automaticUpdate();
 }
 
