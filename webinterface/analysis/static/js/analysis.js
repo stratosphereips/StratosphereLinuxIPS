@@ -272,7 +272,7 @@ function initAlertListeners() {
 /*--------------------------------------------------------------*/
 
 function removeListeners(analysisTag) {
-    $("#table_" + analysisTag).off("click", "**")
+    $("#table_" + analysisTag).off()
 }
 
 function initAllAnalysisTables() {
