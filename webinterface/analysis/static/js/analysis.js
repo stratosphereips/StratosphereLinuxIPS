@@ -10,6 +10,7 @@ let last_analysisTable = 'timeline';
 
 // Global var to track shown child rows
 var childRows = null;
+let correct_update = false;
 
 function capitalizeFirstLetter(data) {
     return data.charAt(0).toUpperCase() + data.slice(1);
@@ -328,17 +329,18 @@ function initListenerReloadProfiles(){
 }
 
 function update(){
+    // Update profiles/tws
+    correct_update = true
+    childRows = $('#table_profiles').DataTable().rows('.shown');
     $('#table_profiles').DataTable().ajax.reload(null, false);
 
-    // console.log("UPDATE")
-    // if (active_profile && active_timewindow) {
-    //     // let link = "/analysis/" + active_analysisTable + "/" + active_profile + "/" + active_timewindow;
-    //     $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); }
-    
-    // childRows = $('#table_profiles').DataTable().rows($('.shown'));
+    // Update analysis table
+    if (active_profile && active_timewindow) {
+        $("#table_" + active_analysisTable).DataTable().ajax.reload(null, false); 
+    }
 
-    // $('#table_profiles').DataTable().ajax.reload(null, false);
-    // // $('#' + clicked_profile_id).DataTable().ajax.reload();
+    // Update IpInfo
+    $("#table_ipinfo").DataTable().ajax.reload(null, false);
 }
 
 function automaticUpdate() {
