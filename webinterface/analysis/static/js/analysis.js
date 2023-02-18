@@ -352,6 +352,7 @@ function initAnalysisPage() {
     initProfileTwListeners(); // Initialize all profile and tw tables' listeners
     initAnalysisTagListeners(); //Initialize analysisTags listeners
     initHideProfileTWButtonListener();
+    initListenerReloadProfiles();
     automaticUpdate();
 }
 
