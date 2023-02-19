@@ -35,6 +35,10 @@ $('#modal_choose_redis').modal({
     keyboard: false
 })
 
+$('#modal_choose_redis').on('show.bs.modal', function (e) {
+    $('#table_choose_redis').DataTable().ajax.reload();
+})
+
 $('#button_choose_db').click(function(){
     let data = $('#table_choose_redis').DataTable().row( { selected: true } ).data()
     $('#modal_choose_redis .close').click() // close modal by imitating the close button click. $('#myModal').hide() does not work
