@@ -130,6 +130,7 @@ function initHideProfileTWButtonListener() {
 
         if (document.getElementById('profiles').style.display === "none") {
             document.getElementById('profiles').style.display = "block";
+            document.getElementById('filter_profiles').style.display = "block";
             document.getElementById('profile-tw-hide-btn').innerHTML = "<";
 
             $('#col_profiles').removeClass('col-0');
@@ -139,6 +140,7 @@ function initHideProfileTWButtonListener() {
 
         } else {
             document.getElementById('profiles').style.display = "none";
+            document.getElementById('filter_profiles').style.display = "none";
             document.getElementById('profile-tw-hide-btn').innerHTML = ">";
             
             $('#col_profiles').removeClass('col-2');
