@@ -268,6 +268,9 @@ def set_timeline(profile, timewindow,):
                 temp = flow["saddr"]
                 flow["daddr"] = temp
 
+            # TODO:fix dns_resolution in IGMP
+            if "dns_resolution" not in flow:
+                flow["dns_resolution"] = "????"
 
             data.append(flow)
 
