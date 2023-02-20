@@ -205,6 +205,11 @@ function initProfileTwListeners() {
             tr.addClass('shown');
         }
     });
+
+    $(".filter-checkbox").on("change", function(e) {
+        let searchTerm = $('input[name="filter"]:checked').attr("data-filter");
+        $('#table_profiles').DataTable().column(1).search(searchTerm, false, false, true).draw();
+    });
 }
 
 function initTimelineFlowsListeners() {
