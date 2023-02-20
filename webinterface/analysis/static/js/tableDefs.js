@@ -176,10 +176,12 @@ let analysisTableDefs = {
         dom: '<"top"f>rt',
         scrollX: false,
         scrollY: "78vh", // hardcoded height to fit the page
-        scrollCollapse: true,
-        paging:false,
+        // scrollCollapse: true,
+        paging:true,
         info: false,
         ajax: '/analysis/profiles_tws',
+        // serverSide: true, // !!!!!
+        scroller:true, 
         columns: [
             {
                 data: 'profile',

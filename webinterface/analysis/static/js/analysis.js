@@ -11,6 +11,8 @@ let last_analysisTable = 'timeline';
 // Global var to track shown child rows
 let childRowsProfile = null;
 let childRowsAnalysis = null;
+let scrollingContainer;
+let scrollTop = 0;
 
 
 function capitalizeFirstLetter(data) {
@@ -214,6 +216,8 @@ function initProfileTwListeners() {
     let t_profile = $('#table_profiles').DataTable();
     t_profile.on('xhr', function () {
         t_profile.one('draw', function () {
+            if(scrollTop > 0){            scrollingContainer.scrollTop(scrollTop);
+            }
             if (childRowsProfile != null) {
                 childRowsProfile.every(function ( rowIdx, tableLoop, rowLoop ) {
                     let profile_id = this.data().profile; 
@@ -274,6 +278,7 @@ function initTimelineListeners() {
 
     t_analysis.on('xhr', function () {
         t_analysis.one('draw', function () {
+
             if (childRowsAnalysis != null) {
                 childRowsAnalysis.every(function ( rowIdx, tableLoop, rowLoop ) {
                     let info = this.data().info;
@@ -354,8 +359,21 @@ function initAllAnalysisTables() {
 function update(){
 
     // Update profiles/tws
-    childRowsProfile = $('#table_profiles').DataTable().rows('.shown');
-    $('#table_profiles').DataTable().ajax.reload(null, false);
+    let t = $('#table_profiles').DataTable();
+    childRowsProfile = t.rows('.shown');
+     scrollingContainer = $(t.table().node()).parent('div.dataTables_scrollBody');
+     scrollTop = scrollingContainer.scrollTop();
+    t.ajax.reload(null    , false);
+        // t.scroller,.toPosition(scrollTop,false);
+
+    // let index = table.scroller.page()['start'];
+    // console.log("polling: " + index);
+    // table.clear().rows.add(dataSet).draw(false);
+    // t.draw().scroller.toPosition(scrollTop,false);
+    // table.ajax.reload(function() {
+    //     scrollingContainer.scrollTop(scrollTop);
+    // }, false);
+
 
     // Update analysis table
     if (active_profile && active_timewindow) {
