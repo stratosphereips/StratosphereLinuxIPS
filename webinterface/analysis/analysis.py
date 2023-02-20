@@ -263,14 +263,20 @@ def set_timeline(profile, timewindow,):
         for flow in timeline:
             flow = json.loads(flow)
 
+            if flow["dport_name"] == "IGMP":
+                flow["dns_resolution"] = "????"
+                flow["dport/proto"] = "????"
+                flow["state"] = "????"
+                flow["sent"] = "????"
+                flow["recv"] = "????"
+                flow["tot"] = "????"
+                flow["warning"] = "????"
+                flow["critical warning"] = "????"
+
             # TODO: check this logic
             if flow["preposition"] == "from":
                 temp = flow["saddr"]
                 flow["daddr"] = temp
-
-            # TODO:fix dns_resolution in IGMP
-            if "dns_resolution" not in flow:
-                flow["dns_resolution"] = "????"
 
             data.append(flow)
 
