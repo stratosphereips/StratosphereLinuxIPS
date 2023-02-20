@@ -263,6 +263,7 @@ def set_timeline(profile, timewindow,):
         for flow in timeline:
             flow = json.loads(flow)
 
+            # TODO: check IGMP
             if flow["dport_name"] == "IGMP":
                 flow["dns_resolution"] = "????"
                 flow["dport/proto"] = "????"
