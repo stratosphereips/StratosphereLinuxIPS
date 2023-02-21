@@ -34,3 +34,4 @@ whois
 wheel
 flask
 tld
+tqdm

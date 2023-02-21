@@ -29,8 +29,6 @@ import json
 import traceback
 import threading
 import subprocess
-import signal
-
 
 # Input Process
 class InputProcess(multiprocessing.Process):
@@ -147,12 +145,14 @@ class InputProcess(multiprocessing.Process):
             The task for this function is to send nfdump output line by line to profilerProcess.py for processing
             """
 
-            line = {'type': 'nfdump'}
+
             if not self.nfdump_output:
                 # The nfdump command returned nothing
                 self.print('Error reading nfdump output ', 1, 3)
             else:
-                lines = len(self.nfdump_output.splitlines())
+                total_flows = len(self.nfdump_output.splitlines())
+                __database__.set_input_metadata({'total_flows': total_flows})
+
                 for nfdump_line in self.nfdump_output.splitlines():
                     # this line is taken from stdout we need to remove whitespaces
                     nfdump_line.replace(' ', '')
@@ -161,11 +161,14 @@ class InputProcess(multiprocessing.Process):
                         # The first letter is not digit -> not valid line.
                         # TODO: What is this valid line check?? explain
                         continue
-                    line['data'] = nfdump_line
+                    line = {
+                        'type': 'nfdump',
+                        'data': nfdump_line
+                    }
                     self.profilerqueue.put(line)
                     if self.testing: break
 
-            return lines
+            return total_flows
         except KeyboardInterrupt:
             return True
 
@@ -357,6 +360,20 @@ class InputProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             return False
 
+    def get_flows_number(self, file) -> int:
+        """
+        returns the number of flows/lines in a given file
+        """
+        p = subprocess.Popen(
+            ['wc', '-l', file],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        line_count, err = p.communicate()
+        if p.returncode != 0:
+            return 0
+        return int(line_count.strip().split()[0])
+
     def read_zeek_folder(self):
         # This is the case that a folder full of zeek files is passed with -f
         try:
@@ -370,8 +387,12 @@ class InputProcess(multiprocessing.Process):
 
             self.zeek_folder = self.given_path
             self.start_observer()
-
+            total_flows = 0
             for file in os.listdir(self.given_path):
+                if not __database__.is_growing_zeek_dir():
+                    # get the total number of flows slips is going to read (used later for the progress bar)
+                    total_flows += self.get_flows_number(os.path.join(self.given_path, file))
+
                 # Remove .log extension and add file name to database.
                 extension = file[-4:]
                 if extension == '.log':
@@ -383,6 +404,7 @@ class InputProcess(multiprocessing.Process):
                 # in testing mode, we only need to read one zeek file to know
                 # that this function is working correctly
                 if self.testing: break
+            __database__.set_input_metadata({'total_flows': total_flows})
 
             lines = self.read_zeek_files()
 
@@ -402,10 +424,7 @@ class InputProcess(multiprocessing.Process):
         sys.stdin = os.fdopen(0, 'r')
         file_stream = sys.stdin
         # tell profilerprocess the type of line the user gave slips
-        line_info = {
-            'type': 'stdin',
-            'line_type': self.line_type
-        }
+
         for line in file_stream:
             if line == '\n':
                 continue
@@ -417,8 +436,11 @@ class InputProcess(multiprocessing.Process):
                 except json.decoder.JSONDecodeError:
                     self.print(f'Invalid json line')
                     continue
-
-            line_info['data'] = line
+            line_info = {
+                'type': 'stdin',
+                'line_type': self.line_type,
+                'data' : line
+            }
             self.print(f'	> Sent Line: {line_info}', 0, 3)
             self.profilerqueue.put(line_info)
             self.lines += 1
@@ -429,27 +451,32 @@ class InputProcess(multiprocessing.Process):
 
     def handle_binetflow(self):
         try:
-            self.lines = 0
-            self.read_lines_delay = 0.02
-            with open(self.given_path) as file_stream:
-                line = {'type': 'argus'}
-                # fake = {'type': 'argus', 'data': 'StartTime,Dur,Proto,SrcAddr,Sport,
-                # Dir,DstAddr,Dport,State,sTos,dTos,TotPkts,TotBytes,SrcBytes,SrcPkts,Label\n'}
-                # self.profilerqueue.put(fake)
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
 
+            self.lines = 0
+            with open(self.given_path) as file_stream:
                 # read first line to determine the type of line, tab or comma separated
                 t_line = file_stream.readline()
                 if '\t' in t_line:
                     # this is the header line
-                    line['type'] = 'argus-tabs'
-                line['data'] = t_line
+                    type_ = 'argus-tabs'
+                else:
+                    type_ = 'argus'
+
+                line = {
+                    'type': type_,
+                    'data': t_line
+                }
                 self.profilerqueue.put(line)
                 self.lines += 1
 
                 # go through the rest of the file
                 for t_line in file_stream:
-                    time.sleep(self.read_lines_delay)
-                    line['data'] = t_line
+                    line = {
+                        'type': type_,
+                        'data': t_line
+                    }
                     # argus files are either tab separated orr comma separated
                     if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
@@ -462,17 +489,20 @@ class InputProcess(multiprocessing.Process):
 
     def handle_suricata(self):
         try:
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
             with open(self.given_path) as file_stream:
-                line = {'type': 'suricata'}
-                self.read_lines_delay = 0.02
-                while str_line := file_stream.readline():
-                    time.sleep(self.read_lines_delay)
-                    line['data'] = str_line
+                for t_line in file_stream:
+                    line = {
+                        'type': 'suricata',
+                        'data': t_line,
+                    }
                     self.print(f'	> Sent Line: {line}', 0, 3)
-                    if len(str_line.strip()) != 0:
+                    if len(t_line.strip()) != 0:
                         self.profilerqueue.put(line)
                     self.lines += 1
-                    if self.testing: break
+                    if self.testing:
+                        break
             self.stop_queues()
             return True
         except KeyboardInterrupt:
@@ -480,6 +510,9 @@ class InputProcess(multiprocessing.Process):
 
     def handle_zeek_log_file(self):
         try:
+            total_flows = self.get_flows_number(self.given_path)
+            __database__.set_input_metadata({'total_flows': total_flows})
+
             try:
                 file_name_without_extension = self.given_path[: self.given_path.index('.log')]
             except IndexError:

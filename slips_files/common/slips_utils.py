@@ -58,6 +58,7 @@ class Utils(object):
          )
         # this format will be used accross all modules and logfiles of slips
         self.alerts_format = '%Y/%m/%d %H:%M:%S.%f%z'
+        self.local_tz = self.get_local_timezone()
 
     def get_cidr_of_ip(self, ip):
         """
@@ -193,6 +194,24 @@ class Utils(object):
             result = datetime_obj.strftime(required_format)
 
         return result
+
+    def get_local_timezone(self):
+        """
+        Returns the current user local timezone
+        """
+        now = datetime.now()
+        local_now = now.astimezone()
+        local_tz = local_now.tzinfo
+        # local_tzname = local_tz.tzname(local_now)
+        return local_tz
+
+    def convert_to_local_timezone(self, ts):
+        """
+        puts the given ts in the local timezone of the current user
+        :parapm ts: any format
+        """
+        datetime_obj = self.convert_to_datetime(ts)
+        return datetime_obj.astimezone(self.local_tz)
 
     def is_datetime_obj(self, ts):
         """
@@ -366,6 +385,10 @@ class Utils(object):
         returns difference in seconds
         :param return_type: can be seconds, minutes, hours or days
         """
+        if start_time == float("-inf"):
+            # a lot of time passed since -inf
+            return 100000000000
+
         start_time = self.convert_to_datetime(start_time)
         end_time = self.convert_to_datetime(end_time)
 
@@ -419,8 +442,8 @@ class Utils(object):
             'Format': 'IDEA0',
             'ID': evidence_id,
             # both times represet the time of the detection, we probably don't need flow_datetime
-            'DetectTime': datetime.now(timezone.utc).isoformat(),
-            'EventTime': datetime.now(timezone.utc).isoformat(),
+            'DetectTime': datetime.now(self.local_tz).isoformat(),
+            'EventTime': datetime.now(self.local_tz).isoformat(),
             'Category': [category],
             'Confidence': confidence,
             'Source': [{}],
@@ -433,12 +456,9 @@ class Utils(object):
             IDEA_dict['Source'][0].update({'IP6': [srcip]})
         elif validators.mac_address(srcip):
             IDEA_dict['Source'][0].update({'MAC': [srcip]})
+        elif validators.url(srcip):
+            IDEA_dict['Source'][0].update({'URL': [srcip]})
 
-        # update the srcip description if specified in the evidence
-        if source_target_tag:   # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
-            # for example: this will be 'Botnet' in case of C&C alerts not C&C,
-            # because it describes the source ip
-            IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
 
         # When someone communicates with C&C, both sides of communication are
         # sources, differentiated by the Type attribute, 'C&C' or 'Botnet'
@@ -462,6 +482,8 @@ class Utils(object):
                 IDEA_dict['Target'] = [{'IP6': [attacker]}]
             elif validators.mac_address(attacker):
                 IDEA_dict['Target'] = [{'MAC': [attacker]}]
+            elif validators.url(attacker):
+                IDEA_dict['Target'][0].update({'URL': [srcip]})
 
             # try to extract the hostname/SNI/rDNS of the dstip form the description if available
             hostname = False
@@ -475,18 +497,30 @@ class Utils(object):
                 pass
             if hostname:
                 IDEA_dict['Target'][0].update({'Hostname': [hostname]})
+
             # update the dstip description if specified in the evidence
-            if source_target_tag:
+            if source_target_tag:    # https://idea.cesnet.cz/en/classifications#sourcetargettagsourcetarget_classification
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
 
         elif 'domain' in attacker_direction:
             # the ioc is a domain
-            target_info = {'Hostname': [attacker]}
+            if validators.domain(attacker):
+                attacker_type = 'Hostname'
+            else:
+                attacker_type = 'URL'
+
+            target_info = {attacker_type: [attacker]}
             IDEA_dict['Target'] = [target_info]
 
             # update the dstdomain description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
+        else:
+            # the ioc is the srcip, therefore the tag is desscribing the source
+            if source_target_tag:
+                IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
+
+
 
         # add the port/proto
         # for all alerts, the srcip is in IDEA_dict['Source'][0] and the dstip is in IDEA_dict['Target'][0]

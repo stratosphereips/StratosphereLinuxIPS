@@ -194,8 +194,25 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.r.set("mode", slips_mode)
 
+    def get_slips_mode(self):
+        """
+        function to get the current mode (daemonized/interactive)
+        in the db
+        """
+        self.r.get("mode")
+    
+    def get_modified_ips_in_the_last_tw(self):
+        """
+        this number is updated in the db every 5s by slips.py
+        used for printing running stats in slips.py or outputprocess
+        """
+        if modified_ips := self.r.hget('analysis', 'modified_ips_in_the_last_tw'):
+            return modified_ips
+        else:
+            return 0
+    
     def close_redis_server(self, redis_port):
-        server_pid = self.get_redis_server_PID( redis_port)
+        server_pid = self.get_redis_server_PID(redis_port)
         if server_pid:
             os.kill(int(server_pid), signal.SIGKILL)
 
@@ -1341,13 +1358,8 @@ class Database(ProfilingFlowsDatabase, object):
         return False
 
 
-    def set_flow_causing_evidence(self, uid, evidence_ID):
-        """
-        :param uid: can be a str or a list
-        """
-        if type(uid) == str:
-            uid = [uid]
-        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uid))
+    def set_flow_causing_evidence(self, uids: list, evidence_ID):
+        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uids))
 
     def get_flows_causing_evidence(self, evidence_ID) -> list:
         uids = self.r.hget("flows_causing_evidence", evidence_ID)
@@ -1409,11 +1421,15 @@ class Database(ProfilingFlowsDatabase, object):
         # every evidence should have an ID according to the IDEA format
         evidence_ID = str(uuid4())
 
-        self.set_flow_causing_evidence(uid, evidence_ID)
-
-        # some evidence are caused by several uids, use the last one only
         if type(uid) == list:
-            uid = uid[-1]
+            # some evidence are caused by several uids, use the last one only
+            # todo check we we have duplicates in the first place
+            # remove duplicate uids
+            uids = list(dict.fromkeys(uid))
+        else:
+            uids = [uid]
+
+        self.set_flow_causing_evidence(uids, evidence_ID)
 
         if type(threat_level) != str:
             # make sure we always store str threat levels in the db
@@ -1430,7 +1446,7 @@ class Database(ProfilingFlowsDatabase, object):
             'evidence_type': evidence_type,
             'description': description,
             'stime': timestamp,
-            'uid': uid,
+            'uid': uids,
             'confidence': confidence,
             'threat_level': threat_level,
             'category': category,
@@ -1494,7 +1510,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         return True
 
-    def mark_evidence_as_processed(self, profileid, twid, evidence_ID):
+    def mark_evidence_as_processed(self, evidence_ID):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """

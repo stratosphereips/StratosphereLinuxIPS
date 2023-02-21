@@ -183,8 +183,15 @@ let analysisTableDefs = {
             {
                 data: 'profile',
                 "className": 'r',
+            },
+            {
+                data: 'blocked'
             }
         ],
+        "aoColumnDefs": [
+            { "bSearchable": true, "bVisible": true, "aTargets": [ 0 ] },
+            { "bSearchable": true, "bVisible": false, "aTargets": [ 1 ] }
+        ], 
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){
                 case true:

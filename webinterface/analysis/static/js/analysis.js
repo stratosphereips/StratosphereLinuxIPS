@@ -113,7 +113,7 @@ function hotkeyPress(e) {
 }
 
 function convertDotToDash(string) {
-    return string.replace(/\./g, '_');
+    return string.replace(/\.|\:/g, '_');
 }
 
 
@@ -137,6 +137,7 @@ function initHideProfileTWButtonListener() {
 
         if (document.getElementById('profiles').style.display === "none") {
             document.getElementById('profiles').style.display = "block";
+            document.getElementById('filter_profiles').style.display = "block";
             document.getElementById('profile-tw-hide-btn').innerHTML = "<";
 
             $('#col_profiles').removeClass('col-0');
@@ -146,6 +147,7 @@ function initHideProfileTWButtonListener() {
 
         } else {
             document.getElementById('profiles').style.display = "none";
+            document.getElementById('filter_profiles').style.display = "none";
             document.getElementById('profile-tw-hide-btn').innerHTML = ">";
             
             $('#col_profiles').removeClass('col-2');
@@ -232,7 +234,12 @@ function initProfileTwListeners() {
                 });
             }
             childRowsProfile = null;
-        });       
+        });
+    });
+
+    $(".filter-checkbox").on("change", function(e) {
+        let searchTerm = $('input[name="filter"]:checked').attr("data-filter");
+        $('#table_profiles').DataTable().column(1).search(searchTerm, false, false, true).draw();
     });
 }
 

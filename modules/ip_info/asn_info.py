@@ -148,6 +148,9 @@ class ASN:
                 return asn
 
             asn_info = ip_info['as'].split()
+            if asn_info == []:
+                return
+
             # usually it's somthing like AS15169 Google LLC
             # separate the org name
             asn.update({
@@ -160,8 +163,10 @@ class ASN:
         except (
             requests.exceptions.ReadTimeout,
             requests.exceptions.ConnectionError,
-            json.decoder.JSONDecodeError, KeyError
+            json.decoder.JSONDecodeError, KeyError, IndexError
         ):
+            # comes here if slips fails to get the as info from the response
+            # OR gets it correctly, but the info doesn't contain the fields slip sis expecting
             pass
 
         return asn

@@ -2,7 +2,15 @@
 - Support ASNs in our own_malicious_iocs.csv file
 - Add a zeek script to recognize the gateway IP and add it to notice.log 
 - Don't alert "Connection to Private IP" when there's a DNS connection on port 53 UDP to the gateway
--1.0.1 (Jan 2023)
+- Faster reading of netflow and suricata files
+- Add a progress bar to slips showing the number of processed flows
+- Fix having duplicate alerts
+- Fix vertical and horizontal portscan errors
+- Add the uids that caused an evidence to the evidence description in alerts.json
+- Add a blocking indicator in alerts.json
+- Fix wrong Source/Target type in alerts.json
+- 
+- 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
 - Fix FP urlhaus detetcions, now we use it to check urls only, not domains.

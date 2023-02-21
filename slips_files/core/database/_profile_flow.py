@@ -945,6 +945,13 @@ class ProfilingFlowsDatabase(object):
         """
         return self.r.hget('analysis', 'zeek_dir')
 
+
+    def get_total_flows(self):
+        """
+        gets total flows to process from the db
+        """
+        return self.r.hget('analysis', 'total_flows')
+
     def get_input_type(self):
         """
         gets input type from the db

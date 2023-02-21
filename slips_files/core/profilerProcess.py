@@ -29,7 +29,7 @@ import os
 import binascii
 import base64
 from re import split
-
+from tqdm import tqdm
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -44,7 +44,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
-        self.last_processed_line = ''
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -2399,9 +2398,9 @@ class ProfilerProcess(multiprocessing.Process):
 
                 if not self.input_type:
                     # Find the type of input received
-                    # This line will be discarded because
                     self.define_type(line)
-                    # We should do this before checking the type of input so we don't lose the first line of input
+                    # Find the number of flows we're going to receive of input received
+                    self.outputqueue.put(f"initialize progress bar")
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -2413,6 +2412,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.process_zeek_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 elif (
                     self.input_type == 'argus'
                     or self.input_type == 'argus-tabs'
@@ -2435,45 +2435,39 @@ class ProfilerProcess(multiprocessing.Process):
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                    except AttributeError:
-                        # No. Define columns. Do not add this line to profile, its only headers
-                        self.define_columns(line)
-                    except KeyError:
-                        # When the columns are not there. Not sure if it works
+                        self.outputqueue.put(f"update progress bar")
+                    except (AttributeError, KeyError):
+                        # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    # make sure that we haven't processed this line before
-                    if line == self.last_processed_line:
-                        # temporary fix for slips processing the last line of suricata files 2000+ times in a row!
-                        continue
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.last_processed_line = line
-
+                    self.outputqueue.put(f"update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 elif self.input_type == 'nfdump':
                     self.process_nfdump_input(line)
                     self.add_flow_to_profile()
+                    self.outputqueue.put(f"update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
+                    return False
+
+
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
                 message = __database__.get_message(self.c1)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if (
-                        message
-                        and message['channel'] == 'reload_whitelist'
-                        and type(message['data']) == str
-                ):
+                if utils.is_msg_intended_for(message, 'reload_whitelist'):
                     # if whitelist.conf is edited using pycharm
-                    # a msg will be sent to this channel on every keypress, becausse pycharm saves file automatically
+                    # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
                     self.whitelist.read_whitelist()
 
