@@ -44,6 +44,7 @@ class UpdateFileManager:
             '#fields',
             'number',
             'atom_type',
+            'attacker'
         )
         self.ignored_IoCs = ('email', 'url', 'file_hash', 'file')
         # to track how many times an ip is present in different blacklists
@@ -1125,12 +1126,11 @@ class UpdateFileManager:
                 line = line.replace('\n', '').replace('"', '')
 
                 amount_of_columns, line_fields, separator = self.parse_line(line, ti_file_path)
-
                 if description_column is None:
                     # assume it's the last column
                     description_column = amount_of_columns - 1
                 data_column = self.get_data_column(amount_of_columns, line_fields, ti_file_path)
-                if data_column == 'False':  # don't use if not because it may be 0
+                if data_column == 'Error':  # don't use 'if not' because it may be 0
                     return False
 
                 # Now that we read the first line, go back so we can process it
@@ -1156,14 +1156,12 @@ class UpdateFileManager:
                         line = new_line + ',' + description
 
                     line = line.replace('\n', '').replace('"', '')
-
                     data, description = self.extract_ioc_from_line(line,
                                                                    line_fields,
                                                                    separator,
                                                                    data_column,
                                                                    description_column,
                                                                    ti_file_path)
-
                     if not data and not description:
                         return False
 
