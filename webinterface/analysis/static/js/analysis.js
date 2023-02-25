@@ -362,11 +362,12 @@ function initAllAnalysisTables() {
 function update(){
 
     // Update profiles/tws
-    let t = $('#table_profiles').DataTable();
-    childRowsProfile = t.rows('.shown');
-    profilesScrollingContainer = $(t.table().node()).parent('div.dataTables_scrollBody');
+    let profile_t = $('#table_profiles').DataTable();
+    childRowsProfile = profile_t.rows('.shown');
+    profilesScrollingContainer = $(profile_t.table().node()).parent('div.dataTables_scrollBody');
     profilesScrollTop = profilesScrollingContainer.scrollTop();
-    t.ajax.reload(null, false);
+    $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
+    profile_t.ajax.reload(null, false);
 
     // Update analysis table
     if (active_profile && active_timewindow) {
