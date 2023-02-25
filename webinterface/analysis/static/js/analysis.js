@@ -382,7 +382,7 @@ function update(){
 }
 
 function automaticUpdate() {
-    setInterval(update, 2000);
+    setInterval(update, 180000);
 }
 
 function initAnalysisPage() {
