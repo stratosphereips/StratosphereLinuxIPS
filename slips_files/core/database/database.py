@@ -1728,9 +1728,17 @@ class Database(ProfilingFlowsDatabase, object):
         identification = ''
         if current_data:
             if 'asn' in current_data:
-                asnorg = current_data['asn']['org']
+                asn_details = ''
+                asnorg = current_data['asn'].get('org', '')
+                if asnorg:
+                    asn_details += asnorg + ' '
+
                 number = current_data['asn'].get('number', '')
-                identification += f'AS: {asnorg} {number}, '
+                if number:
+                    asn_details += number + ' '
+
+                if len(asn_details) >1:
+                    identification += f'AS: {asn_details}'
 
             if 'SNI' in current_data:
                 SNI = current_data['SNI']
