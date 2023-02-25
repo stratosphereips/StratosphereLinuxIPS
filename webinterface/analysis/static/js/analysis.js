@@ -263,11 +263,6 @@ function initTimelineListeners() {
         updateIPInfo(row, "daddr")
     })
 
-    //    $('#table_timeline_filter_button').click(function(){
-    //        var filter_gender = $('#table_timeline_filter_input').val();
-    //        searchReload(filter_gender);
-    //    });
-
     $('#table_timeline').on('click', 'tbody tr', function () {
         let tr = $(this).closest('tr');
         let row = $("#table_timeline").DataTable().row(this)
