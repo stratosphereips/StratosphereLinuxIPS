@@ -233,6 +233,7 @@ function initProfileTwListeners() {
                     this.nodes().to$().addClass('shown');
                 });
             }
+            $($(active_tw_id).DataTable().row(active_timewindow_index).node()).addClass('row_selected');
             childRowsProfile = null;
         });
     });
