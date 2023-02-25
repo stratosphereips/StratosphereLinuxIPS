@@ -179,7 +179,6 @@ function addTableTWsListener(table_tw_id, tr) {
         let t = $("#" + table_tw_id).DataTable();
         if (active_tw_id) {
             $($(active_tw_id).DataTable().row(active_timewindow_index).node()).removeClass('row_selected');
-
         }
         active_tw_id = "#" + table_tw_id
         active_timewindow_index = rowIndex;
@@ -229,7 +228,7 @@ function initProfileTwListeners() {
                     this.child(addTableTWs(profile_id_dash)).show();
                     let table_tws = $("#" + profile_id_dash).DataTable(analysisSubTableDefs["tw"]);
                     table_tws.ajax.url('/analysis/tws/' + profile_id).load();
-                    addTableTWsListener(profile_id_dash, this)
+                    addTableTWsListener(profile_id_dash, this);
                     this.nodes().to$().addClass('shown');
                 });
             }
@@ -380,7 +379,6 @@ function update(){
     if($("#table_ipinfo").DataTable().ajax.url() != null){
         $("#table_ipinfo").DataTable().ajax.reload(null, false);
     }
-    
 }
 
 function automaticUpdate() {
