@@ -317,7 +317,6 @@ function initAlertListeners() {
         t_alerts.one('draw', function () {
             if (childRowsAnalysis != null) {
                 childRowsAnalysis.every(function ( rowIdx, tableLoop, rowLoop ) {
-                    let alertID = row.data()["alert_id"]
                     let alertID = this.data()["alert_id"]
                     let tableEvidenceID = "table_" + alertID;
                     $("#" + tableEvidenceID).DataTable().clear().destroy();
