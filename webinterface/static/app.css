@@ -1,0 +1,15 @@
+
+
+#slips_custom_navbar{
+	padding-top: 20px;
+	list-style-type: none;
+	font-family: "Bell Gothic Std Light";
+	font-size: 20px;
+}
+#slips_custom_navbar li a { 
+    display: inline-block;
+    width: 100%;
+    padding: 10px;
+    text-decoration: none;
+    color: black;
+}
