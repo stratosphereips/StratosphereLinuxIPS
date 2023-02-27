@@ -34,17 +34,19 @@
       <li class="nav-item">
         <a class="nav-link active" type="button" id="nav-hotkeys-tab" data-bs-toggle="tab" data-bs-target="#nav-hotkeys" role="tab"
           aria-controls="nav-hotkeys" aria-selected="true">
+          <i class="fa-solid fa-magnifying-glass"></i>
           Profiles
         </a>
       </li>
       <li class="nav-item">
         <a class="nav-link" type="button" id="nav-general-tab" data-bs-toggle="tab" data-bs-target="#nav-general" role="tab"
           aria-controls="nav-general" aria-selected="false">
-          General
+          <i class="fa-solid fa-circle-info"></i>                    General
         </a>
       </li>
       <li class="nav-item ms-auto" style="padding-right: 30px;">
         <a type="button" id="changedb_button" class="nav-link btn-primary" data-toggle="modal" data-target="#modal_choose_redis">
+          <i class="fa-solid fa-database"></i>
           Change DB
         </a>
       </li>
@@ -99,6 +101,7 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"
   integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
 <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='app.js')}}"></script>
+<script src="https://kit.fontawesome.com/88b12c5474.js" crossorigin="anonymous"></script>
 
 <script type="module" charset="utf8" rel="stylesheet"
   src="{{url_for('analysis.static', filename='js/analysis.js')}}"></script>
