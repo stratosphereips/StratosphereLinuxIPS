@@ -1,6 +1,0 @@
-Slips version: 1.0.1
-File: dataset/test2-malicious.binetflow
-Branch: kamila-automatic-update
-Commit: f9b67c355744de1db454c10a0374d1563cf8561e
-Slips start date: 2023/02/16 16:32:12.716557
-Slips end date: 2023/02/16 16:35:08.752482
