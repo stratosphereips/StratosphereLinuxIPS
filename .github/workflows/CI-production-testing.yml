@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 7200
 
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
     - uses: actions/checkout@v3
@@ -74,7 +74,7 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
 

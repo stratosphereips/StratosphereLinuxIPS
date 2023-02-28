@@ -11,7 +11,7 @@ jobs:
   create_tag:
     runs-on: ubuntu-latest
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
       - uses: actions/checkout@v3
@@ -24,7 +24,7 @@ jobs:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
 
@@ -59,7 +59,7 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
     steps:
     # clone slips and checkout branch
     # By default it checks out only one commit
@@ -148,7 +148,7 @@ jobs:
   tweet_about_the_new_release:
     runs-on: ubuntu-latest
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
       # same as the above without the v and the dots
       SLIPS_URL_VERSION: 101
 
