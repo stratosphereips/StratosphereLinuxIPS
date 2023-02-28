@@ -24,8 +24,6 @@ class ASN:
         :param ip: str
         if teh range of this ip was found, this function returns a dict with {'number' , 'org'}
         """
-        if ip.startswith('185'):
-            pass
         first_octet: str = utils.get_first_octet(ip)
         if not first_octet:
             # invalid ip or no cached asns

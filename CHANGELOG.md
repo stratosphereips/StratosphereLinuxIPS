@@ -9,7 +9,18 @@
 - Add the uids that caused an evidence to the evidence description in alerts.json
 - Add a blocking indicator in alerts.json
 - Fix wrong Source/Target type in alerts.json
-- 
+- Fix error parsing AIP TI list.
+- Update slips default whitelist
+- Kill web interface on ctrl+c
+- Use the current user's timezone in alerts.log and alets.json
+- Fix problem displaying data from the db in the web interface 
+- Add the option to view blocked profiles only in the web interface
+- Fix displaying alerts of profile in the webinterface
+- Add the option to display all evidence in a profile
+- Fix searching in the web interface
+- Fix caching ASN ranges
+- Code optimizations
+
 - 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts
