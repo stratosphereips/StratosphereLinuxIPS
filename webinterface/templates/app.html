@@ -1,104 +1,114 @@
 <!doctype html>
 <html>
-    <head>
-        <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css"/>
-        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.css"/>
-        <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.dataTables.min.css">
-        <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/style.css')}}"/>
-        <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/style.css')}}"/>
-    </head>
-    <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modal_choose_redis">
-        Change DB
-    </button>
-    <div class="modal " id="modal_choose_redis" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel" >
-      <div class="modal-dialog" role="document">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="staticBackdropLabel">Choose DB</h5>
-            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
-              <span aria-hidden="true">&times;</span>
-            </button>
-          </div>
-          <div class="modal-body">
-                <table id="table_choose_redis" class="table table-striped display  nowrap" style="width:100%">
-                    <thead>
-                    <tr>
-                    <th>Filename</th>
-                    <th>Port</th>
-                    </tr>
-                    </thead>
-                </table>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
-            <button type="button" id="button_choose_db" class="btn btn-primary">Apply</button>
-          </div>
-        </div>
+
+<head>
+  <link rel="stylesheet" type="text/css"
+    href="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.3/css/bootstrap.min.css" />
+  <link rel="stylesheet" type="text/css"
+    href="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.css" />
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.2.3/css/buttons.dataTables.min.css">
+  <link rel="stylesheet" type="text/css" href="{{url_for('analysis.static', filename='css/style.css')}}" />
+  <link rel="stylesheet" type="text/css" href="{{url_for('general.static', filename='css/style.css')}}" />
+</head>
+<button type="button" class="btn btn-primary" data-toggle="modal" data-target="#modal_choose_redis">
+  Change DB
+</button>
+<div class="modal " id="modal_choose_redis" tabindex="-1" role="dialog" aria-labelledby="staticBackdropLabel">
+  <div class="modal-dialog" role="document">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="staticBackdropLabel">Choose DB</h5>
+        <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+          <span aria-hidden="true">&times;</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <table id="table_choose_redis" class="table table-striped display  nowrap" style="width:100%">
+          <thead>
+            <tr>
+              <th>Filename</th>
+              <th>Port</th>
+            </tr>
+          </thead>
+        </table>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+        <button type="button" id="button_choose_db" class="btn btn-primary">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<body>
+  <div class="container-fluid">
+    <div class="row justify-content-center" style="margin-bottom: 15px">
+
+      <div class="col-auto d-flex shadow justify-content-center text-center"
+        style="border-right: 1px solid rgb(216, 216, 216);">
+        <a class="navbar-brand">
+          <h4 id="slips_version"></h4>
+        </a>
+      </div>
+
+      <div class="col-5 shadow justify-content-center"
+        style="padding-left:10px;padding-right:10px;border-right: 1px solid rgb(216, 216, 216);">
+        <dl style="  column-count:2">
+          <dd>
+            <b>Name: </b><span id="fileName"></span>
+          </dd>
+          <dd>
+            <b>Size: </b><span id="fileSize"></span>
+          </dd>
+          <dd>
+            <b>Start: </b><span id="analysisStart"></span>
+          </dd>
+          <dd>
+            <b>End: </b><span id="analysisEnd"></span>
+          </dd>
+        </dl>
       </div>
     </div>
 
-    <body>
-        <div class="container-fluid">
-            <div class="row justify-content-center" style="margin-bottom: 15px">
-
-                <div class="col-auto d-flex shadow justify-content-center text-center" style="border-right: 1px solid rgb(216, 216, 216);">
-                    <a class="navbar-brand"><h4 id="slips_version"></h4></a>
-                </div>
-
-                <div class="col-5 shadow justify-content-center" style="padding-left:10px;padding-right:10px;border-right: 1px solid rgb(216, 216, 216);">
-                    <dl style="  column-count:2">
-                        <dd>
-                            <b>Name: </b><span id="fileName"></span>
-                        </dd>
-                        <dd>
-                            <b>Size: </b><span id="fileSize"></span>
-                        </dd>
-                        <dd>
-                            <b>Start: </b><span id="analysisStart"></span>
-                        </dd>
-                        <dd>
-                            <b>End: </b><span id="analysisEnd"></span>
-                        </dd>
-                    </dl>
-                </div>
-            </div>
-
-            <div class="row">
-
-                <nav>
-                  <div class="nav nav-tabs" id="nav-tab" role="tablist">
-                    <button class="nav-link active" id="nav-hotkeys-tab" data-bs-toggle="tab" data-bs-target="#nav-hotkeys" type="button" role="tab" aria-controls="nav-hotkeys" aria-selected="true">Profiles</button>
-                    <button class="nav-link" id="nav-general-tab" data-bs-toggle="tab" data-bs-target="#nav-general" type="button" role="tab" aria-controls="nav-general" aria-selected="false">General</button>
-                  </div>
-                </nav>
-
-                <div class="tab-content" id="nav-tabContent">
-                  <div class="tab-pane fade show active" id="nav-hotkeys" role="tabpanel" aria-labelledby="nav-hotkeys-tab">
-                      <div class="row">
-                        {% include 'analysis.html' %}
-                      </div>
-                  </div>
-                  <div class="tab-pane fade" id="nav-general" role="tabpanel" aria-labelledby="nav-general-tab">
-                    <div class="row">
-                        {% include 'general.html' %}
-                    </div>
-                  </div>
-                </div>
-
-            </div>
+    <div class="row">
+      <nav>
+        <div class="nav nav-tabs" id="nav-tab" role="tablist">
+          <button class="nav-link active" id="nav-hotkeys-tab" data-bs-toggle="tab" data-bs-target="#nav-hotkeys"
+            type="button" role="tab" aria-controls="nav-hotkeys" aria-selected="true">Profiles</button>
+          <button class="nav-link" id="nav-general-tab" data-bs-toggle="tab" data-bs-target="#nav-general" type="button"
+            role="tab" aria-controls="nav-general" aria-selected="false">General</button>
         </div>
-    </body>
+      </nav>
+    </div>
 
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
-    <script type="text/javascript" src="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
-    <script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
-    <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='app.js')}}"></script>
+    <div class="tab-content" id="nav-tabContent">
+      <div class="tab-pane fade show active" id="nav-hotkeys" role="tabpanel" aria-labelledby="nav-hotkeys-tab">
+        {% include 'analysis.html' %}
+      </div>
+      <div class="tab-pane fade" id="nav-general" role="tabpanel" aria-labelledby="nav-general-tab">
+        {% include 'general.html' %}
+      </div>
+    </div>
 
-    <script type="module" charset="utf8" rel="stylesheet" src="{{url_for('analysis.static', filename='js/analysis.js')}}"></script>
-    <script type="module" charset="utf8" rel="stylesheet" src="{{url_for('analysis.static', filename='js/tableDefs.js')}}"></script>
-    <script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('general.static', filename='js/general.js')}}"></script>
+  </div>
+</body>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script type="text/javascript"
+  src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/5.1.3/js/bootstrap.bundle.min.js"></script>
+<script type="text/javascript"
+  src="https://cdn.datatables.net/v/bs5/jq-3.6.0/sl-1.4.0/dt-1.12.1/datatables.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.3/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.datatables.net/buttons/2.2.3/js/buttons.colVis.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.3/dist/js/bootstrap.bundle.min.js"
+  integrity="sha384-ho+j7jyWK8fNQe+A12Hb8AhRq26LrZ/JpcUGGOn+Y7RsweNrtN/tE3MoK7ZeZDyx" crossorigin="anonymous"></script>
+<script type="text/javascript" charset="utf8" rel="stylesheet" src="{{url_for('static', filename='app.js')}}"></script>
+
+<script type="module" charset="utf8" rel="stylesheet"
+  src="{{url_for('analysis.static', filename='js/analysis.js')}}"></script>
+<script type="module" charset="utf8" rel="stylesheet"
+  src="{{url_for('analysis.static', filename='js/tableDefs.js')}}"></script>
+<script type="text/javascript" charset="utf8" rel="stylesheet"
+  src="{{url_for('general.static', filename='js/general.js')}}"></script>
 
 </html>

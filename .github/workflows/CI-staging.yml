@@ -5,7 +5,8 @@ name: CI-staging
 on:
     push:
         branches:
-            - 'develop'
+            # features will be added to this branch using PRs, not need to re-run the tests on push
+            - '!develop'
             - '!master'
     pull_request:
         branches:
@@ -14,7 +15,7 @@ on:
 
 jobs:
 
-    run_unit_tests:
+    run_tests:
         # specify the host OS
         runs-on: ubuntu-latest
         # 2 hours timeout

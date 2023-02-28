@@ -1,10 +1,13 @@
 from flask import Flask, render_template, request, redirect, url_for, current_app
+from argparse import ArgumentParser
+import os.path
+
 from database.database import __database__
 from database.signals import message_sent
-
 from analysis.analysis import analysis
 from general.general import general
-from argparse import ArgumentParser
+from utils import *
+
 
 
 def create_app():
@@ -15,19 +18,10 @@ def create_app():
 
 app = create_app()
 
-
 @app.route('/redis')
 def read_redis_port():
-    data = []
-    file_path = '../running_slips_info.txt'
-    with open(file_path) as file:
-        for line in file:
-            if line.startswith("Date") or line.startswith("#"):
-                continue
-            line = line.split(',')
-            data.append({"filename": line[1], "redis_port": line[2]})
-    return {"data": data}
-
+    res = read_db_file()
+    return {"data" : res}
 
 @app.route('/')
 def index():

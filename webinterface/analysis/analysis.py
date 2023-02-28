@@ -43,18 +43,31 @@ def get_ip_info(ip):
             "ref_file": "-",
             "com_file": "-"}
     ip_info = __database__.cachedb.hget('IPsInfo', ip)
+
     if ip_info:
         ip_info = json.loads(ip_info)
         # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
+
+        # set geocountry
         geocountry = ip_info.get('geocountry', '-')
+
+        # set asn
         asn = ip_info.get('asn', False)
-        asnorg = [asn.get('asnorg', '-') if asn else '-']
+        asnorg = '-'
+        if asn:
+            # we have the asn key, do we have the org to display?
+            if 'org' in asn:
+                asnorg = asn['org']
+            elif 'number' in asn:
+                asnorg = asn['number']
+
         reverse_dns = ip_info.get('reverse_dns', '-')
 
+        # set threatintel
         threatintel = ip_info.get('threatintelligence', False)
         threatintel_info = [threatintel.get('description', '-') + "," + threatintel.get('threat_level',
-                                                                                        '-') + " threat level" if threatintel else '-']
-
+                                                                                 '-') + " threat level" if threatintel else '-']
+        # set vt
         vt_scores = ip_info.get("VirusTotal", False)
         url, down_file, ref_file, com_file = '-', '-', '-', '-'
         if vt_scores:
@@ -63,6 +76,7 @@ def get_ip_info(ip):
             ref_file = vt_scores.get("ref_file", "-")
             com_file = vt_scores.get("com_file", "-")
 
+        # set data
         data = {'geocountry': geocountry, 'asnorg': asnorg,
                 'reverse_dns': reverse_dns,
                 'threat_intel': threatintel_info, "url": url,
@@ -237,7 +251,7 @@ def set_timeline_flows(profile, timewindow):
 
 @analysis.route("/timeline/<profile>/<timewindow>")
 # @analysis.route("/timeline/<profile>/<timewindow>/<search_filter>")
-def set_timeline(profile, timewindow, search_filter=""):
+def set_timeline(profile, timewindow,):
     """
     Set timeline data of a chosen profile and timewindow
     :return: list of timeline as set initially in database
@@ -246,36 +260,26 @@ def set_timeline(profile, timewindow, search_filter=""):
 
     timeline = __database__.db.zrange("profile_" + profile + "_" + timewindow + "_timeline", 0, -1)
     if timeline:
-
-        search_filter = search_filter.strip()
-        search = True if search_filter else False
-        reverse = False
-        if search and "!" in search_filter:
-            search_filter = search_filter.replace("!", "")
-            reverse = True
-
         for flow in timeline:
             flow = json.loads(flow)
+
+            # TODO: check IGMP
+            if flow["dport_name"] == "IGMP":
+                flow["dns_resolution"] = "????"
+                flow["dport/proto"] = "????"
+                flow["state"] = "????"
+                flow["sent"] = "????"
+                flow["recv"] = "????"
+                flow["tot"] = "????"
+                flow["warning"] = "????"
+                flow["critical warning"] = "????"
 
             # TODO: check this logic
             if flow["preposition"] == "from":
                 temp = flow["saddr"]
                 flow["daddr"] = temp
 
-            # search
-            if not search:
-                data.append(flow)
-            else:
-                value_is_present = False
-
-                # partial search in each flow key
-                for v in flow.values():
-                    if search_filter.lower() in str(v).lower():
-                        value_is_present = True
-                        break
-
-                if (not reverse and value_is_present) or (reverse and not value_is_present):
-                    data.append(flow)
+            data.append(flow)
 
     return {
         'data': data

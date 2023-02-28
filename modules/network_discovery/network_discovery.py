@@ -200,7 +200,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
-
+            # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
+            # calling set_evidence
+            lock = threading.Lock()
+            lock.acquire()
             for key, evidence_list in self.pending_vertical_ps_evidence.items():
                 # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
                 # each value here is a list of evidence that should be combined
@@ -230,6 +233,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 )
             # reset the dict sinse we already combiner
             self.pending_vertical_ps_evidence = {}
+            lock.release()
 
     def wait_for_horizontal_scans(self):
         """
@@ -239,7 +243,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         while True:
             # wait 10s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
-
+            # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
+            # calling set_evidence
+            lock = threading.Lock()
+            lock.acquire()
             for key, evidence_list in self.pending_horizontal_ps_evidence.items():
                 # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
                 # each value here is a list of evidence that should be combined
@@ -268,6 +275,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                 )
             # reset the dict sinse we already combiner
             self.pending_horizontal_ps_evidence = {}
+            lock.release()
 
 
     def set_evidence_horizontal_portscan(

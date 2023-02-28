@@ -25,12 +25,8 @@ $("#table_choose_redis").DataTable({
     columns: [
         { data: 'filename' },
         { data: 'redis_port' }
-    ],
-    "fnInitComplete": function( settings, json ) {
-        $('#table_choose_redis tbody tr:eq(0)').click();
-    }
+    ]
 })
-
 
 $('#modal_choose_redis').modal({
     show: false,
@@ -38,10 +34,14 @@ $('#modal_choose_redis').modal({
     keyboard: false
 })
 
+$('#modal_choose_redis').on('show.bs.modal', function (e) {
+    $('#table_choose_redis').DataTable().ajax.reload();
+})
+
 $('#button_choose_db').click(function(){
-    let data = $('#table_choose_redis').DataTable().row( { selected: true } ).data()
+    let chosen_db = $('#table_choose_redis').DataTable().row( { selected: true } ).data()
     $('#modal_choose_redis .close').click() // close modal by imitating the close button click. $('#myModal').hide() does not work
-    let link = "/db/" + data['redis_port']
+    let link = "/db/" + chosen_db['redis_port']
     $.get( link );
     window.location.reload();
 });

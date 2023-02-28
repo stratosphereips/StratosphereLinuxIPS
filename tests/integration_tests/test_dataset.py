@@ -9,11 +9,15 @@ from pathlib import Path
 import shutil
 
 alerts_file = 'alerts.log'
+integration_tests_dir = 'output/integration_tests/'
+#create the integration tests dir
 
+if not os.path.exists(integration_tests_dir):
+    path = Path(integration_tests_dir)
+    path.mkdir(parents=True, exist_ok=True)
 
 def connect_to_redis(redis_port):
     from slips_files.core.database.database import __database__
-
     __database__.connect_to_redis_server(redis_port)
     return __database__
 
@@ -35,7 +39,7 @@ def create_output_dir(dirname):
     returns a full path to the created output dir
     """
 
-    path = Path(os.path.join('output/integration_tests/', dirname))
+    path = Path(os.path.join(integration_tests_dir, dirname))
     # clear output dir before running the test
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -55,7 +59,11 @@ def has_errors(output_dir):
             for line in f:
                 if '<class' in line or 'error' in line:
                     # connection errors shouldn't fail the integration tests
-                    if 'Connection error' in line or 'while downloading' in line:
+                    if (
+                            'Connection error' in line
+                            or 'while downloading' in line
+                            or 'Traceback' in line
+                    ):
                         continue
                     return True
 

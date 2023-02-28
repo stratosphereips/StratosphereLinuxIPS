@@ -129,6 +129,7 @@ class Module(Module, multiprocessing.Process):
             self,
             daddr,
             dport,
+            proto,
             saddr,
             profileid,
             twid,
@@ -136,8 +137,19 @@ class Module(Module, multiprocessing.Process):
             timestamp,
     ):
         """
-        Alerts when there's a connection from a local IP to another local IP
+        Alerts when there's a connection from a private IP to another private IP
+        except for DNS connections to the gateway
         """
+        try:
+            dport = int(dport)
+        except ValueError:
+            # an icmp port with hex value, ignore it
+            pass
+
+        if dport == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip():
+            # skip DNS conns to the gw to avoid having tons of this evidence
+            return
+
         # make sure the 2 ips are private
         if not (
                 ipaddress.ip_address(saddr).is_private
@@ -576,12 +588,6 @@ class Module(Module, multiprocessing.Process):
         to a well-known org"""
 
         ip_data = __database__.getIPData(ip)
-        try:
-            ip_asn = ip_data['asn']['asnorg']
-        except (KeyError, TypeError):
-            # No asn data for this ip
-            ip_asn = False
-
         try:
             SNI = ip_data['SNI']
             if type(SNI) == list:
@@ -1146,7 +1152,7 @@ class Module(Module, multiprocessing.Process):
         Alerts on connections to or from port 0 using protocols other than
         igmp, icmp
         """
-        if proto in ('igmp', 'icmp', 'ipv6-icmp'):
+        if proto.lower() in ('igmp', 'icmp', 'ipv6-icmp', 'arp'):
             return
 
         if not (sport == 0 or dport == 0):
@@ -1892,6 +1898,7 @@ class Module(Module, multiprocessing.Process):
                     self.check_connection_to_local_ip(
                         daddr,
                         dport,
+                        proto,
                         saddr,
                         profileid,
                         twid,

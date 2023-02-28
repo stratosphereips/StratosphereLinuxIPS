@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 7200
 
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
     - uses: actions/checkout@v3
@@ -74,7 +74,7 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
 
@@ -94,6 +94,7 @@ jobs:
         tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: false
 
+
     # use the built image to run unit tests inside docker
     # we ignore the blocking module unit tests because we cannot run
     # docker with -cap-add=NET_ADMIN and use iptables in GH actions
@@ -102,11 +103,15 @@ jobs:
       with:
         image: stratosphereips/slips:latest
         run: |
+          git reset --hard
           git pull & git checkout origin/develop
+          python3 -m pip install -r requirements.txt 
           redis-server --daemonize yes
+          git show-branch --no-name HEAD
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+          printf "0" | ./slips.py -k
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 

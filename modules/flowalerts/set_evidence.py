@@ -47,7 +47,7 @@ class Helper:
     def set_evidence_different_localnet_usage(
             self,
             daddr,
-            dport,
+            portproto,
             profileid,
             timestamp,
             twid,
@@ -81,7 +81,10 @@ class Helper:
                       f' {rev_direction} IP: {victim} '\
 
         if ip_outside_localnet == 'dstip':
-            description += f'on port: {dport}'
+            if 'arp' in portproto:
+                description += f'using ARP'
+            else:
+                description += f'on port: {portproto}'
 
         __database__.setEvidence(
             evidence_type,
@@ -350,12 +353,11 @@ class Helper:
             description += f'on destination port: {dport}'
 
         evidence_type = 'ConnectionToPrivateIP'
-        category = 'Recon.Scanning'
+        category = 'Recon'
         attacker_direction = 'srcip'
-        source_target_tag = 'Info'
         attacker = saddr
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 timestamp, category, profileid=profileid,
                                  twid=twid, uid=uid)
 
 
