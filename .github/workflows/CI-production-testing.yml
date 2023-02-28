@@ -103,8 +103,9 @@ jobs:
       with:
         image: stratosphereips/slips:latest
         run: |
+          git reset --hard
           git pull & git checkout origin/develop
-          redis-server --daemonize yes
+          echo "running tests .. "
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
