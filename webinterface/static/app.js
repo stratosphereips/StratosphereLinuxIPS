@@ -46,4 +46,13 @@ $('#button_choose_db').click(function(){
     window.location.reload();
 });
 
+function fetchDataDB() {
+    fetch("/info", {
+        method: "GET",
+        headers: headers2
+    }).then(response => response.json())
+        .then(data => {
+            document.getElementById("changedb_button").innerHTML = '<i class="fa fa-database"></i> ' + data['name'];
+        });
+}
 
