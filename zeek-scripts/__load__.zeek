@@ -8,6 +8,7 @@
 # Add SHA256 hash for files
 @load ./hash_sha256
 @load ./log_gw.zeek
+@load ./irc_feature_extractor.zeek
 
 ########################################
 ##! Local site policy. Customize as appropriate.
