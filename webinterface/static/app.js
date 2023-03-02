@@ -45,6 +45,41 @@ $('#button_choose_db').click(function(){
     $.get( link );
     window.location.reload();
 });
+function initializeWidgetsAndListeners() {
+    // Table with the list of databases. TODO: change it to dropdown?
+    $("#table_choose_redis").DataTable({
+        destroy: true,
+        searching: false,
+        ajax: '/redis',
+        "bInfo": false,
+        scrollY: "15vh",
+        paging: false,
+        select: true,
+        columns: [
+            { data: 'filename' },
+            { data: 'redis_port' }
+        ]
+    })
+
+    $('#modal_choose_redis').modal({
+        show: false,
+        backdrop: 'static',
+        keyboard: false
+    })
+
+    $('#modal_choose_redis').on('show.bs.modal', function (e) {
+        $('#table_choose_redis').DataTable().ajax.reload();
+    })
+
+    $('#button_choose_db').click(function () {
+        let chosen_db = $('#table_choose_redis').DataTable().row({ selected: true }).data()
+        $('#modal_choose_redis .close').click() // close modal by imitating the close button click. $('#myModal').hide() does not work
+        let link = "/db/" + chosen_db['redis_port']
+        $.get(link);
+        window.location.reload();
+    });
+
+}
 
 function fetchDataDB() {
     fetch("/info", {
