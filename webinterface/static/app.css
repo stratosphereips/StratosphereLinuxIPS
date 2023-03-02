@@ -10,4 +10,6 @@
     width: 100%;
     padding: 10px;
     text-decoration: none;
+#slips_custom_navbar .nav-link.active {
+    color: #0d6efd !important;
 }
