@@ -1,3 +1,4 @@
+
 maxminddb==2.2.0
 numpy==1.19.2
 watchdog==2.1.6
@@ -37,3 +38,6 @@ wheel
 flask
 tld
 tqdm
+dpkt
+repoze.lry
+sets
