@@ -62,6 +62,7 @@ class Main:
         self.proc_man = ProcessManager(self)
         self.checker = Checker(self)
         self.conf = ConfigParser()
+        self.version = self.conf.get_slips_version()
         self.args = self.conf.get_args()
         self.version = self.conf.get_slips_version()
         # in testing mode we manually set the following params
@@ -504,6 +505,7 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+
             self.print_version()
             print('https://stratosphereips.org')
             print('-' * 27)

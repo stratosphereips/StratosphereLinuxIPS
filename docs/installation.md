@@ -132,7 +132,7 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/
-	./slips.py -c config/slips.conf -f dataset/hide-and-seek-short.pcap
+	./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap
 
 Run slips with sudo to enable blocking (Optional) 
 

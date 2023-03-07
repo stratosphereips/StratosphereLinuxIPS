@@ -166,7 +166,7 @@ When running ./kalipso.sh, you will be prompted with the following
     To close all unused redis servers, run slips with --killall
     You have 3 open redis servers, Choose which one to use [1,2,3 etc..] 
     [1] wlp3s0 - port 55879
-    [2] dataset/hide-and-seek-short.pcap - port 59324
+    [2] dataset/test7-malicious.pcap - port 59324
 
 You can type 1 or 2 to view the corresponding file or interface in kalipso.
 
@@ -294,7 +294,7 @@ Slips uses redis to store analysis information. you can save your analysis for l
 
 For example:
 
-```sudo ./slips.py -f dataset/hide-and-seek-short.pcap -s```
+```sudo ./slips.py -f dataset/test7-malicious.pcap -s```
 
 Your .rdb saved database will be stored in the default output dir.
 
