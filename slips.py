@@ -21,14 +21,13 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
-from redisman import RedisManager
-from uiman import UIManager
-from metadataman import MetadataManager
-from procman import ProcessManager
+from redis_manager import RedisManager
+from ui_manager import UIManager
+from metadata_manager import MetadataManager
+from process_manager import ProcessManager
 from checker import Checker
 from style import green
 
-import static
 import signal
 import sys
 import os
@@ -64,6 +63,7 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.args = self.conf.get_args()
+        self.version = self.conf.get_slips_version()
         # in testing mode we manually set the following params
         if not testing:
             self.pid = os.getpid()
@@ -493,7 +493,7 @@ class Main:
             self.args.debug = 0
 
     def print_version(self):
-        slips_version = f'Slips. Version {green(static.version)}'
+        slips_version = f'Slips. Version {green(self.version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there

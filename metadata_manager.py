@@ -1,7 +1,6 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 
-import static
 import socket
 import psutil
 import sys
@@ -94,7 +93,7 @@ class MetadataManager:
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
         with open(self.info_path, 'w') as f:
-            f.write(f'Slips version: {static.version}\n'
+            f.write(f'Slips version: {self.main.version}\n'
                     f'File: {self.main.input_information}\n'
                     f'Branch: {branch}\n'
                     f'Commit: {commit}\n'
@@ -129,7 +128,7 @@ class MetadataManager:
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
 
         info = {
-            'slips_version': static.version,
+            'slips_version': self.main.version,
             'name': self.main.input_information,
             'analysis_start': now,
             'disabled_modules': json.dumps(to_ignore),
