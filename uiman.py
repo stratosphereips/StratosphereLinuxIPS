@@ -26,7 +26,7 @@ class UIManager:
             delattr(self, 'webinterface_return_value')
             return
 
-        self.print(f"Slips {green('web interface')} running on "
+        self.main.print(f"Slips {green('web interface')} running on "
                    f"http://localhost:55000/")
         delattr(self, 'webinterface_return_value')
     

@@ -15,7 +15,6 @@ from collections import OrderedDict
 class ProcessManager:
     def __init__(self, main):
         self.main = main
-        pass
 
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
