@@ -22,7 +22,10 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
+
 from redisman import RedisManager
+from uiman import UIManager
+from style import green
 
 import threading
 import signal
@@ -64,6 +67,7 @@ class Main:
         self.mode = 'interactive'
         # RedisManager is used to manager interactions with the Redis DB
         self.redis_man = RedisManager(terminate_slips=self.terminate_slips)
+        self.ui_man = UIManager(self)
         self.conf = ConfigParser()
         self.args = self.conf.get_args()
         # in testing mode we manually set the following params
@@ -114,78 +118,6 @@ class Main:
             if conn.laddr.port == port:
                 return psutil.Process(conn.pid).pid #.name()
         return None
-
-    def check_if_webinterface_started(self):
-        if not hasattr(self, 'webinterface_return_value'):
-            return
-
-        # now that the web interface had enough time to start,
-        # check if it successfully started or not
-        if self.webinterface_return_value.empty():
-            # to make sure this function is only executed once
-            delattr(self, 'webinterface_return_value')
-            return
-        if self.webinterface_return_value.get() != True:
-            # to make sure this function is only executed once
-            delattr(self, 'webinterface_return_value')
-            return
-
-        self.print(f"Slips {self.green('web interface')} running on "
-                   f"http://localhost:55000/")
-        delattr(self, 'webinterface_return_value')
-
-    def start_webinterface(self):
-        """
-        Starts the web interface shell script if -w is given
-        """
-        def detach_child():
-            """
-            Detach the web interface from the parent process group(slips.py), the child(web interface)
-             will no longer receive signals and should be manually killed in shutdown_gracefully()
-            """
-            os.setpgrp()
-
-        def run_webinterface():
-            # starting the wbeinterface using the shell script results in slips not being able to
-            # get the PID of the python proc started by the .sh scrip
-            command = ['python3', 'webinterface/app.py']
-            webinterface = subprocess.Popen(
-                command,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
-                stdin=subprocess.DEVNULL,
-                preexec_fn=detach_child
-            )
-            # self.webinterface_pid = webinterface.pid
-            __database__.store_process_PID('Web Interface', webinterface.pid)
-            # we'll assume that it started, and if not, the return value will immidiately change and this thread will
-            # print an error
-            self.webinterface_return_value.put(True)
-
-            # waits for process to terminate, so if no errors occur
-            # we will never get the return value of this thread
-            error = webinterface.communicate()[1]
-            if error:
-                # pop the True we just added
-                self.webinterface_return_value.get()
-                # set false as the return value of this thread
-                self.webinterface_return_value.put(False)
-
-                pid = self.get_pid_using_port(55000)
-                self.print (f"Web interface error:\n"
-                            f"{error.strip().decode()}\n"
-                            f"Port 55000 is used by PID {pid}")
-
-        # if theres's an error, this will be set to false, and the error will be printed
-        # otherwise we assume that the inetrface started
-        # self.webinterface_started = True
-        self.webinterface_return_value = Queue()
-        self.webinterface_thread = threading.Thread(
-            target=run_webinterface,
-            daemon=True,
-        )
-        self.webinterface_thread.start()
-        # we'll be checking the return value of this thread later
 
     def store_host_ip(self):
         """
@@ -340,9 +272,9 @@ class Main:
             )
             description = modules_to_call[module_name]['description']
             self.print(
-                f'\t\tStarting the module {self.green(module_name)} '
+                f'\t\tStarting the module {green(module_name)} '
                 f'({description}) '
-                f'[PID {self.green(module.pid)}]', 1, 0
+                f'[PID {green(module.pid)}]', 1, 0
                 )
         # give outputprocess time to print all the started modules
         time.sleep(0.5)
@@ -372,8 +304,8 @@ class Main:
             )
             logs_process.start()
             self.print(
-                f'Started {self.green("Logs Process")} '
-                f'[PID {self.green(logs_process.pid)}]', 1, 0
+                f'Started {green("Logs Process")} '
+                f'[PID {green(logs_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Logs', int(logs_process.pid)
@@ -382,24 +314,6 @@ class Main:
             # If self.args.nologfiles is False, then we don't want log files,
             # independently of what the conf says.
             logs_dir = False
-
-
-    def start_gui_process(self):
-        # Get the type of output from the parameters
-        # Several combinations of outputs should be able to be used
-        if self.args.gui:
-            # Create the curses thread
-            guiProcessQueue = Queue()
-            guiProcess = GuiProcess(
-                guiProcessQueue, self.outputqueue, self.args.verbose,
-                self.args.debug
-            )
-            __database__.store_process_PID(
-                'GUI',
-                int(guiProcess.pid)
-            )
-            guiProcess.start()
-            self.print('quiet')
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
@@ -550,15 +464,6 @@ class Main:
         if delete:
             shutil.rmtree(self.zeek_folder)
 
-    def green(self, txt):
-        """
-        returns the text in green
-        """
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
-        return f'{GREEN_s}{txt}{GREEN_e}'
-
-
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
         # all text printed in green should be wrapped in the following
@@ -567,8 +472,8 @@ class Main:
         # to vertically align them when printing
         module += ' ' * (20 - len(module))
         print(
-            f'\t{self.green(module)} \tStopped. '
-            f'{self.green(modules_left)} left.'
+            f'\t{green(module)} \tStopped. '
+            f'{green(modules_left)} left.'
         )
 
     def get_already_stopped_modules(self):
@@ -1258,7 +1163,7 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {self.green(version)}'
+        slips_version = f'Slips. Version {green(version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
@@ -1391,9 +1296,9 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-            self.print(f'Using redis server on port: {self.green(self.redis_port)}', 1, 0)
-            self.print(f'Started {self.green("Main")} process [PID {self.green(self.pid)}]', 1, 0)
-            self.print(f'Started {self.green("Output Process")} [PID {self.green(output_process.pid)}]', 1, 0)
+            self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
+            self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
+            self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
             # if slips is given a .rdb file, don't load the modules as we don't need them
@@ -1404,7 +1309,7 @@ class Main:
 
             # self.start_gui_process()
             if self.args.webinterface:
-                self.start_webinterface()
+                self.ui_man.start_webinterface()
 
             # call shutdown_gracefully on sigterm
             def sig_handler(sig, frame):
@@ -1424,8 +1329,8 @@ class Main:
             )
             evidence_process.start()
             self.print(
-                f'Started {self.green("Evidence Process")} '
-                f'[PID {self.green(evidence_process.pid)}]', 1, 0
+                f'Started {green("Evidence Process")} '
+                f'[PID {green(evidence_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Evidence',
@@ -1446,8 +1351,8 @@ class Main:
             )
             profiler_process.start()
             self.print(
-                f'Started {self.green("Profiler Process")} '
-                f'[PID {self.green(profiler_process.pid)}]', 1, 0
+                f'Started {green("Profiler Process")} '
+                f'[PID {green(profiler_process.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Profiler',
@@ -1473,8 +1378,8 @@ class Main:
             )
             inputProcess.start()
             self.print(
-                f'Started {self.green("Input Process")} '
-                f'[PID {self.green(inputProcess.pid)}]', 1, 0
+                f'Started {green("Input Process")} '
+                f'[PID {green(inputProcess.pid)}]', 1, 0
             )
             __database__.store_process_PID(
                 'Input Process',
@@ -1524,7 +1429,7 @@ class Main:
                 # if you remove the below logic anywhere before the above sleep() statement
                 # it will try to get the return value very quickly before
                 # the webinterface thread sets it
-                self.check_if_webinterface_started()
+                self.ui_man.check_if_webinterface_started()
 
                 modified_ips_in_the_last_tw, modified_profiles = self.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
