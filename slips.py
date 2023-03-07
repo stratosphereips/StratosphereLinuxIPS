@@ -22,11 +22,12 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
-
 from redisman import RedisManager
 from uiman import UIManager
+from metadataman import MetadataManager
 from style import green
 
+import static
 import threading
 import signal
 import sys
@@ -51,8 +52,6 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '1.0.2'
-
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 # Ignore warnings in general
@@ -68,6 +67,7 @@ class Main:
         # RedisManager is used to manager interactions with the Redis DB
         self.redis_man = RedisManager(terminate_slips=self.terminate_slips)
         self.ui_man = UIManager(self)
+        self.metadata_man = MetadataManager(self)
         self.conf = ConfigParser()
         self.args = self.conf.get_args()
         # in testing mode we manually set the following params
@@ -94,51 +94,6 @@ class Main:
             self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
         else:
             self.zeek_folder = f'zeek_files_{without_ext}/'
-
-    def get_host_ip(self):
-        """
-        Recognize the IP address of the machine
-        """
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(('1.1.1.1', 80))
-            ipaddr_check = s.getsockname()[0]
-            s.close()
-        except (socket.error):
-            # not connected to the internet
-            return None
-        return ipaddr_check
-
-    def get_pid_using_port(self, port):
-        """
-        Returns the PID of the process using the given port or False if no process is using it
-        """
-        port = int(port)
-        for conn in psutil.net_connections():
-            if conn.laddr.port == port:
-                return psutil.Process(conn.pid).pid #.name()
-        return None
-
-    def store_host_ip(self):
-        """
-        Store the host IP address if input type is interface
-        """
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
-        if not running_on_interface:
-            return
-
-        hostIP = self.get_host_ip()
-        while True:
-            try:
-                __database__.set_host_ip(hostIP)
-                break
-            except redis.exceptions.DataError:
-                self.print(
-                    'Not Connected to the internet. Reconnecting in 10s.'
-                )
-                time.sleep(10)
-                hostIP = self.get_host_ip()
-        return hostIP
 
     def create_folder_for_logs(self):
         """
@@ -328,50 +283,6 @@ class Main:
             # another instance of slips is updating ports and orgs
             return
 
-
-    def add_metadata(self):
-        """
-        Create a metadata dir output/metadata/ that has a copy of slips.conf, whitelist.conf, current commit and date
-        """
-        if not self.enable_metadata:
-            return
-
-        metadata_dir = os.path.join(self.args.output, 'metadata')
-        try:
-            os.mkdir(metadata_dir)
-        except FileExistsError:
-            # if the file exists it will be overwritten
-            pass
-
-        # Add a copy of slips.conf
-        config_file = self.args.config or 'config/slips.conf'
-        shutil.copy(config_file, metadata_dir)
-
-        # Add a copy of whitelist.conf
-        whitelist = self.conf.whitelist_path()
-        shutil.copy(whitelist, metadata_dir)
-
-        branch_info = utils.get_branch_info()
-        commit, branch = None, None
-        if branch_info != False:
-            # it's false when we're in docker because there's no .git/ there
-            commit, branch = branch_info[0], branch_info[1]
-
-        now = datetime.now()
-        now = utils.convert_format(now, utils.alerts_format)
-
-        self.info_path = os.path.join(metadata_dir, 'info.txt')
-        with open(self.info_path, 'w') as f:
-            f.write(f'Slips version: {version}\n'
-                    f'File: {self.input_information}\n'
-                    f'Branch: {branch}\n'
-                    f'Commit: {commit}\n'
-                    f'Slips start date: {now}\n'
-                    )
-
-        print(f'[Main] Metadata added to {metadata_dir}')
-        return self.info_path
-
     def kill(self, module_name, INT=False):
         sig = signal.SIGINT if INT else signal.SIGKILL
         try:
@@ -505,23 +416,6 @@ class Main:
         )
         return True
 
-    def set_analysis_end_date(self):
-        """
-        Add the analysis end date to the metadata file and
-        the db for the web inerface to display
-        """
-        self.enable_metadata = self.conf.enable_metadata()
-        end_date = utils.convert_format(datetime.now(), utils.alerts_format)
-        __database__.set_input_metadata({'analysis_end': end_date})
-        if self.enable_metadata:
-            # add slips end date in the metadata dir
-            try:
-                with open(self.info_path, 'a') as f:
-                    f.write(f'Slips end date: {end_date}\n')
-            except (NameError, AttributeError):
-                pass
-        return end_date
-
     def should_kill_all_modules(self, function_start_time, wait_for_modules_to_finish) -> bool:
         """
         checks if x minutes has passed since the start of the function
@@ -550,7 +444,7 @@ class Main:
             __database__.check_TW_to_close(close_all=True)
 
             # set analysis end date
-            end_date = self.set_analysis_end_date()
+            end_date = self.metadata_man.set_analysis_end_date()
 
             start_time = __database__.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
@@ -693,7 +587,7 @@ class Main:
             os._exit(-1)
         except KeyboardInterrupt:
             return False
-
+    
     def is_debugger_active(self) -> bool:
         """Return if the debugger is currently active"""
         gettrace = getattr(sys, 'gettrace', lambda: None)
@@ -1079,41 +973,6 @@ class Main:
             print("Can't use -s and -d together")
             self.terminate_slips()
 
-    def set_input_metadata(self):
-        """
-        save info about name, size, analysis start date in the db
-        """
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
-        to_ignore = self.conf.get_disabled_modules(self.input_type)
-
-        info = {
-            'slips_version': version,
-            'name': self.input_information,
-            'analysis_start': now,
-            'disabled_modules': json.dumps(to_ignore),
-            'output_dir': self.args.output,
-            'input_type': self.input_type,
-        }
-
-        if hasattr(self, 'zeek_folder'):
-            info.update({
-                'zeek_dir': self.zeek_folder
-            })
-
-        size_in_mb = '-'
-        if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
-            size = os.stat(self.args.filepath).st_size
-            size_in_mb = float(size) / (1024 * 1024)
-            size_in_mb = format(float(size_in_mb), '.2f')
-
-        info.update({
-            'size_in_MB': size_in_mb,
-        })
-        # analysis end date will be set in shutdown_gracefully
-        # file(pcap,netflow, etc.) start date will be set in
-        __database__.set_input_metadata(info)
-
-
     def setup_print_levels(self):
         """
         setup debug and verose levels
@@ -1163,47 +1022,13 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {green(version)}'
+        slips_version = f'Slips. Version {green(static.version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
         print(slips_version)
-
-
-    def check_if_port_is_in_use(self, port):
-        if port == 6379:
-            # even if it's already in use, slips will override it
-            return False
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.bind(("localhost", port))
-            return False
-        except OSError:
-            print(f"[Main] Port {port} already is use by another process."
-                  f" Choose another port using -P <portnumber> \n"
-                  f"Or kill your open redis ports using: ./slips.py -k ")
-            self.terminate_slips()
-
-    def update_slips_running_stats(self):
-        """
-        updates the number of processed ips, slips internal time, and modified tws so far in the db
-        """
-        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
-
-        # Get the amount of modified profiles since we last checked
-        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
-            slips_internal_time
-        )
-        modified_ips_in_the_last_tw = len(modified_profiles)
-        __database__.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
-        # Get the time of last modified timewindow and set it as a new
-        if last_modified_tw_time != 0:
-            __database__.setSlipsInternalTime(
-                last_modified_tw_time
-            )
-        return modified_ips_in_the_last_tw, modified_profiles
 
     def start(self):
         """Main Slips Function"""
@@ -1232,7 +1057,7 @@ class Main:
             if self.args.port:
                 self.redis_port = int(self.args.port)
                 # close slips if port is in use
-                self.check_if_port_is_in_use(self.redis_port)
+                self.metadata_man.check_if_port_is_in_use(self.redis_port)
             elif self.args.multiinstance:
                 self.redis_port = self.redis_man.get_random_redis_port()
                 if not self.redis_port:
@@ -1360,10 +1185,7 @@ class Main:
             )
 
             self.c1 = __database__.subscribe('finished_modules')
-            self.enable_metadata = self.conf.enable_metadata()
-
-            if self.enable_metadata:
-                self.info_path = self.add_metadata()
+            self.metadata_man.enable_metadata()
 
             inputProcess = InputProcess(
                 self.outputqueue,
@@ -1386,7 +1208,7 @@ class Main:
                 int(inputProcess.pid)
             )
             self.zeek_folder = inputProcess.zeek_folder
-            self.set_input_metadata()
+            self.metadata_man.set_input_metadata()
 
             if self.conf.use_p2p() and not self.args.interface:
                 self.print('Warning: P2P is only supported using an interface. Disabled P2P.')
@@ -1400,7 +1222,7 @@ class Main:
                     f'Run Slips with --killall to stop them.'
                 )
 
-            hostIP = self.store_host_ip()
+            hostIP = self.metadata_man.store_host_ip()
 
             # Check every 5 secs if we should stop slips or not
             sleep_time = 5
@@ -1431,7 +1253,7 @@ class Main:
                 # the webinterface thread sets it
                 self.ui_man.check_if_webinterface_started()
 
-                modified_ips_in_the_last_tw, modified_profiles = self.update_slips_running_stats()
+                modified_ips_in_the_last_tw, modified_profiles = self.metadata_man.update_slips_running_stats()
                 # for input of type : pcap, interface and growing zeek directories, we prin the stats using slips.py
                 # for other files, we prin a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
@@ -1452,7 +1274,7 @@ class Main:
                 if is_interface and hostIP not in modified_profiles:
                     # In interface we keep track of the host IP. If there was no
                     # modified TWs in the host IP, we check if the network was changed.
-                    if hostIP := self.get_host_ip():
+                    if hostIP := self.metadata_man.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
                 # these are the cases where slips should be running non-stop
