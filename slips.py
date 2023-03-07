@@ -78,6 +78,24 @@ class Main:
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
 
+    def check_zeek_or_bro(self):
+        """
+        Check if we have zeek or bro
+        """
+        self.main.zeek_bro = None
+        if self.main.input_type not in ('pcap', 'interface'):
+            return False
+
+        if shutil.which('zeek'):
+            self.main.zeek_bro = 'zeek'
+        elif shutil.which('bro'):
+            self.main.zeek_bro = 'bro'
+        else:
+            print('Error. No zeek or bro binary found.')
+            self.main.terminate_slips()
+            return False
+
+        return self.main.zeek_bro
 
     def prepare_zeek_output_dir(self):
         from pathlib import Path

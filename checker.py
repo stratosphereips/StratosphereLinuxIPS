@@ -7,26 +7,7 @@ import subprocess
 class Checker:
     def __init__(self, main):
         self.main = main
-    
-    def check_zeek_or_bro(self):
-        """
-        Check if we have zeek or bro
-        """
-        self.main.zeek_bro = None
-        if self.main.input_type not in ('pcap', 'interface'):
-            return False
 
-        if shutil.which('zeek'):
-            self.main.zeek_bro = 'zeek'
-        elif shutil.which('bro'):
-            self.main.zeek_bro = 'bro'
-        else:
-            print('Error. No zeek or bro binary found.')
-            self.main.terminate_slips()
-            return False
-
-        return self.main.zeek_bro
-    
     def check_input_type(self) -> tuple:
         """
         returns line_type, input_type, input_information
