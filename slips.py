@@ -72,7 +72,7 @@ class Main:
                 # Check the type of input
                 self.input_type, self.input_information, self.line_type = self.checker.check_input_type()
                 # If we need zeek (bro), test if we can run it.
-                self.checker.check_zeek_or_bro()
+                self.check_zeek_or_bro()
                 self.prepare_output_dir()
                 # this is the zeek dir slips will be using
                 self.prepare_zeek_output_dir()
@@ -82,20 +82,20 @@ class Main:
         """
         Check if we have zeek or bro
         """
-        self.main.zeek_bro = None
-        if self.main.input_type not in ('pcap', 'interface'):
+        self.zeek_bro = None
+        if self.input_type not in ('pcap', 'interface'):
             return False
 
         if shutil.which('zeek'):
-            self.main.zeek_bro = 'zeek'
+            self.zeek_bro = 'zeek'
         elif shutil.which('bro'):
-            self.main.zeek_bro = 'bro'
+            self.zeek_bro = 'bro'
         else:
             print('Error. No zeek or bro binary found.')
-            self.main.terminate_slips()
+            self.terminate_slips()
             return False
 
-        return self.main.zeek_bro
+        return self.zeek_bro
 
     def prepare_zeek_output_dir(self):
         from pathlib import Path
