@@ -47,7 +47,6 @@ from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
 
-version = '1.0.2'
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -66,6 +65,7 @@ class Main:
         self.start_port = 32768
         self.end_port = 32850
         self.conf = ConfigParser()
+        self.version = self.conf.get_slips_version()
         self.args = self.conf.get_args()
         # in testing mode we manually set the following params
         if not testing:
@@ -573,8 +573,9 @@ class Main:
         now = utils.convert_format(now, utils.alerts_format)
 
         self.info_path = os.path.join(metadata_dir, 'info.txt')
+
         with open(self.info_path, 'w') as f:
-            f.write(f'Slips version: {version}\n'
+            f.write(f'Slips version: {self.version}\n'
                     f'File: {self.input_information}\n'
                     f'Branch: {branch}\n'
                     f'Commit: {commit}\n'
@@ -1534,7 +1535,7 @@ class Main:
         to_ignore = self.conf.get_disabled_modules(self.input_type)
 
         info = {
-            'slips_version': version,
+            'slips_version': self.version,
             'name': self.input_information,
             'analysis_start': now,
             'disabled_modules': json.dumps(to_ignore),
@@ -1610,7 +1611,7 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {self.green(version)}'
+        slips_version = f'Slips. Version {self.green(self.version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
@@ -1655,6 +1656,7 @@ class Main:
     def start(self):
         """Main Slips Function"""
         try:
+
             self.print_version()
             print('https://stratosphereips.org')
             print('-' * 27)

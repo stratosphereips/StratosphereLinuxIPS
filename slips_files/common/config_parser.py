@@ -84,6 +84,12 @@ class ConfigParser(object):
             return float(threshold)
         except Exception as ex:
             return 5
+    def get_slips_version(self):
+        version = self.read_configuration(
+            'version', 'slips_version', ''
+        )
+
+        return version
 
 
     def get_pastebin_download_threshold(self):
