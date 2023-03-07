@@ -168,6 +168,6 @@ modules/flowmldetection/scaler.bin
 modules/flowmldetection/model.bin
 databases/macaddress-db.json
 modules/flowmldetection/model.bin
-output/
 a_create_container.sh
 b_run_test.sh
+output/
