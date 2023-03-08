@@ -1334,7 +1334,7 @@ class Main:
         cmd_result = cmd_result.stdout.decode('utf-8')
         if 'pcap' in cmd_result:
             input_type = 'pcap'
-        elif 'dBase' in cmd_result:
+        elif 'dBase' in cmd_result or 'nfcap' in input_information or 'nfdump' in input_information:
             input_type = 'nfdump'
             if shutil.which('nfdump') is None:
                 # If we do not have nfdump, terminate Slips.
