@@ -10,7 +10,7 @@ import os
 import subprocess
 import json
 import traceback
-
+import shutil
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -275,7 +275,12 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"Error compiling {yara_rule}.")
                 return False
         return True
-
+    def delete_compiled_rules(self):
+        """
+        delete old YARA compiled rules when a new version of yara is being used
+        """
+        shutil.rmtree(self.compiled_yara_rules_path)
+        os.mkdir(self.compiled_yara_rules_path)
 
     def find_matches(self):
         """Run yara rules on the given pcap and find matches"""
@@ -296,8 +301,14 @@ class Module(Module, multiprocessing.Process):
             lines, error = yara_proc.communicate()
             lines = lines.decode()
             if error:
-                self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
-                return
+                if b'rules were compiled with a different version of YARA' in error.strip():
+                    self.delete_compiled_rules()
+                    # will re-compile and save rules again and try to find matches
+                    self.run()
+                else:
+                    self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
+                    return
+
             if not lines:
                 # no match
                 return
