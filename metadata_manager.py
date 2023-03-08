@@ -126,7 +126,6 @@ class MetadataManager:
         """
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
-
         info = {
             'slips_version': self.main.version,
             'name': self.main.input_information,
@@ -136,7 +135,7 @@ class MetadataManager:
             'input_type': self.main.input_type,
         }
 
-        if hasattr(self, 'zeek_folder'):
+        if hasattr(self.main, 'zeek_folder'):
             info.update({
                 'zeek_dir': self.main.zeek_folder
             })

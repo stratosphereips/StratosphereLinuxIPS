@@ -54,7 +54,7 @@ class ProcessManager:
             stop_msg = 'stop_process'
             self.main.profilerProcessQueue.put(stop_msg)
             self.main.outputqueue.put(stop_msg)
-            if hasattr(self, 'logsProcessQueue'):
+            if hasattr(self.main, 'logsProcessQueue'):
                 self.logsProcessQueue.put(stop_msg)
     
     def get_modules(self, to_ignore):
