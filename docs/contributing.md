@@ -53,7 +53,7 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 2. In your clone, checkout origin/develop: ```git checkout origin develop```
 3. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
 4. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
-5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```python3 tests/run_all_tests```
+5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
 6. If some tests didn't pass, it means you need to fix something in your branch. 
 7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>``` 
 8. Open a PR in Slips, remember to set the base branch as develop.
