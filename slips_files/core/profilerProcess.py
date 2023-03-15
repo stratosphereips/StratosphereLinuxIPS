@@ -1659,11 +1659,12 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
         """
-
+        print(f"@@@@@@@@@@@@@@@@@@ add_flow_to_profile is called")
         try:
             if not self.is_supported_flow():
+                print(f"@@@@@@@@@@@@@@@@@@  not a supported flow")
                 return False
-
+            print(f"@@@@@@@@@@@@@@@@@@  is a supported flow")
             self.uid = self.get_uid()
             self.flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
