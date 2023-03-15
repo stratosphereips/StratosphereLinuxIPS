@@ -544,7 +544,7 @@ class ProfilerProcess(multiprocessing.Process):
         line = new_line['data']
         file_type = new_line['type']
         # all zeek lines recieved from stdin should be of type conn
-        if file_type == 'stdin' and new_line.get('line_type', False) == 'zeek':
+        if file_type in ('stdin', 'cyst') and new_line.get('line_type', False) == 'zeek':
             file_type = 'conn'
         else:
             # if the zeek dir given to slips has 'conn' in it's name,
