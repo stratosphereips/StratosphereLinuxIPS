@@ -20,6 +20,7 @@ from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 import sys
 import os
+import socket
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
@@ -429,13 +430,14 @@ class InputProcess(multiprocessing.Process):
             if line == '\n':
                 continue
 
-            # slips supports zeek json only, tabs arent supported
+            # slips supports reading zeek  json conn.log only using stdin, tabs aren't supported
             if self.line_type == 'zeek':
                 try:
                     line = json.loads(line)
                 except json.decoder.JSONDecodeError:
                     self.print(f'Invalid json line')
                     continue
+
             line_info = {
                 'type': 'stdin',
                 'line_type': self.line_type,
@@ -491,6 +493,7 @@ class InputProcess(multiprocessing.Process):
         try:
             total_flows = self.get_flows_number(self.given_path)
             __database__.set_input_metadata({'total_flows': total_flows})
+
             with open(self.given_path) as file_stream:
                 for t_line in file_stream:
                     line = {
@@ -509,9 +512,14 @@ class InputProcess(multiprocessing.Process):
             return True
 
     def handle_zeek_log_file(self):
+        """
+        Handles conn.log files given to slips directly, and conn.log flows given to slips through CYST unix socket.
+        """
         try:
-            total_flows = self.get_flows_number(self.given_path)
-            __database__.set_input_metadata({'total_flows': total_flows})
+            if os.path.exists(self.given_path):
+                # in case of CYST flows, the given path is cyst and there's no way to get the total flows
+                total_flows = self.get_flows_number(self.given_path)
+                __database__.set_input_metadata({'total_flows': total_flows})
 
             try:
                 file_name_without_extension = self.given_path[: self.given_path.index('.log')]
@@ -744,6 +752,69 @@ class InputProcess(multiprocessing.Process):
         if error:
             self.print (f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
 
+    def handle_cyst(self):
+        """
+        Read flows sent by the CYST simulation framework from the unix socket
+        Supported flows are of type zeek conn log
+        """
+        print(f"@@@@@@@@@@@@@@@@@@  handle_cyst is called")
+        # slips supports reading zeek  json conn.log only using CYST
+        if self.line_type != 'zeek':
+            return
+
+        cyst_UDS = '/tmp/slips'
+
+        # Create a UDS socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+        print(f"@@@@@@@@@ connecting to {cyst_UDS}")
+        #todo cyst has to start before slips to init teh socket
+        try:
+            sock.connect(cyst_UDS)
+        except (socket.error) as msg:
+            self.print (f"Problem connecting to cyst socket: {msg}", 0, 1)
+            return
+
+        print(f"@@@@@@@@@@@@@@@@@@  done connecting ")
+        try:
+            while True:
+                # todo when to break?
+                print(f"@@@@@@@@@@@@@@@@@@  waiting for cyst to send a flow")
+
+                # json serialized flow
+                flow: str = sock.recv(10000).decode()
+                print(f"@@@@@@@@@@@ receiveddd {flow} self.line_type: {self.line_type}")
+
+                try:
+                    flow = json.loads(flow)
+                except json.decoder.JSONDecodeError:
+                    self.print(f'Invalid json line received from CYST.')
+                    continue
+
+                line_info = {
+                    'type': 'cyst',
+                    'line_type': self.line_type,
+                    'data' : flow
+                }
+                self.print(f'	> Sent Line: {line_info}', 0, 3)
+                self.profilerqueue.put(line_info)
+                self.lines += 1
+                self.print('Done reading 1 CYST flow.\n ', 0, 3)
+
+                time.sleep(2)
+
+            # TODO: Send data back to cyst
+            # message = b'[slips] alert alert'
+            #
+            # sock.sendall(message)
+
+        finally:
+            print('closing socket')
+            sock.close()
+
+
+
+
 
     def run(self):
         utils.drop_root_privs()
@@ -780,6 +851,8 @@ class InputProcess(multiprocessing.Process):
                 self.handle_pcap_and_interface()
             elif self.input_type == 'suricata':
                 self.handle_suricata()
+            elif self.input_type == 'cyst':
+                self.handle_cyst()
             else:
                 # if self.input_type is 'file':
                 # default value

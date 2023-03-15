@@ -105,7 +105,7 @@ class UpdateFileManager:
             with open(feeds_path, 'r') as feeds_file:
                 feeds = feeds_file.read()
         except FileNotFoundError:
-            self.print(f"Error finding {feeds_path}. Feeds won't be added to slips.")
+            self.print(f"Error finding {feeds_path}. Feed won't be added to slips.")
             return {}
 
         # this dict will contain every link and its threat_level
