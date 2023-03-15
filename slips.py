@@ -520,6 +520,52 @@ class Main:
         print(slips_version)
 
 
+    def check_if_port_is_in_use(self, port):
+        if port == 6379:
+            # even if it's already in use, slips will override it
+            return False
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.bind(("localhost", port))
+            return False
+        except OSError:
+            print(f"[Main] Port {port} already is use by another process."
+                  f" Choose another port using -P <portnumber> \n"
+                  f"Or kill your open redis ports using: ./slips.py -k ")
+            self.terminate_slips()
+
+    def update_slips_running_stats(self):
+        """
+        updates the number of processed ips, slips internal time, and modified tws so far in the db
+        """
+        slips_internal_time = float(__database__.getSlipsInternalTime()) + 1
+
+        # Get the amount of modified profiles since we last checked
+        modified_profiles, last_modified_tw_time = __database__.getModifiedProfilesSince(
+            slips_internal_time
+        )
+        modified_ips_in_the_last_tw = len(modified_profiles)
+        __database__.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
+        # Get the time of last modified timewindow and set it as a new
+        if last_modified_tw_time != 0:
+            __database__.setSlipsInternalTime(
+                last_modified_tw_time
+            )
+        return modified_ips_in_the_last_tw, modified_profiles
+
+    def should_run_non_stop(self) -> bool:
+        """
+        determines if slips shouldn't terminate because by defualt,
+        it terminates when there's no moreincoming flows
+        """
+        # these are the cases where slips should be running non-stop
+        if (
+                self.is_debugger_active()
+                or self.input_type in ('stdin','cyst')
+                or is_interface
+        ):
+            return True
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -759,8 +805,7 @@ class Main:
                     if hostIP := self.metadata_man.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
-                # these are the cases where slips should be running non-stop
-                if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
+                if self.should_run_non_stop():
                     continue
 
                 # Reaches this point if we're running Slips on a file.
