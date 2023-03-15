@@ -1390,7 +1390,7 @@ class Main:
         """
         returns line_type, input_type, input_information
         supported input types are:
-            interface, argus, suricata, zeek, nfdump, db
+            interface, argus, suricata, zeek, nfdump, redis db
         supported self.input_information:
             given filepath, interface or type of line given in stdin
         """
@@ -1407,6 +1407,12 @@ class Main:
             self.load_db()
             return
 
+        if self.args.CYST:
+            input_information = 'cyst'
+            input_type = 'cyst'
+            line_type = 'zeek'
+            return input_type, input_information, line_type
+
         if not self.args.filepath:
             print('[Main] You need to define an input source.')
             sys.exit(-1)
@@ -1415,6 +1421,7 @@ class Main:
         if os.path.exists(input_information):
             input_type = self.get_input_file_type(input_information)
         else:
+            # -f zeek is used to read zeek flows from stdin
             input_type, line_type = self.handle_flows_from_stdin(
                 input_information
             )
