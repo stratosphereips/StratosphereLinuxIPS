@@ -113,9 +113,9 @@ class ProfilerProcess(multiprocessing.Process):
                 self.print('\tProblem in define_type()', 0, 1)
                 return False
 
-            if file_type == 'stdin':
+            if file_type in ('stdin', 'cyst'):
                 # don't determine the type of line given using define_type(),
-                # the type of line is taken directly from the user
+                # the type of line is taken directly from the user or from CYST
                 # because define_type expects zeek lines in a certain format and the user won't reformat the zeek line
                 # before giving it to slips
                 self.input_type = line['line_type']
