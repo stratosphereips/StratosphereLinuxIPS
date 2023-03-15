@@ -280,6 +280,13 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help='Print Slips Version',
         )
+        self.add_argument(
+            '-C',
+            '--CYST',
+            action='store_true',
+            required=False,
+            help='Read flows from CYST simulation framework.',
+        )
         try:
             self.add_argument(
                 '-h', '--help', action='store_true', help='command line help',
