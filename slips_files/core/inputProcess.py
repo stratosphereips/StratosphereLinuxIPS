@@ -858,7 +858,6 @@ class InputProcess(multiprocessing.Process):
         # Create a UDS socket
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 
-        print(f"@@@@@@@@@ connecting to {cyst_UDS}")
         #todo cyst has to start before slips to init teh socket
         try:
             sock.connect(cyst_UDS)
@@ -866,42 +865,31 @@ class InputProcess(multiprocessing.Process):
             self.print (f"Problem connecting to cyst socket: {msg}", 0, 1)
             return
 
-        print(f"@@@@@@@@@@@@@@@@@@  done connecting ")
-        try:
-            while True:
-                # todo when to break?
-                print(f"@@@@@@@@@@@@@@@@@@  waiting for cyst to send a flow")
+        while True:
+            # todo when to break?
 
-                # json serialized flow
-                flow: str = sock.recv(10000).decode()
-                print(f"@@@@@@@@@@@ receiveddd {flow} self.line_type: {self.line_type}")
+            # json serialized flow
+            flow: str = sock.recv(10000).decode()
 
-                try:
-                    flow = json.loads(flow)
-                except json.decoder.JSONDecodeError:
-                    self.print(f'Invalid json line received from CYST.')
-                    continue
+            try:
+                flow = json.loads(flow)
+            except json.decoder.JSONDecodeError:
+                self.print(f'Invalid json line received from CYST.')
+                continue
 
-                line_info = {
-                    'type': 'cyst',
-                    'line_type': self.line_type,
-                    'data' : flow
-                }
-                self.print(f'	> Sent Line: {line_info}', 0, 3)
-                self.profilerqueue.put(line_info)
-                self.lines += 1
-                self.print('Done reading 1 CYST flow.\n ', 0, 3)
+            line_info = {
+                'type': 'cyst',
+                'line_type': self.line_type,
+                'data' : flow
+            }
+            self.print(f'	> Sent Line: {line_info}', 0, 3)
+            self.profilerqueue.put(line_info)
+            self.lines += 1
+            self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
-                time.sleep(2)
+            time.sleep(2)
 
-            # TODO: Send data back to cyst
-            # message = b'[slips] alert alert'
-            #
-            # sock.sendall(message)
-
-        finally:
-            print('closing socket')
-            sock.close()
+        sock.close()
 
 
 
