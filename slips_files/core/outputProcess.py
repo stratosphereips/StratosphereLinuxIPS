@@ -261,7 +261,7 @@ class OutputProcess(multiprocessing.Process):
         initializes the progress bar when slips is runnning on a file or a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
         """
-        if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
+        if __database__.get_input_type() in ('pcap', 'interface', 'cyst', 'stdin') or '-g' in sys.argv:
             # we don't know how to get the total number of flows slips is going to process, because they're growing
             return
         if self.stdout != '':
