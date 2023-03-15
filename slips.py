@@ -1660,6 +1660,19 @@ class Main:
             )
         return modified_ips_in_the_last_tw, modified_profiles
 
+    def should_run_non_stop(self) -> bool:
+        """
+        determines if slips shouldn't terminate because by defualt,
+        it terminates when there's no moreincoming flows
+        """
+        # these are the cases where slips should be running non-stop
+        if (
+                self.is_debugger_active()
+                or self.input_type in ('stdin','cyst')
+                or is_interface
+        ):
+            return True
+
     def start(self):
         """Main Slips Function"""
         try:
@@ -1911,8 +1924,7 @@ class Main:
                     if hostIP := self.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
-                # these are the cases where slips should be running non-stop
-                if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
+                if self.should_run_non_stop():
                     continue
 
                 # Reaches this point if we're running Slips on a file.
