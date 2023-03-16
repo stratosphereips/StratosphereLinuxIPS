@@ -43,7 +43,13 @@ class CYST():
         returns True, flow_dict if the flow was received
         and Tuple(False, Error_msg) if there was an error
         """
-        flow: str = self.sock.recv(10000).decode()
+        try:
+            self.sock.settimeout(5)
+            flow: str = self.sock.recv(10000).decode()
+        except ConnectionResetError:
+            msg = f'Connection reset by CYST.'
+            return False, msg
+
         try:
             flow = json.loads(flow)
         except json.decoder.JSONDecodeError:
