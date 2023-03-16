@@ -195,7 +195,7 @@ class EvidenceProcess(multiprocessing.Process):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
 
-    def addDataToJSONFile(self, IDEA_dict: dict, all_uids):
+    def add_to_json_log_file(self, IDEA_dict: dict, all_uids):
         """
         Add a new evidence line to our alerts.json file in json IDEA format.
         :param IDEA_dict: dict containing 1 alert
@@ -214,7 +214,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.print('Error in addDataToJSONFile()')
             self.print(traceback.print_exc(), 0, 1)
 
-    def addDataToLogFile(self, data):
+    def add_to_log_file(self, data):
         """
         Add a new evidence line to the alerts.log and other log files if logging is enabled.
         """
@@ -428,7 +428,7 @@ class EvidenceProcess(multiprocessing.Process):
         msg += f'given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
 
         # log in alerts.log
-        self.addDataToLogFile(msg)
+        self.add_to_log_file(msg)
 
         # log the alert
         blocked_srcip_dict = {
@@ -446,7 +446,7 @@ class EvidenceProcess(multiprocessing.Process):
         IDEA_dict['Category'] = 'Alert'
         IDEA_dict['Attach'][0]['Content'] = msg
         # add to alerts.json
-        self.addDataToJSONFile(IDEA_dict, [])
+        self.add_to_json_log_file(IDEA_dict, [])
 
 
     def shutdown_gracefully(self):
@@ -669,14 +669,18 @@ class EvidenceProcess(multiprocessing.Process):
                     alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
 
                     # Add the evidence to the log files
-                    self.addDataToLogFile(alert_to_log)
+                    self.add_to_log_file(alert_to_log)
                     # add to alerts.json
-                    self.addDataToJSONFile(IDEA_dict, all_uids)
+                    self.add_to_json_log_file(IDEA_dict, all_uids)
+
                     # if -l is given
                     self.add_to_log_folder(IDEA_dict)
 
                     __database__.set_evidence_for_profileid(IDEA_dict)
                     __database__.publish('report_to_peers', json.dumps(data))
+                    # export to cyst if it's running
+                    __database__.publish('new_json_evidence', json.dumps(IDEA_dict))
+
 
                     #
                     # Analysis of evidence for blocking or not
