@@ -17,6 +17,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
+from modules.CYST.cyst import cyst
 import multiprocessing
 import sys
 import os
@@ -673,6 +674,9 @@ class InputProcess(multiprocessing.Process):
         if hasattr(self, 'zeek_pid'):
             __database__.publish('finished_modules', 'Zeek')
 
+        if hasattr(self, 'CYST'):
+            cyst.close_connection()
+
         __database__.publish('finished_modules', self.name)
 
     def run_zeek(self):
@@ -757,34 +761,26 @@ class InputProcess(multiprocessing.Process):
         Read flows sent by the CYST simulation framework from the unix socket
         Supported flows are of type zeek conn log
         """
-        print(f"@@@@@@@@@@@@@@@@@@  handle_cyst is called")
         # slips supports reading zeek  json conn.log only using CYST
         if self.line_type != 'zeek':
             return
 
-        cyst_UDS = '/tmp/slips'
-
-        # Create a UDS socket
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-
-        #todo cyst has to start before slips to init teh socket
-        try:
-            sock.connect(cyst_UDS)
-        except (socket.error) as msg:
-            self.print (f"Problem connecting to cyst socket: {msg}", 0, 1)
+        connected, error = cyst.connect()
+        if not connected:
+            self.print(error)
             return
+
+        # so we can close the connection later in shutdown_gracefully
+        self.CYST = True
 
         while True:
             # todo when to break?
-
-            # json serialized flow
-            flow: str = sock.recv(10000).decode()
-
-            try:
-                flow = json.loads(flow)
-            except json.decoder.JSONDecodeError:
-                self.print(f'Invalid json line received from CYST.')
+            flow, error = cyst.get_flow()
+            if not flow:
+                print(error)
+                time.sleep(2)
                 continue
+
 
             line_info = {
                 'type': 'cyst',
@@ -797,10 +793,6 @@ class InputProcess(multiprocessing.Process):
             self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
             time.sleep(2)
-
-        sock.close()
-
-
 
 
 
