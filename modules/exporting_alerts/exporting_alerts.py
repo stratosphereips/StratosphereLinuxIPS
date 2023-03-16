@@ -79,10 +79,6 @@ class Module(Module, multiprocessing.Process):
             # push delay doesnt exist -> running using file not interface -> only push to taxii server once before
             # stopping
 
-        if 'cyst' in __database__.get_input_type():
-            # slips started with --CYST
-            self.cyst_UDS = __database__.get_cyst_UDS()
-
 
 
     def get_slack_token(self):
