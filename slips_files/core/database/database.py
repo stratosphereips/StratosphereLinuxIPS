@@ -59,7 +59,8 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_gopy',
         'report_to_peers',
         'new_tunnel',
-        'new_json_evidence'
+        'new_json_evidence',
+        'new_cyst_flow'
     }
 
     """ Database object management """
