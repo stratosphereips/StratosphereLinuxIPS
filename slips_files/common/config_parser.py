@@ -722,8 +722,6 @@ class ConfigParser(object):
         if (
                 'stix' not in export_to
                 and 'slack' not in export_to
-                and '--CYST' not in sys.argv
-                and '-C' not in sys.argv
         ):
             to_ignore.append('exporting_alerts')
 
