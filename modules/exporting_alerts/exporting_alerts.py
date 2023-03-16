@@ -43,7 +43,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('export_evidence')
         self.c2 = __database__.subscribe('new_json_evidence')
-
+        self.is_connected_to_cyst = False
         self.read_configuration()
         if 'slack' in self.export_to:
             self.get_slack_token()
@@ -359,6 +359,10 @@ class Module(Module, multiprocessing.Process):
 
 
                 if '-C' in sys.argv or '--CYST' in sys.argv:
+                    if not self.is_connected_to_cyst:
+                        cyst.connect()
+                        self.is_connected_to_cyst = True
+
                     msg = __database__.get_message(self.c2)
                     if msg and msg['data'] == 'stop_process':
                         self.shutdown_gracefully()
