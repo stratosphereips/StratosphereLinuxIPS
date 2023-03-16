@@ -59,6 +59,7 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_gopy',
         'report_to_peers',
         'new_tunnel',
+        'new_json_evidence'
     }
 
     """ Database object management """
@@ -419,7 +420,7 @@ class Database(ProfilingFlowsDatabase, object):
             if user_agent not in user_agents:
                 user_agents.append(user_agent)
                 self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
-                
+
     def add_software_to_profile(
         self, profileid, flow
     ):
