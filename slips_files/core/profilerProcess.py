@@ -1534,9 +1534,6 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
-        # print(f"@@@@@@@@@@@@@@@@@@  self.column_values['type']")
-        import pprint
-        pprint.pp(self.column_values)
 
         supported_types = (
             'ssh',
@@ -1662,12 +1659,10 @@ class ProfilerProcess(multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
         """
-        print(f"@@@@@@@@@@@@@@@@@@ add_flow_to_profile is called")
         try:
             if not self.is_supported_flow():
-                print(f"@@@@@@@@@@@@@@@@@@  not a supported flow")
                 return False
-            print(f"@@@@@@@@@@@@@@@@@@  is a supported flow")
+
             self.uid = self.get_uid()
             self.flow_type = self.column_values['type']
             self.saddr = self.column_values['saddr']
@@ -1718,6 +1713,9 @@ class ProfilerProcess(multiprocessing.Process):
                 if self.analysis_direction == 'all':
                     # No home. Store all
                     self.handle_in_flows()
+            print(f"@@@@@@@@@@@@@@@@@@  ")
+            import pprint
+            pprint.pp(self.column_values)
             return True
         except Exception as ex:
             # For some reason we can not use the output queue here.. check

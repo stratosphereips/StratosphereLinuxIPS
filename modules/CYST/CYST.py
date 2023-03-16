@@ -65,28 +65,29 @@ class Module(Module, multiprocessing.Process):
         self.sock = sock
         return True ,''
 
-    def get_flow(self) -> tuple:
+    def get_flow(self):
         """
         reads 1 flow from the CYST socket and converts it to dict
-        returns True, flow_dict if the flow was received
-        and Tuple(False, Error_msg) if there was an error
+        returns a dict if the flow was received or False if there was an error
         """
         try:
             self.sock.settimeout(5)
             #todo handle multiple flows received at once i.e. split by \n
             flow: str = self.sock.recv(10000).decode()
         except ConnectionResetError:
-            return False, 'Connection reset by CYST.'
+            self.print( 'Connection reset by CYST.', 0, 1)
+            return False,
         except socket.timeout:
-            # no flows yet
-            return False, 'CYST didnt send flows yet.'
+            self.print('CYST didnt send flows yet.', 0, 1)
+            return False
 
         try:
             flow = json.loads(flow)
         except json.decoder.JSONDecodeError:
-            return False, 'Invalid json line received from CYST.'
+            self.print('Invalid json line received from CYST.', 0, 1)
+            return False
 
-        return flow, ''
+        return flow
 
     def send_evidence(self, evidence: str):
         """
@@ -118,12 +119,9 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 # RECEIVE FLOWS FROM CYST
-                flow, error = self.get_flow()
-                if not flow:
-                    self.print(error, 0, 1)
-                else:
+                if flow := self.get_flow():
                     # send the flow to inputprocess so slips can process it normally
-                    __database__.publish('new_cyst_flow', new_flow)
+                    __database__.publish('new_cyst_flow', json.dumps(flow))
 
 
                 # SEND EVIDENCE TO CYST
