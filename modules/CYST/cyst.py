@@ -49,6 +49,10 @@ class CYST():
         except ConnectionResetError:
             msg = f'Connection reset by CYST.'
             return False, msg
+        except socket.timeout:
+            # no flows yet
+            msg = f'CYST didnt send flows yet.'
+            return False, msg
 
         try:
             flow = json.loads(flow)
