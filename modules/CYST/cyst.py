@@ -54,6 +54,15 @@ class CYST():
 
         return flow, ''
 
+    def send_evidence(self, evidence: str):
+        """
+        :param evidence: json serialized dict
+        """
+        # todo test how long will it take slips to respond to cyst
+        self.sock.sendall(evidence.encode())
+
+
+
     def close_connection(self):
         self.sock.close()
 
