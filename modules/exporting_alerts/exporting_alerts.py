@@ -2,7 +2,6 @@ from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-from modules.CYST.cyst import cyst
 import multiprocessing
 from slack import WebClient
 from slack.errors import SlackApiError
@@ -19,17 +18,15 @@ import datetime
 
 
 
-# todo exporting alerts should run when --cyst is given
-# sendresponses
 
 class Module(Module, multiprocessing.Process):
     """
-    Module to export alerts to slack, CYST and/or STIX
+    Module to export alerts to slack and/or STIX
     You need to have the token in your environment variables to use this module
     """
 
     name = 'Exporting Alerts'
-    description = 'Export alerts to slack, CYST or STIX format'
+    description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
     def __init__(self, outputqueue, redis_port):
@@ -38,8 +35,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('export_evidence')
-        self.c2 = __database__.subscribe('new_json_evidence')
-        self.is_connected_to_cyst = False
         self.read_configuration()
         if 'slack' in self.export_to:
             self.get_slack_token()
@@ -78,8 +73,6 @@ class Module(Module, multiprocessing.Process):
             # push delay exists -> create thread that waits
             # push delay doesnt exist -> running using file not interface -> only push to taxii server once before
             # stopping
-
-
 
     def get_slack_token(self):
         if not hasattr(self, 'slack_token_filepath'):
@@ -330,6 +323,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 msg = __database__.get_message(self.c1)
+
                 if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
@@ -353,20 +347,6 @@ class Module(Module, multiprocessing.Process):
                         if not exported_to_stix:
                             self.print('Problem in export_to_STIX()', 0, 3)
 
-
-                if '-C' in sys.argv or '--CYST' in sys.argv:
-                    if not self.is_connected_to_cyst:
-                        cyst.connect()
-                        self.is_connected_to_cyst = True
-
-                    msg = __database__.get_message(self.c2)
-                    if msg and msg['data'] == 'stop_process':
-                        self.shutdown_gracefully()
-                        return True
-
-                    if utils.is_msg_intended_for(msg, 'new_json_evidence'):
-                        evidence: str = msg['data']
-                        cyst.send_evidence(evidence)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
