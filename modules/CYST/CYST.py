@@ -8,6 +8,7 @@ import traceback
 import socket
 import json
 import os
+import errno
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -78,32 +79,36 @@ class Module(Module, multiprocessing.Process):
         reads 1 flow from the CYST socket and converts it to dict
         returns a dict if the flow was received or False if there was an error
         """
+        #todo handle multiple flows received at once i.e. split by \n
         try:
             self.cyst_conn.settimeout(5)
-            #todo handle multiple flows received at once i.e. split by \n
-            flow: bytes = self.cyst_conn.recv(10000)
-            # When a recv returns 0 bytes, it means the other side has closed
-            # (or is in the process of closing) the connection.
-            if flow == 0:
-                self.print( 'Connection closed by CYST.', 0, 1)
+            flow: bytes = self.cyst_conn.recv(10000).decode()
+        except socket.timeout:
+            self.print("timeout but still listening for flows.")
+            return False
+        except socket.error as e:
+            err = e.args[0]
+            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
+                # cyst didn't send anything
+                return False
+            else:
+                self.print(f"An error occurred: {e}")
                 self.conn_closed = True
                 return False
-            flow = flow.decode()
 
-        except ConnectionResetError:
-            self.print( 'Connection reset by CYST.', 0, 1)
+        # When a recv returns 0 bytes, it means the other side has closed
+        # (or is in the process of closing) the connection.
+        if not flow:
+            self.print(f"CYST closed the connection.")
             return False
-        except socket.timeout:
-            self.print('CYST didnt send flows yet.', 0, 1)
-            return False
-
         try:
             flow = json.loads(flow)
+            return flow
         except json.decoder.JSONDecodeError:
             self.print(f'Invalid json line received from CYST. {flow}', 0, 1)
             return False
 
-        return flow
+
 
     def send_evidence(self, evidence: str):
         """
@@ -112,8 +117,11 @@ class Module(Module, multiprocessing.Process):
         self.print(f"Sending evidence back to CYST.", 0, 1)
         # todo test how long will it take slips to respond to cyst
         # todo explicitly sending message length before the message itself.
-        self.cyst_conn.sendall(evidence.encode())
-
+        try:
+            self.cyst_conn.sendall(evidence.encode())
+        except BrokenPipeError:
+            self.conn_closed = True
+            return
 
     def close_connection(self):
         self.sock.close()
@@ -121,10 +129,8 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
+        __database__.publish('finished_modules', 'stop_slips')
         return
-
-
 
     def run(self):
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
@@ -135,15 +141,28 @@ class Module(Module, multiprocessing.Process):
 
         while True:
             try:
+                #check for connection before sending
+                if self.conn_closed :
+                    self.print( 'Connection closed by CYST.', 0, 1)
+                    self.shutdown_gracefully()
+                    return True
+
                 # RECEIVE FLOWS FROM CYST
                 if flow := self.get_flow():
                     # send the flow to inputprocess so slips can process it normally
                     __database__.publish('new_cyst_flow', json.dumps(flow))
 
+                #check for connection before receiving
+                if self.conn_closed:
+                    self.print( 'Connection closed by CYST.', 0, 1)
+                    # todo slips doesn't stop when connection is closed by cyst.
+                    #  it keeps running forever
+                    self.shutdown_gracefully()
+                    return True
+
                 # SEND EVIDENCE TO CYST
-                print(f"@@@@@@@@@@@@@@@@@@  tryoing to get msg")
                 msg = __database__.get_message(self.c1)
-                if (msg and msg['data'] == 'stop_process') or self.conn_closed:
+                if (msg and msg['data'] == 'stop_process'):
                     self.shutdown_gracefully()
                     return True
 
