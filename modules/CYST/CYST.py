@@ -79,7 +79,6 @@ class Module(Module, multiprocessing.Process):
         reads 1 flow from the CYST socket and converts it to dict
         returns a dict if the flow was received or False if there was an error
         """
-        #todo handle multiple flows received at once i.e. split by \n
         try:
             self.cyst_conn.settimeout(5)
             flow: bytes = self.cyst_conn.recv(10000).decode()
@@ -115,8 +114,8 @@ class Module(Module, multiprocessing.Process):
         :param evidence: json serialized dict
         """
         self.print(f"Sending evidence back to CYST.", 0, 1)
-        # todo test how long will it take slips to respond to cyst
-        # todo explicitly sending message length before the message itself.
+        # slips takes around 8s from the second it receives the flow to respond to cyst
+        # todo explicitly send message length before the message itself.
         try:
             self.cyst_conn.sendall(evidence.encode())
         except BrokenPipeError:
@@ -157,8 +156,6 @@ class Module(Module, multiprocessing.Process):
                 #check for connection before receiving
                 if self.conn_closed:
                     self.print( 'Connection closed by CYST.', 0, 1)
-                    # todo slips doesn't stop when connection is closed by cyst.
-                    #  it keeps running forever
                     self.shutdown_gracefully()
                     return True
 
