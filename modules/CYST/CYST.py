@@ -92,7 +92,7 @@ class Module(Module, multiprocessing.Process):
         try:
             flow = json.loads(flow)
         except json.decoder.JSONDecodeError:
-            self.print('Invalid json line received from CYST.', 0, 1)
+            self.print(f'Invalid json line received from CYST. {flow}', 0, 1)
             return False
 
         return flow
@@ -101,9 +101,10 @@ class Module(Module, multiprocessing.Process):
         """
         :param evidence: json serialized dict
         """
+        self.print(f"Sending evidence back to CYST.", 0, 1)
         # todo test how long will it take slips to respond to cyst
         # todo explicitly sending message length before the message itself.
-        self.cyst_conn.sendall(evidence.encode())
+        self.cyst_conn.send(evidence.encode())
 
 
     def close_connection(self):
@@ -117,8 +118,6 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
-        # utils.drop_root_privs()
-
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
 
