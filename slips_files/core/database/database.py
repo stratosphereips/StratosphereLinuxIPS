@@ -297,6 +297,7 @@ class Database(ProfilingFlowsDatabase, object):
         try:
             return channel.get_message(timeout=timeout)
         except redis.exceptions.ConnectionError as ex:
+            print(f"@@@@@@@@@@@@@@@@@@  {ex}")
             if not self.is_connection_error_logged():
                 self.publish('finished_modules', 'stop_slips')
                 self.print(f'Stopping slips due to redis.exceptions.ConnectionError: {ex}',0,1)
