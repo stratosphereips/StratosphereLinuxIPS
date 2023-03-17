@@ -79,7 +79,7 @@ class Module(Module, multiprocessing.Process):
         and Tuple(False, Error_msg) if there was an error
         """
         try:
-            self.sock.settimeout(5)
+            self.cyst_conn.settimeout(5)
             #todo handle multiple flows received at once i.e. split by \n
             flow: str = self.cyst_conn.recv(10000).decode()
         except ConnectionResetError:
