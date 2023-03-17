@@ -22,8 +22,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
         self.cyst_UDS = '/tmp/slips.sock'
-        # connect to cyst
-        self.sock, self.cyst_conn = self.initialize_unix_socket()
+
 
 
     def print(self, text, verbose=1, debug=0):
@@ -116,14 +115,13 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
-        utils.drop_root_privs()
+        # utils.drop_root_privs()
 
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
 
-        if not hasattr(self, 'sock'):
-            # can't connect to cyst. exit module
-            return
+        # connect to cyst
+        self.sock, self.cyst_conn = self.initialize_unix_socket()
 
         while True:
             try:
