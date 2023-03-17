@@ -129,6 +129,8 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+        # if slips is done, slips shouldn't expect more flows or send evidence
+        # it should terminate
         __database__.publish('finished_modules', 'stop_slips')
         return
 
