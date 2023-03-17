@@ -103,7 +103,7 @@ class Module(Module, multiprocessing.Process):
         self.print(f"Sending evidence back to CYST.", 0, 1)
         # todo test how long will it take slips to respond to cyst
         # todo explicitly sending message length before the message itself.
-        self.cyst_conn.send(evidence.encode())
+        self.cyst_conn.sendall(evidence.encode())
 
 
     def close_connection(self):
@@ -112,6 +112,7 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+
         return
 
 
@@ -129,15 +130,18 @@ class Module(Module, multiprocessing.Process):
                 if flow := self.get_flow():
                     # send the flow to inputprocess so slips can process it normally
                     __database__.publish('new_cyst_flow', json.dumps(flow))
-
+                else:
+                    print(f"@@@@@@@@@@@@@@@@@@  no flow is received")
 
                 # SEND EVIDENCE TO CYST
+                print(f"@@@@@@@@@@@@@@@@@@  tryoing to get msg")
                 msg = __database__.get_message(self.c1)
                 if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(msg, 'new_json_evidence'):
+                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new evidence . sending ... ")
                     evidence: str = msg['data']
                     self.send_evidence(evidence)
 
