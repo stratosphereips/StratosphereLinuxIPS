@@ -3,6 +3,8 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from typing import Optional
+from user_agents import parse as ua_parse
 from slips_files.common.slips_utils import utils
 import sys
 import traceback
@@ -53,6 +55,14 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+        
+    def findject(self, host: str, uri: str, user_agent: str) -> Optional[str]:
+        parsed_ua = ua_parse(user_agent)
+        if not parsed_ua.is_bot and not parsed_ua.is_mobile and not parsed_ua.is_tablet:
+            if host.lower() in self.hosts:
+                if "html" in uri.lower() or "htm" in uri.lower():
+                    return f"Possible QuantumInsert MOTS attack: {host}{uri} with user-agent {user_agent}"
+        return None
 
     def check_suspicious_user_agents(
         self, uid, host, uri, timestamp, user_agent, profileid, twid
@@ -80,6 +90,12 @@ class Module(Module, multiprocessing.Process):
                                          description, timestamp, category, source_target_tag=source_target_tag,
                                          profileid=profileid, twid=twid, uid=uid)
                 return True
+        return False
+    
+        findject_result = self.findject(host, uri, user_agent)
+        if findject_result:
+            self.print(findject_result, verbose=2)
+            return True
         return False
 
     def check_multiple_empty_connections(
