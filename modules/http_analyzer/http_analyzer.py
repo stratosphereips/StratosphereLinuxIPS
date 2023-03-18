@@ -1,14 +1,19 @@
 
 from slips_files.common.abstracts import Module
 import multiprocessing
+from scapy.all import sniff, IP, TCP
+from collections import defaultdict
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
+from typing import Optional
+from user_agents import parse as ua_parse
 from slips_files.common.slips_utils import utils
 import sys
 import traceback
 import json
 import urllib
 import requests
+import hashlib
 
 
 class Module(Module, multiprocessing.Process):
@@ -53,6 +58,27 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+        
+    def detect_quantum_insert_mots(self, packet):
+        """
+        Detect Quantum Insert attacks with More-On-The-Side (MOTS) technique.
+        """
+        if IP in packet and TCP in packet:
+            src_ip = packet[IP].src
+            dst_ip = packet[IP].dst
+            src_port = packet[TCP].sport
+            dst_port = packet[TCP].dport
+            seq = packet[TCP].seq
+            payload = packet[TCP].payload
+            payload_hash = hashlib.sha256(bytes(payload)).hexdigest()
+
+            connection_key = (src_ip, dst_ip, src_port, dst_port, seq)
+            if connection_key in self.packet_hashes:
+                # Check if payloads are different for the same connection_key
+                if payload_hash != self.packet_hashes[connection_key]:
+                    self.print(f"Potential Quantum Insert MOTS detected: {connection_key}", verbose=1)
+            else:
+                self.packet_hashes[connection_key] = payload_hash
 
     def check_suspicious_user_agents(
         self, uid, host, uri, timestamp, user_agent, profileid, twid
@@ -453,6 +479,7 @@ class Module(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
+        self.packet_hashes = defaultdict(str)
         # Main loop function
         while True:
             try:
@@ -545,6 +572,7 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid
                     )
+                sniff(filter="tcp", prn=self.detect_quantum_insert_mots, count=10000)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
