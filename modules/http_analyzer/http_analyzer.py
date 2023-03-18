@@ -59,6 +59,31 @@ class Module(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
         
+    def detect_executable_mime_types(self, resp_mime_types, profileid, twid, uid, timestamp):
+        if resp_mime_types:
+            executable_mime_types = [
+                'application/x-msdownload',
+                'application/x-ms-dos-executable',
+                'application/x-ms-exe',
+                'application/x-exe',
+                'application/x-winexe',
+                'application/x-winhlp',
+                'application/x-winhelp',
+                'application/octet-stream'
+            ]
+
+            for mime_type in resp_mime_types:
+                if mime_type in executable_mime_types:
+                    self.print(f'Detected executable mime type: {mime_type}', 0, 1)
+                    self.report_executable_mime_type(
+                        mime_type,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+                    break
+        
     def detect_quantum_insert_mots(self, packet):
         """
         Detect Quantum Insert attacks with More-On-The-Side (MOTS) technique.
@@ -572,6 +597,15 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid
                     )
+                    
+                    self.detect_executable_mime_types(
+                        resp_mime_types,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+
                 sniff(filter="tcp", prn=self.detect_quantum_insert_mots, count=10000)
 
             except KeyboardInterrupt:
