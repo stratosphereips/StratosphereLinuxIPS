@@ -500,6 +500,7 @@ Available detection are:
 - Incompatible user agents
 - Multiple user agents
 - Pastebin downloads
+- Unencrypted HTTP traffic
 
 ### Multiple empty connections
 
@@ -559,6 +560,11 @@ This value can be customized in slips.conf by changing ```pastebin_download_thre
 
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
+
+### Unencrypted HTTP traffic
+
+When slip sees an HTTP unencrypted traffic in zeek's http.log it generates 
+an evidence with threat_level low
 
 ## Leak Detector Module
 

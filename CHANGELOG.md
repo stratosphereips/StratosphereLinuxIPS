@@ -1,3 +1,6 @@
+-1.0.3 (March 2023)
+- Add unencrypted traffic detection by @haleelsada
+- 
 -1.0.2 (Feb 2023)
 - Support ASNs in our own_malicious_iocs.csv file
 - Add a zeek script to recognize the gateway IP and add it to notice.log 
