@@ -382,6 +382,24 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
+        ## added
+        def check_large_response_body(self, uid, response_body_len, timestamp, profileid, twid):
+        """
+        Check if the response body length is larger than the defined threshold
+        """
+        if response_body_len > self.pastebin_downloads_threshold:
+            evidence_type = 'LargeResponseBody'
+            attacker_direction = 'srcip'
+            attacker = profileid.split('_')[0]
+            threat_level = 'medium'
+            category = 'Anomaly.DataTransfer'
+            confidence = 1
+            description = f'response body is larger than the threshold ({self.pastebin_downloads_threshold})'
+            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                                     description, timestamp, category, profileid=profileid, twid=twid, uid=uid)
+            return True
+        return False
+
 
     def check_pastebin_downloads(
             self,
