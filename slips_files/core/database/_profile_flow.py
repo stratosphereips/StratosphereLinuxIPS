@@ -913,7 +913,7 @@ class ProfilingFlowsDatabase(object):
 
         if not (
                 validators.ipv4(saddr)
-                and ipaddress.ip_address(saddr).is_private
+                and ipaddress.ip_address(saddr).is_private and ipaddress.ip_address(saddr) != ipaddress.ip_address("0.0.0.0")
         ):
             return
         # get the local network of this saddr

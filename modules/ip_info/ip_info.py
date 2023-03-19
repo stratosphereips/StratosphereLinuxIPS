@@ -214,7 +214,7 @@ class Module(Module, multiprocessing.Process):
         """
         if not hasattr(self, 'country_db'):
             return False
-        if ipaddress.ip_address(ip).is_private:
+        if (ipaddress.ip_address(ip).is_private and ip != '0.0.0.0'):
             # Try to find if it is a local/private IP
             data = {'geocountry': 'Private'}
         elif geoinfo := self.country_db.get(ip):

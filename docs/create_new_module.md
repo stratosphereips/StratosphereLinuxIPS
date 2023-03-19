@@ -345,30 +345,31 @@ class Module(Module, multiprocessing.Process):
                     daddr = flow['daddr']
                     srcip_obj = ipaddress.ip_address(saddr)
                     dstip_obj = ipaddress.ip_address(daddr)
-                    if srcip_obj.is_private and dstip_obj.is_private:
-                        # on a scale of 0 to 1, how confident you are of this evidence
-                        confidence = 0.8
-                        # how dangerous is this evidence? info, low, medium, high, critical?
-                        threat_level = 'high'
-                        # the name of your evidence, you can put any descriptive string here
-                        evidence_type = 'ConnectionToLocalDevice'
-                        # what is this evidence category according to IDEA categories
-                        category = 'Anomaly.Connection'
-                        # which ip is the attacker here? the src or the dst?
-                        attacker_direction = 'srcip'
-                        # what is the ip of the attacker?
-                        attacker = saddr
-                        # describe the evidence
-                        description = f'Detected a connection to a local device {daddr}'
-                        timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
-                        # the crrent profile is the source ip, this comes in the msg received in the channel
-                        profileid = message['profileid']
-                        # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
-                        twid = message['twid']
+                    if srcip_obj != ipaddress.ip_address('0.0.0.0') and dstip_obj != ipaddress.ip_address('0.0.0.0'):
+                        if srcip_obj.is_private and dstip_obj.is_private:
+                            # on a scale of 0 to 1, how confident you are of this evidence
+                            confidence = 0.8
+                            # how dangerous is this evidence? info, low, medium, high, critical?
+                            threat_level = 'high'
+                            # the name of your evidence, you can put any descriptive string here
+                            evidence_type = 'ConnectionToLocalDevice'
+                            # what is this evidence category according to IDEA categories
+                            category = 'Anomaly.Connection'
+                            # which ip is the attacker here? the src or the dst?
+                            attacker_direction = 'srcip'
+                            # what is the ip of the attacker?
+                            attacker = saddr
+                            # describe the evidence
+                            description = f'Detected a connection to a local device {daddr}'
+                            timestamp = datetime.datetime.now().strftime('%Y/%m/%d-%H:%M:%S')
+                            # the crrent profile is the source ip, this comes in the msg received in the channel
+                            profileid = message['profileid']
+                            # Profiles are split into timewindows, each timewindow is 1h, this comes in the msg received in the channel
+                            twid = message['twid']
 
-                        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level,
-                                                 confidence, description, timestamp, category, profileid=profileid,
-                                                 twid=twid)
+                            __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level,
+                                                    confidence, description, timestamp, category, profileid=profileid,
+                                                    twid=twid)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

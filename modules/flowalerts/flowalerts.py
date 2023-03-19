@@ -152,8 +152,8 @@ class Module(Module, multiprocessing.Process):
 
         # make sure the 2 ips are private
         if not (
-                ipaddress.ip_address(saddr).is_private
-                and ipaddress.ip_address(daddr).is_private
+            (ipaddress.ip_address(saddr).is_private and saddr != '0.0.0.0')
+            and (ipaddress.ip_address(daddr).is_private and daddr != '0.0.0.0')
         ):
             return
 
@@ -1675,7 +1675,7 @@ class Module(Module, multiprocessing.Process):
             # any msg is published in the new_flow channel
             return
 
-        if not (validators.ipv4(ip_to_check) and ip_obj.is_private):
+        if not (validators.ipv4(ip_to_check) and ip_obj.is_private and ip_to_check != '0.0.0.0'):
             return
 
         # if it's a private ipv4 addr, it should belong to our local network
@@ -1723,6 +1723,7 @@ class Module(Module, multiprocessing.Process):
         if not (
                 validators.ipv4(saddr)
                 and ipaddress.ip_address(saddr).is_private
+                and saddr != '0.0.0.0'  # Check if the IP address is not 0.0.0.0
         ):
             return
 

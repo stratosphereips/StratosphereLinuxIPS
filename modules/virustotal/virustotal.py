@@ -272,7 +272,7 @@ class Module(Module, multiprocessing.Process):
 
         try:
             addr = ipaddress.ip_address(ip)
-            if addr.is_private:
+            if (addr.is_private and addr != ipaddress.ip_address('0.0.0.0')):
                 self.print(f'[{ip}] is private, skipping', 0, 2)
                 scores = 0, 0, 0, 0
                 return scores, '', ''

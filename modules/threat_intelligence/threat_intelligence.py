@@ -367,7 +367,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     ip_obj = ipaddress.ip_address(net_addr)
                     if (
                         ip_obj.is_multicast
-                        or ip_obj.is_private
+                        or (ip_obj.is_private and ip_obj != ipaddress.ip_address('0.0.0.0') ) # Check if the IPv4 address is not 0.0.0.0)
                         or ip_obj.is_link_local
                         or net_addr in utils.home_networks
                     ):

@@ -320,7 +320,7 @@ class Utils(object):
         # The broadcast address 255.255.255.255 is reserved.
         if (
             ip_obj.is_multicast
-            or ip_obj.is_private
+            or (ip_obj.is_private and ip_obj != '0.0.0.0')
             or ip_obj.is_link_local
             or ip_obj.is_reserved
             or '.255' in ip_obj.exploded

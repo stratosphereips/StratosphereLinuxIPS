@@ -91,6 +91,7 @@ class Module(Module, multiprocessing.Process):
 
                     if ip_version == 'IP4' and (
                         validators.ipv4(ip)
+                        and ip != '0.0.0.0'  # Check if the IP address is not 0.0.0.0
                         and ipaddress.IPv4Address(ip).is_private
                     ):
                         # private ipv4

@@ -518,7 +518,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
-        if not ip_obj.is_private:
+        if not (ip_obj.is_private and ip_obj == ipaddress.ip_address("0.0.0.0")):
             # now we're given a public ip and a MAC that's supposedly belongs to it
             # we are sure this is the gw mac
             # set it if we don't already have it in the db
