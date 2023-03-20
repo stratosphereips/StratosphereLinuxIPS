@@ -1483,8 +1483,8 @@ class Main:
 
 
         # Clear cache if the parameter was included
-        if self.args.blocking and not self.args.interface:
-            print('Blocking is only allowed when running slips using an interface.')
+        if self.args.blocking and not (self.args.interface or self.args.CYST):
+            print('Blocking is only allowed when running slips using an interface or CYST.')
             self.terminate_slips()
 
         # kill all open unused redis servers if the parameter was included
