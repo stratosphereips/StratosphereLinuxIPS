@@ -125,8 +125,18 @@ class Module(Module, multiprocessing.Process):
         self.print(f"Sending evidence back to CYST.", 0, 1)
         # slips takes around 8s from the second it receives the flow to respond to cyst
         # todo explicitly send message length before the message itself.
+
+        evidence = evidence.encode()
+        self.print("Sending evidence length to cyst.")
+        # send the length of the msg to slips first
+        evidence_len = str(len(evidence)).encode()
+        # pad the length so it takes eactly 5 bytes, this is what cyst expects
+        evidence_len += (5- len(evidence_len) ) *b' '
+
+        self.cyst_conn.sendall(evidence_len)
+
         try:
-            self.cyst_conn.sendall(evidence.encode())
+            self.cyst_conn.sendall(evidence)
         except BrokenPipeError:
             self.conn_closed = True
             return
