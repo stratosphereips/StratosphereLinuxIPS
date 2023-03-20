@@ -22,6 +22,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
+        self.c2 = __database__.subscribe('new_blocking')
         self.cyst_UDS = '/tmp/slips.sock'
         self.conn_closed = False
 
@@ -143,6 +144,27 @@ class Module(Module, multiprocessing.Process):
             self.conn_closed = True
             return
 
+    def send_blocking_request(self, ip):
+        """
+        for now when slips generates a blocking request, it blocks everything from and to thi sip
+        """
+        #todo handle this slips_msg_type in cyst
+        blocking_request = {
+            'slips_msg_type': 'blocking',
+            'to_block_type': 'ip', # can be anything in the future i.e domain url etc
+            'value': ip
+        }
+        blocking_request: bytes = json.dumps(blocking_request).encode()
+        self.send_length(blocking_request)
+
+        try:
+            self.cyst_conn.sendall(blocking_request)
+        except BrokenPipeError:
+            self.conn_closed = True
+            return
+
+
+
     def close_connection(self):
         self.sock.close()
 
@@ -190,6 +212,19 @@ class Module(Module, multiprocessing.Process):
                     print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new evidence . sending ... ")
                     evidence: str = msg['data']
                     self.send_evidence(evidence)
+
+                msg = __database__.get_message(self.c2)
+                if (msg and msg['data'] == 'stop_process'):
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(msg, 'new_blocking'):
+                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
+                    msg = json.loads(msg['data'])
+                    # Parse the data dictionary
+                    ip = msg.get('ip')
+                    self.send_blocking_request(ip)
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
