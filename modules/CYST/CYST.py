@@ -135,6 +135,14 @@ class Module(Module, multiprocessing.Process):
         :param evidence: json serialized dict
         """
         self.print(f"Sending evidence back to CYST.", 0, 1)
+        # add the slips_msg_type
+        evidence: dict = json.loads(evidence)
+        # this field helps cyst see what slips is sending, an evidence or a blocking request
+        evidence.update(
+            {'slips_msg_type': 'evidence'}
+        )
+        evidence = json.dumps(evidence)
+
         # slips takes around 8s from the second it receives the flow to respond to cyst
         evidence: bytes = evidence.encode()
         self.send_length(evidence)
