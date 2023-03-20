@@ -48,7 +48,6 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
 
-
     def initialize_unix_socket(self):
         """
         Slips will be the server, so it has to run before cyst to create the socket
@@ -116,6 +115,18 @@ class Module(Module, multiprocessing.Process):
             self.print(f'Invalid json line received from CYST. {flow}', 0, 1)
             return False
 
+    def send_length(self, msg: bytes):
+        """
+        takes care of sending the msg length with padding before the actual msg
+        """
+        # self.print("Sending evidence length to cyst.")
+
+        # send the length of the msg to cyst first
+        msg_len = str(len(msg)).encode()
+        # pad the length so it takes exactly 5 bytes, this is what cyst expects
+        msg_len += (5- len(msg_len) ) *b' '
+
+        self.cyst_conn.sendall(msg_len)
 
 
     def send_evidence(self, evidence: str):
@@ -124,17 +135,8 @@ class Module(Module, multiprocessing.Process):
         """
         self.print(f"Sending evidence back to CYST.", 0, 1)
         # slips takes around 8s from the second it receives the flow to respond to cyst
-        # todo explicitly send message length before the message itself.
-
-        evidence = evidence.encode()
-        self.print("Sending evidence length to cyst.")
-        # send the length of the msg to slips first
-        evidence_len = str(len(evidence)).encode()
-        # pad the length so it takes eactly 5 bytes, this is what cyst expects
-        evidence_len += (5- len(evidence_len) ) *b' '
-
-        self.cyst_conn.sendall(evidence_len)
-
+        evidence: bytes = evidence.encode()
+        self.send_length(evidence)
         try:
             self.cyst_conn.sendall(evidence)
         except BrokenPipeError:
