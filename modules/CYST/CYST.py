@@ -81,7 +81,16 @@ class Module(Module, multiprocessing.Process):
         """
         try:
             self.cyst_conn.settimeout(5)
-            flow: bytes = self.cyst_conn.recv(10000).decode()
+            # get the number of bytes cyst is going to send, it is exactly 5 bytes
+            flow_len = self.cyst_conn.recv(5).decode()
+            try:
+                flow_len: int = int(flow_len)
+            except ValueError:
+                self.print(f"Received invalid flow length from cyst: {flow_len}")
+                return False
+
+            flow: bytes = self.cyst_conn.recv(flow_len).decode()
+
         except socket.timeout:
             self.print("timeout but still listening for flows.")
             return False
