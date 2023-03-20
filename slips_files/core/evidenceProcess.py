@@ -388,6 +388,8 @@ class EvidenceProcess(multiprocessing.Process):
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
         # that we decided to alert and block it
+        #todo if by default we don't block everything from/to this ip anymore, remember to update the CYST module
+
         ip_to_block = profileid.split('_')[-1]
 
         # Make sure we don't block our own IP
@@ -583,6 +585,18 @@ class EvidenceProcess(multiprocessing.Process):
             )
         return alert_to_log
 
+    def is_blocking_module_enabled(self) -> bool:
+        """
+        returns true if slips is running in an interface or growing zeek dir with -p
+        or if slips is using cyst
+        """
+        if '-p' not in sys.argv:
+            return False
+
+        is_cyst_running = '-C' in sys.argv or '--CYST' in sys.argv
+        return (self.is_running_on_interface() or is_cyst_running)
+
+
     def run(self):
         while True:
             try:
@@ -745,7 +759,8 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # todo if it's already blocked, we shouldn't decide blocking
                             blocked = False
-                            if self.is_running_on_interface() and '-p' in sys.argv:
+
+                            if self.is_blocking_module_enabled():
                                 # send ip to the blocking module
                                 if self.decide_blocking(profileid):
                                     blocked = True
