@@ -37,3 +37,4 @@ wheel
 flask
 tld
 tqdm
+termcolor
