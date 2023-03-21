@@ -46,6 +46,7 @@ from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
+from termcolor import colored
 
 version = '1.0.2'
 
@@ -680,9 +681,7 @@ class Main:
         """
         returns the text in green
         """
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
-        return f'{GREEN_s}{txt}{GREEN_e}'
+        return colored(txt, "green", "on_black")
 
 
     def print_stopped_module(self, module):
