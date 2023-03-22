@@ -727,6 +727,9 @@ class ConfigParser(object):
         if input_type != 'pcap':
             to_ignore.append('leak_detector')
 
+        if not ('-C' in sys.argv or '--CYST' in sys.argv):
+            to_ignore.append('CYST')
+
         return to_ignore
 
 

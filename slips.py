@@ -553,14 +553,15 @@ class Main:
 
     def should_run_non_stop(self, is_interface) -> bool:
         """
-        determines if slips shouldn't terminate because by defualt,
-        it terminates when there's no moreincoming flows
+        determines if slips shouldn't terminate because by default,
+        it terminates when there's no more incoming flows
         """
         # these are the cases where slips should be running non-stop
+
         if (
                 self.is_debugger_active()
                 or self.input_type in ('stdin','cyst')
-                or is_interface
+                or self.is_interface
         ):
             return True
 
@@ -760,7 +761,7 @@ class Main:
             intervals_to_wait = max_intervals_to_wait
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
-            is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+            self.is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
 
             while True:
                 message = self.c1.get_message(timeout=0.01)
@@ -797,7 +798,7 @@ class Main:
                 # Check if we need to close any TWs
                 __database__.check_TW_to_close()
 
-                if is_interface and hostIP not in modified_profiles:
+                if self.is_interface and hostIP not in modified_profiles:
                     # In interface we keep track of the host IP. If there was no
                     # modified TWs in the host IP, we check if the network was changed.
                     if hostIP := self.metadata_man.get_host_ip():
