@@ -588,13 +588,11 @@ class EvidenceProcess(multiprocessing.Process):
     def is_blocking_module_enabled(self) -> bool:
         """
         returns true if slips is running in an interface or growing zeek dir with -p
-        or if slips is using cyst
+        or if slips is using cyst. when using cyst, there's no need for -p to enable the blocking
         """
-        if '-p' not in sys.argv:
-            return False
 
         is_cyst_running = '-C' in sys.argv or '--CYST' in sys.argv
-        return (self.is_running_on_interface() or is_cyst_running)
+        return (self.is_running_on_interface() and '-p' not in sys.argv) or is_cyst_running
 
 
     def run(self):

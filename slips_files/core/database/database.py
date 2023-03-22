@@ -1322,8 +1322,7 @@ class Database(ProfilingFlowsDatabase, object):
     def get_evidence_causing_alert(self, profileid, twid, alert_ID) -> list:
         """
         Returns all the IDs of evidence causing this alert
-        :param alert_ID: ID of alert to export to warden server
-        for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
+        :param alert_ID: ID of alert for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
         alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
         if alerts:
