@@ -721,7 +721,12 @@ class EvidenceProcess(multiprocessing.Process):
                                 alert_ID,
                                 self.IDs_causing_an_alert
                             )
-                            __database__.publish('new_alert', alert_ID)
+                            to_send = {
+                                'alert_ID': alert_ID,
+                                'profileid': profileid,
+                                'twid': twid,
+                            }
+                            __database__.publish('new_alert', json.dumps(to_send))
 
                             self.send_to_exporting_module(tw_evidence)
 
