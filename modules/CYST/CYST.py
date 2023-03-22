@@ -22,7 +22,7 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
-        self.c2 = __database__.subscribe('new_blocking')
+        self.c2 = __database__.subscribe('new_alert')
         self.cyst_UDS = '/tmp/slips.sock'
         self.conn_closed = False
 
@@ -137,6 +137,8 @@ class Module(Module, multiprocessing.Process):
         self.print(f"Sending evidence back to CYST.", 0, 1)
         # add the slips_msg_type
         evidence: dict = json.loads(evidence)
+
+
         # this field helps cyst see what slips is sending, an evidence or a blocking request
         evidence.update(
             {'slips_msg_type': 'evidence'}
@@ -154,7 +156,10 @@ class Module(Module, multiprocessing.Process):
 
     def send_blocking_request(self, ip):
         """
-        for now when slips generates a blocking request, it blocks everything from and to thi sip
+        for now when slips generates a blocking request, it blocks everything from and to this srcip
+        -p doesn't have to be present for slips to send blocking requests to cyst
+        the blocking module won't start and it's ok. the goal is to have cyst take care of the blocking not slips
+
         """
         #todo handle this slips_msg_type in cyst
         blocking_request = {
@@ -226,12 +231,17 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(msg, 'new_blocking'):
+                if utils.is_msg_intended_for(msg, 'new_alert'):
                     print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
-                    msg = json.loads(msg['data'])
-                    # Parse the data dictionary
-                    ip = msg.get('ip')
-                    self.send_blocking_request(ip)
+                    alert_info: dict = json.loads(msg['data'])
+                    profileid = alert_info['profileid']
+                    twid = alert_info['twid']
+                    # alert_ID is {profileid}_{twid}_{ID}
+                    alert_ID = alert_info['alert_ID']
+                    evidence: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
+                    if evidence:
+                        self.send_alert(alert_ID, evidence)
+
 
 
             except KeyboardInterrupt:
