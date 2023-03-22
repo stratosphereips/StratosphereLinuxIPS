@@ -23,7 +23,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
         self.c2 = __database__.subscribe('new_alert')
-        self.cyst_UDS = '/tmp/slips.sock'
+        self.cyst_UDS = '/run/slips.sock'
         self.conn_closed = False
 
 
@@ -176,14 +176,15 @@ class Module(Module, multiprocessing.Process):
             self.conn_closed = True
             return
 
-    def send_alert(self, alert_ID: str, evidence: list):
+    def send_alert(self, alert_ID: str, evidence: list, ip_to_block: str):
         """
         Sends the alert ID and the IDs of the evidence causing this alert to cyst
         """
         alert_to_send = {
             'slips_msg_type': 'alert',
             'alert_ID': alert_ID,
-            'evidence': evidence
+            'evidence': evidence,
+            'ip_to_block': ip_to_block
         }
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
         self.send_length(alert_to_send)
@@ -258,7 +259,7 @@ class Module(Module, multiprocessing.Process):
                     alert_ID = alert_info['alert_ID']
                     evidence: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
                     if evidence:
-                        self.send_alert(alert_ID, evidence)
+                        self.send_alert(alert_ID, evidence, profileid.split('_')[-1])
 
 
 
