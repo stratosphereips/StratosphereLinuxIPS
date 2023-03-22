@@ -171,6 +171,24 @@ class Module(Module, multiprocessing.Process):
             self.conn_closed = True
             return
 
+    def send_alert(self, alert_ID: str, evidence: list):
+        """
+        Sends the alert ID and the IDs of the evidence causing this alert to cyst
+        """
+        alert_to_send = {
+            'slips_msg_type': 'alert',
+            'alert_ID': alert_ID,
+            'evidence': evidence
+        }
+        alert_to_send: bytes = json.dumps(alert_to_send).encode()
+        self.send_length(alert_to_send)
+
+        try:
+            self.cyst_conn.sendall(alert_to_send)
+        except BrokenPipeError:
+            self.conn_closed = True
+            return
+
 
 
     def close_connection(self):
