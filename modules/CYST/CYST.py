@@ -51,35 +51,28 @@ class Module(Module, multiprocessing.Process):
 
     def initialize_unix_socket(self):
         """
-        Slips will be the server, so it has to run before cyst to create the socket
+        If the socket is there, slips will connect to itm if not, slips will create it
         """
-
-        # Make sure the socket does not already exist
-        if os.path.exists(self.cyst_UDS):
-            os.unlink(self.cyst_UDS)
-
-        # Create a UDS socket
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.bind(self.cyst_UDS)
-
-
-        failure = sock.listen(2)
-        if not failure:
-            self.print(f"Slips is now listening. waiting for CYST to connect.")
+        if os.path.exists(self.cyst_UDS):
+            try:
+                sock.connect(self.cyst_UDS)
+            except (socket.error) as msg:
+                error = f"Problem connecting to socket ({self.cyst_UDS}): {msg}"
+                return False, error
+            return '', sock
         else:
-            self.print(f" failed to initialize sips socket. Error code: {failure}")
+            # Create a UDS socket
+            sock.bind(self.cyst_UDS)
+            failure = sock.listen(2)
+            if not failure:
+                self.print(f"Slips is now listening. waiting for CYST to connect.")
+            else:
+                error = (f" failed to initialize sips socket. Error code: {failure}")
+                return False, error
 
-        connection, client_address = sock.accept()
-        print(f"@@@@@@@@@@@@@@@@@@  connection, client_address {(connection, client_address)}  ")
-        try:
-            print(f"@@@@@@@@@@@@@@@@@@  connection.__dict__ {connection.__dict__}")
-        except:
-            pass
-        try:
-            print(f"@@@@@@@@@@@@@@@@@@  client_address.__dict__ {client_address.__dict__}")
-        except:
-            pass
-        return sock, connection
+            connection, client_address = sock.accept()
+            return sock, connection
 
 
     def get_flow(self):
@@ -206,7 +199,9 @@ class Module(Module, multiprocessing.Process):
 
 
     def close_connection(self):
-        self.sock.close()
+        print(f"@@@@@@@@@@@@@@@@@@  close conn is called!! ")
+        if hasattr(self, 'sock'):
+            self.sock.close()
         # delete the socket
         os.unlink(self.cyst_UDS)
 
@@ -222,9 +217,18 @@ class Module(Module, multiprocessing.Process):
     def run(self):
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
+        try:
+            # connect to cyst
+            self.sock, self.cyst_conn = self.initialize_unix_socket()
+        except KeyboardInterrupt:
+            self.shutdown_gracefully()
+            return True
+        except Exception:
+            exception_line = sys.exc_info()[2].tb_lineno
+            self.print(f'Problem on initialize_unix_socket() line {exception_line}', 0, 1)
+            self.print(traceback.format_exc(), 0, 1)
+            return True
 
-        # connect to cyst
-        self.sock, self.cyst_conn = self.initialize_unix_socket()
 
         while True:
             try:
