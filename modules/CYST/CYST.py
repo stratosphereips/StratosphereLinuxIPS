@@ -82,6 +82,7 @@ class Module(Module, multiprocessing.Process):
                 flow_len: int = int(flow_len)
             except ValueError:
                 self.print(f"Received invalid flow length from cyst: {flow_len}")
+                self.conn_closed = True
                 return False
 
             flow: bytes = self.cyst_conn.recv(flow_len).decode()
@@ -103,6 +104,7 @@ class Module(Module, multiprocessing.Process):
         # (or is in the process of closing) the connection.
         if not flow:
             self.print(f"CYST closed the connection.")
+            self.conn_closed = True
             return False
         try:
             flow = json.loads(flow)
