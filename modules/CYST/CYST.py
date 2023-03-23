@@ -53,15 +53,14 @@ class Module(Module, multiprocessing.Process):
         """
         Slips will be the server, so it has to run before cyst to create the socket
         """
-        unix_socket = '/tmp/slips.sock'
 
         # Make sure the socket does not already exist
-        if os.path.exists(unix_socket):
-            os.unlink(unix_socket)
+        if os.path.exists(self.cyst_UDS):
+            os.unlink(self.cyst_UDS)
 
         # Create a UDS socket
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.bind(unix_socket)
+        sock.bind(self.cyst_UDS)
 
 
         failure = sock.listen(2)
@@ -71,6 +70,15 @@ class Module(Module, multiprocessing.Process):
             self.print(f" failed to initialize sips socket. Error code: {failure}")
 
         connection, client_address = sock.accept()
+        print(f"@@@@@@@@@@@@@@@@@@  connection, client_address {(connection, client_address)}  ")
+        try:
+            print(f"@@@@@@@@@@@@@@@@@@  connection.__dict__ {connection.__dict__}")
+        except:
+            pass
+        try:
+            print(f"@@@@@@@@@@@@@@@@@@  client_address.__dict__ {client_address.__dict__}")
+        except:
+            pass
         return sock, connection
 
 
@@ -199,8 +207,11 @@ class Module(Module, multiprocessing.Process):
 
     def close_connection(self):
         self.sock.close()
+        # delete the socket
+        os.unlink(self.cyst_UDS)
 
     def shutdown_gracefully(self):
+        self.close_connection()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         # if slips is done, slips shouldn't expect more flows or send evidence
