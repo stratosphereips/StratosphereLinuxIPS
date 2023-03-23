@@ -55,24 +55,18 @@ class Module(Module, multiprocessing.Process):
         """
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         if os.path.exists(self.cyst_UDS):
-            try:
-                sock.connect(self.cyst_UDS)
-            except (socket.error) as msg:
-                error = f"Problem connecting to socket ({self.cyst_UDS}): {msg}"
-                return False, error
-            return '', sock
+            os.unlink(self.cyst_UDS)
+        # Create a UDS socket
+        sock.bind(self.cyst_UDS)
+        failure = sock.listen(2)
+        if not failure:
+            self.print(f"Slips is now listening. waiting for CYST to connect.")
         else:
-            # Create a UDS socket
-            sock.bind(self.cyst_UDS)
-            failure = sock.listen(2)
-            if not failure:
-                self.print(f"Slips is now listening. waiting for CYST to connect.")
-            else:
-                error = (f" failed to initialize sips socket. Error code: {failure}")
-                return False, error
+            error = (f" failed to initialize sips socket. Error code: {failure}")
+            return False, error
 
-            connection, client_address = sock.accept()
-            return sock, connection
+        connection, client_address = sock.accept()
+        return sock, connection
 
 
     def get_flow(self):
