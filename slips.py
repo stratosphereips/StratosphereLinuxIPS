@@ -1445,6 +1445,9 @@ class Main:
             print('Only -i or -f is allowed. Stopping slips.')
             self.terminate_slips()
 
+        if (self.args.interface or self.args.filepath) and self.args.CYST:
+            print('You can\'t use --CYST with -f or -i. Stopping slips.')
+            self.terminate_slips()
 
         if (self.args.save or self.args.db) and os.getuid() != 0:
             print('Saving and loading the database requires root privileges.')
