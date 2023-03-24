@@ -26,6 +26,7 @@ from datetime import datetime
 import os
 import traceback
 from tqdm.auto import tqdm
+from termcolor import colored
 
 class OutputProcess(multiprocessing.Process):
     """
@@ -219,7 +220,7 @@ class OutputProcess(multiprocessing.Process):
         verbose_level, debug_level = int(level[0]), int(level[1])
         # if verbosity level is 3 make it red
         if debug_level == 3:
-            msg = f'\033[0;35;40m{msg}\033[00m'
+            msg = colored(msg, "magenta", "on_black")
 
         # There should be a level 0 that we never print. So its >, and not >=
         if ((
