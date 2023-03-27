@@ -411,6 +411,16 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.r.hset(profileid, 'User-agent', user_agent)
 
+        # To keep a history of the past user agents and not just store the last user agent in the db
+        if not self.r.exists('past_user_agents'):
+            self.r.hset(profileid, 'past_user_agents', json.dumps([json.loads(user_agent)['user_agent']]))
+        else:
+            user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
+            UA = json.loads(user_agent)['user_agent']
+            if UA not in user_agents:
+                user_agents.append(UA)
+                self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
+
     def add_software_to_profile(
         self, profileid, software, version_major, version_minor, uid
     ):
