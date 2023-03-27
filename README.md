@@ -142,7 +142,7 @@ To build a Docker image of Slips for macOS follow the next steps:
     cd StratosphereLinuxIPS/
     
     # build the MacOS image from the recommended Dockerfile
-    docker build --no-cache -t slips -f docker/macos-image/Dockerfile .
+    docker build --no-cache -t slips -f docker/macosm1-image/Dockerfile .
 ```
 
 To use Slips with files already inside the Docker you can do;
