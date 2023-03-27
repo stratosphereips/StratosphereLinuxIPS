@@ -681,10 +681,12 @@ class Main:
         """
         returns the text in green
         """
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
-        return f'{GREEN_s}{txt}{GREEN_e}'
-
+        return colored(txt, 'green')
+    # def red(self, txt):
+    #     """
+    #     returns the text in red
+    #     """
+    #     return colored(txt, 'red')
 
     def print_stopped_module(self, module):
         self.PIDs.pop(module, None)
