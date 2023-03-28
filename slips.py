@@ -46,7 +46,9 @@ from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
+from termcolor import colored
 
+from slips_files.core.guiProcess import GuiProcess
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
