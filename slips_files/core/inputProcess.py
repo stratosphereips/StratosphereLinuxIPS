@@ -193,169 +193,213 @@ class InputProcess(multiprocessing.Process):
                     pass
             self.to_be_deleted = []
 
+
+    def is_ignored_file(self, filename) -> bool:
+        # Ignore the files that do not contain data.
+        # These are the zeek log files that we don't use
+        filename_without_ext = filename.split('/')[-1].split('.')[0]
+        if filename_without_ext in self.ignored_files:
+            print(f"@@@@@@@@@@@@@@@@@@  ignored file {filename_without_ext} {lines}")
+            return True
+
+    def get_file_handler(self, filename):
+        # Update which files we know about
+        try:
+            # We already opened this file
+            file_handler = self.open_file_handlers[filename]
+        except KeyError:
+            # First time opening this file.
+            try:
+                file_handler = open(filename, 'r')
+                lock = threading.Lock()
+                lock.acquire()
+                self.open_file_handlers[filename] = file_handler
+                lock.release()
+                # now that we replaced the old handle with the newly created file handle
+                # delete the old .log file, that has a timestamp in its name.
+            except FileNotFoundError:
+                # for example dns.log
+                # zeek changes the dns.log file name every 1d, it adds a timestamp to it
+                # it doesn't create the new dns.log until a new dns request occurs
+                # if slips tries to read from the old dns.log now it won't find it
+                # because it's been renamed and the new one isn't created yet
+                # simply continue until the new log file is created and added to the zeek_files list
+                return False
+        return file_handler
+
+
+    def get_ts_from_line(self, zeek_line):
+        """
+        :param line: can be a json or a json serialized dict
+        """
+
+        try:
+            nline = json.loads(zeek_line)
+            # All bro files have a field 'ts' with the timestamp.
+            # So we are safe here not checking the type of line
+            # In some Zeek files there may not be a ts field
+            # Like in some weird smb files
+            timestamp = nline.get('ts', 0)
+
+        except json.decoder.JSONDecodeError:
+            # It is not JSON format. It is tab format line.
+            nline = zeek_line
+            # Ignore comments at the beginning of the file.
+            if not nline or nline[0] == '#':
+                return False, False
+
+            timestamp = nline.split('\t')[0]
+
+        try:
+            timestamp = float(timestamp)
+        except ValueError:
+            # this ts doesnt repr a float value, ignore it
+            return False, False
+
+        return timestamp, nline
+
+    def cache_nxt_line_in_file(self, filename):
+        file_handler = self.get_file_handler(filename)
+        if not file_handler:
+            return False
+
+
+        # Only read the next line if the previous line  from this file was sent
+        if filename in self.cache_lines:
+            # We have still something to send, do not read the next line from this file
+            return False
+
+        # We don't have any waiting line for this file, so proceed
+        try:
+            zeek_line = file_handler.readline()
+        except ValueError:
+            # remover thread just finished closing all old handles.
+            # comes here if I/O operation failed due to a closed file.
+            # to get the new dict of open handles.
+            return False
+
+        # self.print(f'Reading from file {filename}, the line {zeek_line}', 0, 6)
+        # Did the file end?
+        if not zeek_line:
+            # We reached the end of one of the files that we were reading.
+            # Wait for more data to come from another file
+            return False
+
+        timestamp, nline = self.get_ts_from_line(zeek_line)
+        if not timestamp:
+            return False
+
+
+        self.file_time[filename] = timestamp
+        # Store the line in the cache
+        self.cache_lines[filename] = {
+            'type': filename,
+            'data': nline
+        }
+        return True
+
+    def should_stop_zeek(self):
+        # If we don't have any cached lines to send,
+        # it may mean that new lines are not arriving. Check
+        if not self.cache_lines:
+            # Verify that we didn't have any new lines in the
+            # last 10 seconds. Seems enough for any network to have ANY traffic
+            # Since we actually read something form any file, update the last time of read
+            last_updated_file_time = datetime.now()
+            diff = utils.get_time_diff(last_updated_file_time, datetime.now())
+            if diff >= self.bro_timeout:
+                # It has been <bro_timeout> seconds without any file
+                # being updated. So stop Zeek
+                print(f"@@@@@@@@@@@@@@@@@@  bro timeout !diff {diff} .. self.bro_timeout: {self.bro_timeout}")
+                return True
+    def close_all_handles(self):
+        # We reach here after the break produced if no zeek files are being updated.
+        # No more files to read. Close the files
+        for file, handle in self.open_file_handlers.items():
+            self.print(f'Closing file {file}', 2, 0)
+            handle.close()
+    def get_earliest_line(self):
+        """
+        loops through all the caches lines and returns the line with the earliest ts
+        """
+        # Now read lines in order. The line with the earliest timestamp first
+        files_sorted_by_ts = sorted(self.file_time, key=self.file_time.get)
+        try:
+            # get the file that has the earliest flow
+            file_with_earliest_flow = files_sorted_by_ts[0]
+        except IndexError:
+            # No more sorted keys. Just loop waiting for more lines
+            # It may happen that we check all the files in the folder,
+            # and there is still no files for us.
+            # To cover this case, just refresh the list of files
+            self.zeek_files = __database__.get_all_zeek_file()
+            # time.sleep(1)
+            # print(f"@@@@@@@@@@@@@@@@@@  continuinggg {lines}\n"
+            #       f" .. files_sorted_by_ts: {files_sorted_by_ts}\n"
+            #       f"zeek_files : {zeek_files}\n"
+            #       f"file_time: {file_time}\n")
+            return False, False
+
+        # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
+        # make sure we read flows in the following order:
+        # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
+        # conn.log
+        # any other flow
+        # for key in cache_lines:
+        #     if 'dns' in key:
+        #         file_with_earliest_flow = key
+        #         break
+        # comes here if we're done with all conn.log flows and it's time to process other files
+        earliest_line = self.cache_lines[file_with_earliest_flow]
+        return earliest_line, file_with_earliest_flow
+
     def read_zeek_files(self) -> int:
         try:
             # Get the zeek files in the folder now
-            zeek_files = __database__.get_all_zeek_file()
+            self.zeek_files = __database__.get_all_zeek_file()
             self.open_file_handlers = {}
-            file_time = {}
-            cache_lines = {}
+            self.file_time = {}
+            self.cache_lines = {}
             # Try to keep track of when was the last update so we stop this reading
             last_updated_file_time = datetime.now()
             lines = 0
             while True:
                 self.check_if_time_to_del_rotated_files()
-                # Go to all the files generated by Zeek and read them
-                for filename in zeek_files:
+                # Go to all the files generated by Zeek and read 1 line from each of them
+                for filename in self.zeek_files:
                     # filename is the log file name with .log extension in case of interface or pcap
                     # and without the ext in case of zeek files
                     if not filename.endswith('.log'):
                         filename += '.log'
-                    # Ignore the files that do not contain data. These are the zeek log files that we don't use
-                    filename_without_ext = filename.split('/')[-1].split('.')[
-                        0
-                    ]
-                    if filename_without_ext in self.ignored_files:
+
+                    if self.is_ignored_file(filename):
                         continue
 
-                    # Update which files we know about
-                    try:
-                        # We already opened this file
-                        file_handler = self.open_file_handlers[filename]
-                    except KeyError:
-                        # First time opening this file.
-                        try:
-                            file_handler = open(filename, 'r')
-                            lock = threading.Lock()
-                            lock.acquire()
-                            self.open_file_handlers[filename] = file_handler
-                            lock.release()
-                            # now that we replaced the old handle with the newly created file handle
-                            # delete the old .log file, that has a timestamp in its name.
-                        except FileNotFoundError:
-                            # for example dns.log
-                            # zeek changes the dns.log file name every 1d, it adds a timestamp to it
-                            # it doesn't create the new dns.log until a new dns request occurs
-                            # if slips tries to read from the old dns.log now it won't find it
-                            # because it's been renamed and the new one isn't created yet
-                            # simply continue until the new log file is created and added to the zeek_files list
-                            continue
+                    # reads 1 line from the given file and cache it from in self.cache_lines
+                    self.cache_nxt_line_in_file(filename)
 
-                    # Only read the next line if the previous line was sent
-                    try:
-                        _ = cache_lines[filename]
-                        # We have still something to send, do not read the next line from this file
-                    except KeyError:
-                        # We don't have any waiting line for this file, so proceed
-                        try:
-                            zeek_line = file_handler.readline()
-                        except ValueError:
-                            # remover thread just finished closing all old handles.
-                            # comes here if I/O operation failed due to a closed file.
-                            # to get the new dict of open handles.
-                            continue
+                if self.should_stop_zeek():
+                    break
 
-                        # self.print(f'Reading from file {filename}, the line {zeek_line}', 0, 6)
-                        # Did the file end?
-                        if not zeek_line:
-                            # We reached the end of one of the files that we were reading. Wait for more data to come
-                            continue
-
-                        # Since we actually read something form any file, update the last time of read
-                        last_updated_file_time = datetime.now()
-                        try:
-                            nline = json.loads(zeek_line)
-                            line = {'type': filename, 'data': nline}
-
-                            # All bro files have a field 'ts' with the timestamp.
-                            # So we are safe here not checking the type of line
-                            # In some Zeek files there may not be a ts field
-                            # Like in some weird smb files
-                            timestamp = nline.get('ts', 0)
-
-                        except json.decoder.JSONDecodeError:
-                            # It is not JSON format. It is tab format line.
-                            nline = zeek_line
-                            # Ignore comments at the beginning of the file.
-                            if not nline or nline[0] == '#':
-                                continue
-
-                            line = {'type': filename, 'data': nline}
-                            timestamp = nline.split('\t')[0]
-
-                        try:
-
-                            # is a dict with {'filename': ts, ...}
-                            file_time[filename] = float(timestamp)
-                            # self.print(f'File {filename}. TS: {timestamp}')
-                            # Store the line in the cache
-                            # self.print(f'Adding cache and time of {filename}')
-                            cache_lines[filename] = line
-                        except ValueError:
-                            # this ts doesnt repr a float value, ignore it
-                            pass
-
-
-                ###################################################################################
-                # Out of the for that check each Zeek file one by one
-                # self.print('Cached lines: {}'.format(str(cache_lines)))
-
-                # If we don't have any cached lines to send, it may mean that new lines are not arriving. Check
-                if not cache_lines:
-                    # Verify that we didn't have any new lines in the
-                    # last 10 seconds. Seems enough for any network to have ANY traffic
-                    diff = utils.get_time_diff(last_updated_file_time, datetime.now())
-                    if diff >= self.bro_timeout:
-                        # It has been <bro_timeout> seconds without any file
-                        # being updated. So stop Zeek
-                        break
-
-                # Now read lines in order. The line with the smallest timestamp first
-                files_sorted_by_ts = sorted(file_time, key=file_time.get)
-                # self.print('Sorted times: {}'.format(str(files_sorted_by_ts)))
-                try:
-                    # get the file that has the earliest flow
-                    file_with_earliest_flow = files_sorted_by_ts[0]
-                except IndexError:
-                    # No more sorted keys. Just loop waiting for more lines
-                    # It may happen that we check all the files in the folder, and there is still no file for us.
-                    # To cover this case, just refresh the list of files
-                    zeek_files = __database__.get_all_zeek_file()
-                    time.sleep(1)
+                earliest_line, file_with_earliest_flow = self.get_earliest_line()
+                if not file_with_earliest_flow:
                     continue
 
-                # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
-                # make sure we read flows in the following order:
-                # dns.log  (make it a priority to avoid FP connection without dns resolution alerts)
-                # conn.log
-                # any other flow
-                # for key in cache_lines:
-                #     if 'dns' in key:
-                #         file_with_earliest_flow = key
-                #         break
-                # comes here if we're done with all conn.log flows and it's time to process other files
-                line_to_send = cache_lines[file_with_earliest_flow]
-
-                # self.print('Line to send from file {}. {}'.format(file_with_earliest_flow, line_to_send))
-                self.print('	> Sent Line: {}'.format(line_to_send), 0, 3)
-                self.profilerqueue.put(line_to_send)
-                # Count the read lines
+                self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
+                self.profilerqueue.put(earliest_line)
+                print(f"@@@@@@@@@@@@@@@@@@  now reading line {lines}")
                 lines += 1
                 # Delete this line from the cache and the time list
-                # self.print('Deleting cache and time of {}'.format(earliest_flow))
-                del cache_lines[file_with_earliest_flow]
-                del file_time[file_with_earliest_flow]
-                # Get the new list of files. Since new files may have been created by Zeek while we were processing them.
-                zeek_files = __database__.get_all_zeek_file()
+                del self.cache_lines[file_with_earliest_flow]
+                del self.file_time[file_with_earliest_flow]
+                # Get the new list of files. Since new files may have been created by
+                # Zeek while we were processing them.
+                self.zeek_files = __database__.get_all_zeek_file()
+                print(f"@@@@@@@@@@@@@@@@@@  zeek_files: {self.zeek_files}")
 
-            ################
-            # Out of the while
+            print(f"@@@@@@@@@@@@@@@@@@  out of the loop @ {lines}")
+            self.close_all_handles()
 
-            # We reach here after the break produced if no zeek files are being updated.
-            # No more files to read. Close the files
-            for file, handle in self.open_file_handlers.items():
-                self.print(f'Closing file {file}', 2, 0)
-                handle.close()
             return lines
         except KeyboardInterrupt:
             return False
@@ -379,8 +423,8 @@ class InputProcess(multiprocessing.Process):
     def read_zeek_folder(self):
         # This is the case that a folder full of zeek files is passed with -f
         try:
-            # wait max 3 seconds before stopping slips if no new flows are read
-            self.bro_timeout = 3
+            # wait max 10 seconds before stopping slips if no new flows are read
+            self.bro_timeout = 10
             if __database__.is_growing_zeek_dir():
                 # slips is given a dir that is growing i.e zeek dir running on an interface
                 # don't stop zeek or slips
@@ -523,7 +567,8 @@ class InputProcess(multiprocessing.Process):
                 return False
             # Add log file to database
             __database__.add_zeek_file(file_name_without_extension)
-            self.bro_timeout = 3
+            # no need for a bro timeout when given a log file, bro is not even running
+            self.bro_timeout = float("inf")
             self.lines = self.read_zeek_files()
             self.stop_queues()
             return True
