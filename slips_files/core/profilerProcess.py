@@ -44,6 +44,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
+        self.ctr = 0
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -2412,7 +2413,9 @@ class ProfilerProcess(multiprocessing.Process):
                     self.process_zeek_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
+
                     self.outputqueue.put(f"update progress bar")
+
                 elif (
                     self.input_type == 'argus'
                     or self.input_type == 'argus-tabs'
@@ -2421,8 +2424,8 @@ class ProfilerProcess(multiprocessing.Process):
                     # Argus puts the definition of the columns on the first line only
                     # So read the first line and define the columns
                     try:
-                        # argus from stdin
                         if '-f' in sys.argv and 'argus' in sys.argv:
+                            # argus from stdin
                             self.define_columns(
                                 {
                                     'data': "StartTime,Dur,Proto,SrcAddr,Sport,"
@@ -2431,6 +2434,7 @@ class ProfilerProcess(multiprocessing.Process):
                                             "TotBytes,SrcBytes,SrcPkts,Label"
                                 }
                             )
+
                         _ = self.column_idx['starttime']
                         self.process_argus_input(line)
                         # Add the flow to the profile

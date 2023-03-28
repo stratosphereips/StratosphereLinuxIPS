@@ -364,8 +364,10 @@ class InputProcess(multiprocessing.Process):
         """
         returns the number of flows/lines in a given file
         """
+        # using grep -c instead of wc because wc doesn't count last of
+        # the file if it does not have end of line character
         p = subprocess.Popen(
-            ['wc', '-l', file],
+            ['grep', '-c', "", file],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE
         )
@@ -451,7 +453,8 @@ class InputProcess(multiprocessing.Process):
 
     def handle_binetflow(self):
         try:
-            total_flows = self.get_flows_number(self.given_path)
+            # the number of flows returned by get_flows_number contains the header, so subtract that
+            total_flows = self.get_flows_number(self.given_path) -1
             __database__.set_input_metadata({'total_flows': total_flows})
 
             self.lines = 0
