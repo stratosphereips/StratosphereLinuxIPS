@@ -76,6 +76,17 @@ jobs:
     env:
       SLIPS_VERSION: v1.0.2
 
+    strategy:
+      matrix:
+        include:
+          - type: ubuntu-image
+            name: ubuntu-image
+            path: ./docker/ubuntu-image/Dockerfile
+          
+          - type: macosm1-image
+            name: macosm1-image
+            path: ./docker/macosm1-image/Dockerfile
+
     steps:
 
     # clone slips and checkout branch
@@ -84,13 +95,13 @@ jobs:
       with:
         ref: 'develop'
 
-    # build slips from ubuntu dockerfile, but don't push
-    - name: Build our ubuntu image from dockerfile
+    # build slips from target dockerfile, but don't push
+    - name: Build our ${{ matrix.name }} from dockerfile
       id: docker_build_slips
       uses: docker/build-push-action@v2
       with:
         context: ./
-        file: ./docker/ubuntu-image/Dockerfile
+        file: ${{ matrix.path }}
         tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
         push: false
 
