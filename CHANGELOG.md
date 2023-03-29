@@ -1,6 +1,7 @@
 -1.0.3 (March 2023)
 - Add unencrypted traffic detection by @haleelsada
-- 
+- user termcolor by @haleelsada
+- Instead of dos detection. slips is now detecting all executables thanks to @Onyx2406 
 -1.0.2 (Feb 2023)
 - Support ASNs in our own_malicious_iocs.csv file
 - Add a zeek script to recognize the gateway IP and add it to notice.log 
