@@ -416,6 +416,26 @@ class Module(Module, multiprocessing.Process):
                                  twid=twid, uid=uid)
         return True
 
+
+    def set_evidence_http_traffic(self, daddr, profileid, twid, uid, timestamp):
+        """
+        Detect when a new HTTP flow is found stating that the traffic is unencrypted
+        """
+        confidence = 1
+        threat_level = 'low'
+        source_target_tag = 'SendingUnencryptedData'
+        category = 'Anomaly.Traffic'
+        evidence_type = 'HTTPtraffic'
+        attacker_direction = 'srcip'
+        attacker = profileid.split('_')[1]
+        description = (f'Unencrypted HTTP traffic from {attacker} to {daddr}.')
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
+        return True
+
+
     def check_pastebin_downloads(
             self,
             daddr,
@@ -587,6 +607,16 @@ class Module(Module, multiprocessing.Process):
                         twid,
                         uid
                     )
+                    self.set_evidence_http_traffic(
+                        daddr,
+                        profileid,
+                        twid,
+                        uid,
+                        timestamp
+                    )
+
+
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
