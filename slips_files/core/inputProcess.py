@@ -427,9 +427,14 @@ class InputProcess(multiprocessing.Process):
             self.start_observer()
             total_flows = 0
             for file in os.listdir(self.given_path):
+                full_path = os.path.join(self.given_path, file)
+                # exclude ignored files from the total flows to be processed
+                if self.is_ignored_file(full_path):
+                    continue
+
                 if not __database__.is_growing_zeek_dir():
                     # get the total number of flows slips is going to read (used later for the progress bar)
-                    total_flows += self.get_flows_number(os.path.join(self.given_path, file))
+                    total_flows += self.get_flows_number(full_path)
                     # subtract comment lines in zeek tab files, they shouldnt be considered flows
                     total_flows -= 9
 
