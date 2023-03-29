@@ -46,7 +46,7 @@ from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
-
+from termcolor import colored
 
 # Ignore warnings on CPU from tensorflow
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
@@ -681,9 +681,7 @@ class Main:
         """
         returns the text in green
         """
-        GREEN_s = '\033[1;32;40m'
-        GREEN_e = '\033[00m'
-        return f'{GREEN_s}{txt}{GREEN_e}'
+        return colored(txt, "green")
 
 
     def print_stopped_module(self, module):
