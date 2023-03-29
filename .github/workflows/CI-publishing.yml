@@ -32,10 +32,12 @@ jobs:
         include:
           - type: ubuntu-image
             name: ubuntu-image
+            image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
           
           - type: macosm1-image
             name: macosm1-image
+            image_name: slips_macos_m1
             path: ./docker/macosm1-image/Dockerfile
 
     steps:
@@ -66,7 +68,7 @@ jobs:
       with:
         context: ./
         file: ${{ matrix.path }}
-        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
         push: true
 
   publish_P2P_docker_image:
