@@ -199,7 +199,6 @@ class InputProcess(multiprocessing.Process):
         # These are the zeek log files that we don't use
         filename_without_ext = filename.split('/')[-1].split('.')[0]
         if filename_without_ext in self.ignored_files:
-            print(f"@@@@@@@@@@@@@@@@@@  ignored file {filename_without_ext} {lines}")
             return True
 
     def get_file_handler(self, filename):
@@ -310,7 +309,6 @@ class InputProcess(multiprocessing.Process):
             if diff >= self.bro_timeout:
                 # It has been <bro_timeout> seconds without any file
                 # being updated. So stop Zeek
-                print(f"@@@@@@@@@@@@@@@@@@  bro timeout !diff {diff} .. self.bro_timeout: {self.bro_timeout}")
                 return True
     def close_all_handles(self):
         # We reach here after the break produced if no zeek files are being updated.
@@ -334,10 +332,6 @@ class InputProcess(multiprocessing.Process):
             # To cover this case, just refresh the list of files
             self.zeek_files = __database__.get_all_zeek_file()
             # time.sleep(1)
-            # print(f"@@@@@@@@@@@@@@@@@@  continuinggg {lines}\n"
-            #       f" .. files_sorted_by_ts: {files_sorted_by_ts}\n"
-            #       f"zeek_files : {zeek_files}\n"
-            #       f"file_time: {file_time}\n")
             return False, False
 
         # to fix the problem of evidence being generated BEFORE their corresponding flows are added to our db
@@ -376,7 +370,8 @@ class InputProcess(multiprocessing.Process):
                         continue
 
                     # reads 1 line from the given file and cache it from in self.cache_lines
-                    self.cache_nxt_line_in_file(filename)
+                    if not self.cache_nxt_line_in_file(filename):
+                        continue
 
                 if self.should_stop_zeek():
                     break
@@ -387,7 +382,6 @@ class InputProcess(multiprocessing.Process):
 
                 self.print('	> Sent Line: {}'.format(earliest_line), 0, 3)
                 self.profilerqueue.put(earliest_line)
-                print(f"@@@@@@@@@@@@@@@@@@  now reading line {lines}")
                 lines += 1
                 # Delete this line from the cache and the time list
                 del self.cache_lines[file_with_earliest_flow]
@@ -395,9 +389,7 @@ class InputProcess(multiprocessing.Process):
                 # Get the new list of files. Since new files may have been created by
                 # Zeek while we were processing them.
                 self.zeek_files = __database__.get_all_zeek_file()
-                print(f"@@@@@@@@@@@@@@@@@@  zeek_files: {self.zeek_files}")
 
-            print(f"@@@@@@@@@@@@@@@@@@  out of the loop @ {lines}")
             self.close_all_handles()
 
             return lines
@@ -438,6 +430,8 @@ class InputProcess(multiprocessing.Process):
                 if not __database__.is_growing_zeek_dir():
                     # get the total number of flows slips is going to read (used later for the progress bar)
                     total_flows += self.get_flows_number(os.path.join(self.given_path, file))
+                    # subtract comment lines in zeek tab files, they shouldnt be considered flows
+                    total_flows -= 9
 
                 # Remove .log extension and add file name to database.
                 extension = file[-4:]
@@ -554,10 +548,31 @@ class InputProcess(multiprocessing.Process):
             return True
         except KeyboardInterrupt:
             return True
+    def is_zeek_tabs_file(self):
+        """
+        returns true if self.given path is a zeek tab separated file
+        """
+        with open(self.given_path,'r') as f:
+            line = f.readline()
+            if '\t' in line:
+                return True
+            if line.startswith("#separator \\x09"):
+                return True
+            try:
+                json.loads(line)
+                return true
+            except json.decoder.JSONDecodeError:
+                return False
 
     def handle_zeek_log_file(self):
         try:
             total_flows = self.get_flows_number(self.given_path)
+            if self.is_zeek_tabs_file():
+                # zeek tab files contain many comments at the begging of the file and at the end
+                # subtract the comments from the flows number
+                total_flows -= 9
+
+
             __database__.set_input_metadata({'total_flows': total_flows})
 
             try:
