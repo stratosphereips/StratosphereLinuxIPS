@@ -176,17 +176,17 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         
-    def report_executable_mime_type(self, mime_type, daddr, profileid, twid, uid, timestamp):
+    def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
         confidence = 1
-        threat_level = 'medium'
+        threat_level = 'low'
         source_target_tag = 'ExecutableMIMEType'
         category = 'Anomaly.File'
         evidence_type = 'ExecutableMIMEType'
-        attacker_direction = 'srcip'
-        attacker = profileid.split('_')[1]
-        ip_identification = __database__.getIPIdentification(daddr)
+        attacker_direction = 'dstip'
+        srcip = profileid.split('_')[1]
+        ip_identification = __database__.getIPIdentification(attacker)
         description = f'download of an executable with mime type: {mime_type} ' \
-                      f'by {attacker} from {daddr} {ip_identification}.'
+                      f'by {srcip} from {attacker} {ip_identification}.'
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
@@ -476,34 +476,7 @@ class Module(Module, multiprocessing.Process):
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
-    def detect_binary_downloads(
-            self,
-            resp_mime_types,
-            daddr,
-            host,
-            uri,
-            timestamp,
-            profileid,
-            twid,
-            uid
-    ):
-        if not resp_mime_types or not ('application/x-dosexec' in resp_mime_types):
-            return False
 
-        attacker_direction = 'dstdomain'
-        source_target_tag = 'Malware'
-        attacker = f'{host}{uri}'
-        evidence_type = 'DOSExecutableDownload'
-        threat_level = 'low'
-        category = 'Information'
-        confidence = 1
-        description = (
-            f'DOS executable binary download from IP: {daddr} {attacker}'
-        )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
-        return True
 
 
     def shutdown_gracefully(self):
