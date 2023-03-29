@@ -681,7 +681,7 @@ class Main:
         """
         returns the text in green
         """
-        return colored(txt, "green", "on_black")
+        return colored(txt, "green")
 
 
     def print_stopped_module(self, module):
