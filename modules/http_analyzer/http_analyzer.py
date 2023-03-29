@@ -28,6 +28,17 @@ class Module(Module, multiprocessing.Process):
         # to check your internet connection
         self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
         self.read_configuration()
+        self.executable_mime_types = [
+            'application/x-msdownload',
+            'application/x-ms-dos-executable',
+            'application/x-ms-exe',
+            'application/x-exe',
+            'application/x-winexe',
+            'application/x-winhlp',
+            'application/x-winhelp',
+            'application/octet-stream',
+            'application/x-dosexec'
+        ]
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -53,24 +64,16 @@ class Module(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
 
-    def detect_executable_mime_types(resp_mime_types):
+    def detect_executable_mime_types(self, resp_mime_types: list) -> bool:
+        """
+        detects the type of file in the http response,
+        returns true if it's an executable
+        """
         if not resp_mime_types:
             return False
 
-        executable_mime_types = [
-            'application/x-msdownload',
-            'application/x-ms-dos-executable',
-            'application/x-ms-exe',
-            'application/x-exe',
-            'application/x-winexe',
-            'application/x-winhlp',
-            'application/x-winhelp',
-            'application/octet-stream',
-            'application/x-dosexec'
-        ]
-
         for mime_type in resp_mime_types:
-            if mime_type in executable_mime_types:
+            if mime_type in self.executable_mime_types:
                 return True
         return False
 
@@ -173,15 +176,17 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         
-    def report_executable_mime_type(self, mime_type, profileid, twid, uid, timestamp):
+    def report_executable_mime_type(self, mime_type, daddr, profileid, twid, uid, timestamp):
         confidence = 1
-        threat_level = 'low'
+        threat_level = 'medium'
         source_target_tag = 'ExecutableMIMEType'
         category = 'Anomaly.File'
         evidence_type = 'ExecutableMIMEType'
         attacker_direction = 'srcip'
         attacker = profileid.split('_')[1]
-        description = (f'Detected executable mime type: {mime_type} from {attacker}.')
+        ip_identification = __database__.getIPIdentification(daddr)
+        description = f'download of an executable with mime type: {mime_type} ' \
+                      f'by {attacker} from {daddr} {ip_identification}.'
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
@@ -572,6 +577,7 @@ class Module(Module, multiprocessing.Process):
                     if self.detect_executable_mime_types(resp_mime_types):
                         self.report_executable_mime_type(
                             resp_mime_types,
+                            daddr,
                             profileid,
                             twid,
                             uid,
