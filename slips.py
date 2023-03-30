@@ -65,7 +65,7 @@ class Main:
         self.start_port = 32768
         self.end_port = 32850
         self.conf = ConfigParser()
-        self.version = self.conf.get_slips_version()
+        self.version = self.get_slips_version()
         self.args = self.conf.get_args()
         # in testing mode we manually set the following params
         if not testing:
@@ -81,6 +81,11 @@ class Main:
                 self.prepare_zeek_output_dir()
                 self.twid_width = self.conf.get_tw_width()
 
+    def get_slips_version(self):
+        version_file = 'VERSION'
+        with open(version_file, 'r') as f:
+            version = f.read()
+        return version
 
     def prepare_zeek_output_dir(self):
         from pathlib import Path
