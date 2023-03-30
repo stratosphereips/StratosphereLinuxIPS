@@ -682,7 +682,8 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             __database__.store_process_PID('Zeek', self.zeek_pid)
-
+            if not hasattr(self, 'is_zeek_tabs'):
+                self.is_zeek_tabs = False
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
