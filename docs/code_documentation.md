@@ -6,4 +6,4 @@
 
 TODO: explain all points in the graph 
 
-[Slips auto-generated code documentation here](https://stratosphereips.github.io/StratosphereLinuxIPS/annotated.html)
+[Slips auto-generated code documentation here](https://stratosphereips.github.io/StratosphereLinuxIPS/files.html)
