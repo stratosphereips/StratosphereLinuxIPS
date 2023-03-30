@@ -1,6 +1,13 @@
 <h1 align="center"> 
 
-Slips v1.0.2
+<h1>Slips Version: <span id="version"></span></h1>
+<script>
+  fetch('https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/alya-read-version-from-1-file/VERSION')
+    .then(response => response.text())
+    .then(data => {
+      document.getElementById('version').textContent = data;
+    });
+</script>
 
 
 <h3 align="center"> 
