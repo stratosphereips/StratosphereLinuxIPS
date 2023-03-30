@@ -4,11 +4,13 @@ import shutil
 import os
 import random
 
+
+zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+redis_port = 6531
+
 def do_nothing(*arg):
     """Used to override the print function because using the print causes broken pipes"""
     pass
-
-zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
 def check_zeek_or_bro():
     """
@@ -29,6 +31,8 @@ def create_inputProcess_instance(
 ):
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
+    global redis_port
+    redis_port +=1
     inputProcess = InputProcess(
         outputQueue,
         profilerQueue,
@@ -38,8 +42,9 @@ def create_inputProcess_instance(
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        random.randint(6531, 6540)
+        redis_port
     )
+
     inputProcess.bro_timeout = 1
     # override the print function to avoid broken pipes
     inputProcess.print = do_nothing
@@ -61,6 +66,7 @@ def test_handle_pcap_and_interface(
         outputQueue, profilerQueue, input_information, input_type
     )
     inputProcess.zeek_pid = 'False'
+    inputProcess.is_zeek_tabs = True
     assert inputProcess.handle_pcap_and_interface() == True
 
 
@@ -95,8 +101,6 @@ def test_handle_zeek_log_file(
         outputQueue, profilerQueue, input_information, input_type
     )
     assert inputProcess.handle_zeek_log_file() == expected_output
-
-
 
 
 @pytest.mark.parametrize(
