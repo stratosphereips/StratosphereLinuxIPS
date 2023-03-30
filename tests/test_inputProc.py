@@ -2,6 +2,7 @@ import pytest
 from slips_files.core.inputProcess import InputProcess
 import shutil
 import os
+import random
 
 def do_nothing(*arg):
     """Used to override the print function because using the print causes broken pipes"""
@@ -37,7 +38,7 @@ def create_inputProcess_instance(
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        65531
+        random.randint(6531, 6540)
     )
     inputProcess.bro_timeout = 1
     # override the print function to avoid broken pipes
@@ -66,8 +67,8 @@ def test_handle_pcap_and_interface(
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'),
-        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'),
+        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'), # tabs
+        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'), # json
     ],
 )
 def test_read_zeek_folder(
@@ -78,21 +79,24 @@ def test_read_zeek_folder(
     )
     assert inputProcess.read_zeek_folder() == True
 
-
 @pytest.mark.parametrize(
-    'input_type,input_information',
+    'input_type,input_information,expected_output',
     [
-        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir-2/conn.log'),
-        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log'),
+        ('zeek_log_file', 'dataset/test10-mixed-zeek-dir/conn.log', True), #tabs
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log', True), # json
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn', False), # json
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/x509.log', False), # json
     ],
 )
 def test_handle_zeek_log_file(
-    outputQueue, profilerQueue, input_type, input_information
+    outputQueue, profilerQueue, input_type, input_information, expected_output
 ):
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_zeek_log_file() == True
+    assert inputProcess.handle_zeek_log_file() == expected_output
+
+
 
 
 @pytest.mark.parametrize(
