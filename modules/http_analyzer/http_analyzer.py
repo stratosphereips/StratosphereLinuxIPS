@@ -576,16 +576,7 @@ class Module(Module, multiprocessing.Process):
                         uid
                     )
 
-                    self.detect_binary_downloads(
-                        resp_mime_types,
-                        daddr,
-                        host,
-                        uri,
-                        timestamp,
-                        profileid,
-                        twid,
-                        uid
-                    )
+
                     self.set_evidence_http_traffic(
                         daddr,
                         profileid,
