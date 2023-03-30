@@ -352,6 +352,7 @@ class InputProcess(multiprocessing.Process):
             self.cache_lines = {}
             # Try to keep track of when was the last update so we stop this reading
             self.last_updated_file_time = datetime.now()
+
             lines = 0
             while True:
                 self.check_if_time_to_del_rotated_files()
@@ -365,10 +366,6 @@ class InputProcess(multiprocessing.Process):
 
                     if self.is_ignored_file(filename):
                         continue
-
-                    # used later for extracting the ts from the line
-                    if not hasattr(self, 'is_zeek_tabs'):
-                        self.is_zeek_tabs = self.is_zeek_tabs_file(filename)
 
                     # reads 1 line from the given file and cache it
                     # from in self.cache_lines
@@ -429,11 +426,17 @@ class InputProcess(multiprocessing.Process):
 
             self.zeek_folder = self.given_path
             self.start_observer()
+
+
+            # if 1 file is zeek tabs the rest should be the same
+            if not hasattr(self, 'is_zeek_tabs'):
+                full_path = os.path.join(self.given_path, os.listdir(self.given_path)[0])
+                self.is_zeek_tabs = self.is_zeek_tabs_file(full_path)
+
+
             total_flows = 0
             for file in os.listdir(self.given_path):
                 full_path = os.path.join(self.given_path, file)
-                if not hasattr(self, 'is_zeek_tabs'):
-                    self.is_zeek_tabs = self.is_zeek_tabs_file(full_path)
 
                 # exclude ignored files from the total flows to be processed
                 if self.is_ignored_file(full_path):
@@ -591,7 +594,8 @@ class InputProcess(multiprocessing.Process):
                 return False
 
             total_flows = self.get_flows_number(self.given_path)
-            if self.is_zeek_tabs_file(self.given_path):
+            self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
+            if self.is_zeek_tabs:
                 # zeek tab files contain many comments at the begging of the file and at the end
                 # subtract the comments from the flows number
                 total_flows -= 9
@@ -678,6 +682,7 @@ class InputProcess(multiprocessing.Process):
             time.sleep(3)
 
             __database__.store_process_PID('Zeek', self.zeek_pid)
+
             lines = self.read_zeek_files()
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
