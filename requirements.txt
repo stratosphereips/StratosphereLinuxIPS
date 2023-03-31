@@ -38,3 +38,4 @@ flask
 tld
 tqdm
 termcolor
+transformers==4.27.4
