@@ -16,6 +16,8 @@
 
 import recommonmark
 from recommonmark.transform import AutoStructify
+import requests
+
 
 # -- Project information -----------------------------------------------------
 
@@ -24,9 +26,11 @@ copyright = '2021, Stratosphere Laboratory'
 author = 'Stratosphere Laboratory'
 
 # The full version, including alpha/beta/rc tags
-with open("VERSION", 'r') as f:
-    release = f.read()
+url = "https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION"
+response = requests.get(url)
 
+if response.status_code == 200:
+    release = response.text
 
 # -- General configuration ---------------------------------------------------
 
