@@ -1,5 +1,5 @@
 <h1 align="center"> 
-SLIPS
+Slips v1.0.3
 </h1>
 
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
