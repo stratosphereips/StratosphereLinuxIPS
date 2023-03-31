@@ -195,7 +195,9 @@ class ProcessManager:
         )
         return True
 
-    def should_kill_all_modules(self, function_start_time, wait_for_modules_to_finish) -> bool:
+    def should_kill_all_modules(self,
+                                function_start_time,
+                                wait_for_modules_to_finish) -> bool:
         """
         checks if x minutes has passed since the start of the function
         :param wait_for_modules_to_finish: time in mins to wait before force killing all modules

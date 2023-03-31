@@ -106,7 +106,7 @@ class MetadataManager:
     def set_analysis_end_date(self):
         """
         Add the analysis end date to the metadata file and
-        the db for the web inerface to display
+        the db for the web interface to display
         """
         self.enable_metadata = self.main.conf.enable_metadata()
         end_date = utils.convert_format(datetime.now(), utils.alerts_format)
