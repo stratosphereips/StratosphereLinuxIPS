@@ -58,7 +58,7 @@ pip3 install --ignore-installed six
 # For Kalipso
 echo "[+] Downloading nodejs v19 and npm dependencies"
 curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
-cd /modules/kalipso && npm install
+cd ./modules/kalipso && npm install
 cd ../..
 
 echo "[+] Installing p2p4slips\n"

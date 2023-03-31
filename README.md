@@ -1,12 +1,9 @@
 <h1 align="center"> 
-
-Slips v1.0.2
-
-
-<h3 align="center"> 
+Slips v1.0.3
+</h1>
 
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
-</h3>
+
 
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
@@ -142,7 +139,7 @@ To build a Docker image of Slips for macOS follow the next steps:
     cd StratosphereLinuxIPS/
     
     # build the MacOS image from the recommended Dockerfile
-    docker build --no-cache -t slips -f docker/macos-image/Dockerfile .
+    docker build --no-cache -t slips -f docker/macosm1-image/Dockerfile .
 ```
 
 To use Slips with files already inside the Docker you can do;

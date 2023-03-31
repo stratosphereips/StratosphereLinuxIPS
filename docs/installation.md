@@ -88,7 +88,7 @@ Update the repository of packages so you see the latest versions:
 	
 Install the required packages (-y to install without asking for approval):
 
-    apt-get -y installtshark iproute2 python3.8 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
+    apt-get -y install tshark iproute2 python3.8 python3-tzlocal net-tools python3-dev build-essential python3-certifi curl git gnupg ca-certificates redis wget python3-minimal python3-redis python3-pip python3-watchdog nodejs redis-server npm lsof file iptables nfdump zeek whois yara
     apt install -y --no-install-recommends nodejs
 	
 Even though we just installed pip3, the package installer for Python (3.8), we need to upgrade it to its latest version:
@@ -132,7 +132,7 @@ Once Redis is running it’s time to clone the Slips repository and run it:
 
 	git clone https://github.com/stratosphereips/StratosphereLinuxIPS.git
 	cd StratosphereLinuxIPS/
-	./slips.py -c config/slips.conf -f dataset/hide-and-seek-short.pcap
+	./slips.py -c config/slips.conf -f dataset/test7-malicious.pcap
 
 Run slips with sudo to enable blocking (Optional) 
 

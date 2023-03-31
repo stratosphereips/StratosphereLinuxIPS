@@ -10,10 +10,13 @@ jobs:
   # auto add release tag
   create_tag:
     runs-on: ubuntu-latest
-    env:
-      SLIPS_VERSION: v1.0.2
 
     steps:
+      - name: Get slips version
+        run: |
+          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
       - uses: actions/checkout@v3
       - uses: rickstaa/action-create-tag@v1
         with:
@@ -23,10 +26,12 @@ jobs:
   publish_ubuntu_image:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
-    env:
-      SLIPS_VERSION: v1.0.2
 
     steps:
+    - name: Get slips version
+      run: |
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
     # clone slips and checkout branch
     # By default it checks out only one commit
@@ -58,9 +63,13 @@ jobs:
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
-    env:
-      SLIPS_VERSION: v1.0.2
+
     steps:
+    - name: Get slips version
+      run: |
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
     # clone slips and checkout branch
     # By default it checks out only one commit
     - uses: actions/checkout@v3
@@ -147,18 +156,26 @@ jobs:
 
   tweet_about_the_new_release:
     runs-on: ubuntu-latest
-    env:
-      SLIPS_VERSION: v1.0.2
-      # same as the above without the v and the dots
-      SLIPS_URL_VERSION: 101
-
     steps:
-      - name: Tweet-trigger-publish-release
-        uses: mugi111/tweet-trigger-release@v1.2
+      - name: Get slips version
+        run: |
+          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          VER2=$(echo $VER | sed 's/\.//g')
+          DATE=$(date +'%Y/%m/%d')
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+          echo "VER2=$VER2" >> $GITHUB_ENV
+          echo "DATE=$DATE" >> $GITHUB_ENV
+
+      - name: Tweet
+        uses: snow-actions/tweet@v1.4.0
         with:
-          consumer_key: ${{ secrets.CONSUMER_KEY }}
-          consumer_secret: ${{ secrets.CONSUMER_SECRET }}
-          access_token_key: ${{ secrets.ACCESS_KEY }}
-          access_token_secret: ${{ secrets.ACCESS_SECRET }}
-          tweet_body: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: www.stratosphereips.org/blog/2022/8/30/new-slips-version-${{ env.SLIPS_URL_VERSION }}-is-here '
+          status: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: ${{ env.BLOG_URL }}'
+        env:
+          CONSUMER_API_KEY: ${{ secrets.CONSUMER_KEY }}
+          CONSUMER_API_SECRET_KEY: ${{ secrets.CONSUMER_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_KEY }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_SECRET }}
+          # same as SLIPS_VERSION without the v and the dots
+          BLOG_URL: 'www.stratosphereips.org/blog/${{ env.DATE }}/new-slips-version-${{ env.VER2 }}-is-here'
+
 

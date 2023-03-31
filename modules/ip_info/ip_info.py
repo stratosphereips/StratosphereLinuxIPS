@@ -13,7 +13,7 @@ import whois
 import socket
 import requests
 import json
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import re
 import time
@@ -372,7 +372,7 @@ class Module(Module, multiprocessing.Process):
         # the errors are the same exceptions we're handling
         # temorarily change stdout to /dev/null
         with open('/dev/null', 'w') as f:
-            with redirect_stdout(f):
+            with redirect_stdout(f) and redirect_stderr(f):
                 # get registration date
                 try:
                     creation_date = whois.query(domain).creation_date

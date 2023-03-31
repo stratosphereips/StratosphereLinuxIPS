@@ -1,4 +1,3 @@
-
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
@@ -29,6 +28,17 @@ class Module(Module, multiprocessing.Process):
         # to check your internet connection
         self.hosts = ['bing.com', 'google.com', 'yandex.com', 'yahoo.com', 'duckduckgo.com']
         self.read_configuration()
+        self.executable_mime_types = [
+            'application/x-msdownload',
+            'application/x-ms-dos-executable',
+            'application/x-ms-exe',
+            'application/x-exe',
+            'application/x-winexe',
+            'application/x-winhlp',
+            'application/x-winhelp',
+            'application/octet-stream',
+            'application/x-dosexec'
+        ]
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -53,6 +63,19 @@ class Module(Module, multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.pastebin_downloads_threshold = conf.get_pastebin_download_threshold()
+
+    def detect_executable_mime_types(self, resp_mime_types: list) -> bool:
+        """
+        detects the type of file in the http response,
+        returns true if it's an executable
+        """
+        if not resp_mime_types:
+            return False
+
+        for mime_type in resp_mime_types:
+            if mime_type in self.executable_mime_types:
+                return True
+        return False
 
     def check_suspicious_user_agents(
         self, uid, host, uri, timestamp, user_agent, profileid, twid
@@ -152,7 +175,22 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
+        
+    def report_executable_mime_type(self, mime_type, attacker, profileid, twid, uid, timestamp):
+        confidence = 1
+        threat_level = 'low'
+        source_target_tag = 'ExecutableMIMEType'
+        category = 'Anomaly.File'
+        evidence_type = 'ExecutableMIMEType'
+        attacker_direction = 'dstip'
+        srcip = profileid.split('_')[1]
+        ip_identification = __database__.getIPIdentification(attacker)
+        description = f'download of an executable with mime type: {mime_type} ' \
+                      f'by {srcip} from {attacker} {ip_identification}.'
 
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
 
 
     def check_incompatible_user_agent(
@@ -383,6 +421,26 @@ class Module(Module, multiprocessing.Process):
                                  twid=twid, uid=uid)
         return True
 
+
+    def set_evidence_http_traffic(self, daddr, profileid, twid, uid, timestamp):
+        """
+        Detect when a new HTTP flow is found stating that the traffic is unencrypted
+        """
+        confidence = 1
+        threat_level = 'low'
+        source_target_tag = 'SendingUnencryptedData'
+        category = 'Anomaly.Traffic'
+        evidence_type = 'HTTPtraffic'
+        attacker_direction = 'srcip'
+        attacker = profileid.split('_')[1]
+        description = (f'Unencrypted HTTP traffic from {attacker} to {daddr}.')
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
+                                 twid=twid, uid=uid)
+        return True
+
+
     def check_pastebin_downloads(
             self,
             daddr,
@@ -418,34 +476,7 @@ class Module(Module, multiprocessing.Process):
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
-    def detect_binary_downloads(
-            self,
-            resp_mime_types,
-            daddr,
-            host,
-            uri,
-            timestamp,
-            profileid,
-            twid,
-            uid
-    ):
-        if not resp_mime_types or not ('application/x-dosexec' in resp_mime_types):
-            return False
 
-        attacker_direction = 'dstdomain'
-        source_target_tag = 'Malware'
-        attacker = f'{host}{uri}'
-        evidence_type = 'DOSExecutableDownload'
-        threat_level = 'low'
-        category = 'Information'
-        confidence = 1
-        description = (
-            f'DOS executable binary download from IP: {daddr} {attacker}'
-        )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
-                                 twid=twid, uid=uid)
-        return True
 
 
     def shutdown_gracefully(self):
@@ -516,6 +547,16 @@ class Module(Module, multiprocessing.Process):
                             profileid
                         )
 
+                    if self.detect_executable_mime_types(resp_mime_types):
+                        self.report_executable_mime_type(
+                            resp_mime_types,
+                            daddr,
+                            profileid,
+                            twid,
+                            uid,
+                            timestamp
+                        )
+
                     self.check_incompatible_user_agent(
                         host,
                         uri,
@@ -535,16 +576,17 @@ class Module(Module, multiprocessing.Process):
                         uid
                     )
 
-                    self.detect_binary_downloads(
-                        resp_mime_types,
+
+                    self.set_evidence_http_traffic(
                         daddr,
-                        host,
-                        uri,
-                        timestamp,
                         profileid,
                         twid,
-                        uid
+                        uid,
+                        timestamp
                     )
+
+
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

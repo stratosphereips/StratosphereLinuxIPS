@@ -45,5 +45,24 @@ Pull Requests:
 - PRs won't be merged unless the checks pass.
 - The cleaner you code/change/changeset is, the faster it will be merged.
 
+## Beginner tips on how to create a PR in Slips
+
+Here's a very simple beginner-level steps on how to create your PR in Slips
+
+1. Clone the Slips repo 
+2. In your clone, checkout origin/develop: ```git checkout origin develop```
+3. Create your own branch off develop using your name and the feature name:  ```git checkout -b <yourname>_<feature_name> develop```
+4. Change the code, add the feature or fix the bug, etc. then commit with a descriptive msg ```git commit -m "descriptive msg here" ```
+5. Test your code: this is a very important step. you shouldn't open a PR with code that is not working: ```./tests/run_all_tests.sh```
+6. If some tests didn't pass, it means you need to fix something in your branch. 
+7. Push to your own repo: ```git push -u origin <yourname>_<feature_name>``` 
+8. Open a PR in Slips, remember to set the base branch as develop.
+9. List your changes in the PR description
+
+Some IDEs like [PyCharm](https://www.jetbrains.com/help/pycharm/work-with-github-pull-requests.html) and [vscode](https://levelup.gitconnected.com/how-to-create-a-pull-request-on-github-using-vs-code-f03db28308c4) have the option 
+to open a PR from within the IDE. 
+
+That's it, now you have a ready-to-merge PR!
+
 ***
 [1] These contributions guidelines are inspired by the project [Snoopy](https://raw.githubusercontent.com/a2o/snoopy/master/.github/CONTRIBUTING.md)﻿

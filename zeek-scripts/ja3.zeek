@@ -65,9 +65,10 @@ event ssl_extension(c: connection, is_orig: bool, code: count, val: string)
 if ( ! c?$tlsfp )
     c$tlsfp=TLSFPStorage();
     if ( is_orig == T ) {
-        if ( code in grease ) {
-            next;
-        }
+      #  if ( code in grease ) {
+        #    next;
+        # }
+
         if ( c$tlsfp$extensions == "" ) {
             c$tlsfp$extensions = cat(code);
         }

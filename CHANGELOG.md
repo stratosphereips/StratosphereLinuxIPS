@@ -1,3 +1,12 @@
+-1.0.3 (March 2023)
+- Add HTTP unencrypted traffic detection by @haleelsada
+- use termcolor by @haleelsada
+- Instead of dos detection. slips is now detecting all executables thanks to @Onyx2406 
+- Updated the docs for contributing 
+- Fix Leak detector errors when a different version of yara is used.
+- fix problem with counting the number of flows to be processed in the progress bar
+- Remove debugging prints printed by the whois python library to stderr
+
 -1.0.2 (Feb 2023)
 - Support ASNs in our own_malicious_iocs.csv file
 - Add a zeek script to recognize the gateway IP and add it to notice.log 

@@ -258,21 +258,23 @@ class OutputProcess(multiprocessing.Process):
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
-            total=total_flows+1,
+            total=total_flows,
             leave=True,
             colour="green",
             desc="Flows processed",
-            mininterval=0,
+            mininterval=0, # defines how long to wait between each refresh.
             unit=' flow',
             smoothing=1,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
             position=0,
+            initial=0, #initial value of the flows processed
             file=sys.stdout
         )
 
     def update_progress_bar(self):
         """
         wrapper for tqdm.update()
+        adds 1 to the number of flows processed
         """
         if not hasattr(self, 'progress_bar'):
             # this module wont have the progress_bar set if it's running on pcap or interface
@@ -281,7 +283,6 @@ class OutputProcess(multiprocessing.Process):
         # todo profile slips with and without the bar !
         if self.slips_mode == 'daemonized':
             return
-
 
         self.progress_bar.update(1)
         # self.progress_bar.refresh()
@@ -294,6 +295,9 @@ class OutputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def update_progress_bar_stats(self):
+        """
+        updates the statistics shown next to the progress bar
+        """
         if not hasattr(self, 'progress_bar'):
             return
 
