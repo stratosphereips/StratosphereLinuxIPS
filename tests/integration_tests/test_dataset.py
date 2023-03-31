@@ -225,7 +225,7 @@ def test_binetflow(
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
                 'suspicious user-agent',
-                'DOS executable binary download',
+                'download of an executable',
             ],
             'test14-malicious-zeek-dir/',
             6670
