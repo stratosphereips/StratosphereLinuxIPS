@@ -344,6 +344,11 @@ class Helper:
     def set_evidence_conn_to_private_ip(
             self, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
+        
+        if daddr != '0.0.0.0' and daddr != '255.255.255.255':
+            return
+        if saddr != '0.0.0.0' and saddr != '255.255.255.255':
+            return
 
         confidence = 1
         threat_level = 'info'
