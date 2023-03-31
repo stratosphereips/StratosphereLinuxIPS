@@ -345,9 +345,9 @@ class Helper:
             self, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
         
-        if daddr != '0.0.0.0' and daddr != '255.255.255.255':
+        if (daddr == '0.0.0.0' || daddr == '255.255.255.255'):
             return
-        if saddr != '0.0.0.0' and saddr != '255.255.255.255':
+        if (saddr == '0.0.0.0' || saddr == '255.255.255.255'):
             return
 
         confidence = 1
