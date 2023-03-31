@@ -1,3 +1,5 @@
+-1.0.4 (April 2023)
+- keep a history of the past user agents  by @haleelsada
 -1.0.3 (March 2023)
 - Add HTTP unencrypted traffic detection by @haleelsada
 - use termcolor by @haleelsada
