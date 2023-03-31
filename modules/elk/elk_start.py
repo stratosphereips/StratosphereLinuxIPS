@@ -89,7 +89,15 @@ class ELKStart:
             print()
             print("Now you can see the visualizations on Kibana under 'Discover' section in 'Analytics' subsection when clicked on 3 bars on top left side of the page.")
             print("Don't forget to change the timeperiod on top right , to get the results you are searching for.")
+            print()
+            print()
+            print("Logstach is also listening on port 5000, for recieving logs from other machines. You can send logs to it by using the following command as examples:")
+            print("cat ./alerts.log | nc localhost 5000")
+            print()
+            print("Please ensure to configure configure.sh in modules/elk/ to use appropiate network adapter ip.")
             print("#################################################")
+
+
 
 
         # Start the services
