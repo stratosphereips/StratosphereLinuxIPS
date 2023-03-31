@@ -305,6 +305,9 @@ class Module(Module, multiprocessing.Process):
         if not user_agent:
             return False
 
+        # keep a history of the past user agents
+        __database__.add_all_user_agent_to_profile(profileid, user_agent)
+
         # don't make a request again if we already have a user agent associated with this profile
         if __database__.get_user_agent_from_profile(profileid) != None:
             # this profile already has a user agent
