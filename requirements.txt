@@ -32,7 +32,7 @@ blinker
 exclusiveprocess
 setuptools
 pytest-dependency
-whois
+python-whois-extended==0.7.12
 wheel
 flask
 tld

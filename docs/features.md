@@ -249,7 +249,7 @@ And you can add other SSL feeds in ```ssl_feeds``` in ```config/slips.conf```.
 
 ### Young Domains
 
-Slips uses whois python library to get the creation date of every domain met in the dns flows.
+Slips uses python-whois-extended==0.7.12 library to get the creation date of every domain met in the dns flows.
 
 If a domain's age is less than 60 days, slips sets an alert.
 
