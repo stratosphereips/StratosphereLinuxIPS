@@ -1,12 +1,9 @@
 <h1 align="center"> 
-
-<h1>Slips</h1>
-
-
-<h3 align="center"> 
+SLIPS
+</h1>
 
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
-</h3>
+
 
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)

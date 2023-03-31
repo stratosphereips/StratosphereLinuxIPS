@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Get slips version
         run: |
-          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/alya-read-version-from-1-file/VERSION)
+          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
           echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
       - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
     steps:
     - name: Get slips version
       run: |
-        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/alya-read-version-from-1-file/VERSION)
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
         echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
     # clone slips and checkout branch
@@ -67,7 +67,7 @@ jobs:
     steps:
     - name: Get slips version
       run: |
-        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/alya-read-version-from-1-file/VERSION)
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
         echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
     # clone slips and checkout branch
@@ -159,7 +159,7 @@ jobs:
     steps:
       - name: Get slips version
         run: |
-          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/alya-read-version-from-1-file/VERSION)
+          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
           VER2=$(echo $VER | sed 's/\.//g')
           DATE=$(date +'%Y/%m/%d')
           echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
