@@ -22,6 +22,12 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from exclusiveprocess import Lock, CannotAcquireLock
+from redis_manager import RedisManager
+from metadata_manager import MetadataManager
+from process_manager import ProcessManager
+from ui_manager import UIManager
+from checker import Checker
+from style import green
 
 import threading
 import signal
@@ -293,7 +299,7 @@ class Main:
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
             # used in case we need to remove the line using 6379 from running logfile
-            with open(self.running_logfile, 'a') as f:
+            with open(self.redis_man.running_logfile, 'a') as f:
                 # add the header lines if the file is newly created
                 if f.tell() == 0:
                     f.write(
@@ -311,13 +317,13 @@ class Main:
                 )
         except PermissionError:
             # last run was by root, change the file ownership to non-root
-            os.remove(self.running_logfile)
-            open(self.running_logfile, 'w').close()
+            os.remove(self.redis_man.running_logfile)
+            open(self.redis_man.running_logfile, 'w').close()
             self.log_redis_server_PID(redis_port, redis_pid)
 
         if redis_port == 6379:
             # remove the old logline using this port
-            self.remove_old_logline(6379)
+            self.redis_man.remove_old_logline(6379)
 
     def set_mode(self, mode, daemon=''):
         """
@@ -394,7 +400,7 @@ class Main:
         # this is where the db will be loaded
         redis_port = 32850
         # make sure the db on 32850 is flushed and ready for the new db to be loaded
-        if pid := self.get_pid_of_redis_server(redis_port):
+        if pid := self.redis_man.get_pid_of_redis_server(redis_port):
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
 
@@ -405,10 +411,10 @@ class Main:
             # we shouldn't modify it as root
 
             self.input_information = os.path.basename(self.args.db)
-            redis_pid = self.get_pid_of_redis_server(redis_port)
+            redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
             self.zeek_folder = '""'
             self.log_redis_server_PID(redis_port, redis_pid)
-            self.remove_old_logline(redis_port)
+            self.redis_man.remove_old_logline(redis_port)
 
             print(
                 f'{self.args.db} loaded successfully.\n'
@@ -570,7 +576,7 @@ class Main:
             self.clear_redis_cache_database()
             self.input_information = ''
             self.zeek_folder = ''
-            self.log_redis_server_PID(6379, self.get_pid_of_redis_server(6379))
+            self.log_redis_server_PID(6379, self.redis_man.get_pid_of_redis_server(6379))
             self.terminate_slips()
 
 
@@ -710,7 +716,7 @@ class Main:
         return (current_stdout, stderr, slips_logfile)
 
     def print_version(self):
-        slips_version = f'Slips. Version {self.green(self.version)}'
+        slips_version = f'Slips. Version {green(self.version)}'
         branch_info = utils.get_branch_info()
         if branch_info != False:
             # it's false when we're in docker because there's no .git/ there
@@ -823,7 +829,7 @@ class Main:
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
-            redis_pid = self.get_pid_of_redis_server(self.redis_port)
+            redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
