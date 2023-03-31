@@ -787,7 +787,7 @@ Available detection are:
 - Incompatible user agents
 - Multiple user agents
 - Downloads from pastebin
-- DOS executable downloads
+- Executable downloads
 
 #### Multiple empty connections
 
@@ -848,9 +848,10 @@ This value can be customized in slips.conf by changing ```pastebin_download_thre
 When found, slips alerts pastebin download with threat level low because not all downloads from pastebin are malicious.
 
 
-#### DOS executable downloads
+#### Executable downloads
 
-Slips generates an evidence everytime there's a DOS executable download from an HTTP website.
+Slips generates an evidence everytime there's an
+executable download from an HTTP website.
 
 
 ### Leak Detector Module
