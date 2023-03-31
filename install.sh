@@ -29,6 +29,7 @@ echo "export PATH=$PATH:/usr/local/zeek/bin" >> ~/.bashrc
 
 
 echo "[+] Installing Slips dependencies ...\n"
+sudo apt update
 sudo apt install -y --no-install-recommends \
   python3 \
   redis-server \
