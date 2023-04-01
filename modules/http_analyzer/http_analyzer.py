@@ -271,7 +271,7 @@ class Module(Module, multiprocessing.Process):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
         """
-        url = f'http://useragentstring.com/'
+        url = 'http://useragentstring.com/'
         params = {
             'uas': user_agent,
             'getJSON':'all'
@@ -309,7 +309,7 @@ class Module(Module, multiprocessing.Process):
         __database__.add_all_user_agent_to_profile(profileid, user_agent)
 
         # don't make a request again if we already have a user agent associated with this profile
-        if __database__.get_user_agent_from_profile(profileid) != None:
+        if __database__.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
 
@@ -355,7 +355,7 @@ class Module(Module, multiprocessing.Process):
         Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
-        if __database__.get_user_agent_from_profile(profileid) != None:
+        if __database__.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
@@ -594,7 +594,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

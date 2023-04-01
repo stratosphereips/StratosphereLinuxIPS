@@ -174,7 +174,7 @@ class Database(ProfilingFlowsDatabase, object):
             time.sleep(1)
             self.r.client_list()
             return True
-        except redis.exceptions.ConnectionError as ex:
+        except redis.exceptions.ConnectionError:
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
@@ -1018,7 +1018,7 @@ class Database(ProfilingFlowsDatabase, object):
                 portdata = json.loads(data)
                 value = portdata
             return value
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
@@ -2077,7 +2077,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
-        if info == None:
+        if info is None:
             return False
         return info
 
@@ -2335,7 +2335,7 @@ class Database(ProfilingFlowsDatabase, object):
         description if we found a match
         """
         ip_description = self.rcache.hget('IoC_ips', ip)
-        if ip_description == None:
+        if ip_description is None:
             return False
         else:
             return ip_description
@@ -2370,7 +2370,7 @@ class Database(ProfilingFlowsDatabase, object):
         bool: True if we found a match for exactly the given domain False if we matched a subdomain
         """
         domain_description = self.rcache.hget('IoC_domains', domain)
-        if domain_description == None:
+        if domain_description is None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
             for malicious_domain, description in ioc_domains.items():
@@ -2625,7 +2625,7 @@ class Database(ProfilingFlowsDatabase, object):
             command = 'file ' + backup_file
             result = subprocess.run(command.split(), stdout=subprocess.PIPE)
             file_type = result.stdout.decode('utf-8')
-            if not 'Redis' in file_type:
+            if 'Redis' not in file_type:
                 print(
                     f'{backup_file} is not a valid redis database file.'
                 )
@@ -2649,9 +2649,9 @@ class Database(ProfilingFlowsDatabase, object):
             os.system(self.sudo + 'service redis-server stop')
 
             # Start the server again, but make sure it's flushed and doesnt have any keys
-            os.system(f'redis-server redis.conf > /dev/null 2>&1')
+            os.system('redis-server redis.conf > /dev/null 2>&1')
             return True
-        except Exception as e:
+        except Exception:
             self.print(
                 f'Error loading the database {backup_file}.'
             )

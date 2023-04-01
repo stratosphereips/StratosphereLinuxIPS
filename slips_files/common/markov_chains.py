@@ -80,7 +80,7 @@ def maximum_likelihood_probabilities(states, order=1):
                 # The last state is alone. There is no transaction, forget about it.
                 break
             try:
-                temp = initial_matrix[state1]
+                initial_matrix[state1]
             except KeyError:
                 # First time there is a transition FROM state1
                 initial_matrix[state1] = {}

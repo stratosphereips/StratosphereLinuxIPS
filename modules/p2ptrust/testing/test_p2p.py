@@ -206,18 +206,6 @@ def get_default_config():
 
 
 def make_data():
-    data = [
-        {
-            'peer': '10.0.0.4',
-            'credibility': 0.5,
-            'data': '{"remote_ip": "8.8.8.8", "score":0.0, "confidence":0.9}',
-        },
-        {
-            'peer': '10.0.0.9',
-            'credibility': 0.9,
-            'data': '{"remote_ip": "8.8.8.8", "score":0.1, "confidence":0.8}',
-        },
-    ]
 
     # the data is a list of reports from multiple peers. Each report contains information about the remote peer (his IP
     # and his credibility), and the data the peer sent. From slips, we know that the data sent contains the IP address
@@ -310,7 +298,6 @@ def test_pigeon():
 def test_trustdb():
     trustdb = TrustDB(data_dir + 'trustdb.db6660', None)
     print(trustdb.get_opinion_on_ip('1.1.1.3'))
-    k = 3
 
 
 if __name__ == '__main__':

@@ -319,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                     http_data = {
                         k: v
                         for k, v in http_data_all.items()
-                        if v is not '' and v is not '/'
+                        if v != '' and v != '/'
                     }
                     alt_activity = {'info': http_data}
                 elif alt_flow['type'] == 'ssl':
@@ -328,7 +328,7 @@ class Module(Module, multiprocessing.Process):
                         resumed = 'False'
                     elif (
                         not alt_flow['validation_status']
-                        and alt_flow['resumed'] == True
+                        and alt_flow['resumed'] is True
                     ):
                         # If there is no validation and it is a resumed ssl.
                         # It means that there was a previous connection with
@@ -377,7 +377,7 @@ class Module(Module, multiprocessing.Process):
             )
 
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on process_flow() line {exception_line}', 0, 1
@@ -417,7 +417,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

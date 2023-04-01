@@ -281,7 +281,7 @@ class ProfilingFlowsDatabase(object):
                     """
                     return 'Not Established'
             return None
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
@@ -329,7 +329,7 @@ class ProfilingFlowsDatabase(object):
                     ), 3, 0,
                 )
             return value
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
@@ -596,7 +596,7 @@ class ProfilingFlowsDatabase(object):
             self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
@@ -1604,7 +1604,7 @@ class ProfilingFlowsDatabase(object):
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
                         domain_data[key] = prev_info.extend(data_to_store)
-                    elif prev_info == None:
+                    elif prev_info is None:
                         # no previous info about this domain
                         domain_data[key] = data_to_store
 

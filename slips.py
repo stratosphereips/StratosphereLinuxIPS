@@ -270,7 +270,7 @@ class Main:
                             os.remove(file_path)
                         elif os.path.isdir(file_path):
                             shutil.rmtree(file_path)
-                    except Exception as ex:
+                    except Exception:
                         pass
             else:
                 os.makedirs(self.args.output)
@@ -498,7 +498,7 @@ class Main:
         setup debug and verose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
-        if self.args.verbose == None:
+        if self.args.verbose is None:
             self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
@@ -506,7 +506,7 @@ class Main:
             self.args.verbose = 1
 
         # Any deug passed as parameter overrides the configuration. Only check its value
-        if self.args.debug == None:
+        if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
@@ -516,7 +516,7 @@ class Main:
     def print_version(self):
         slips_version = f'Slips. Version {green(self.version)}'
         branch_info = utils.get_branch_info()
-        if branch_info != False:
+        if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
@@ -805,8 +805,8 @@ if __name__ == '__main__':
         if not daemon.pid:
             # pidfile doesn't exist
             print(
-                f"Trying to stop Slips daemon.\n"
-                f"Daemon is not running."
+                "Trying to stop Slips daemon.\n"
+                "Daemon is not running."
             )
         else:
             daemon.stop()
@@ -815,7 +815,7 @@ if __name__ == '__main__':
             print('Daemon stopped.')
     elif slips.args.daemon:
         daemon = Daemon(slips)
-        if daemon.pid != None:
+        if daemon.pid is not None:
             print(f'pidfile {daemon.pidfile} already exists. Daemon already running?')
         else:
             print('Slips daemon started.')

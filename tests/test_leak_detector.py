@@ -2,7 +2,6 @@
 import os
 
 from ..modules.leak_detector.leak_detector import Module
-import configparser
 
 
 def do_nothing(*args):

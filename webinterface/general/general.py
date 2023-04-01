@@ -1,5 +1,5 @@
 from flask import Blueprint
-from flask import Flask, render_template, request
+from flask import render_template
 from database.database import __database__
 
 general = Blueprint('general', __name__, static_folder='static', static_url_path='/general/static',

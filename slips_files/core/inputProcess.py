@@ -493,7 +493,7 @@ class InputProcess(multiprocessing.Process):
                 try:
                     line = json.loads(line)
                 except json.decoder.JSONDecodeError:
-                    self.print(f'Invalid json line')
+                    self.print('Invalid json line')
                     continue
             line_info = {
                 'type': 'stdin',

@@ -48,7 +48,7 @@ class Module(Module, multiprocessing.Process):
             # it is installed
             return True
         # elif returncode == 32512:
-        self.print(f"yara is not installed. install it using:\nsudo apt-get install yara")
+        self.print("yara is not installed. install it using:\nsudo apt-get install yara")
         return False
 
     def shutdown_gracefully(self):
@@ -346,7 +346,7 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)

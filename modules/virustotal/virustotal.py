@@ -284,7 +284,7 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, passive_dns, as_owner
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
@@ -308,7 +308,7 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, as_owner
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_domain_vt_data() line {exception_line}',
@@ -534,7 +534,7 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)
@@ -651,7 +651,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

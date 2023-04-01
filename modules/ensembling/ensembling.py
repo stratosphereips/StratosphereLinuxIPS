@@ -2,7 +2,6 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
 import sys
 import json
 import traceback
@@ -68,7 +67,7 @@ class Module(Module, multiprocessing.Process):
             # initialize the amount of normal and malicious flows per dstip.
             try:
                 dstip_labels_total[flow_data['daddr']]
-            except KeyError as err:
+            except KeyError:
                 dstip_labels_total[flow_data['daddr']] = {
                     self.normal_label: 0,
                     self.malicious_label: 0,
@@ -133,7 +132,7 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

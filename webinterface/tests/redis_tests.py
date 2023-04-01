@@ -38,7 +38,7 @@ Helper functions for testing
 def is_json(myjson):
   try:
     json.loads(myjson)
-  except ValueError as e:
+  except ValueError:
     return False
   return True
 
@@ -49,13 +49,13 @@ Test functions
 def test_type_profiles_correct():
     test_key = "profiles"
     assert __database__.type(test_key) == TYPE_SET
-    assert ("profile_" in list(__database__.smembers(test_key))[0]) == True
+    assert ('profile_' in list(__database__.smembers(test_key))[0]) is True
 
 
 def test_type_tws_correct():
     test_key = "twsprofile_188.110.58.51"
     assert __database__.type(test_key) == TYPE_ZSET
-    assert ("timewindow" in __database__.zrange(test_key, 0, -1)[0]) == True
+    assert ('timewindow' in __database__.zrange(test_key, 0, -1)[0]) is True
 
 
 def test_type_outtuples_correct():
@@ -64,13 +64,13 @@ def test_type_outtuples_correct():
     assert __database__.type(test_key) == TYPE_HASH
 
     outtuples = __database__.hget(test_key, test_field)
-    assert is_json(outtuples) == True
+    assert is_json(outtuples) is True
 
     outtuples = json.loads(outtuples)
-    assert (type(outtuples) is dict) == True
+    assert (type(outtuples) is dict) is True
 
     first_keypair = list(outtuples.items())[0]
-    assert (type(first_keypair[1]) is list) == True
+    assert (type(first_keypair[1]) is list) is True
 
 
 def test_type_IPsInfo_correct():
@@ -79,10 +79,10 @@ def test_type_IPsInfo_correct():
 
     assert __cache__.type(test_key) == TYPE_HASH
     ip_info = __cache__.hget(test_key, test_field)
-    assert is_json(ip_info) == True
+    assert is_json(ip_info) is True
 
     ip_info = json.loads(ip_info)
-    assert (type(ip_info) is dict) == True
+    assert (type(ip_info) is dict) is True
 
 
 def test_type_timeline_correct():
@@ -96,7 +96,7 @@ def test_type_timeline_correct():
         assert is_json(line)
         line = json.loads(line)
         for field in table_fields:
-            assert (field in line) == True
+            assert (field in line) is True
 
 
 def test_type_flows_correct():
@@ -111,7 +111,7 @@ def test_type_flows_correct():
         assert is_json(line)
         line = json.loads(line)
         for field in table_fields:
-            assert (field in line) == True
+            assert (field in line) is True
 
 
 if __name__ == "__main__":

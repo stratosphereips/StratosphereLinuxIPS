@@ -115,7 +115,7 @@ class Module(Module, multiprocessing.Process):
     def send_to_slack(self, msg_to_send: str) -> bool:
         # Msgs sent in this channel will be exported to slack
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
-        if self.BOT_TOKEN is '':
+        if self.BOT_TOKEN == '':
             # The file is empty
             self.print(
                 f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
@@ -124,7 +124,7 @@ class Module(Module, multiprocessing.Process):
 
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
-            response = slack_client.chat_postMessage(
+            slack_client.chat_postMessage(
                 # Channel name is set in slips.conf
                 channel=self.slack_channel_name,
                 # Sensor name is set in slips.conf
@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
             discovery_path=self.discovery_path,
         )
         # jwt_auth_url is optional
-        if self.jwt_auth_path is not '':
+        if self.jwt_auth_path != '':
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
@@ -235,11 +235,11 @@ class Module(Module, multiprocessing.Process):
             # Get the ip
             attacker = attacker.split(':')[0]
         ioc_type = utils.detect_data_type(attacker)
-        if ioc_type is 'ip':
+        if ioc_type == 'ip':
             pattern = "[ip-addr:value = '{}']".format(attacker)
-        elif ioc_type is 'domain':
+        elif ioc_type == 'domain':
             pattern = "[domain-name:value = '{}']".format(attacker)
-        elif ioc_type is 'url':
+        elif ioc_type == 'url':
             pattern = "[url:value = '{}']".format(attacker)
         else:
             self.print(
@@ -367,7 +367,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

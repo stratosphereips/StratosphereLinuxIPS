@@ -1,4 +1,3 @@
-import configparser
 import multiprocessing
 import os
 import shutil
@@ -88,7 +87,7 @@ class Trust(Module, multiprocessing.Process):
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
         # get the used interface
-        used_interface = self.get_used_interface()
+        # self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
         self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
@@ -204,7 +203,7 @@ class Trust(Module, multiprocessing.Process):
                 sock.bind(('0.0.0.0', port))
                 sock.close()
                 return port
-            except Exception as ex:
+            except Exception:
                 # port is in use
                 continue
 
@@ -285,7 +284,7 @@ class Trust(Module, multiprocessing.Process):
 
         # example: dstip srcip dport sport dstdomain
         attacker_direction = data.get('attacker_direction')
-        if not 'ip' in attacker_direction:   # and not 'domain' in attacker_direction:
+        if 'ip' not in attacker_direction:   # and not 'domain' in attacker_direction:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
@@ -683,13 +682,13 @@ class Trust(Module, multiprocessing.Process):
                         self.print(f"You Multiaddress is: {multiaddr}")
                         self.mutliaddress_printed = True
 
-                except Exception as ex:
+                except Exception:
                     pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem with P2P. line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)

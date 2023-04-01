@@ -1,8 +1,6 @@
 """Unit test for ../profilerProcess.py"""
 from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.whitelist import Whitelist
 import subprocess
-import configparser
 import pytest
 import json
 
@@ -172,10 +170,10 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     }
 
     # process it
-    assert profilerProcess.process_zeek_input(sample_flow) == True
+    assert profilerProcess.process_zeek_input(sample_flow) is True
     # add to profile
     added_to_prof = profilerProcess.add_flow_to_profile()
-    assert added_to_prof == True
+    assert added_to_prof is True
 
     uid = profilerProcess.uid
     profileid =  profilerProcess.profileid
@@ -186,6 +184,6 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
         added_flow = database.get_flow(profileid, twid, uid)[uid]
     else:
         added_flow = (
-            database.get_altflow_from_uid(profileid, twid, uid) != None
+            database.get_altflow_from_uid(profileid, twid, uid) is not None
         )
-    assert added_flow != None
+    assert added_flow is not None

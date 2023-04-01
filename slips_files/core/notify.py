@@ -2,7 +2,6 @@ import os
 import platform
 import psutil
 import pwd
-import subprocess
 
 
 
@@ -23,7 +22,7 @@ class Notify:
             # it is installed
             return True
         # elif returncode == 32512:
-        print(f"notify-send is not installed. install it using:\nsudo apt-get install libnotify-bin")
+        print("notify-send is not installed. install it using:\nsudo apt-get install libnotify-bin")
         return False
 
 

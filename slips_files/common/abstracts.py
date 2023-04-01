@@ -20,5 +20,5 @@ class Module(object):
     def run(self):
         try:
             print('test')
-        except ArgumentErrorCallback as e:
+        except ArgumentErrorCallback:
             print('error')
