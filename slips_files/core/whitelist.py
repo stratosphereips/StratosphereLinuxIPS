@@ -477,7 +477,7 @@ class Whitelist:
 
                         else:
                             self.print(f'{data} is not a valid {type_}.', 1, 0)
-                    except Exception as ex:
+                    except Exception:
                         self.print(
                             f'Line {line_number} in whitelist.conf is invalid. Skipping. '
                         )
@@ -695,7 +695,7 @@ class Whitelist:
             # the database won't return the whitelist
             # so we need to try several times until the db returns the populated whitelist
             # empty dicts evaluate to False
-            while bool(whitelist) == False and max_tries != 0:
+            while bool(whitelist) is False and max_tries != 0:
                 # try max 10 times to get the whitelist, if it's still empty then it's not empty by mistake
                 max_tries -= 1
                 whitelist = __database__.get_all_whitelist()

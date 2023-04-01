@@ -129,7 +129,7 @@ class LogsProcess(multiprocessing.Process):
             # Stop the timer
             timer.shutdown()
             return True
-        except Exception as inst:
+        except Exception:
             # Stop the timer
             try:
                 timer.shutdown()
@@ -248,7 +248,7 @@ class LogsProcess(multiprocessing.Process):
                         if ans:
                             to_print += f' answers: {ans}'
                         if 'No' in trusted:
-                            to_print += f', not trusted.'
+                            to_print += ', not trusted.'
                         to_print += '\n\n'
                     except json.decoder.JSONDecodeError:
                         # data is a str, leave it as it is
@@ -260,7 +260,7 @@ class LogsProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except Exception as inst:
+        except Exception:
             self.print('Error in addDataToFile()')
             self.print(traceback.print_exc(), 0, 1)
             sys.exit(1)

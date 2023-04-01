@@ -358,7 +358,7 @@ class Module(Module, multiprocessing.Process):
             for ssl_flow in range(size):
                 try:
                     ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
-                except Exception as ex:
+                except Exception:
                     continue
 
                 # unpack the flow
@@ -486,7 +486,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         if (
-            not 'icmp' in proto
+            'icmp' not in proto
             and not self.is_p2p(dport, proto, daddr)
             and not __database__.is_ftp_port(dport)
         ):
@@ -1099,7 +1099,7 @@ class Module(Module, multiprocessing.Process):
         # don't want to count nxdomains to cymru.com or spamhaus as DGA as they're made
         # by slips
         if (
-            not 'NXDOMAIN' in rcode_name
+            'NXDOMAIN' not in rcode_name
             or not query
             or query.endswith('.arpa')
             or query.endswith('.local')
@@ -2202,7 +2202,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

@@ -342,7 +342,7 @@ class GoDirector:
         self.evaluation_processors[evaluation_type](
             reporter, report_time, key_type, key, evaluation
         )
-        if evaluation != None:
+        if evaluation is not None:
             msg = f'[The Network -> Slips] Peer report about {key} Evaluation: {evaluation}'
             self.print(msg)
             # log the reporter too

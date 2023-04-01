@@ -17,7 +17,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import multiprocessing
-import platform
 import traceback
 from slips_files.common.slips_utils import utils
 import os
@@ -66,7 +65,7 @@ class GuiProcess(multiprocessing.Process):
         except KeyboardInterrupt:
             self.print('Stoppting the GUI Process')
             return True
-        except Exception as ex:
+        except Exception:
             self.print('Error in the GUI Process')
             self.print(traceback.print_exc(),0,1)
             return True

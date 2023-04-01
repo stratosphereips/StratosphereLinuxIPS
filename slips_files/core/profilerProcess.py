@@ -29,7 +29,6 @@ import os
 import binascii
 import base64
 from re import split
-from tqdm import tqdm
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -169,7 +168,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.separator = self.separators[self.input_type]
             return self.input_type
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_type() line {exception_line}', 0, 1
@@ -248,7 +247,7 @@ class ProfilerProcess(multiprocessing.Process):
                 temp_dict[k] = e
             self.column_idx = temp_dict
             return self.column_idx
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_columns() line {exception_line}', 0, 1
@@ -1716,7 +1715,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # No home. Store all
                     self.handle_in_flows()
             return True
-        except Exception as ex:
+        except Exception:
             # For some reason we can not use the output queue here.. check
             self.print(
                 f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
@@ -2362,7 +2361,7 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
-        except Exception as ex:
+        except Exception:
             # For some reason we can not use the output queue here.. check
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
@@ -2401,7 +2400,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Find the type of input received
                     self.define_type(line)
                     # Find the number of flows we're going to receive of input received
-                    self.outputqueue.put(f"initialize progress bar")
+                    self.outputqueue.put("initialize progress bar")
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -2414,7 +2413,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the flow to the profile
                     self.add_flow_to_profile()
 
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
 
                 elif (
                     self.input_type == 'argus'
@@ -2439,7 +2438,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                        self.outputqueue.put(f"update progress bar")
+                        self.outputqueue.put("update progress bar")
                     except (AttributeError, KeyError):
                         # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
@@ -2447,17 +2446,17 @@ class ProfilerProcess(multiprocessing.Process):
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 elif self.input_type == 'nfdump':
                     self.process_nfdump_input(line)
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
                     return False
@@ -2478,7 +2477,7 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(
                     f'Error. Stopped Profiler Process. Received {rec_lines} '

@@ -3,7 +3,6 @@ import ipaddress
 import redis
 import os
 import json
-import sys
 import time
 
 
@@ -81,7 +80,7 @@ def test_add_flow(outputQueue):
          "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20,
          "spkts": 20, "sbytes": 20, "appproto": "dhcp", "smac": "", "dmac": "", "label": "", "flow_type": "",
                   "module_labels": {}}
-    assert add_flow(database) == True
+    assert add_flow(database) is True
     assert (
         json.loads(database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)) == added_flow
     )
@@ -95,9 +94,9 @@ def test_getProfileIdFromIP(outputQueue):
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    ret = database.addProfile('profile_192.168.1.1', '00:00', '1')
+    database.addProfile('profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
-    assert database.getProfileIdFromIP(test_ip) != False
+    assert database.getProfileIdFromIP(test_ip) is not False
 
 
 def test_timewindows(outputQueue):
@@ -142,10 +141,7 @@ def test_add_ips(outputQueue):
     }
     # make sure ip is added
     assert (
-        database.add_ips(
-            profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server'
-        )
-        == True
+        database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server') is True
     )
     hash_id = profileid + '_' + twid
     stored_dstips = database.r.hget(hash_id, 'SrcIPs')
@@ -224,9 +220,7 @@ def test_module_labels(outputQueue):
     module_label = 'malicious'
     module_name = 'test'
     uid = '1234'
-    assert database.set_module_label_to_flow(
-        profileid, twid, uid, module_name, module_label
-    ) == True
+    assert database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label) is True
 
     labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'test' in labels
@@ -248,7 +242,7 @@ def test_setInfoForDomains(outputQueue):
 def test_subscribe(outputQueue):
     database = create_db_instace(outputQueue)
     # invalid channel
-    assert database.subscribe('invalid_channel') == False
+    assert database.subscribe('invalid_channel') is False
     # valid channel, shoud return a pubsub object
     assert type(database.subscribe('tw_modified')) == redis.client.PubSub
 
@@ -270,14 +264,14 @@ def test_add_mac_addr_to_profile(outputQueue):
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
     # first associate this ip with some mac
-    assert database.add_mac_addr_to_profile(profileid_ipv4, MAC_info) == True
+    assert database.add_mac_addr_to_profile(profileid_ipv4, MAC_info) is True
     assert ipv4 in str(database.r.hget('MAC', MAC_info['MAC']))
 
     # now claim that we found another profile
     # that has the same mac as this one
     # both ipv4
     profileid = 'profile_192.168.1.6'
-    assert database.add_mac_addr_to_profile(profileid, MAC_info) == False
+    assert database.add_mac_addr_to_profile(profileid, MAC_info) is False
     # this ip shouldnt be added to the profile as they're both ipv4
     assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
 

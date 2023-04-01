@@ -210,7 +210,7 @@ class EvidenceProcess(multiprocessing.Process):
             self.jsonfile.write('\n')
         except KeyboardInterrupt:
             return True
-        except Exception as ex:
+        except Exception:
             self.print('Error in addDataToJSONFile()')
             self.print(traceback.print_exc(), 0, 1)
 
@@ -232,7 +232,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except Exception as ex:
+        except Exception:
             self.print('Error in addDataToLogFile()')
             self.print(traceback.print_exc(),0,1)
 
@@ -314,7 +314,7 @@ class EvidenceProcess(multiprocessing.Process):
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
             twid_start_time = None
-            while twid_start_time == None:
+            while twid_start_time is None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
 
@@ -345,7 +345,7 @@ class EvidenceProcess(multiprocessing.Process):
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
                 f'given the following evidence:{Style.RESET_ALL}\n'
             )
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
@@ -801,7 +801,7 @@ class EvidenceProcess(multiprocessing.Process):
                 self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.outputqueue.put(
                     f'01|[Evidence] Error in the Evidence Process line {exception_line}'

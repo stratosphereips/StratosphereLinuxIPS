@@ -32,7 +32,7 @@ def test_check_if_update_based_on_update_period(outputQueue, database):
     update_manager = create_update_manager_instance(outputQueue)
     url = 'abc.com/x'
     # update period hasnt passed
-    assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) == False
+    assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) is False
 
 def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
     update_manager = create_update_manager_instance(outputQueue)
@@ -45,7 +45,7 @@ def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '1234'}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == False
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is False
 
 
     # period passed, etag different
@@ -56,7 +56,7 @@ def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'ETag': '2222'}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == True
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
 def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
     update_manager = create_update_manager_instance(outputQueue)
@@ -69,7 +69,7 @@ def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'Last-Modified': 10.0}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == False
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is False
 
     # period passed, no etag, last modified changed
     url = 'google.com/photos'
@@ -78,7 +78,7 @@ def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
     mock_requests.return_value.status_code = 200
     mock_requests.return_value.headers = {'Last-Modified': 11}
     mock_requests.return_value.text = ""
-    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) == True
+    assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
 
 def test_read_ports_info(outputQueue, database):

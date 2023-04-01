@@ -3,7 +3,6 @@ from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
 from ..modules.update_manager.update_file_manager import UpdateFileManager
 import maxminddb
-import pytest
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -82,5 +81,5 @@ def test_get_vendor(outputQueue, database, mocker):
 
     # tries to get vendor either online or from our offline db
     mac_info = ip_info.get_vendor(mac_addr, host_name, profileid)
-    assert mac_info != False
+    assert mac_info is not False
     assert mac_info['Vendor'].lower() == 'Pcs Systemtechnik GmbH'.lower()

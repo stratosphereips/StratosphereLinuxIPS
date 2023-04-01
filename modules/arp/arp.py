@@ -94,7 +94,7 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(timeout=0.5)
-            except Exception as ex:
+            except Exception:
                 # nothing in queue
                 time.sleep(5)
                 continue
@@ -107,7 +107,7 @@ class Module(Module, multiprocessing.Process):
             while True:
                 try:
                     new_evidence = self.pending_arp_scan_evidence.get(timeout=0.5)
-                except Exception as ex:
+                except Exception:
                     # queue is empty
                     break
 
@@ -329,7 +329,7 @@ class Module(Module, multiprocessing.Process):
 
         # get the original IP of the src mac from the database
         original_IP = __database__.get_IP_of_MAC(src_mac)
-        if original_IP == None:
+        if original_IP is None:
             return
 
         # original_IP is a serialized list
@@ -496,7 +496,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

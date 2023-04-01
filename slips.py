@@ -131,7 +131,7 @@ class Main:
             # to make sure this function is only executed once
             delattr(self, 'webinterface_return_value')
             return
-        if self.webinterface_return_value.get() != True:
+        if self.webinterface_return_value.get() is not True:
             # to make sure this function is only executed once
             delattr(self, 'webinterface_return_value')
             return
@@ -256,7 +256,7 @@ class Main:
 
                 print('[Main] Starting redis cache database..')
                 os.system(
-                    f'redis-server redis.conf --daemonize yes  > /dev/null 2>&1'
+                    'redis-server redis.conf --daemonize yes  > /dev/null 2>&1'
                 )
                 # give the server time to start
                 time.sleep(1)
@@ -510,7 +510,7 @@ class Main:
 
 
         # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
-        print(f"Successfully closed all open redis servers")
+        print("Successfully closed all open redis servers")
 
         try:
             os.remove(self.running_logfile)
@@ -570,7 +570,7 @@ class Main:
 
         branch_info = utils.get_branch_info()
         commit, branch = None, None
-        if branch_info != False:
+        if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
 
@@ -866,8 +866,8 @@ class Main:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
                                 if 'Update Manager' not in finished_modules:
                                     print(
-                                        f"[Main] Update Manager may take several minutes "
-                                        f"to finish updating 45+ TI files."
+                                        "[Main] Update Manager may take several minutes "
+                                        "to finish updating 45+ TI files."
                                     )
                                 warning_printed = True
 
@@ -947,8 +947,8 @@ class Main:
         Returns a dict {counter: (used_port,pid) }
         """
         open_servers = {}
-        to_print = f"Choose which one to kill [0,1,2 etc..]\n" \
-                   f"[0] Close all Redis servers\n"
+        to_print = "Choose which one to kill [0,1,2 etc..]\n" \
+                   "[0] Close all Redis servers\n"
         there_are_ports_to_print = False
         try:
             with open(self.running_logfile, 'r') as f:
@@ -1168,7 +1168,7 @@ class Main:
                             os.remove(file_path)
                         elif os.path.isdir(file_path):
                             shutil.rmtree(file_path)
-                    except Exception as ex:
+                    except Exception:
                         pass
             else:
                 os.makedirs(self.args.output)
@@ -1511,7 +1511,6 @@ class Main:
                 self.terminate_slips()
             else:
                 # start only the blocking module process and the db
-                from slips_files.core.database.database import __database__
                 from multiprocessing import Queue, active_children
                 from modules.blocking.blocking import Module
 
@@ -1570,7 +1569,7 @@ class Main:
         setup debug and verose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
-        if self.args.verbose == None:
+        if self.args.verbose is None:
             self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
@@ -1578,7 +1577,7 @@ class Main:
             self.args.verbose = 1
 
         # Any deug passed as parameter overrides the configuration. Only check its value
-        if self.args.debug == None:
+        if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
@@ -1616,7 +1615,7 @@ class Main:
     def print_version(self):
         slips_version = f'Slips. Version {self.green(self.version)}'
         branch_info = utils.get_branch_info()
-        if branch_info != False:
+        if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
@@ -1941,8 +1940,8 @@ if __name__ == '__main__':
         if not daemon.pid:
             # pidfile doesn't exist
             print(
-                f"Trying to stop Slips daemon.\n"
-                f"Daemon is not running."
+                "Trying to stop Slips daemon.\n"
+                "Daemon is not running."
             )
         else:
             daemon.stop()
@@ -1951,7 +1950,7 @@ if __name__ == '__main__':
             print('Daemon stopped.')
     elif slips.args.daemon:
         daemon = Daemon(slips)
-        if daemon.pid != None:
+        if daemon.pid is not None:
             print(f'pidfile {daemon.pidfile} already exists. Daemon already running?')
         else:
             print('Slips daemon started.')

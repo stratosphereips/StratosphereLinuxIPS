@@ -2,10 +2,8 @@
 this file needs sudoroot to run
 """
 from ..modules.blocking.blocking import Module
-import configparser
 import platform
 import pytest
-from subprocess import check_output
 import os
 
 
@@ -29,7 +27,7 @@ linuxOS = pytest.mark.skipif(
 # we use this environment variable to check if slips is
 # running in github actions
 isroot = pytest.mark.skipif(
-    os.geteuid() != 0 or IS_DEPENDENCY_IMAGE != False,
+    os.geteuid() != 0 or IS_DEPENDENCY_IMAGE is not False,
     reason='Blocking is supported only with root priveledges',
 )
 
@@ -78,7 +76,7 @@ def test_initialize_chains_in_firewall(outputQueue, database):
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
-    assert is_slipschain_initialized(outputQueue) == True
+    assert is_slipschain_initialized(outputQueue) is True
 
 
 # todo
@@ -100,7 +98,7 @@ def test_block_ip(outputQueue, database):
         ip = '2.2.0.0'
         from_ = True
         to = True
-        assert blocking.block_ip(ip, from_, to) == True
+        assert blocking.block_ip(ip, from_, to) is True
 
 @linuxOS
 @isroot
@@ -112,5 +110,5 @@ def test_unblock_ip(outputQueue, database):
     to = True
     # first make sure that it's blocked
     if not blocking.is_ip_blocked('2.2.0.0'):
-        assert blocking.block_ip(ip, from_, to) == True
-    assert blocking.unblock_ip(ip, from_, to) == True
+        assert blocking.block_ip(ip, from_, to) is True
+    assert blocking.unblock_ip(ip, from_, to) is True

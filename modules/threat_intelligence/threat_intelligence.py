@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             time.sleep(120)
             try:
                 flow_info = self.circllu_queue.get(timeout=0.5)
-            except Exception as ex:
+            except Exception:
                 # queue is empty wait extra 2 min
                 continue
 
@@ -587,7 +587,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         try:
             spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
-        except Exception as ex:
+        except Exception:
             spamhaus_result = 0
 
         if not spamhaus_result:
@@ -694,7 +694,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 f"{circl_base_url}/md5/{md5}",
                headers=self.circl_session.headers
             )
-        except Exception as ex:
+        except Exception:
             # add the hash to the cirllu queue and ask for it later
             self.circllu_queue.put(flow_info)
             return
@@ -812,7 +812,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             is_subdomain,
         ) = __database__.is_domain_malicious(domain)
         if (
-            domain_info != False
+            domain_info is not False
         ):   # Dont change this condition. This is the only way it works
             # If the domain is in the blacklist of IoC. Set an evidence
             domain_info = json.loads(domain_info)
@@ -948,7 +948,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             self.update_local_file('own_malicious_iocs.csv')
             self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)
@@ -1028,7 +1028,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc())

@@ -42,9 +42,9 @@ class Error(Exception):
         # We shift method and req_id into each and every error, because
         # we want to be able to simply merge more Error arrays (for
         # returning errors from more Warden calls at once
-        if method and not 'method' in kwargs:
+        if method and 'method' not in kwargs:
             kwargs['method'] = method
-        if req_id and not 'req_id' in kwargs:
+        if req_id and 'req_id' not in kwargs:
             kwargs['req_id'] = req_id
         # Ugly, but be paranoid, don't rely on server reply to be well formed
         try:
@@ -157,7 +157,7 @@ class Error(Exception):
     def str_debug(self, e):
         out = []
         out.append(self.str_preamble(e))
-        if not 'exc' in e or not e['exc']:
+        if 'exc' not in e or not e['exc']:
             return ''
         exc_tb = e['exc'][2]
         if exc_tb:
@@ -278,7 +278,7 @@ class Client(object):
                 fl.setLevel(loglevel(filelog.get('level', 'debug')))
                 fl.setFormatter(format_time)
                 self.logger.addHandler(fl)
-            except Exception as e:
+            except Exception:
                 Error(
                     message='Unable to setup file logging', exc=exc_info()
                 ).log(self.logger)
@@ -293,7 +293,7 @@ class Client(object):
                 sl.setLevel(loglevel(syslog.get('level', 'debug')))
                 sl.setFormatter(format_notime)
                 self.logger.addHandler(sl)
-            except Exception as e:
+            except Exception:
                 Error(
                     message='Unable to setup syslog logging', exc=exc_info()
                 ).log(self.logger)
@@ -363,7 +363,7 @@ class Client(object):
                 data = ''
             else:
                 data = json.dumps(payload)
-        except Exception as ex:
+        except Exception:
             return Error(
                 message='Serialization to JSON failed',
                 exc=exc_info(),
@@ -385,7 +385,7 @@ class Client(object):
         loc = '%s/%s%s' % (self.url.path, func, argurl)
         try:
             conn.request('POST', loc, data, self.headers)
-        except Exception as ex:
+        except Exception:
             conn.close()
             return Error(
                 message='Sending of request to server failed',
@@ -398,7 +398,7 @@ class Client(object):
 
         try:
             res = conn.getresponse()
-        except Exception as ex:
+        except Exception:
             conn.close()
             return Error(
                 method=func,
@@ -411,7 +411,7 @@ class Client(object):
 
         try:
             response_data = res.read()
-        except Exception as ex:
+        except Exception:
             conn.close()
             return Error(
                 method=func,
@@ -427,7 +427,7 @@ class Client(object):
         if res.status == http.client.OK:
             try:
                 data = json.loads(response_data)
-            except Exception as ex:
+            except Exception:
                 data = Error(
                     method=func,
                     message='JSON message parsing failed',
@@ -440,7 +440,7 @@ class Client(object):
                 data[
                     'errors'
                 ]   # trigger exception if not dict or no error key
-            except Exception as ex:
+            except Exception:
                 data = Error(
                     method=func,
                     message='Generic server HTTP error',
@@ -464,7 +464,7 @@ class Client(object):
         try:
             with open(idf, 'w+') as f:
                 f.write(str(id))
-        except (ValueError, IOError) as e:
+        except (ValueError, IOError):
             # Use Error instance just for proper logging
             Error(
                 message='Writing id file "%s" failed' % idf,
@@ -480,7 +480,7 @@ class Client(object):
         try:
             with open(idf, 'r') as f:
                 id = int(f.read())
-        except (ValueError, IOError) as e:
+        except (ValueError, IOError):
             Error(
                 message='Reading id file "%s" failed, relying on server' % idf,
                 exc=exc_info(),

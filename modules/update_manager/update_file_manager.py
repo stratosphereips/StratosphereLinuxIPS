@@ -410,7 +410,7 @@ class UpdateFileManager:
                 self.loaded_ti_files += 1
                 return False
 
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on update_TI_file() line {exception_line}', 0, 1
@@ -617,7 +617,7 @@ class UpdateFileManager:
 
             return True
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on update_TI_file() line {exception_line}', 0, 1
@@ -633,7 +633,7 @@ class UpdateFileManager:
         ):
             return False
         try:
-            self.log(f'Updating RiskIQ domains')
+            self.log('Updating RiskIQ domains')
             url = 'https://api.riskiq.net/pt/v2/articles/indicators'
             auth = (self.riskiq_email, self.riskiq_key)
             today = datetime.date.today()
@@ -675,7 +675,7 @@ class UpdateFileManager:
             self.log('Successfully updated RiskIQ domains.')
             return True
         except Exception as e:
-            self.log(f'An error occurred while updating RiskIQ domains. Updating was aborted.')
+            self.log('An error occurred while updating RiskIQ domains. Updating was aborted.')
             self.print('An error occurred while updating RiskIQ feed.', 0, 1)
             self.print(f'Error: {e}', 0, 1)
             return False
@@ -851,7 +851,7 @@ class UpdateFileManager:
             __database__.add_ja3_to_IoC(malicious_ja3_dict)
             return True
 
-        except Exception as inst:
+        except Exception:
             self.print('Problem in parse_ja3_feed()', 0, 1)
             print(traceback.format_exc())
             return False
@@ -1172,7 +1172,7 @@ class UpdateFileManager:
                     data_file_name = ti_file_path.split('/')[-1]
 
                     data_type = utils.detect_data_type(data)
-                    if data_type == None:
+                    if data_type is None:
                         self.print(
                             'The data {} is not valid. It was found in {}.'.format(
                                 data, ti_file_path
@@ -1369,7 +1369,7 @@ class UpdateFileManager:
             __database__.add_ip_range_to_IoC(malicious_ip_ranges)
             return True
 
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem while updating {link_to_download} line '
@@ -1459,7 +1459,7 @@ class UpdateFileManager:
         if response.status_code != 200:
             return False
 
-        self.log(f'Updating the MAC database.')
+        self.log('Updating the MAC database.')
         path_to_mac_db = 'databases/macaddress-db.json'
 
         # write to file the info as 1 json per line

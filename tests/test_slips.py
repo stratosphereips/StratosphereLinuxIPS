@@ -1,10 +1,6 @@
 """Unit test for ../slips.py"""
 from ..slips import *
 import os
-import argparse
-import subprocess
-import time
-import pytest
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
@@ -66,11 +62,11 @@ def test_load_modules():
 
 def test_create_folder_for_logs():
     main = create_Main_instance()
-    assert main.create_folder_for_logs() != False
+    assert main.create_folder_for_logs() is not False
 
 
 def test_clear_redis_cache_database():
     main = create_Main_instance()
-    assert main.clear_redis_cache_database() == True
+    assert main.clear_redis_cache_database() is True
 
 

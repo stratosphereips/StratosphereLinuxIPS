@@ -1,7 +1,6 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import platform
 import traceback
@@ -261,9 +260,9 @@ class Module(Module, multiprocessing.Process):
                 from_, to = True, True
             # This dictionary will be used to construct the rule
             options = {
-                'protocol': ' -p ' + protocol if protocol != None else '',
-                'dport': ' --dport ' + str(dport) if dport != None else '',
-                'sport': ' --sport ' + str(sport) if sport != None else '',
+                'protocol': ' -p ' + protocol if protocol is not None else '',
+                'dport': ' --dport ' + str(dport) if dport is not None else '',
+                'sport': ' --sport ' + str(sport) if sport is not None else '',
             }
 
             if from_:
@@ -444,7 +443,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
