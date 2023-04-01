@@ -337,19 +337,20 @@ class Module(Module, multiprocessing.Process):
             self.print(X_flow)
             self.print(traceback.print_exc(),0,1)
 
-    def store_model(self):
-        """
-        Store the trained model on disk
-        """
-        self.print(f'Storing the trained model and scaler on disk.', 0, 2)
-        f = open('./modules/flowmldetection/model.bin', 'wb')
-        data = pickle.dumps(self.clf)
-        f.write(data)
-        f.close()
-        g = open('./modules/flowmldetection/scaler.bin', 'wb')
-        data = pickle.dumps(self.scaler)
-        g.write(data)
-        g.close()
+def store_model(self):
+    """
+    Store the trained model on disk if it has been updated
+    """
+    if self.model_updated:
+        self.print(f'Storing the updated trained model and scaler on disk.', 0, 2)
+        with open('./modules/flowmldetection/model.bin', 'wb') as f:
+            pickle.dump(self.clf, f)
+        with open('./modules/flowmldetection/scaler.bin', 'wb') as g:
+            pickle.dump(self.scaler, g)
+        self.model_updated = False
+    else:
+        self.print(f'Trained model has not been updated. Not storing on disk.', 0, 2)
+        
 
     def read_model(self):
         """
