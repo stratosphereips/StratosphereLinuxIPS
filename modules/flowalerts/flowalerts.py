@@ -1,3 +1,4 @@
+import contextlib
 from slips_files.common.abstracts import Module
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
@@ -140,12 +141,8 @@ class Module(Module, multiprocessing.Process):
         Alerts when there's a connection from a private IP to another private IP
         except for DNS connections to the gateway
         """
-        try:
+        with contextlib.suppress(ValueError):
             dport = int(dport)
-        except ValueError:
-            # an icmp port with hex value, ignore it
-            pass
-
         if dport == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip():
             # skip DNS conns to the gw to avoid having tons of this evidence
             return
@@ -254,14 +251,11 @@ class Module(Module, multiprocessing.Process):
             return True
 
         # is it a range?
-        try:
+        with contextlib.suppress(ValueError):
             # we have the org range in our database, check if the daddr belongs to this range
             if ipaddress.ip_address(daddr) in ipaddress.ip_network(org_ip):
                 # it does, consider the port as known
                 return True
-        except ValueError:
-            pass
-
         # not a range either since nothing is specified, e.g. ip is set to ""
         # check the source and dst mac address vendors
         src_mac_vendor = str(
@@ -287,12 +281,7 @@ class Module(Module, multiprocessing.Process):
 
         # if it's an org that slips has info about (apple, fb, google,etc.),
         # check if the daddr belongs to it
-        if self.whitelist.is_ip_in_org(daddr, org_name):
-            #self.print(f"ip {daddr} belongs to {org_name} so considering port {portproto} as known")
-            return True
-
-        # consider this port as unknown
-        return False
+        return bool(self.whitelist.is_ip_in_org(daddr, org_name))
 
 
 
@@ -358,7 +347,7 @@ class Module(Module, multiprocessing.Process):
             for ssl_flow in range(size):
                 try:
                     ssl_flow: dict = self.pending_ssl_flows.get(timeout=0.5)
-                except Exception as ex:
+                except Exception:
                     continue
 
                 # unpack the flow
@@ -368,8 +357,7 @@ class Module(Module, multiprocessing.Process):
                 # returns {uid: {actual flow..}}
                 # always returns a dict, never returns None
                 flow: dict = __database__.get_flow(profileid, twid, uid)
-                flow = flow.get(uid)
-                if flow:
+                if flow := flow.get(uid):
                     flow = json.loads(flow)
                     if 'ts' in flow:
                         # this means the flow is found in conn.log
@@ -486,7 +474,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         if (
-            not 'icmp' in proto
+            'icmp' not in proto
             and not self.is_p2p(dport, proto, daddr)
             and not __database__.is_ftp_port(dport)
         ):
@@ -612,10 +600,9 @@ class Module(Module, multiprocessing.Process):
             if self.whitelist.is_ip_asn_in_org_asn(ip, org):
                 return True
 
-            if flow_domain:
-                # we have the rdns or sni of this flow , now check
-                if self.whitelist.is_domain_in_org(flow_domain, org):
-                    return True
+            # we have the rdns or sni of this flow , now check
+            if flow_domain and self.whitelist.is_domain_in_org(flow_domain, org):
+                return True
 
 
             # check if the ip belongs to the range of a well known org
@@ -655,8 +642,7 @@ class Module(Module, multiprocessing.Process):
         # To avoid false positives in case of an interface don't alert ConnectionWithoutDNS
         # until 30 minutes has passed
         # after starting slips because the dns may have happened before starting slips
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
-        if running_on_interface:
+        if '-i' in sys.argv or __database__.is_growing_zeek_dir():
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
@@ -713,12 +699,10 @@ class Module(Module, multiprocessing.Process):
             )
             # This UID will never appear again, so we can remove it and
             # free some memory
-            try:
+            with contextlib.suppress(ValueError):
                 self.connections_checked_in_conn_dns_timer_thread.remove(
                     uid
                 )
-            except ValueError:
-                pass
 
     def is_CNAME_contacted(self, answers, contacted_ips) -> bool:
         """
@@ -773,8 +757,7 @@ class Module(Module, multiprocessing.Process):
         # This happens, for example, when there is 1 DNS resolution with A, then 1 DNS resolution
         # with AAAA, and the computer chooses the A address. Therefore, the 2nd DNS resolution
         # would be treated as 'without connection', but this is false.
-        prev_domain_resolutions = __database__.getDomainData(domain)
-        if prev_domain_resolutions:
+        if prev_domain_resolutions := __database__.getDomainData(domain):
             prev_domain_resolutions = prev_domain_resolutions.get('IPs',[])
             # if there's a domain in the cache (prev_domain_resolutions) that is not in the
             # current answers given to this function, append it to the answers list
@@ -837,10 +820,8 @@ class Module(Module, multiprocessing.Process):
             )
             # This UID will never appear again, so we can remove it and
             # free some memory
-            try:
+            with contextlib.suppress(ValueError):
                 self.connections_checked_in_dns_conn_timer_thread.remove(uid)
-            except ValueError:
-                pass
 
     def detect_successful_ssh_by_zeek(self, uid, timestamp, profileid, twid):
         """
@@ -865,12 +846,10 @@ class Module(Module, multiprocessing.Process):
                 timestamp,
                 by='Zeek',
             )
-            try:
+            with contextlib.suppress(ValueError):
                 self.connections_checked_in_ssh_timer_thread.remove(
                     uid
                 )
-            except ValueError:
-                pass
             return True
         elif uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
@@ -897,10 +876,10 @@ class Module(Module, multiprocessing.Process):
             ssh_flow_dict = json.loads(
                 original_ssh_flow[original_flow_uid]
             )
-            daddr = ssh_flow_dict['daddr']
-            saddr = ssh_flow_dict['saddr']
             size = ssh_flow_dict['allbytes']
             if size > self.ssh_succesful_detection_threshold:
+                daddr = ssh_flow_dict['daddr']
+                saddr = ssh_flow_dict['saddr']
                 # Set the evidence because there is no
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek
@@ -914,39 +893,33 @@ class Module(Module, multiprocessing.Process):
                     timestamp,
                     by='Slips',
                 )
-                try:
+                with contextlib.suppress(ValueError):
                     self.connections_checked_in_ssh_timer_thread.remove(
                         uid
                     )
-                except ValueError:
-                    pass
                 return True
 
-            else:
-                # self.print(f'NO Successsul SSH recived: {data}', 1, 0)
-                pass
-        else:
+        elif uid not in self.connections_checked_in_ssh_timer_thread:
             # It can happen that the original SSH flow is not in the DB yet
-            if uid not in self.connections_checked_in_ssh_timer_thread:
-                # comes here if we haven't started the timer thread for this connection before
-                # mark this connection as checked
-                # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
-                # time {datetime.datetime.now()}')
-                self.connections_checked_in_ssh_timer_thread.append(
-                    uid
-                )
-                params = [uid, timestamp, profileid, twid, auth_success]
-                timer = TimerThread(
-                    15, self.check_successful_ssh, params
-                )
-                timer.start()
+            # comes here if we haven't started the timer thread for this connection before
+            # mark this connection as checked
+            # self.print(f'Starting the timer to check on {flow_dict}, uid {uid}.
+            # time {datetime.datetime.now()}')
+            self.connections_checked_in_ssh_timer_thread.append(
+                uid
+            )
+            params = [uid, timestamp, profileid, twid, auth_success]
+            timer = TimerThread(
+                15, self.check_successful_ssh, params
+            )
+            timer.start()
 
     def check_successful_ssh(self, uid, timestamp, profileid, twid, auth_success):
         """
         Function to check if an SSH connection logged in successfully
         """
         # it's true in zeek json files, T in zeke tab files
-        if auth_success == 'true' or auth_success == 'T':
+        if auth_success in ['true', 'T']:
             self.detect_successful_ssh_by_zeek(uid, timestamp, profileid, twid)
 
         else:
@@ -1050,7 +1023,7 @@ class Module(Module, multiprocessing.Process):
 
     def estimate_shannon_entropy(self, string):
         m = len(string)
-        bases = collections.Counter([tmp_base for tmp_base in string])
+        bases = collections.Counter(list(string))
         shannon_entropy_value = 0
         for base in bases:
             # number of residues
@@ -1099,7 +1072,7 @@ class Module(Module, multiprocessing.Process):
         # don't want to count nxdomains to cymru.com or spamhaus as DGA as they're made
         # by slips
         if (
-            not 'NXDOMAIN' in rcode_name
+            'NXDOMAIN' not in rcode_name
             or not query
             or query.endswith('.arpa')
             or query.endswith('.local')
@@ -1155,7 +1128,7 @@ class Module(Module, multiprocessing.Process):
         if proto.lower() in ('igmp', 'icmp', 'ipv6-icmp', 'arp'):
             return
 
-        if not (sport == 0 or dport == 0):
+        if sport != 0 and dport != 0:
             return
 
         direction = 'source' if sport == 0 else 'destination'
@@ -1289,9 +1262,7 @@ class Module(Module, multiprocessing.Process):
         uids = self.smtp_bruteforce_cache[profileid][1]
 
         # check if 3 bad login attemps happened within 10 seconds or less
-        if not (
-            len(timestamps) == self.smtp_bruteforce_threshold
-        ):
+        if len(timestamps) != self.smtp_bruteforce_threshold:
             return
 
         # check if they happened within 10 seconds or less
@@ -1332,10 +1303,7 @@ class Module(Module, multiprocessing.Process):
             profileid,
             twid
     ):
-        if not (
-            proto == 'tcp'
-            and state == 'Established'
-        ):
+        if proto != 'tcp' or state != 'Established':
             return
 
         dport_name = appproto
@@ -2202,7 +2170,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

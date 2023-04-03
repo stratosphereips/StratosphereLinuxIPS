@@ -39,10 +39,7 @@ def test_check_suspicious_user_agents(outputQueue, database):
     uri = '/wpad.dat'
     user_agent = 'CHM_MSDN'
     assert (
-        http_analyzer.check_suspicious_user_agents(
-            uid, host, uri, timestamp, user_agent, profileid, twid
-        )
-        == True
+        http_analyzer.check_suspicious_user_agents(uid, host, uri, timestamp, user_agent, profileid, twid) is True
     )
 
 
@@ -57,11 +54,11 @@ def test_check_multiple_google_connections(outputQueue, database):
     host = 'google.com'
     # uri = '/'
     request_body_len = 0
-    for i in range(4):
+    for _ in range(4):
         found_detection = http_analyzer.check_multiple_empty_connections(
             uid, host, timestamp, request_body_len, profileid, twid
         )
-    assert found_detection == True
+    assert found_detection is True
 
 def test_parsing_online_ua_info(outputQueue, database, mocker):
     """
@@ -104,21 +101,18 @@ def test_check_incompatible_user_agent(outputQueue, database, mocker):
     # get ua info online, and add os_type , os_name and agent_name anout this profile
     # to the db
     ua_added_to_db = http_analyzer.get_user_agent_info(SAFARI_UA, profileid)
-    assert ua_added_to_db != None, 'Error getting UA info online'
-    assert ua_added_to_db != False, 'We already have UA info about this profile in the db'
+    assert ua_added_to_db is not None, 'Error getting UA info online'
+    assert ua_added_to_db is not False, 'We already have UA info about this profile in the db'
 
     # set this profile's vendor to intel
     MAC_info = {
         'Vendor': 'Intel Corp',
         'MAC': get_random_MAC()
     }
-    assert database.add_mac_addr_to_profile(profileid, MAC_info) == True
+    assert database.add_mac_addr_to_profile(profileid, MAC_info) is True
 
     assert (
-        http_analyzer.check_incompatible_user_agent(
-            'google.com', '/images', timestamp, profileid, twid, uid
-        )
-        == True
+        http_analyzer.check_incompatible_user_agent('google.com', '/images', timestamp, profileid, twid, uid) is True
     )
 
 
@@ -143,16 +137,10 @@ def test_check_multiple_UAs(outputQueue):
     user_agent = mozilla_ua
     # should set evidence
     assert (
-        http_analyzer.check_multiple_UAs(
-            cached_ua, user_agent, timestamp, profileid, twid, uid
-        )
-        == False
+        http_analyzer.check_multiple_UAs(cached_ua, user_agent, timestamp, profileid, twid, uid) is False
     )
     # in this case we should alert
     user_agent = SAFARI_UA
     assert (
-        http_analyzer.check_multiple_UAs(
-            cached_ua, user_agent, timestamp, profileid, twid, uid
-        )
-        == True
+        http_analyzer.check_multiple_UAs(cached_ua, user_agent, timestamp, profileid, twid, uid) is True
     )

@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
+import contextlib
 from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
@@ -116,9 +117,7 @@ class Main:
     def prepare_zeek_output_dir(self):
         from pathlib import Path
         without_ext = Path(self.input_information).stem
-        # do we store the zeek dir inside the output dir?
-        store_zeek_files_in_the_output_dir = self.conf.store_zeek_files_in_the_output_dir()
-        if store_zeek_files_in_the_output_dir:
+        if self.conf.store_zeek_files_in_the_output_dir():
             self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
         else:
             self.zeek_folder = f'zeek_files_{without_ext}/'
@@ -209,13 +208,10 @@ class Main:
         # We need to separate it from the path
         self.input_information = os.path.basename(self.input_information)
         # Remove the extension from the filename
-        try:
+        with contextlib.suppress(ValueError):
             self.input_information = self.input_information[
                 : self.input_information.index('.')
             ]
-        except ValueError:
-            # it's a zeek dir
-            pass
         # Give the exact path to save(), this is where our saved .rdb backup will be
         rdb_filepath = os.path.join(backups_dir, self.input_information)
         __database__.save(rdb_filepath)
@@ -240,8 +236,7 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete = self.conf.delete_zeek_files()
-        if delete:
+        if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_folder)
 
     def is_debugger_active(self) -> bool:
@@ -265,13 +260,11 @@ class Main:
                         continue
 
                     file_path = os.path.join(self.args.output, file)
-                    try:
+                    with contextlib.suppress(Exception):
                         if os.path.isfile(file_path):
                             os.remove(file_path)
                         elif os.path.isdir(file_path):
                             shutil.rmtree(file_path)
-                    except Exception as ex:
-                        pass
             else:
                 os.makedirs(self.args.output)
             return
@@ -407,22 +400,25 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
-            # to be able to use running_slips_info later as a non-root user,
-            # we shouldn't modify it as root
-
-            self.input_information = os.path.basename(self.args.db)
-            redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
-            self.zeek_folder = '""'
-            self.log_redis_server_PID(redis_port, redis_pid)
-            self.redis_man.remove_old_logline(redis_port)
-
-            print(
-                f'{self.args.db} loaded successfully.\n'
-                f'Run ./kalipso.sh and choose port {redis_port}'
-            )
+            self.load_redis_db(redis_port)
             # __database__.disable_redis_persistence()
 
         self.terminate_slips()
+
+    def load_redis_db(self, redis_port):
+        # to be able to use running_slips_info later as a non-root user,
+        # we shouldn't modify it as root
+
+        self.input_information = os.path.basename(self.args.db)
+        redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
+        self.zeek_folder = '""'
+        self.log_redis_server_PID(redis_port, redis_pid)
+        self.redis_man.remove_old_logline(redis_port)
+
+        print(
+            f'{self.args.db} loaded successfully.\n'
+            f'Run ./kalipso.sh and choose port {redis_port}'
+        )
 
     def get_input_file_type(self, input_information):
         """
@@ -498,25 +494,22 @@ class Main:
         setup debug and verose levels
         """
         # Any verbosity passed as parameter overrides the configuration. Only check its value
-        if self.args.verbose == None:
+        if self.args.verbose is None:
             self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
-        if self.args.verbose < 1:
-            self.args.verbose = 1
-
+        self.args.verbose = max(self.args.verbose, 1)
         # Any deug passed as parameter overrides the configuration. Only check its value
-        if self.args.debug == None:
+        if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
-        if self.args.debug < 0:
-            self.args.debug = 0
+        self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
         slips_version = f'Slips. Version {green(self.version)}'
         branch_info = utils.get_branch_info()
-        if branch_info != False:
+        if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             commit = branch_info[0]
             slips_version += f' ({commit[:8]})'
@@ -805,8 +798,8 @@ if __name__ == '__main__':
         if not daemon.pid:
             # pidfile doesn't exist
             print(
-                f"Trying to stop Slips daemon.\n"
-                f"Daemon is not running."
+                "Trying to stop Slips daemon.\n"
+                "Daemon is not running."
             )
         else:
             daemon.stop()
@@ -815,7 +808,7 @@ if __name__ == '__main__':
             print('Daemon stopped.')
     elif slips.args.daemon:
         daemon = Daemon(slips)
-        if daemon.pid != None:
+        if daemon.pid is not None:
             print(f'pidfile {daemon.pidfile} already exists. Daemon already running?')
         else:
             print('Slips daemon started.')

@@ -5,7 +5,6 @@ for example: setting up the database, inputqueue, outputqueue, etc..
 import pytest
 import os, sys, inspect
 from multiprocessing import Queue
-import configparser
 
 
 # add parent dir to path for imports to work

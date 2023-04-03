@@ -1,4 +1,3 @@
-import configparser
 import multiprocessing
 import os
 import shutil
@@ -47,11 +46,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get('ip')
         # time_since_cached = int(message_data.get('cache_age', 0))
-        if not p2p_utils.validate_ip_address(ip_address):
-            return None
-
-        return message_data
-
+        return message_data if p2p_utils.validate_ip_address(ip_address) else None
     except ValueError:
         # message has wrong format
         print(
@@ -88,7 +83,7 @@ class Trust(Module, multiprocessing.Process):
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
         # get the used interface
-        used_interface = self.get_used_interface()
+        # self.get_used_interface()
         # pigeon_logfile = f'output/{used_interface}/p2p.log'
         pigeon_logfile = os.path.join(output_dir, 'p2p.log')
         self.p2p_reports_logfile = os.path.join(output_dir, 'p2p_reports.log')
@@ -113,11 +108,7 @@ class Trust(Module, multiprocessing.Process):
         self.override_p2p = override_p2p
         self.data_dir = data_dir
 
-        if self.rename_with_port:
-            str_port = str(self.port)
-        else:
-            str_port = ''
-
+        str_port = str(self.port) if self.rename_with_port else ''
         self.printer = Printer(output_queue, self.name + str_port)
 
         self.slips_update_channel = slips_update_channel
@@ -151,7 +142,7 @@ class Trust(Module, multiprocessing.Process):
         }
         __database__.start(redis_port)
 
-        self.sql_db_name = self.data_dir + 'trustdb.db'
+        self.sql_db_name = f'{self.data_dir}trustdb.db'
         if rename_sql_db_file:
             self.sql_db_name += str(pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
@@ -171,8 +162,7 @@ class Trust(Module, multiprocessing.Process):
 
 
     def get_used_interface(self):
-        used_interface = sys.argv[sys.argv.index('-i') + 1]
-        return used_interface
+        return sys.argv[sys.argv.index('-i') + 1]
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -204,7 +194,7 @@ class Trust(Module, multiprocessing.Process):
                 sock.bind(('0.0.0.0', port))
                 sock.close()
                 return port
-            except Exception as ex:
+            except Exception:
                 # port is in use
                 continue
 
@@ -285,7 +275,7 @@ class Trust(Module, multiprocessing.Process):
 
         # example: dstip srcip dport sport dstdomain
         attacker_direction = data.get('attacker_direction')
-        if not 'ip' in attacker_direction:   # and not 'domain' in attacker_direction:
+        if 'ip' not in attacker_direction:   # and not 'domain' in attacker_direction:
             # todo do we share domains too?
             # the detection is a srcport, dstport, etc. don't share
             return
@@ -460,11 +450,7 @@ class Trust(Module, multiprocessing.Process):
         # dns_resolution = __database__.get_dns_resolution(ip)
         # dns_resolution = dns_resolution.get('domains', [])
         # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
-        if 'src' in ip_state:
-            direction = 'from'
-        else:
-            direction = 'to'
-
+        direction = 'from' if 'src' in ip_state else 'to'
         # we'll be using this to make the description more clear
         other_direction = 'to' if 'from' in direction else 'from'
 
@@ -683,13 +669,13 @@ class Trust(Module, multiprocessing.Process):
                         self.print(f"You Multiaddress is: {multiaddr}")
                         self.mutliaddress_printed = True
 
-                except Exception as ex:
+                except Exception:
                     pass
 
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem with P2P. line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)

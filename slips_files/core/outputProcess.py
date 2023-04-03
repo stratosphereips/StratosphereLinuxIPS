@@ -77,8 +77,7 @@ class OutputProcess(multiprocessing.Process):
         self.printable_twid_width = conf.get_tw_width()
 
     def log_branch_info(self, logfile):
-        branch_info = utils.get_branch_info()
-        if branch_info:
+        if branch_info := utils.get_branch_info():
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
@@ -193,7 +192,7 @@ class OutputProcess(multiprocessing.Process):
                 sys.exit(-1)
             return (level, sender, msg)
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
@@ -356,7 +355,7 @@ class OutputProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',

@@ -29,7 +29,6 @@ import os
 import binascii
 import base64
 from re import split
-from tqdm import tqdm
 
 # Profiler Process
 class ProfilerProcess(multiprocessing.Process):
@@ -148,28 +147,20 @@ class ProfilerProcess(multiprocessing.Process):
                     # not suricata, data is a tab or comma separated str
                     nr_commas = data.count(',')
                     if nr_commas > 3:
-                        # comma separated str
                         # we have 2 files where Commas is the separator
                         # argus comma-separated files, or nfdump lines
                         # in argus, the ts format has a space
                         # in nfdump lines, the ts format doesn't
-                        ts = data.split(',')[0]
-                        if ' ' in ts:
-                            self.input_type = 'nfdump'
-                        else:
-                            self.input_type = 'argus'
+                        self.input_type = 'nfdump' if ' ' in data.split(',')[0] else 'argus'
+                    elif '->' in data or 'StartTime' in data:
+                        self.input_type = 'argus-tabs'
                     else:
-                        # tab separated str
-                        # a zeek tab file or a binetflow tab file
-                        if '->' in data or 'StartTime' in data:
-                            self.input_type = 'argus-tabs'
-                        else:
-                            self.input_type = 'zeek-tabs'
+                        self.input_type = 'zeek-tabs'
 
             self.separator = self.separators[self.input_type]
             return self.input_type
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_type() line {exception_line}', 0, 1
@@ -241,14 +232,10 @@ class ProfilerProcess(multiprocessing.Process):
             # so just delete them from the index if their value is False.
             # If not we will believe that we have data on them
             # We need a temp dict because we can not change the size of dict while analyzing it
-            temp_dict = {}
-            for k, e in self.column_idx.items():
-                if e == 'null':
-                    continue
-                temp_dict[k] = e
+            temp_dict = {k: e for k, e in self.column_idx.items() if e != 'null'}
             self.column_idx = temp_dict
             return self.column_idx
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'\tProblem in define_columns() line {exception_line}', 0, 1
@@ -263,19 +250,13 @@ class ProfilerProcess(multiprocessing.Process):
         line = new_line['data']
         line = line.rstrip('\n')
         # the data is either \t separated or space separated
-        if '\t' in line:
-            line = line.split('\t')
-        else:
-            # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
-            # using regex split, split line when you encounter more than 2 spaces in a row
-            line = split(r'\s{2,}', line)
-
-
+        # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
+        # using regex split, split line when you encounter more than 2 spaces in a row
+        line = line.split('\t') if '\t' in line else split(r'\s{2,}', line)
         # Generic fields in Zeek
-        self.column_values: dict = {}
         # We need to set it to empty at the beginning so any new flow has
         # the key 'type'
-        self.column_values['type'] = ''
+        self.column_values: dict = {'type': ''}
         try:
             self.column_values['starttime'] = utils.convert_to_datetime(line[0])
         except IndexError:
@@ -558,7 +539,7 @@ class ProfilerProcess(multiprocessing.Process):
                     self.column_values['host_key'] = line[17]
                 except IndexError:
                     self.column_values['host_key'] = ''
-            elif 'T' not in line[7]:
+            else:
                 self.column_values['auth_success'] = ''
                 try:
                     self.column_values['auth_attempts'] = line[7]
@@ -663,8 +644,8 @@ class ProfilerProcess(multiprocessing.Process):
 
             if self.column_values['daddr'] == '-':
                 self.column_values['daddr'] = line[14]  #  dst field
-                if self.column_values['daddr'] == '-':
-                    self.column_values['daddr'] = self.column_values['saddr']
+            if self.column_values['daddr'] == '-':
+                self.column_values['daddr'] = self.column_values['saddr']
 
             self.column_values['dport'] = line[5]   # id.orig_p
             if self.column_values['dport'] == '-':
@@ -733,16 +714,12 @@ class ProfilerProcess(multiprocessing.Process):
             file_type = file_type.split('/')[-1]
 
         # Generic fields in Zeek
-        self.column_values = {}
-        # We need to set it to empty at the beginning so any new flow has the key 'type'
-        self.column_values['type'] = ''
-        # to set the default value to '' if ts isn't found
-        ts = line.get('ts', False)
-        if ts:
-            self.column_values['starttime'] = utils.convert_to_datetime(ts)
-        else:
-            self.column_values['starttime'] = ''
-
+        self.column_values = {
+            'type': '',
+            'starttime': utils.convert_to_datetime(ts)
+            if (ts := line.get('ts', False))
+            else '',
+        }
         self.column_values['uid'] = line.get('uid', False)
         self.column_values['saddr'] = line.get('id.orig_h', '')
         self.column_values['daddr'] = line.get('id.resp_h', '')
@@ -795,9 +772,7 @@ class ProfilerProcess(multiprocessing.Process):
             if type(self.column_values['answers']) == str:
                 # If the answer is only 1, Zeek gives a string
                 # so convert to a list
-                self.column_values.update(
-                    {'answers': [self.column_values['answers']]}
-                )
+                self.column_values['answers'] = [self.column_values['answers']]
 
         elif 'http' in file_type:
             self.column_values.update(
@@ -861,9 +836,9 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'irc' in file_type:
-            self.column_values.update({'type': 'irc'})
+            self.column_values['type'] = 'irc'
         elif 'long' in file_type:
-            self.column_values.update({'type': 'long'})
+            self.column_values['type'] = 'long'
         elif 'dhcp' in file_type:
             self.column_values.update(
                 {
@@ -886,12 +861,12 @@ class ProfilerProcess(multiprocessing.Process):
                 and self.column_values['daddr'] == ''
                 and line.get('mac', False)
             ):
-                self.column_values.update({'saddr': line.get('mac', '')})
+                self.column_values['saddr'] = line.get('mac', '')
 
         elif 'dce_rpc' in file_type:
-            self.column_values.update({'type': 'dce_rpc'})
+            self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in file_type:
-            self.column_values.update({'type': 'dnp3'})
+            self.column_values['type'] = 'dnp3'
         elif 'ftp' in file_type:
             self.column_values.update(
                 {
@@ -948,7 +923,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] == '':
-                self.column_values.update({'saddr': line.get('src', '')})
+                self.column_values['saddr'] = line.get('src', '')
             if self.column_values['daddr'] == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
                 self.column_values.update(
@@ -958,12 +933,10 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'files.log' in file_type:
             """Parse the fields we're interested in in the files.log file"""
             # the slash before files to distinguish between 'files' in the dir name and file.log
-            saddr =  line.get('tx_hosts', [''])[0]
-            if saddr:
+            if saddr := line.get('tx_hosts', [''])[0]:
                 self.column_values['saddr'] = saddr
 
-            daddr = line.get('rx_hosts', [''])[0]
-            if daddr:
+            if daddr := line.get('rx_hosts', [''])[0]:
                 self.column_values['daddr'] = daddr
 
             self.column_values.update(
@@ -1529,9 +1502,7 @@ class ProfilerProcess(multiprocessing.Process):
             'profileid': f'profile_{ip}'
         }
         if host_name:
-            to_send.update({
-                'host_name': host_name
-            })
+            to_send['host_name'] = host_name
         __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
@@ -1555,13 +1526,11 @@ class ProfilerProcess(multiprocessing.Process):
             'weird'
         )
 
-        if (
-            not self.column_values
-            or self.column_values['starttime'] is None
-            or self.column_values['type'] not in supported_types
-        ):
-            return False
-        return True
+        return bool(
+            self.column_values
+            and self.column_values['starttime'] is not None
+            and self.column_values['type'] in supported_types
+        )
 
     def get_starttime(self):
         ts = self.column_values['starttime']
@@ -1686,9 +1655,7 @@ class ProfilerProcess(multiprocessing.Process):
 
             # 5th. Store the data according to the paremeters
             # Now that we have the profileid and twid, add the data from the flow in this tw for this profile
-            self.print(
-                'Storing data in the profile: {}'.format(self.profileid), 3, 0
-            )
+            self.print(f'Storing data in the profile: {self.profileid}', 3, 0)
             self.starttime = self.get_starttime()
             # For this 'forward' profile, find the id in the database of the tw where the flow belongs.
             self.twid = __database__.get_timewindow(self.starttime, self.profileid)
@@ -1703,10 +1670,11 @@ class ProfilerProcess(multiprocessing.Process):
                         )
                         self.store_features_going_out()
 
-                    if self.analysis_direction == 'all':
-                        # in all mode we create profiled for daddrs too
-                        if self.daddr_as_obj in network:
-                            self.handle_in_flows()
+                    if (
+                        self.analysis_direction == 'all'
+                        and self.daddr_as_obj in network
+                    ):
+                        self.handle_in_flows()
             else:
                 # home_network param wasn't set in slips.conf
                 # Create profiles for all ips we see
@@ -1716,7 +1684,7 @@ class ProfilerProcess(multiprocessing.Process):
                     # No home. Store all
                     self.handle_in_flows()
             return True
-        except Exception as ex:
+        except Exception:
             # For some reason we can not use the output queue here.. check
             self.print(
                 f'Error in add_flow_to_profile Profiler Process. {traceback.format_exc()}'
@@ -1890,8 +1858,7 @@ class ProfilerProcess(multiprocessing.Process):
             __database__.set_default_gateway("IP", gw_addr)
 
     def handle_ftp(self):
-        used_port = self.column_values['used_port']
-        if used_port:
+        if used_port := self.column_values['used_port']:
             __database__.set_ftp_port(used_port)
 
     def handle_smtp(self):
@@ -1937,9 +1904,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.saddr,
                 host_name=(self.column_values.get('host_name', False))
             )
-        server_addr = self.column_values.get('server_addr', False)
-
-        if server_addr:
+        if server_addr := self.column_values.get('server_addr', False):
             __database__.store_dhcp_server(server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
@@ -2045,12 +2010,10 @@ class ProfilerProcess(multiprocessing.Process):
             # call the function that handles this flow
             cases[self.flow_type]()
         except KeyError:
-            # does flow contain a part of the key?
             for flow in cases:
                 if flow in self.flow_type:
                     cases[flow]()
-            else:
-                return False
+            return False
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified
@@ -2062,20 +2025,19 @@ class ProfilerProcess(multiprocessing.Process):
         store features going our adds the conn in the profileA from IP A -> IP B in the db
         this function stores the reverse of this connection. adds the conn in the profileB from IP B <- IP A
         """
-        role = 'Server'
-
         # self.print(f'Storing features going in for profile {profileid} and tw {twid}')
-        if not (
-            'flow' in self.flow_type
-            or 'conn' in self.flow_type
-            or 'argus' in self.flow_type
-            or 'nfdump' in self.flow_type
+        if (
+            'flow' not in self.flow_type
+            and 'conn' not in self.flow_type
+            and 'argus' not in self.flow_type
+            and 'nfdump' not in self.flow_type
         ):
             return
         symbol = self.compute_symbol('InTuples')
 
         # Add the src tuple using the src ip, and dst port
         tupleid = f'{self.daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        role = 'Server'
         __database__.add_tuple(
             profileid, twid, tupleid, symbol, role, self.starttime, self.uid
         )
@@ -2164,10 +2126,10 @@ class ProfilerProcess(multiprocessing.Process):
             # Thresholds learnt from Stratosphere ips first version
             # Timeout time, after 1hs
             tto = timedelta(seconds=3600)
-            tt1 = float(1.05)
-            tt2 = float(1.3)
+            tt1 = 1.05
+            tt2 = 1.3
             tt3 = float(5)
-            td1 = float(0.1)
+            td1 = 0.1
             td2 = float(10)
             ts1 = float(250)
             ts2 = float(1100)
@@ -2180,8 +2142,8 @@ class ProfilerProcess(multiprocessing.Process):
             # self.print(f'Profileid: {profileid}. Data extracted from DB. last_ts: {last_ts}, last_last_ts: {last_last_ts}', 0, 5)
 
             def compute_periodicity(
-                now_ts: float, last_ts: float, last_last_ts: float
-            ):
+                        now_ts: float, last_ts: float, last_last_ts: float
+                    ):
                 """Function to compute the periodicity"""
                 zeros = ''
                 if last_last_ts is False or last_ts is False:
@@ -2208,10 +2170,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                     # Compute TD
                     try:
-                        if T2 >= T1:
-                            TD = T2 / T1
-                        else:
-                            TD = T1 / T2
+                        TD = T2 / T1 if T2 >= T1 else T1 / T2
                     except ZeroDivisionError:
                         TD = 1
 
@@ -2314,10 +2273,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Here begins the function's code
             try:
                 # Update value of T2
-                if now_ts and last_ts:
-                    T2 = now_ts - last_ts
-                else:
-                    T2 = False
+                T2 = now_ts - last_ts if now_ts and last_ts else False
                 # Are flows sorted?
                 if T2 < 0:
                     # Flows are not sorted!
@@ -2328,7 +2284,6 @@ class ProfilerProcess(multiprocessing.Process):
                         0,
                         2,
                     )
-                    pass
             except TypeError:
                 T2 = False
             # self.print("T2:{}".format(T2), 0, 1)
@@ -2362,7 +2317,7 @@ class ProfilerProcess(multiprocessing.Process):
             symbol = zeros + letter + timechar
             # Return the symbol, the current time of the flow and the T1 value
             return symbol, (last_ts, now_ts)
-        except Exception as ex:
+        except Exception:
             # For some reason we can not use the output queue here.. check
             self.print('Error in compute_symbol in Profiler Process.', 0, 1)
             self.print('{}'.format(traceback.format_exc()), 0, 1)
@@ -2385,23 +2340,22 @@ class ProfilerProcess(multiprocessing.Process):
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     self.shutdown_gracefully()
                     self.print(
-                        'Stopping Profiler Process. Received {} lines ({})'.format(
-                            rec_lines,
-                            utils.convert_format(datetime.now(), utils.alerts_format),
-                        ), 2,0
+                        f'Stopping Profiler Process. Received {rec_lines} lines ({utils.convert_format(datetime.now(), utils.alerts_format)})',
+                        2,
+                        0,
                     )
                     return True
 
                 # Received new input data
                 # Extract the columns smartly
-                self.print('< Received Line: {}'.format(line), 2, 0)
+                self.print(f'< Received Line: {line}', 2, 0)
                 rec_lines += 1
 
                 if not self.input_type:
                     # Find the type of input received
                     self.define_type(line)
                     # Find the number of flows we're going to receive of input received
-                    self.outputqueue.put(f"initialize progress bar")
+                    self.outputqueue.put("initialize progress bar")
 
                 # What type of input do we have?
                 if not self.input_type:
@@ -2414,12 +2368,9 @@ class ProfilerProcess(multiprocessing.Process):
                     # Add the flow to the profile
                     self.add_flow_to_profile()
 
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
 
-                elif (
-                    self.input_type == 'argus'
-                    or self.input_type == 'argus-tabs'
-                ):
+                elif self.input_type in ['argus', 'argus-tabs']:
                     # self.print('Argus line')
                     # Argus puts the definition of the columns on the first line only
                     # So read the first line and define the columns
@@ -2439,7 +2390,7 @@ class ProfilerProcess(multiprocessing.Process):
                         self.process_argus_input(line)
                         # Add the flow to the profile
                         self.add_flow_to_profile()
-                        self.outputqueue.put(f"update progress bar")
+                        self.outputqueue.put("update progress bar")
                     except (AttributeError, KeyError):
                         # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
@@ -2447,17 +2398,17 @@ class ProfilerProcess(multiprocessing.Process):
                     self.process_suricata_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
                     self.process_zeek_tabs_input(line)
                     # Add the flow to the profile
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 elif self.input_type == 'nfdump':
                     self.process_nfdump_input(line)
                     self.add_flow_to_profile()
-                    self.outputqueue.put(f"update progress bar")
+                    self.outputqueue.put("update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
                     return False
@@ -2478,7 +2429,7 @@ class ProfilerProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(
                     f'Error. Stopped Profiler Process. Received {rec_lines} '

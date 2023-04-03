@@ -150,13 +150,7 @@ class EvidenceProcess(multiprocessing.Process):
         #     dns_resolution_ip[:3]
         #     ) > 0 else '. '
 
-        if detection_module == 'ThreatIntelligenceBlacklistIP':
-            evidence_string = f'Detected {description}'
-
-        elif detection_module == 'ThreatIntelligenceBlacklistDomain':
-            evidence_string = f'Detected {description}'
-
-        elif detection_module == 'SSHSuccessful':
+        if detection_module == 'SSHSuccessful':
             evidence_string = f'Did a successful SSH. {description}'
         else:
             evidence_string = f'Detected {description}'
@@ -203,14 +197,12 @@ class EvidenceProcess(multiprocessing.Process):
         """
         try:
             # we add extra fields to alerts.json that are not in the IDEA format
-            IDEA_dict.update(
-                {'uids': all_uids}
-            )
+            IDEA_dict['uids'] = all_uids
             json.dump(IDEA_dict, self.jsonfile)
             self.jsonfile.write('\n')
         except KeyboardInterrupt:
             return True
-        except Exception as ex:
+        except Exception:
             self.print('Error in addDataToJSONFile()')
             self.print(traceback.print_exc(), 0, 1)
 
@@ -232,7 +224,7 @@ class EvidenceProcess(multiprocessing.Process):
 
         except KeyboardInterrupt:
             return True
-        except Exception as ex:
+        except Exception:
             self.print('Error in addDataToLogFile()')
             self.print(traceback.print_exc(),0,1)
 
@@ -314,7 +306,7 @@ class EvidenceProcess(multiprocessing.Process):
             srcip = profileid.split(self.separator)[1]
             # Get the start time of this TW
             twid_start_time = None
-            while twid_start_time == None:
+            while twid_start_time is None:
                 # give the database time to retreive the time
                 twid_start_time = __database__.getTimeTW(profileid, twid)
 
@@ -345,7 +337,7 @@ class EvidenceProcess(multiprocessing.Process):
                 f'(start {tw_start_time_str}, stop {tw_stop_time_str}) \n'
                 f'given the following evidence:{Style.RESET_ALL}\n'
             )
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on format_evidence_causing_this_alert() line {exception_line}',0,1,
@@ -560,8 +552,7 @@ class EvidenceProcess(multiprocessing.Process):
         return accumulated_threat_level
 
     def get_last_evidence_ID(self, tw_evidence):
-        last_evidence_ID = list(tw_evidence.keys())[-1]
-        return last_evidence_ID
+        return list(tw_evidence.keys())[-1]
 
     def send_to_exporting_module(self, tw_evidence):
         for evidence in tw_evidence.values():
@@ -570,10 +561,7 @@ class EvidenceProcess(multiprocessing.Process):
     def add_hostname_to_alert(self, alert_to_log, profileid, flow_datetime, evidence):
         # sometimes slips tries to get the hostname of a profile before ip_info stores it in the db
         # there's nothing we can do about it
-        hostname = __database__.get_hostname_from_profile(
-            profileid
-        )
-        if hostname:
+        if hostname := __database__.get_hostname_from_profile(profileid):
             srcip = profileid.split("_")[-1]
             srcip = f'{srcip} ({hostname})'
             # fill the rest of the 26 characters with spaces to keep the alignment
@@ -620,6 +608,7 @@ class EvidenceProcess(multiprocessing.Process):
                         uid = all_uids[-1]
                     else:
                         # all_uids is just 1 str uid
+                        # TODO this is terrible and should be refactored
                         uid = all_uids
 
                     flow = __database__.get_flow(profileid, twid, uid)
@@ -678,17 +667,11 @@ class EvidenceProcess(multiprocessing.Process):
                     __database__.set_evidence_for_profileid(IDEA_dict)
                     __database__.publish('report_to_peers', json.dumps(data))
 
-                    #
-                    # Analysis of evidence for blocking or not
-                    # This is done every time we receive 1 new evidence
-                    #
-                    tw_evidence = self.get_evidence_for_tw(profileid, twid)
-
-                    # Important! It may happen that the evidence is not related to a profileid and twid.
-                    # For example when the evidence is on some src IP attacking our home net, and we are not creating
-                    # profiles for attackers
-                    if tw_evidence:
+                    if tw_evidence := self.get_evidence_for_tw(profileid, twid):
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
+                        # Important! It may happen that the evidence is not related to a profileid and twid.
+                        # For example when the evidence is on some src IP attacking our home net, and we are not creating
+                        # profiles for attackers
 
                         # The accumulated threat level is for all the types of evidence for this profile
                         accumulated_threat_level = self.get_accumulated_threat_level(tw_evidence)
@@ -741,10 +724,12 @@ class EvidenceProcess(multiprocessing.Process):
 
                             # todo if it's already blocked, we shouldn't decide blocking
                             blocked = False
-                            if self.is_running_on_interface() and '-p' in sys.argv:
-                                # send ip to the blocking module
-                                if self.decide_blocking(profileid):
-                                    blocked = True
+                            if (
+                                self.is_running_on_interface()
+                                and '-p' in sys.argv
+                                and self.decide_blocking(profileid)
+                            ):
+                                blocked = True
 
                             self.mark_as_blocked(
                                 profileid,
@@ -801,10 +786,10 @@ class EvidenceProcess(multiprocessing.Process):
                 self.shutdown_gracefully()
                 # self.outputqueue.put('01|evidence|[Evidence] Stopping the Evidence Process')
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.outputqueue.put(
                     f'01|[Evidence] Error in the Evidence Process line {exception_line}'
                 )
-                self.outputqueue.put('01|[Evidence] {}'.format(traceback.print_exc()))
+                self.outputqueue.put(f'01|[Evidence] {traceback.print_exc()}')
                 return True

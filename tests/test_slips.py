@@ -72,7 +72,7 @@ def test_load_modules():
 
 def test_create_folder_for_logs():
     main = create_Main_instance()
-    assert main.create_folder_for_logs() != False
+    assert main.create_folder_for_logs() is not False
 
 
 def test_clear_redis_cache_database():

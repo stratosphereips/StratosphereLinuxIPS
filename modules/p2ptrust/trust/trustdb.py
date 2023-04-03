@@ -29,7 +29,7 @@ class TrustDB:
         self.conn.close()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print('[TrustDB] ' + text, verbose, debug)
+        self.printer.print(f'[TrustDB] {text}', verbose, debug)
 
     def create_tables(self):
         self.conn.execute(
@@ -138,7 +138,6 @@ class TrustDB:
             reports,
         )
         self.conn.commit()
-        pass
 
     def insert_new_go_report(
         self,
@@ -172,7 +171,6 @@ class TrustDB:
             parameters,
         )
         self.conn.commit()
-        pass
 
     def update_cached_network_opinion(
         self,
@@ -215,8 +213,7 @@ class TrustDB:
             'SELECT MAX(update_time) AS ip_update_time, ipaddress FROM peer_ips WHERE peerid = ?;',
             ((peerid),)
         )
-        res = cache_cur.fetchone()
-        if res:
+        if res := cache_cur.fetchone():
             last_update_time, ip = res
             return last_update_time, ip
         return False, False
@@ -305,9 +302,7 @@ class TrustDB:
             )
             data = slips_reputation_cur.fetchone()
             if data is None:
-                self.print(
-                    'No slips reputation data for ' + str(parameters_dict)
-                )
+                self.print(f'No slips reputation data for {parameters_dict}')
                 continue
 
             go_reliability_cur = self.conn.execute(

@@ -1,6 +1,5 @@
 """Unit test for ../arp.py"""
 from ..modules.arp.arp import Module
-import configparser
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
@@ -29,10 +28,7 @@ def test_check_dstip_outside_localnet(outputQueue, database):
     saddr = '192.168.1.1'
     ts = '1632214645.783595'
     assert (
-        ARP.check_dstip_outside_localnet(
-            profileid, twid, daddr, uid, saddr, ts
-        )
-        == True
+        ARP.check_dstip_outside_localnet(profileid, twid, daddr, uid, saddr, ts) is True
     )
 
 
@@ -45,10 +41,7 @@ def test_detect_unsolicited_arp(outputQueue, database):
     src_mac = '44:11:44:11:44:11'
     src_hw = '44:11:44:11:44:11'
     assert (
-        ARP.detect_unsolicited_arp(
-            profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw
-        )
-        == True
+        ARP.detect_unsolicited_arp(profileid, twid, uid, ts, dst_mac, src_mac, dst_hw, src_hw) is True
     )
 
 
@@ -68,6 +61,5 @@ def test_detect_MITM_ARP_attack(outputQueue, database):
     ts = '1636305825.755132'
     saddr = '192.168.1.3'
     assert (
-        ARP.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac)
-        == True
+        ARP.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac) is True
     )
