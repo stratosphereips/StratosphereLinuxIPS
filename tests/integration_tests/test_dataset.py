@@ -94,7 +94,7 @@ def create_Main_instance(input_information):
             'dataset/test7-malicious.pcap',
             15,
             'test7/',
-            'horizontal port scan to port  23',
+            'A device changing IPs',
             6666,
         ),
         ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
