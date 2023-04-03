@@ -236,15 +236,13 @@ class Module(Module, multiprocessing.Process):
             attacker = attacker.split(':')[0]
         ioc_type = utils.detect_data_type(attacker)
         if ioc_type == 'ip':
-            pattern = "[ip-addr:value = '{}']".format(attacker)
+            pattern = f"[ip-addr:value = '{attacker}']"
         elif ioc_type == 'domain':
-            pattern = "[domain-name:value = '{}']".format(attacker)
+            pattern = f"[domain-name:value = '{attacker}']"
         elif ioc_type == 'url':
-            pattern = "[url:value = '{}']".format(attacker)
+            pattern = f"[url:value = '{attacker}']"
         else:
-            self.print(
-                "Can't set pattern for STIX. {}".format(attacker), 0, 3
-            )
+            self.print(f"Can't set pattern for STIX. {attacker}", 0, 3)
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
@@ -275,7 +273,7 @@ class Module(Module, multiprocessing.Process):
             # Append mode to add the new indicator to the objects array
             with open('STIX_data.json', 'a') as stix_file:
                 # Append the indicator in the objects array
-                stix_file.write(',' + str(indicator) + ']\n}\n')
+                stix_file.write(f',{str(indicator)}' + ']\n}\n')
 
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(attacker)

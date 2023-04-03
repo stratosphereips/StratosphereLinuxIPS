@@ -71,10 +71,7 @@ class Module(Module, multiprocessing.Process):
         self.running_in_docker = os.environ.get(
             'IS_IN_A_DOCKER_CONTAINER', False
         )
-        if self.running_in_docker:
-            self.sudo = ''
-        else:
-            self.sudo = 'sudo '
+        self.sudo = '' if self.running_in_docker else 'sudo '
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -117,9 +114,7 @@ class Module(Module, multiprocessing.Process):
         # check if slipsBlocking chain exists before flushing it and suppress stderr and stdout while checking
         # 0 means it exists
         chain_exists = (
-            os.system(
-                self.sudo + 'iptables -nvL slipsBlocking >/dev/null 2>&1'
-            )
+            os.system(f'{self.sudo}iptables -nvL slipsBlocking >/dev/null 2>&1')
             == 0
         )
         if self.firewall == 'iptables' and chain_exists:
@@ -134,9 +129,9 @@ class Module(Module, multiprocessing.Process):
         elif self.firewall == 'nftables':
             # TODO: handle the creation of the slipsBlocking chain in nftables
             # Flush rules in slipsBlocking chain because you can't delete a chain without flushing first
-            os.system(self.sudo + 'nft flush chain inet slipsBlocking')
+            os.system(f'{self.sudo}nft flush chain inet slipsBlocking')
             # Delete slipsBlocking chain from nftables
-            os.system(self.sudo + 'nft delete chain inet slipsBlocking')
+            os.system(f'{self.sudo}nft delete chain inet slipsBlocking')
             return True
         return False
 
@@ -157,18 +152,12 @@ class Module(Module, multiprocessing.Process):
             # self.delete_iptables_chain()
             self.print('Executing "sudo iptables -N slipsBlocking"', 6, 0)
             # Add a new chain to iptables
-            os.system(self.sudo + 'iptables -N slipsBlocking >/dev/null 2>&1')
+            os.system(f'{self.sudo}iptables -N slipsBlocking >/dev/null 2>&1')
 
             # Check if we're already redirecting to slipsBlocking chain
-            INPUT_chain_rules = self.get_cmd_output(
-                self.sudo + ' iptables -nvL INPUT'
-            )
-            OUTPUT_chain_rules = self.get_cmd_output(
-                self.sudo + ' iptables -nvL OUTPUT'
-            )
-            FORWARD_chain_rules = self.get_cmd_output(
-                self.sudo + ' iptables -nvL FORWARD'
-            )
+            INPUT_chain_rules = self.get_cmd_output(f'{self.sudo} iptables -nvL INPUT')
+            OUTPUT_chain_rules = self.get_cmd_output(f'{self.sudo} iptables -nvL OUTPUT')
+            FORWARD_chain_rules = self.get_cmd_output(f'{self.sudo} iptables -nvL FORWARD')
             # Redirect the traffic from all other chains to slipsBlocking so rules
             # in any pre-existing chains dont override it
             # -I to insert slipsBlocking at the top of the INPUT, OUTPUT and FORWARD chains
@@ -193,7 +182,7 @@ class Module(Module, multiprocessing.Process):
                 'Executing "sudo nft add table inet slipsBlocking"', 6, 0
             )
             # Add a new nft table that uses the inet family (ipv4,ipv6)
-            os.system(self.sudo + 'nft add table inet slipsBlocking')
+            os.system(f'{self.sudo}nft add table inet slipsBlocking')
             # TODO: HANDLE NFT TABLE
 
     def exec_iptables_command(self, action, ip_to_block, flag, options):
@@ -222,7 +211,7 @@ class Module(Module, multiprocessing.Process):
     def is_ip_blocked(self, ip) -> bool:
         """Checks if ip is already blocked or not"""
 
-        command = self.sudo + 'iptables -L slipsBlocking -v -n'
+        command = f'{self.sudo}iptables -L slipsBlocking -v -n'
         # Execute command
         result = subprocess.run(command.split(), stdout=subprocess.PIPE)
         result = result.stdout.decode('utf-8')
@@ -260,9 +249,9 @@ class Module(Module, multiprocessing.Process):
                 from_, to = True, True
             # This dictionary will be used to construct the rule
             options = {
-                'protocol': ' -p ' + protocol if protocol is not None else '',
-                'dport': ' --dport ' + str(dport) if dport is not None else '',
-                'sport': ' --sport ' + str(sport) if sport is not None else '',
+                'protocol': f' -p {protocol}' if protocol is not None else '',
+                'dport': f' --dport {str(dport)}' if dport is not None else '',
+                'sport': f' --sport {str(sport)}' if sport is not None else '',
             }
 
             if from_:
@@ -355,7 +344,7 @@ class Module(Module, multiprocessing.Process):
 
         if unblocked:
             # Successfully blocked an ip
-            self.print('Unblocked: ' + ip_to_unblock)
+            self.print(f'Unblocked: {ip_to_unblock}')
             return True
         return False
 

@@ -14,7 +14,7 @@ def do_nothing(*args):
 test_pcap = 'dataset/test7-malicious.pcap'
 yara_rules_path = 'tests/yara_rules_for_testing/rules/'
 compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-compiled_test_rule = compiled_yara_rules_path + 'test_rule.yara_compiled'
+compiled_test_rule = f'{compiled_yara_rules_path}test_rule.yara_compiled'
 
 
 def create_leak_detector_instance(outputQueue):

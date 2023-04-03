@@ -41,10 +41,9 @@ class ConfigParser(object):
         return parser.get_configfile()
 
     def get_parser(self, help=False):
-        parser = ArgumentParser(
+        return ArgumentParser(
             usage='./slips.py -c <configfile> [options] [file]', add_help=help
         )
-        return parser
 
 
 
@@ -105,11 +104,9 @@ class ConfigParser(object):
         """
         Returns a list of network objects if defined in slips.conf. or False
         """
-        home_net = self.read_configuration(
+        if home_net := self.read_configuration(
             'parameters', 'home_network', False
-        )
-
-        if home_net:
+        ):
             # we have home_network param set in slips.conf
             home_nets = home_net.replace(']','').replace('[','').split(',')
             home_nets = [network.strip() for network in home_nets]
@@ -135,9 +132,7 @@ class ConfigParser(object):
         pcapfilter = self.read_configuration(
             'parameters', 'pcapfilter', 'no'
         )
-        if pcapfilter in ('no'):
-            return False
-        return pcapfilter
+        return False if pcapfilter in ('no') else pcapfilter
 
     def online_whitelist(self):
         return self.read_configuration(
@@ -182,11 +177,7 @@ class ConfigParser(object):
         store_a_copy_of_zeek_files = self.read_configuration(
             'parameters', 'store_a_copy_of_zeek_files', 'no'
         )
-        return (
-            False
-            if 'no' in store_a_copy_of_zeek_files.lower()
-            else True
-        )
+        return 'no' not in store_a_copy_of_zeek_files.lower()
 
     def create_log_files(self):
         do_logs = self.read_configuration(
@@ -303,18 +294,21 @@ class ConfigParser(object):
             sec = int(sec)
 
             res = ''
-            if hrs:
+            if hrs := hrs:
                 res += f'{hrs} hrs '
                 # remove the s
-                if hrs == 1: res=res[:-2] + ' '
+                if hrs == 1:
+                    res = f'{res[:-2]} '
 
-            if mins:
+            if mins := mins:
                 res += f'{mins} mins '
-                if mins == 1: res=res[:-2] + ' '
+                if mins == 1:
+                    res = f'{res[:-2]} '
 
-            if sec:
+            if sec := sec:
                 res += f'{sec} seconds '
-                if sec == 1: res=res[:-2] + ' '
+                if sec == 1:
+                    res = f'{res[:-2]} '
 
             if res.endswith(' '): res=res[:-1]
             return res
@@ -328,24 +322,17 @@ class ConfigParser(object):
                                                 'metadata_dir',
                                                 'no'
                                                 )
-        return (
-            False if 'no' in enable_metadata.lower() else True
-        )
+        return 'no' not in enable_metadata.lower()
 
     def use_p2p(self):
         use_p2p = self.read_configuration(
             'P2P', 'use_p2p', 'no'
         )
-        return (
-            False if 'no' in use_p2p.lower() else True
-        )
+        return 'no' not in use_p2p.lower()
 
 
     def cesnet_conf_file(self):
-        file = self.read_configuration(
-            'CESNET', 'configuration_file', False
-        )
-        return file
+        return self.read_configuration('CESNET', 'configuration_file', False)
 
     def poll_delay(self):
         poll_delay = self.read_configuration(
@@ -363,17 +350,13 @@ class ConfigParser(object):
         send_to_warden = self.read_configuration(
             'CESNET', 'send_alerts', 'no'
         ).lower()
-        return (
-            False if 'no' in send_to_warden.lower() else True
-        )
+        return 'no' not in send_to_warden.lower()
 
     def receive_from_warden(self):
         receive_from_warden = self.read_configuration(
             'CESNET', 'receive_alerts', 'no'
         ).lower()
-        return (
-            False if 'no' in receive_from_warden.lower() else True
-        )
+        return 'no' not in receive_from_warden.lower()
 
     def verbose(self):
         verbose = self.read_configuration(
@@ -381,9 +364,7 @@ class ConfigParser(object):
         )
         try:
             verbose = int(verbose)
-            if verbose < 1:
-                verbose = 1
-            return verbose
+            return max(verbose, 1)
         except ValueError:
             return 1
 
@@ -393,39 +374,31 @@ class ConfigParser(object):
         )
         try:
             debug = int(debug)
-            if debug < 0:
-                debug = 0
+            debug = max(debug, 0)
         except ValueError:
             debug = 0
         return debug
 
     def export_to(self):
-        export_to = self.read_configuration(
-            'exporting_alerts', 'export_to', '[]'
-        )\
-            .replace(']','')\
-            .replace('[','')\
-            .replace(' ', '')\
-            .lower().split(',')
-        return export_to
+        return (
+            self.read_configuration('exporting_alerts', 'export_to', '[]')
+            .replace(']', '')
+            .replace('[', '')
+            .replace(' ', '')
+            .lower()
+            .split(',')
+        )
 
     def slack_token_filepath(self):
-        file = self.read_configuration(
-            'exporting_alerts', 'slack_api_path', False
-        )
-        return file
+        return self.read_configuration('exporting_alerts', 'slack_api_path', False)
 
     def slack_channel_name(self):
-        channel = self.read_configuration(
+        return self.read_configuration(
             'exporting_alerts', 'slack_channel_name', False
         )
-        return channel
 
     def sensor_name(self):
-        sensor = self.read_configuration(
-            'exporting_alerts', 'sensor_name', False
-        )
-        return sensor
+        return self.read_configuration('exporting_alerts', 'sensor_name', False)
 
 
     def taxii_server(self):
@@ -638,7 +611,7 @@ class ConfigParser(object):
         delete = self.read_configuration(
              'parameters', 'deletePrevdb', True
         )
-        return False if delete == 'False' else True
+        return delete != 'False'
 
     def rotation_period(self):
         rotation_period = self.read_configuration(

@@ -29,8 +29,7 @@ def create_update_manager_instance(outputQueue):
 def create_ASN_Info_instance():
     """Create an instance of asn_info.py
     needed by every other test in this file"""
-    ASN_Info = ASN()
-    return ASN_Info
+    return ASN()
 
 
 # ASN unit tests

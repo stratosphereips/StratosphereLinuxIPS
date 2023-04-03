@@ -90,9 +90,7 @@ class Main:
     def prepare_zeek_output_dir(self):
         from pathlib import Path
         without_ext = Path(self.input_information).stem
-        # do we store the zeek dir inside the output dir?
-        store_zeek_files_in_the_output_dir = self.conf.store_zeek_files_in_the_output_dir()
-        if store_zeek_files_in_the_output_dir:
+        if self.conf.store_zeek_files_in_the_output_dir():
             self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
         else:
             self.zeek_folder = f'zeek_files_{without_ext}/'
@@ -274,8 +272,7 @@ class Main:
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
             try:
-                connected = __database__.connect_to_redis_server(port)
-                if connected:
+                if connected := __database__.connect_to_redis_server(port):
                     server_used = len(list(__database__.r.keys())) < 2
                     if server_used:
                         # if the db managed to connect to this random port, then this is
@@ -284,11 +281,10 @@ class Main:
             except redis.exceptions.ConnectionError:
                 # Connection refused to this port
                 continue
-        else:
-            # there's no usable port in this range
-            print(f"All ports from {self.start_port} to {self.end_port} are used. "
-                   "Unable to start slips.\n")
-            return False
+        # there's no usable port in this range
+        print(f"All ports from {self.start_port} to {self.end_port} are used. "
+               "Unable to start slips.\n")
+        return False
 
 
     def clear_redis_cache_database(
@@ -407,7 +403,7 @@ class Main:
                 continue
 
             module_class = modules_to_call[module_name]['obj']
-            if 'P2P Trust' == module_name:
+            if module_name == 'P2P Trust':
                 module = module_class(
                     self.outputqueue,
                     self.redis_port,
@@ -500,11 +496,10 @@ class Main:
 
 
         # closes all the ports in slips supported range of ports
-        slips_supported_range = [port for port in range(self.start_port, self.end_port + 1)]
+        slips_supported_range = list(range(self.start_port, self.end_port + 1))
         slips_supported_range.append(6379)
         for port in slips_supported_range:
-            pid = self.get_pid_of_redis_server(port)
-            if pid:
+            if pid := self.get_pid_of_redis_server(port):
                 self.flush_redis_server(pid=pid)
                 self.kill_redis_server(pid)
 
@@ -678,8 +673,7 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete = self.conf.delete_zeek_files()
-        if delete:
+        if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_folder)
 
     def green(self, txt):
@@ -755,7 +749,7 @@ class Main:
         """
         now = datetime.now()
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
-        return True if diff >= wait_for_modules_to_finish else False
+        return diff >= wait_for_modules_to_finish
 
 
     def shutdown_gracefully(self):
@@ -784,8 +778,6 @@ class Main:
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
 
-            finished_modules = []
-
             # get dict of PIDs spawned by slips
             self.PIDs = __database__.get_PIDs()
 
@@ -807,11 +799,6 @@ class Main:
             # only print that modules are still running once
             warning_printed = False
 
-            # timeout variable so we don't loop forever
-            # give slips enough time to close all modules - make sure
-            # all modules aren't considered 'busy' when slips stops
-            max_loops = 430
-
             # loop until all loaded modules are finished
             # in the case of -S, slips doesn't even start the modules,
             # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
@@ -819,6 +806,13 @@ class Main:
                 #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
                 # we will kill them aletr, so we shouldn't be looping and waiting for them to get outta the loop
                 slips_processes = len(list(self.PIDs.keys())) - len(modules_to_be_killed_last)
+
+                finished_modules = []
+
+                # timeout variable so we don't loop forever
+                # give slips enough time to close all modules - make sure
+                # all modules aren't considered 'busy' when slips stops
+                max_loops = 430
 
                 try:
                     while (
@@ -998,17 +992,16 @@ class Main:
         :param pid: can be False if port is given
         Gets the pid of the port is not given
         """
-        if not port and not pid:
-            return False
+        if not port:
+            if not pid:
+                return False
 
-        # sometimes the redis port is given, no need to get it manually
-        if not port and pid:
             if not hasattr(self, 'open_servers_PIDs'):
                 self.get_open_redis_servers()
-            port = self.open_servers_PIDs.get(str(pid), False)
-            if not port:
-                # try to get the port using a cmd
-                port = self.get_port_of_redis_server(pid)
+            port = self.open_servers_PIDs.get(pid, False)
+        if not port:
+            # try to get the port using a cmd
+            port = self.get_port_of_redis_server(pid)
         port = str(port)
 
         # clear the server opened on this port
@@ -1508,7 +1501,6 @@ class Main:
                 print(
                     'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
                 )
-                self.terminate_slips()
             else:
                 # start only the blocking module process and the db
                 from multiprocessing import Queue, active_children
@@ -1521,9 +1513,7 @@ class Main:
                 # run shutdown_gracefully here (not all modules has started)
                 for child in active_children():
                     child.kill()
-                self.terminate_slips()
-
-
+            self.terminate_slips()
         # Check if user want to save and load a db at the same time
         if self.args.save and self.args.db:
             print("Can't use -s and -d together")
@@ -1546,9 +1536,7 @@ class Main:
         }
 
         if hasattr(self, 'zeek_folder'):
-            info.update({
-                'zeek_dir': self.zeek_folder
-            })
+            info['zeek_dir'] = self.zeek_folder
 
         size_in_mb = '-'
         if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
@@ -1556,9 +1544,7 @@ class Main:
             size_in_mb = float(size) / (1024 * 1024)
             size_in_mb = format(float(size_in_mb), '.2f')
 
-        info.update({
-            'size_in_MB': size_in_mb,
-        })
+        info['size_in_MB'] = size_in_mb
         # analysis end date will be set in shutdown_gracefully
         # file(pcap,netflow, etc.) start date will be set in
         __database__.set_input_metadata(info)
@@ -1573,16 +1559,13 @@ class Main:
             self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
-        if self.args.verbose < 1:
-            self.args.verbose = 1
-
+        self.args.verbose = max(self.args.verbose, 1)
         # Any deug passed as parameter overrides the configuration. Only check its value
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
-        if self.args.debug < 0:
-            self.args.debug = 0
+        self.args.debug = max(self.args.debug, 0)
 
 
     def check_output_redirection(self) -> tuple:

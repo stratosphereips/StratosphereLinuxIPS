@@ -12,7 +12,7 @@ def has_netadmin_cap():
     """ Check the capabilities given to this docker container"""
     cmd = 'capsh --print | grep "Current:" | cut -d' ' -f3 | grep cap_net_admin'
     output = os.popen(cmd).read()
-    return True if 'cap_net_admin' in output else False
+    return 'cap_net_admin' in output
 
 
 IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
@@ -63,10 +63,7 @@ def is_slipschain_initialized(outputQueue) -> bool:
         '-A FORWARD -j slipsBlocking',
         '-A OUTPUT -j slipsBlocking',
     ]
-    for rule in rules:
-        if rule not in output:
-            return False
-    return True
+    return all(rule in output for rule in rules)
 
 @linuxOS
 @isroot

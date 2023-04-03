@@ -43,10 +43,7 @@ def have_available_quota(api_key):
             quotas = (api_requests_daily, api_requests_hourly, api_requests_monthly)
             quotas = list(map(int, quotas))
 
-            if not any(quotas):
-                # one of the above is 0
-                return 'Not enough quota.'
-            return True
+            return True if any(quotas) else 'Not enough quota.'
         else:
             error = json.loads(response.text)['error']
             code = error['code']

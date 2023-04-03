@@ -77,15 +77,11 @@ class Helper:
         evidence_type = 'DifferentLocalnet'
         localnet = __database__.get_local_network()
         description = f'A connection {direction} a private IP ({attacker}) ' \
-                      f'outside of the used local network {localnet}.' \
-                      f' {rev_direction} IP: {victim} '
+                          f'outside of the used local network {localnet}.' \
+                          f' {rev_direction} IP: {victim} '
 
-        if ip_outside_localnet == 'dstip':
-            if 'arp' in portproto:
-                description += f'using ARP'
-            else:
-                description += f'on port: {portproto}'
-
+        if attacker_direction == 'dstip':
+            description += 'using ARP' if 'arp' in portproto else f'on port: {portproto}'
         __database__.setEvidence(
             evidence_type,
             attacker_direction,
@@ -255,8 +251,10 @@ class Helper:
         start_time = __database__.get_slips_start_time()
         now = time.time()
         confidence = 0.8
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
-        if running_on_interface:
+        if (
+            '-i' in sys.argv
+            or __database__.is_growing_zeek_dir()
+        ):
             diff = utils.get_time_diff(start_time, now, return_type='hours')
             if diff < 5:
                 confidence = 0.1

@@ -77,8 +77,7 @@ class OutputProcess(multiprocessing.Process):
         self.printable_twid_width = conf.get_tw_width()
 
     def log_branch_info(self, logfile):
-        branch_info = utils.get_branch_info()
-        if branch_info:
+        if branch_info := utils.get_branch_info():
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()

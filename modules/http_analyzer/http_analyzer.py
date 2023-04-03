@@ -116,11 +116,7 @@ class Module(Module, multiprocessing.Process):
         # 1 to google.com and another one to www.google.com
 
         for host in self.hosts:
-            if (
-                (contacted_host == host
-                 or contacted_host == f'www.{host}')
-                and request_body_len == 0
-            ):
+            if contacted_host in [host, f'www.{host}'] and request_body_len == 0:
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
@@ -143,7 +139,7 @@ class Module(Module, multiprocessing.Process):
             attacker_direction = 'srcip'
             attacker = profileid.split('_')[0]
             threat_level = 'medium'
-            category = 'Anomaly.Connection'
+            category = 'Anomaly.Connection' 
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
             __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
@@ -319,8 +315,7 @@ class Module(Module, multiprocessing.Process):
             'os_name': ''
         }
 
-        ua_info = self.get_ua_info_online(user_agent)
-        if ua_info:
+        if ua_info := self.get_ua_info_online(user_agent):
             # the above website returns unknown if it has no info about this UA,
             # remove the 'unknown' from the string before storing in the db
             os_type = (

@@ -110,10 +110,7 @@ def get_ip_info_from_slips(ip_address: str) -> (float, float):
     slips_score, slips_confidence = read_data_from_ip_info(ip_info)
     # check that both values were provided
     # TODO by Martin: Dita does not handle scenario when only confidence is None, is it intentional?
-    if slips_score is None:
-        return None, None
-
-    return slips_score, slips_confidence
+    return (None, None) if slips_score is None else (slips_score, slips_confidence)
 
 
 # parse data from redis
@@ -198,8 +195,7 @@ def build_score_confidence(score: float, confidence: float) -> dict:
     :return: The evaluation dictionary
     """
 
-    evaluation = {'score': score, 'confidence': confidence}
-    return evaluation
+    return {'score': score, 'confidence': confidence}
 
 
 def send_evaluation_to_go(

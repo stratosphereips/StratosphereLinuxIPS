@@ -210,14 +210,14 @@ class Module(Module, multiprocessing.Process):
                 warning = ''
                 if type(sport) == int:
                     # zeek puts the number
-                    if sport == 8:
-                        dport_name = 'PING echo'
-
-                    elif sport == 11:
+                    if sport == 11:
                         dport_name = 'ICMP Time Excedded in Transit'
 
                     elif sport == 3:
                         dport_name = 'ICMP Destination Net Unreachable'
+
+                    elif sport == 8:
+                        dport_name = 'PING echo'
 
                     else:
                         dport_name = 'ICMP Unknown type'
@@ -233,7 +233,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = 'ICMP Host Unreachable'
                     elif '0x0303' in sport:
                         dport_name = 'ICMP Port Unreachable'
-                        warning =  'unreachable port is ' + str(int(dport, 16))
+                        warning = f'unreachable port is {int(dport, 16)}'
                     elif '0x000b' in sport:
                         dport_name = ''
                     elif '0x0003' in sport:

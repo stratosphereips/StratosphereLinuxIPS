@@ -64,7 +64,7 @@ class GoDirector:
         self.read_configuration()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
-        self.printer.print('[TrustDB] ' + text, verbose, debug)
+        self.printer.print(f'[TrustDB] {text}', verbose, debug)
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -95,7 +95,7 @@ class GoDirector:
                 self.process_go_data(message_contents)
 
             else:
-                self.print('Invalid command: ' + message_type, 0, 2)
+                self.print(f'Invalid command: {message_type}', 0, 2)
 
         except json.decoder.JSONDecodeError:
             self.print(

@@ -187,14 +187,13 @@ def test_inputs():
     for test_case_name, test_case in json_data.__dict__.items():
         if test_case_name.startswith('_'):
             continue
-        else:
-            print()
-            print('#########################')
-            print('Running test case:', test_case_name)
-            print('-------------------------')
-            __database__.publish('p2p_gopy', 'go_data ' + test_case)
-            # the sleep is not needed, but it makes the log more readable
-            time.sleep(1)
+        print()
+        print('#########################')
+        print('Running test case:', test_case_name)
+        print('-------------------------')
+        __database__.publish('p2p_gopy', f'go_data {test_case}')
+        # the sleep is not needed, but it makes the log more readable
+        time.sleep(1)
 
     print('Tests done.')
 
@@ -248,7 +247,7 @@ def slips_listener_test():
     __database__.publish('p2p_gopy', 'UPDATE ipaddress 3')
 
     data = make_data()
-    __database__.publish('p2p_gopy', 'GO_DATA %s' % data)
+    __database__.publish('p2p_gopy', f'GO_DATA {data}')
 
     # stop instruction
     __database__.publish('p2p_gopy', 'stop_process')
@@ -275,7 +274,7 @@ def test_handle_slips_update():
 
 def test_evaluation_error():
     __database__.publish(
-        'p2p_gopy', 'go_data ' + json_data.wrong_message_eval_structure
+        'p2p_gopy', f'go_data {json_data.wrong_message_eval_structure}'
     )
     # __database__.publish("p2p_gopy", "go_data " + json_data.wrong_message_type)
 
@@ -296,7 +295,7 @@ def test_pigeon():
 
 
 def test_trustdb():
-    trustdb = TrustDB(data_dir + 'trustdb.db6660', None)
+    trustdb = TrustDB(f'{data_dir}trustdb.db6660', None)
     print(trustdb.get_opinion_on_ip('1.1.1.3'))
 
 

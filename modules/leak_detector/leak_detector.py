@@ -44,7 +44,7 @@ class Module(Module, multiprocessing.Process):
         """
         cmd = 'yara -h > /dev/null 2>&1'
         returncode = os.system(cmd)
-        if returncode == 256 or returncode == 0:
+        if returncode in [256, 0]:
             # it is installed
             return True
         # elif returncode == 32512:
@@ -212,20 +212,14 @@ class Module(Module, multiprocessing.Process):
                 profileid = src_profileid
                 attacker = dstip
                 ip_identification = __database__.getIPIdentification(dstip)
-                description = (
-                    f'{rule} to destination address: {dstip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             elif __database__.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
                 ip_identification = __database__.getIPIdentification(srcip)
-                description = (
-                    f'{rule} to destination address: {srcip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             else:
                 # no profiles in slips for either IPs
@@ -325,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                 var = line[1].replace('$', '')
                 # strings_matched is exactly the string that was found that triggered this detection
                 # starts from the var until the end of the line
-                strings_matched = ' '.join([s for s in line[2:]])
+                strings_matched = ' '.join(list(line[2:]))
                 self.set_evidence_yara_match({
                     'rule': matching_rule,
                     'vars_matched': var,

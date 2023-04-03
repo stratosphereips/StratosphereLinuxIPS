@@ -147,16 +147,14 @@ class Module(Module, multiprocessing.Process):
         """
 
         def is_valid_response(response: dict) -> bool:
-            if not type(response) == dict:
+            if type(response) != dict:
                 return False
 
             response_code = response.get('response_code', -1)
             if response_code == -1:
                 return False
             verbose_msg = response.get('verbose_msg', '')
-            if 'Resource does not exist' in verbose_msg:
-                return False
-            return True
+            return 'Resource does not exist' not in verbose_msg
 
         response = self.api_query_(url)
         # Can't get url report
@@ -321,10 +319,7 @@ class Module(Module, multiprocessing.Process):
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
         # don't move this to utils, this is the only module that supports urls
-        if validators.url(ioc):
-            return 'url'
-
-        return utils.detect_data_type(ioc)
+        return 'url' if validators.url(ioc) else utils.detect_data_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """

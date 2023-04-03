@@ -291,9 +291,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def is_valid_threat_level(self, threat_level):
-        if threat_level in utils.threat_levels:
-            return True
-        return False
+        return threat_level in utils.threat_levels
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """
@@ -611,13 +609,12 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         source_dataset += 'spamhaus'
 
-        ip_info = {
+        return {
             'source': source_dataset,
             'description': description,
             'therat_level': 'medium',
-            'tags': 'spam'
+            'tags': 'spam',
         }
-        return ip_info
 
     def is_ignored_domain(self, domain):
         if not domain:
@@ -719,26 +716,22 @@ class Module(Module, multiprocessing.Process, URLhaus):
         returns a dict containing confidence, threat level and blacklist or the
         reporting website
         """
-        circllu_info = self.circl_lu(flow_info)
-        if circllu_info:
+        if circllu_info := self.circl_lu(flow_info):
             return circllu_info
 
-        urlhaus_info = self.urlhaus.urlhaus_lookup(flow_info['md5'], 'md5_hash')
-        if urlhaus_info:
+        if urlhaus_info := self.urlhaus.urlhaus_lookup(
+            flow_info['md5'], 'md5_hash'
+        ):
             return urlhaus_info
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
         ip_info = __database__.search_IP_in_IoC(ip)
         # check if it's a blacklisted ip
-        if not ip_info:
-            return False
-
-        return json.loads(ip_info)
+        return json.loads(ip_info) if ip_info else False
 
     def search_online_for_ip(self, ip):
-        spamhaus_res = self.spamhaus(ip)
-        if spamhaus_res:
+        if spamhaus_res := self.spamhaus(ip):
             return spamhaus_res
 
     def ip_has_blacklisted_ASN(
@@ -827,9 +820,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
             ip_info = self.search_online_for_ip(ip)
-            if not ip_info:
-                # not malicious
-                return False
+        if not ip_info:
+            # not malicious
+            return False
         __database__.add_ips_to_IoC({
                 ip: json.dumps(ip_info)
         })
@@ -850,8 +843,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
 
-        file_info:dict = self.search_online_for_hash(flow_info)
-        if file_info:
+        if file_info := self.search_online_for_hash(flow_info):
             # is malicious.
             # update the file_info dict with uid, twid, ts etc.
             file_info.update(flow_info)
