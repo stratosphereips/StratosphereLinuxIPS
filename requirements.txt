@@ -38,3 +38,4 @@ flask
 tld
 tqdm
 termcolor
+pypi-json==0.3.0

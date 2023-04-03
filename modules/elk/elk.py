@@ -26,6 +26,7 @@ import signal
 import subprocess
 import time
 import os
+import json
 import psutil
 
 class Module(Module, multiprocessing.Process):
@@ -134,6 +135,23 @@ class Module(Module, multiprocessing.Process):
                 return False
             else:
                 return True
+        def elk_config():
+            curr=os.getcwd()
+            CONFIG=curr + '/config/elk_config.json'
+            if os.path.exists(CONFIG):
+                with open(CONFIG) as f:
+                    data = json.load(f)
+            else:
+                data = {}
+                #ADD comment to the config file
+                data['comment'] = 'Choose number from 1,2,3,4 to start elk services, where 1 stands for temporary, 2 for permanent, 3 for permanent and auto start on boot, 4 for not to start elk services'
+                data['other_configuration']='You can check other configurations inside /modules/elk'
+                data['choice'] = 4
+                with open(CONFIG, 'w') as f:
+                    json.dump(data, f, indent=4)
+
+            return data['choice']
+                
 
         def ask_elk():
             """Asks the user how to start the ELK stack     services"""
@@ -142,13 +160,8 @@ class Module(Module, multiprocessing.Process):
 
             if not(Module.ELKStart().elk_ram_check()):
                 return
-            # Ask the user how to start the services
-            print("How do you want to start elk services?")
-            print("1. Temporarily")
-            print("2. Permanently")
-            print("3. Permanently and Automatically on boot")
-            print("4. Do not start elk services")
-            choice = input("Enter your choice: ")
+
+            choice = Module.ELKStart().elk_config()
 
             if not(choice =='4'):
                 print("#############################################")
