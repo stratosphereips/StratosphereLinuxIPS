@@ -308,8 +308,7 @@ class Module(Module, multiprocessing.Process):
 
             if oui in line:
                 line = json.loads(line)
-                vendor = line['vendorName']
-                return vendor
+                return line['vendorName']
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         """
@@ -444,8 +443,7 @@ class Module(Module, multiprocessing.Process):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        gw_MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
-        if gw_MAC:
+        if gw_MAC := __database__.get_mac_addr_from_profile(f'profile_{gw_ip}'):
             __database__.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
 

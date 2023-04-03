@@ -80,7 +80,7 @@ def test_define_type_zeek_dict(outputQueue, inputQueue, file, expected_value):
 @pytest.mark.parametrize('nfdump_file', [('dataset/test1-normal.nfdump')])
 def test_define_type_nfdump(outputQueue, inputQueue, nfdump_file):
     # nfdump files aren't text files so we need to process them first
-    command = 'nfdump -b -N -o csv -q -r ' + nfdump_file
+    command = f'nfdump -b -N -o csv -q -r {nfdump_file}'
     # Execute command
     result = subprocess.run(command.split(), stdout=subprocess.PIPE)
     # Get command output

@@ -55,7 +55,7 @@ class Module(Module, multiprocessing.Process):
         """
 
         flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
-        dstip_labels_total = dict()
+        dstip_labels_total = {}
         for flow_uid, flow_data in flows.items():
             flow_data = json.loads(flow_data)
             flow_module_labels = flow_data['module_labels']
@@ -87,7 +87,7 @@ class Module(Module, multiprocessing.Process):
                     )
                     + 1
                 )
-            elif malicious_label_total >= normal_label_total:
+            else:
                 __database__.set_first_stage_ensembling_label_to_flow(
                     profileid, twid, flow_uid, self.malicious_label
                 )
@@ -118,7 +118,7 @@ class Module(Module, multiprocessing.Process):
                         # Convert from json to dict
                         profileip = data.split(self.separator)[1]
                         twid = data.split(self.separator)[2]
-                        profileid = 'profile' + self.separator + profileip
+                        profileid = f'profile{self.separator}{profileip}'
 
                         # First stage -  define the final label for each flow in profileid and twid
                         # by the majority vote of malicious and normal

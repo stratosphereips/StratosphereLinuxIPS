@@ -46,11 +46,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get('ip')
         # time_since_cached = int(message_data.get('cache_age', 0))
-        if not p2p_utils.validate_ip_address(ip_address):
-            return None
-
-        return message_data
-
+        return message_data if p2p_utils.validate_ip_address(ip_address) else None
     except ValueError:
         # message has wrong format
         print(
@@ -112,11 +108,7 @@ class Trust(Module, multiprocessing.Process):
         self.override_p2p = override_p2p
         self.data_dir = data_dir
 
-        if self.rename_with_port:
-            str_port = str(self.port)
-        else:
-            str_port = ''
-
+        str_port = str(self.port) if self.rename_with_port else ''
         self.printer = Printer(output_queue, self.name + str_port)
 
         self.slips_update_channel = slips_update_channel
@@ -150,7 +142,7 @@ class Trust(Module, multiprocessing.Process):
         }
         __database__.start(redis_port)
 
-        self.sql_db_name = self.data_dir + 'trustdb.db'
+        self.sql_db_name = f'{self.data_dir}trustdb.db'
         if rename_sql_db_file:
             self.sql_db_name += str(pigeon_port)
         # todo don't duplicate this dict, move it to slips_utils
@@ -170,8 +162,7 @@ class Trust(Module, multiprocessing.Process):
 
 
     def get_used_interface(self):
-        used_interface = sys.argv[sys.argv.index('-i') + 1]
-        return used_interface
+        return sys.argv[sys.argv.index('-i') + 1]
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -459,11 +450,7 @@ class Trust(Module, multiprocessing.Process):
         # dns_resolution = __database__.get_dns_resolution(ip)
         # dns_resolution = dns_resolution.get('domains', [])
         # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
-        if 'src' in ip_state:
-            direction = 'from'
-        else:
-            direction = 'to'
-
+        direction = 'from' if 'src' in ip_state else 'to'
         # we'll be using this to make the description more clear
         other_direction = 'to' if 'from' in direction else 'from'
 

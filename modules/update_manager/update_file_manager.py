@@ -937,10 +937,7 @@ class UpdateFileManager:
         for column in header.split(','):
             for keyword in description_keywords:
                 if keyword in column:
-                    description_column = header.split(',').index(
-                        column
-                    )
-                    return description_column
+                    return header.split(',').index(column)
 
     def is_ignored_line(self, line) -> bool:
         """
@@ -978,7 +975,7 @@ class UpdateFileManager:
                     description = line.split('Z,', 1)[1].replace(
                         ', ', ''
                     )
-                    line = new_line + ',' + description
+                    line = f'{new_line},{description}'
 
                 # get a list of every field in the line e.g [ioc, description, date]
                 line_fields = line.split(separator)
@@ -1008,20 +1005,16 @@ class UpdateFileManager:
         :param file_path: path of the ti file that contains the given fields
         """
         for column_idx in range(amount_of_columns):
-            # Check if we support this type.
-            data_type = utils.detect_data_type(line_fields[column_idx])
-            # found a supported type
-            if data_type:
+            if utils.detect_data_type(line_fields[column_idx]):
                 return column_idx
-        else:
-            # Some unknown string and we cant detect the type of it
-            # can't find a column that contains an ioc
-            self.print(
-                f'Error while reading the TI file {file_path}.'
-                f' Could not find a column with an IP or domain',
-                0, 1,
-            )
-            return 'Error'
+        # Some unknown string and we cant detect the type of it
+        # can't find a column that contains an ioc
+        self.print(
+            f'Error while reading the TI file {file_path}.'
+            f' Could not find a column with an IP or domain',
+            0, 1,
+        )
+        return 'Error'
 
     def extract_ioc_from_line(self, line, line_fields, separator, data_column, description_column, file_path) -> tuple:
         """
@@ -1046,9 +1039,7 @@ class UpdateFileManager:
             )
             return False, False
 
-        self.print(
-            '\tRead Data {}: {}'.format(data, description), 3, 0
-        )
+        self.print(f'\tRead Data {data}: {description}', 3, 0)
         return data, description
 
     def add_to_ip_ctr(self, ip, blacklist):
@@ -1153,7 +1144,7 @@ class UpdateFileManager:
                         new_line = line.split('Z,')[0]
                         # replace every ',' from the description
                         description = line.split('Z,', 1)[1].replace(', ', '')
-                        line = new_line + ',' + description
+                        line = f'{new_line},{description}'
 
                     line = line.replace('\n', '').replace('"', '')
                     data, description = self.extract_ioc_from_line(line,
@@ -1174,9 +1165,9 @@ class UpdateFileManager:
                     data_type = utils.detect_data_type(data)
                     if data_type is None:
                         self.print(
-                            'The data {} is not valid. It was found in {}.'.format(
-                                data, ti_file_path
-                            ), 0, 1,
+                            f'The data {data} is not valid. It was found in {ti_file_path}.',
+                            0,
+                            1,
                         )
                         continue
 
@@ -1422,13 +1413,14 @@ class UpdateFileManager:
     def update_ports_info(self):
         for file in os.listdir('slips_files/ports_info'):
             file = os.path.join('slips_files/ports_info', file)
-            if self.__check_if_update_local_file(file):
-                if not self.update_local_file(file):
-                    # update failed
-                    self.print(
-                        f'An error occurred while updating {file}. Updating '
-                        f'was aborted.', 0, 1,
-                    )
+            if self.__check_if_update_local_file(
+                file
+            ) and not self.update_local_file(file):
+                # update failed
+                self.print(
+                    f'An error occurred while updating {file}. Updating '
+                    f'was aborted.', 0, 1,
+                )
 
     def print_duplicate_ip_summary(self):
         if not self.first_time_reading_files:
@@ -1524,7 +1516,7 @@ class UpdateFileManager:
             files_to_download.update(self.ja3_feeds)
             files_to_download.update(self.ssl_feeds)
 
-            for file_to_download in files_to_download.keys():
+            for file_to_download in files_to_download:
                 if self.__check_if_update(file_to_download, self.update_period):
                     # failed to get the response, either a server problem
                     # or the file is up to date so the response isn't needed

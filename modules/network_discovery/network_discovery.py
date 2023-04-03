@@ -298,7 +298,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         category = 'Recon.Scanning'
         portproto = f'{dport}/{protocol}'
         port_info = __database__.get_port_info(portproto)
-        port_info = port_info if port_info else ""
+        port_info = port_info or ""
         confidence = self.calculate_confidence(pkts_sent)
         description = (
             f'horizontal port scan to port {port_info} {portproto}. '
@@ -701,12 +701,8 @@ class PortScanProcess(Module, multiprocessing.Process):
         # we alert every 4,8,12, etc. requested IPs
         number_of_requested_addrs = len(dhcp_flows)
         if number_of_requested_addrs % self.minimum_requested_addrs == 0:
-
             # get the uids of all the flows where this client was requesting an addr in this tw
-            uids = []
-            for requested_addr, uid in dhcp_flows.items():
-                uids.append(uid)
-
+            uids = list(dhcp_flows.values())
             self.set_evidence_dhcp_scan(
                 ts,
                 profileid,

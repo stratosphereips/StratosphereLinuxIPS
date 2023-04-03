@@ -40,8 +40,7 @@ def set_pcap_info():
     """
     Set information about the pcap.
     """
-    info = __database__.db.hgetall("analysis")
-    return info
+    return __database__.db.hgetall("analysis")
 
 
 if __name__ == '__main__':

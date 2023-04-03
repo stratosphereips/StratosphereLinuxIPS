@@ -116,9 +116,7 @@ class Main:
     def prepare_zeek_output_dir(self):
         from pathlib import Path
         without_ext = Path(self.input_information).stem
-        # do we store the zeek dir inside the output dir?
-        store_zeek_files_in_the_output_dir = self.conf.store_zeek_files_in_the_output_dir()
-        if store_zeek_files_in_the_output_dir:
+        if self.conf.store_zeek_files_in_the_output_dir():
             self.zeek_folder = os.path.join(self.args.output, 'zeek_files')
         else:
             self.zeek_folder = f'zeek_files_{without_ext}/'
@@ -240,8 +238,7 @@ class Main:
             )
 
     def delete_zeek_files(self):
-        delete = self.conf.delete_zeek_files()
-        if delete:
+        if self.conf.delete_zeek_files():
             shutil.rmtree(self.zeek_folder)
 
     def is_debugger_active(self) -> bool:
@@ -502,16 +499,13 @@ class Main:
             self.args.verbose = self.conf.verbose()
 
         # Limit any verbosity to > 0
-        if self.args.verbose < 1:
-            self.args.verbose = 1
-
+        self.args.verbose = max(self.args.verbose, 1)
         # Any deug passed as parameter overrides the configuration. Only check its value
         if self.args.debug is None:
             self.args.debug = self.conf.debug()
 
         # Limit any debuggisity to > 0
-        if self.args.debug < 0:
-            self.args.debug = 0
+        self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
         slips_version = f'Slips. Version {green(self.version)}'

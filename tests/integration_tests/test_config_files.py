@@ -21,11 +21,9 @@ def connect_to_redis(redis_port):
 def is_evidence_present(log_file, expected_evidence):
     """Function to read the log file line by line and returns when it finds the expected evidence"""
     with open(log_file, 'r') as f:
-        line = f.readline()
-        while line:
+        while line := f.readline():
             if expected_evidence in line:
                 return True
-            line = f.readline()
         # evidence not found in any line
         return False
 

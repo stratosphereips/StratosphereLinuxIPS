@@ -54,7 +54,7 @@ def test_check_multiple_google_connections(outputQueue, database):
     host = 'google.com'
     # uri = '/'
     request_body_len = 0
-    for i in range(4):
+    for _ in range(4):
         found_detection = http_analyzer.check_multiple_empty_connections(
             uid, host, timestamp, request_body_len, profileid, twid
         )

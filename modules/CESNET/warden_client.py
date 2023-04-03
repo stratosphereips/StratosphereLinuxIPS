@@ -75,7 +75,9 @@ class Error(Exception):
                 del kwargs['send_events_limit']
         self.errors.append(kwargs)
 
-    def extend(self, method=None, req_id=None, iterable=[]):
+    def extend(self, method=None, req_id=None, iterable=None):
+        if iterable is None:
+            iterable = []
         try:
             iter(iterable)
         except TypeError:
@@ -106,8 +108,7 @@ class Error(Exception):
     def __str__(self):
         out = []
         for e in self.errors:
-            out.append(self.str_err(e))
-            out.append(self.str_info(e))
+            out.extend((self.str_err(e), self.str_info(e)))
         return '\n'.join(out)
 
     def log(self, logger=None, prio=logging.ERROR):
@@ -115,27 +116,19 @@ class Error(Exception):
             logger = logging.getLogger()
         for e in self.errors:
             logger.log(prio, self.str_err(e))
-            info = self.str_info(e)
-            if info:
+            if info := self.str_info(e):
                 logger.info(info)
-            debug = self.str_debug(e)
-            if debug:
+            if debug := self.str_debug(e):
                 logger.debug(debug)
 
     def str_preamble(self, e):
         return '%08x/%s' % (e.get('req_id', 0), e.get('method', '?'))
 
     def str_err(self, e):
-        out = []
-        out.append(self.str_preamble(e))
-        out.append(
-            ' Error(%s) %s '
-            % (e.get('error', 0), e.get('message', 'Unknown error'))
-        )
+        out = [self.str_preamble(e)]
+        out.append(f" Error({e.get('error', 0)}) {e.get('message', 'Unknown error')} ")
         if 'exc' in e and e['exc']:
-            out.append(
-                '(cause was %s: %s)' % (e['exc'][0].__name__, str(e['exc'][1]))
-            )
+            out.append(f"(cause was {e['exc'][0].__name__}: {str(e['exc'][1])})")
         return ''.join(out)
 
     def str_info(self, e):
@@ -145,47 +138,31 @@ class Error(Exception):
         ecopy.pop('error', None)
         ecopy.pop('message', None)
         ecopy.pop('exc', None)
-        if ecopy:
-            out = '%s Detail: %s' % (
+        return (
+            '%s Detail: %s'
+            % (
                 self.str_preamble(e),
                 json.dumps(ecopy, default=lambda v: str(v)),
             )
-        else:
-            out = ''
-        return out
+            if ecopy
+            else ''
+        )
 
     def str_debug(self, e):
-        out = []
-        out.append(self.str_preamble(e))
+        out = [self.str_preamble(e)]
         if 'exc' not in e or not e['exc']:
             return ''
-        exc_tb = e['exc'][2]
-        if exc_tb:
+        if exc_tb := e['exc'][2]:
             out.append('Traceback:\n')
             out.extend(format_tb(exc_tb))
         return ''.join(out)
 
 
 class Client(object):
-    def __init__(
-        self,
-        url,
-        certfile=None,
-        keyfile=None,
-        cafile=None,
-        timeout=60,
-        retry=3,
-        pause=5,
-        get_events_limit=6000,
-        send_events_limit=500,
-        errlog={},
-        syslog=None,
-        filelog=None,
-        idstore=None,
-        name='org.example.warden.test',
-        secret=None,
-    ):
+    def __init__(self, url, certfile=None, keyfile=None, cafile=None, timeout=60, retry=3, pause=5, get_events_limit=6000, send_events_limit=500, errlog=None, syslog=None, filelog=None, idstore=None, name='org.example.warden.test', secret=None):
 
+        if errlog is None:
+            errlog = {}
         self.name = name
         self.secret = secret
         # Init logging as soon as possible and make sure we don't
@@ -232,29 +209,21 @@ class Client(object):
             try:
                 return int(getattr(logging, lev.upper()))
             except (AttributeError, ValueError):
-                self.logger.warning(
-                    'Unknown loglevel "%s", using "debug"' % lev
-                )
+                self.logger.warning(f'Unknown loglevel "{lev}", using "debug"')
                 return logging.DEBUG
 
         def facility(fac):
             try:
-                return int(
-                    getattr(
-                        logging.handlers.SysLogHandler, 'LOG_' + fac.upper()
-                    )
-                )
+                return int(getattr(logging.handlers.SysLogHandler, f'LOG_{fac.upper()}'))
             except (AttributeError, ValueError):
-                self.logger.warning(
-                    'Unknown syslog facility "%s", using "local7"' % fac
-                )
+                self.logger.warning(f'Unknown syslog facility "{fac}", using "local7"')
                 return logging.handlers.SysLogHandler.LOG_LOCAL7
 
         form = (
             '%(filename)s[%(process)d]: %(name)s (%(levelname)s) %(message)s'
         )
         format_notime = logging.Formatter(form)
-        format_time = logging.Formatter('%(asctime)s ' + form)
+        format_time = logging.Formatter(f'%(asctime)s {form}')
 
         self.logger = logging.getLogger(self.name)
         self.logger.propagate = False   # Don't bubble up to root logger
@@ -354,15 +323,12 @@ class Client(object):
             for k in list(kwargs.keys()):
                 if kwargs[k] is None:
                     del kwargs[k]
-            argurl = '?' + urlencode(kwargs, doseq=True)
+            argurl = f'?{urlencode(kwargs, doseq=True)}'
         else:
             argurl = ''
 
         try:
-            if payload is None:
-                data = ''
-            else:
-                data = json.dumps(payload)
+            data = '' if payload is None else json.dumps(payload)
         except Exception:
             return Error(
                 message='Serialization to JSON failed',
@@ -382,7 +348,7 @@ class Client(object):
         if not conn:
             return conn  # either False of Error instance
 
-        loc = '%s/%s%s' % (self.url.path, func, argurl)
+        loc = f'{self.url.path}/{func}{argurl}'
         try:
             conn.request('POST', loc, data, self.headers)
         except Exception:
@@ -467,7 +433,7 @@ class Client(object):
         except (ValueError, IOError):
             # Use Error instance just for proper logging
             Error(
-                message='Writing id file "%s" failed' % idf,
+                message=f'Writing id file "{idf}" failed',
                 exc=exc_info(),
                 idstore=idf,
             ).log(self.logger, logging.INFO)
@@ -482,7 +448,7 @@ class Client(object):
                 id = int(f.read())
         except (ValueError, IOError):
             Error(
-                message='Reading id file "%s" failed, relying on server' % idf,
+                message=f'Reading id file "{idf}" failed, relying on server',
                 exc=exc_info(),
                 idstore=idf,
             ).log(self.logger, logging.INFO)
@@ -505,13 +471,17 @@ class Client(object):
                 pass
         return res
 
-    def send_events_raw(self, events=[]):
+    def send_events_raw(self, events=None):
+        if events is None:
+            events = []
         return self.sendRequest('sendEvents', payload=events)
 
-    def send_events_chunked(self, events=[]):
+    def send_events_chunked(self, events=None):
         """Split potentially long "events" list to send_events_limit
         long chunks to avoid slap from server.
         """
+        if events is None:
+            events = []
         count = len(events)
         err = Error()
         send_events_limit = (
@@ -526,9 +496,7 @@ class Client(object):
                 # Shift all error indices by offset to correspond with 'events' list
                 for e in res.errors:
                     evlist = e.get('events', [])
-                    # Update sending limit advice, if present in error
-                    srv_limit = e.get('send_events_limit')
-                    if srv_limit:
+                    if srv_limit := e.get('send_events_limit'):
                         self.send_events_limit = min(
                             self.send_events_limit, srv_limit
                         )
@@ -538,12 +506,14 @@ class Client(object):
 
         return err if err.errors else {}
 
-    def sendEvents(self, events=[], q=None, retry=None, pause=None):
+    def sendEvents(self, events=None, q=None, retry=None, pause=None):
         """
         Send out "events" list to server, retrying on server errors.
         :param q: in case this function was called as a thread, this queue will hold the return value of it
         """
 
+        if events is None:
+            events = []
         ev = events
         idx_xlat = range(len(ev))
         err = Error()
@@ -601,7 +571,7 @@ class Client(object):
         if not id:
             id = self._loadID(idstore)
 
-        res = self.sendRequest(
+        if res := self.sendRequest(
             'getEvents',
             id=id,
             count=count or self.get_events_limit,
@@ -611,9 +581,7 @@ class Client(object):
             notag=notag,
             group=group,
             nogroup=nogroup,
-        )
-
-        if res:
+        ):
             try:
                 events = res['events']
                 newid = res['lastid']

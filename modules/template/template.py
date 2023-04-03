@@ -83,7 +83,7 @@ class Module(Module, multiprocessing.Process):
                     # Example of printing the number of profiles in the
                     # Database every second
                     data = len(__database__.getProfiles())
-                    self.print('Amount of profiles: {}'.format(data), 3, 0)
+                    self.print(f'Amount of profiles: {data}', 3, 0)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

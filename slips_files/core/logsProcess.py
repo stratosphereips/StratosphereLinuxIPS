@@ -90,11 +90,7 @@ class LogsProcess(multiprocessing.Process):
         try:
             # Create our main output folder. The current datetime with microseconds
             # TODO. Do not create the folder if there is no data? (not sure how to)
-            self.print(
-                'Using the dir {}/ for storing logs.'.format(
-                    self.mainfoldername
-                )
-            )
+            self.print(f'Using the dir {self.mainfoldername}/ for storing logs.')
             # go into the main  folder
             os.chdir(self.mainfoldername)
 
@@ -109,13 +105,12 @@ class LogsProcess(multiprocessing.Process):
                 if 'stop_process' in line:
                     timer.shutdown()
                     return True
-                elif 'stop' != line:
+                elif line != 'stop':
                     # CHECK if we ever go here...
                     # we are not processing input from the queue yet
                     # without this line the complete output thread does not work!!
                     # WTF???????
                     print(line)
-                    pass
                 else:
                     # CHECK if we ever go here...
                     # Here we should still print the lines coming in the input for a while after receiving a 'stop'. We don't know how to do it.
@@ -137,7 +132,7 @@ class LogsProcess(multiprocessing.Process):
                 # The timer variable didn't exist, so just end
                 pass
             self.outputqueue.put('01|logs|\t[Logs] Error with LogsProcess')
-            self.outputqueue.put('01|logs|\t[Logs] {}'.format(traceback.print_exc()))
+            self.outputqueue.put(f'01|logs|\t[Logs] {traceback.print_exc()}')
             sys.exit(1)
             return True
 
@@ -153,9 +148,7 @@ class LogsProcess(multiprocessing.Process):
             os.makedirs(profilefolder)
             ip = profileid.split(self.fieldseparator)[1]
             # If we create the folder, add once there the profileid. We have to do this here if we want to do it once.
-            self.addDataToFile(
-                profilefolder + '/' + 'ProfileData.txt', 'Profiled IP: ' + ip
-            )
+            self.addDataToFile(f'{profilefolder}/ProfileData.txt', f'Profiled IP: {ip}')
 
             # Add more data into the file that is only for the global profile of this IP, without any time window
 
@@ -163,17 +156,13 @@ class LogsProcess(multiprocessing.Process):
             ip_info = __database__.getIPData(ip)
             printable_ip_info = ''
             if ip_info:
-                printable_ip_info = ', '.join(
-                    '{} {}'.format(k, v) for k, v in ip_info.items()
-                )
+                printable_ip_info = ', '.join(f'{k} {v}' for k, v in ip_info.items())
                 self.addDataToFile(
-                    profilefolder + '/' + 'ProfileData.txt',
-                    'Info: ',
-                    file_mode='a+',
+                    f'{profilefolder}/ProfileData.txt', 'Info: ', file_mode='a+'
                 )
                 for data in printable_ip_info.split(','):
                     self.addDataToFile(
-                        profilefolder + '/' + 'ProfileData.txt',
+                        f'{profilefolder}/ProfileData.txt',
                         '\t' + data.strip(),
                         file_mode='a+',
                     )
@@ -205,12 +194,7 @@ class LogsProcess(multiprocessing.Process):
                 data = data + '\n'
 
             # get the type of file param
-            if type(file) == str:
-                # The file was not opened yet
-                fileobj = open(file, file_mode)
-            else:
-                fileobj = file
-
+            fileobj = open(file, file_mode) if type(file) == str else file
             if data_type == 'lines':
                 # We received a bunch of lines all together. Just write them
                 fileobj.writelines(data)
@@ -229,7 +213,7 @@ class LogsProcess(multiprocessing.Process):
                         ts = flow.get('timestamp', '').split()
                         # print(f"flow: {flow}\n\n")
                         # discard the seconds and milliseconds in ts
-                        ts = f'{ts[0]}  {ts[1][0:4]}'
+                        ts = f'{ts[0]}  {ts[1][:4]}'
                         dport_name = flow.get('dport_name', '')
                         preposition = flow.get('preposition', '')
                         daddr = flow.get('daddr', '')
@@ -239,9 +223,8 @@ class LogsProcess(multiprocessing.Process):
                         state = flow.get('state', '')
                         critical_warning = flow.get('critical warning', '')
                         trusted = flow.get('Trusted', '')
-                        if state.lower() == 'not established':
-                            if 'UDP' in dport:
-                                state = 'not answered'
+                        if state.lower() == 'not established' and 'UDP' in dport:
+                            state = 'not answered'
                         to_print += f'{ts} : {dport_name} {preposition} {daddr} {dport} {critical_warning} {state}'
                         if query:
                             to_print += f' query: {query}'
@@ -308,6 +291,7 @@ class LogsProcess(multiprocessing.Process):
             TWModifiedforProfile = __database__.getModifiedTW()
             last_profile_id = None
             description_of_malicious_ip_profile = None
+            type_data = 'Ports'
             for profileTW in TWModifiedforProfile:
 
                 # Get the profileid and twid
@@ -322,34 +306,25 @@ class LogsProcess(multiprocessing.Process):
                 twtime = time.strftime(
                     '%Y-%m-%dT%H:%M:%S', time.localtime(twtime)
                 )
-                self.print(
-                    '\tStoring Profile: {}. TW {}. Time: {}'.format(
-                        profileid, twid, twtime
-                    ),
-                    3,
-                    0,
-                )
+                self.print(f'\tStoring Profile: {profileid}. TW {twid}. Time: {twtime}', 3, 0)
                 # self.print('\tProfile: {} has {} timewindows'.format(profileid, twLen), 0, 3)
 
                 # Create the folder for this profile if it doesn't exist
                 profilefolder = self.createProfileFolder(profileid)
 
                 # Create the TW log file
-                twlog = twtime + '.' + twid
+                twlog = f'{twtime}.{twid}'
                 # First Erase its file and save the data again
                 self.addDataToFile(
-                    profilefolder + '/' + twlog,
-                    '',
-                    file_mode='w+',
-                    data_mode='raw',
+                    f'{profilefolder}/{twlog}', '', file_mode='w+', data_mode='raw'
                 )
 
                 # Save in the log file all parts of the profile
 
                 # 0. Write the profileID for people getting know what they see in the file.
                 self.addDataToFile(
-                    profilefolder + '/' + twlog,
-                    'ProfileID: {}\n'.format(profileid),
+                    f'{profilefolder}/{twlog}',
+                    f'ProfileID: {profileid}\n',
                     file_mode='a+',
                     data_type='text',
                 )
@@ -362,19 +337,15 @@ class LogsProcess(multiprocessing.Process):
                     )
                 if description_of_malicious_ip_profile:
                     ip_of_profile = profileid.split(self.separator)[1]
-                    text_data = '[THREAT INTELIGENCE] IP of this profile: {} was detected as malicious. Description: "{}"\n'.format(
-                        ip_of_profile, description_of_malicious_ip_profile
-                    )
+                    text_data = f'[THREAT INTELIGENCE] IP of this profile: {ip_of_profile} was detected as malicious. Description: "{description_of_malicious_ip_profile}"\n'
                     self.addDataToFile(
-                        profilefolder + '/' + twlog,
+                        f'{profilefolder}/' + twlog,
                         text_data,
                         file_mode='a+',
                         data_type='text',
                     )
-
                 # 1. Detections to block. The getBlockingRequest function return {True, False}
-                blocking = __database__.checkBlockedProfTW(profileid, twid)
-                if blocking:
+                if blocking := __database__.checkBlockedProfTW(profileid, twid):
                     text_data = (
                         'Was requested to block in this time window: '
                         + str(blocking)
@@ -389,9 +360,7 @@ class LogsProcess(multiprocessing.Process):
                         '03|logs|\t\t[Logs] Blocking Request: ' + str(blocking)
                     )
 
-                # 2. Info about the evidence so far for this TW.
-                evidence = __database__.getEvidenceForTW(profileid, twid)
-                if evidence:
+                if evidence := __database__.getEvidenceForTW(profileid, twid):
                     evidence = json.loads(evidence)
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -405,17 +374,13 @@ class LogsProcess(multiprocessing.Process):
                     for data in evidence:
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
-                            '\tEvidence: {}'.format(data),
+                            f'\tEvidence: {data}',
                             file_mode='a+',
                             data_type='text',
                         )
-                        self.outputqueue.put(
-                            '03|logs|\t\t\t Evidence: {}'.format(data[0])
-                        )
+                        self.outputqueue.put(f'03|logs|\t\t\t Evidence: {data[0]}')
 
-                # 3. DstIPs
-                dstips = __database__.getDstIPsfromProfileTW(profileid, twid)
-                if dstips:
+                if dstips := __database__.getDstIPsfromProfileTW(profileid, twid):
                     # Add dstips to log file
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -427,27 +392,19 @@ class LogsProcess(multiprocessing.Process):
                     data = json.loads(dstips)
                     # Better printing of data
                     for key in data:
-                        ip_info = __database__.getIPData(key)
-                        if ip_info:
-                            printable_ip_info = ', '.join(
-                                '{} {}'.format(k, v)
-                                for k, v in ip_info.items()
-                            )
+                        if ip_info := __database__.getIPData(key):
+                            printable_ip_info = ', '.join(f'{k} {v}' for k, v in ip_info.items())
                         else:
                             printable_ip_info = '-'
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
-                            '\t{} ({} times). Info: {}'.format(
-                                key, data[key], printable_ip_info
-                            ),
+                            f'\t{key} ({data[key]} times). Info: {printable_ip_info}',
                             file_mode='a+',
                             data_type='text',
                         )
                     self.outputqueue.put('03|logs|\t\t[Logs] DstIP: ' + dstips)
 
-                # 4. SrcIPs
-                srcips = __database__.getSrcIPsfromProfileTW(profileid, twid)
-                if srcips:
+                if srcips := __database__.getSrcIPsfromProfileTW(profileid, twid):
                     # Add srcips
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -458,33 +415,21 @@ class LogsProcess(multiprocessing.Process):
                     self.outputqueue.put('03|logs|\t\t[Logs] SrcIP:')
                     data = json.loads(srcips)
                     for key in data:
-                        ip_info = __database__.getIPData(key)
-                        if ip_info:
-                            printable_ip_info = ', '.join(
-                                '{} {}'.format(k, v)
-                                for k, v in ip_info.items()
-                            )
+                        if ip_info := __database__.getIPData(key):
+                            printable_ip_info = ', '.join(f'{k} {v}' for k, v in ip_info.items())
                         else:
                             printable_ip_info = '-'
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
-                            '\t{} ({} times). Info: {}'.format(
-                                key, data[key], printable_ip_info
-                            ),
+                            f'\t{key} ({data[key]} times). Info: {printable_ip_info}',
                             file_mode='a+',
                             data_type='text',
                         )
-                        self.outputqueue.put(
-                            '03|logs|\t\t\t[Logs] {} ({} times)'.format(
-                                key, data[key]
-                            )
-                        )
+                        self.outputqueue.put(f'03|logs|\t\t\t[Logs] {key} ({data[key]} times)')
 
-                # 5. OutTuples
-                out_tuples = __database__.getOutTuplesfromProfileTW(
+                if out_tuples := __database__.getOutTuplesfromProfileTW(
                     profileid, twid
-                )
-                if out_tuples:
+                ):
                     # Add tuples
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -497,24 +442,18 @@ class LogsProcess(multiprocessing.Process):
                     for key in data:
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
-                            '\t{} ({})'.format(key, data[key]),
+                            f'\t{key} ({data[key]})',
                             file_mode='a+',
                             data_type='text',
                         )
-                        self.outputqueue.put(
-                            '03|logs|\t\t\t[Logs] {} ({})'.format(
-                                key, data[key]
-                            )
-                        )
+                        self.outputqueue.put(f'03|logs|\t\t\t[Logs] {key} ({data[key]})')
                     self.outputqueue.put(
                         '03|logs|\t\t[Logs] Tuples: ' + out_tuples
                     )
 
-                # 6. InTuples
-                in_tuples = __database__.getInTuplesfromProfileTW(
+                if in_tuples := __database__.getInTuplesfromProfileTW(
                     profileid, twid
-                )
-                if in_tuples:
+                ):
                     # Add in tuples
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -527,33 +466,26 @@ class LogsProcess(multiprocessing.Process):
                     for key in data:
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
-                            '\t{} ({})'.format(key, data[key]),
+                            f'\t{key} ({data[key]})',
                             file_mode='a+',
                             data_type='text',
                         )
-                        self.outputqueue.put(
-                            '03|logs|\t\t\t[Logs] {} ({})'.format(
-                                key, data[key]
-                            )
-                        )
+                        self.outputqueue.put(f'03|logs|\t\t\t[Logs] {key} ({data[key]})')
 
                 # 7. Print the port data
                 all_roles = ['Client', 'Server']
                 all_protocols = ['TCP', 'UDP', 'ICMP', 'IPV6ICMP']
                 all_states = ['Established', 'NotEstablished']
                 all_directions = ['Dst', 'Src']
-                type_data = 'Ports'
                 for role in all_roles:
                     for protocol in all_protocols:
                         for state in all_states:
                             for direction in all_directions:
-                                text_data = 'As {}, {} {} {} ports:'.format(
-                                    role, protocol, state, direction
-                                )
+                                text_data = f'As {role}, {protocol} {state} {direction} ports:'
                                 self.outputqueue.put(
                                     '03|logs|\t\t\t[Logs]: ' + text_data
                                 )
-                                data = __database__.getDataFromProfileTW(
+                                if data := __database__.getDataFromProfileTW(
                                     profileid,
                                     twid,
                                     direction,
@@ -561,9 +493,7 @@ class LogsProcess(multiprocessing.Process):
                                     protocol,
                                     role,
                                     type_data,
-                                )
-                                # self.print('LOGING data: {}'.format(data))
-                                if data:
+                                ):
                                     self.addDataToFile(
                                         profilefolder + '/' + twlog,
                                         text_data,
@@ -571,12 +501,7 @@ class LogsProcess(multiprocessing.Process):
                                         data_type='text',
                                     )
                                     for port in data:
-                                        text_data = '\tPort {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(
-                                            port,
-                                            data[port]['totalflows'],
-                                            data[port]['totalpkt'],
-                                            data[port]['totalbytes'],
-                                        )
+                                        text_data = f"\tPort {port}. Total Flows: {data[port]['totalflows']}. Total Pkts: {data[port]['totalpkt']}. TotalBytes: {data[port]['totalbytes']}."
                                         self.addDataToFile(
                                             profilefolder + '/' + twlog,
                                             text_data,
@@ -588,9 +513,7 @@ class LogsProcess(multiprocessing.Process):
                                             + text_data
                                         )
 
-                # 8. Info about the evidence so far for this TW.
-                evidence = __database__.getEvidenceForTW(profileid, twid)
-                if evidence:
+                if evidence := __database__.getEvidenceForTW(profileid, twid):
                     evidence = json.loads(evidence)
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
@@ -631,10 +554,9 @@ class LogsProcess(multiprocessing.Process):
                 flow_types_dict = self.create_all_flow_possibilities()
                 hash_key = profileid + self.separator + twid
                 for flow_type_key, sentence in flow_types_dict.items():
-                    data = __database__.get_data_from_profile_tw(
+                    if data := __database__.get_data_from_profile_tw(
                         hash_key, flow_type_key
-                    )
-                    if data:
+                    ):
                         self.addDataToFile(
                             profilefolder + '/' + twlog,
                             sentence,
@@ -647,13 +569,7 @@ class LogsProcess(multiprocessing.Process):
                                 if 'ip' in flow_type_key.lower()
                                 else 'Port'
                             )
-                            text_data = '\t{} {}. Total Flows: {}. Total Pkts: {}. TotalBytes: {}.'.format(
-                                type,
-                                port,
-                                sample['totalflows'],
-                                sample['totalpkt'],
-                                sample['totalbytes'],
-                            )
+                            text_data = f"\t{type} {port}. Total Flows: {sample['totalflows']}. Total Pkts: {sample['totalpkt']}. TotalBytes: {sample['totalbytes']}."
                             self.addDataToFile(
                                 profilefolder + '/' + twlog,
                                 text_data,
@@ -664,9 +580,7 @@ class LogsProcess(multiprocessing.Process):
                                 '03|logs|\t\t\t[Logs]: ' + text_data
                             )
 
-                # 9. This should be last. Detections to block
-                blocking = __database__.checkBlockedProfTW(profileid, twid)
-                if blocking:
+                if blocking := __database__.checkBlockedProfTW(profileid, twid):
                     self.addDataToFile(
                         profilefolder + '/' + twlog,
                         'Was requested to block in this time window: '
@@ -696,7 +610,7 @@ class LogsProcess(multiprocessing.Process):
                 if not os.path.isfile(timeline_path):
                     self.addDataToFile(
                         timeline_path,
-                        'Complete Timeline of IP {}\n'.format(ip),
+                        f'Complete Timeline of IP {ip}\n',
                         file_mode='w+',
                     )
 
@@ -709,13 +623,7 @@ class LogsProcess(multiprocessing.Process):
                     )
                     self.timeline_first_index[hash_key] = first_index
                     if data:
-                        self.print(
-                            'Adding to the profile line {} {}, data {}'.format(
-                                profileid, twid, data
-                            ),
-                            3,
-                            0,
-                        )
+                        self.print(f'Adding to the profile line {profileid} {twid}, data {data}', 3, 0)
                         self.addDataToFile(
                             profilefolder
                             + '/'
@@ -727,11 +635,8 @@ class LogsProcess(multiprocessing.Process):
                         )
 
                 last_profile_id = profileid
-
             # Create the file of the blocked profiles and TW
-            ProfileTWsBlocked = __database__.getAllBlockedProfTW()
-            # Create the file of blocked data
-            if ProfileTWsBlocked:
+            if ProfileTWsBlocked := __database__.getAllBlockedProfTW():
                 self.addDataToFile(
                     'Blocked.txt',
                     'Detections:\n',
@@ -752,10 +657,10 @@ class LogsProcess(multiprocessing.Process):
                         )
                     # self.outputqueue.put('03|logs|\t\t[Logs]: Blocked file updated: {}'.format(TWforProfileBlocked))
 
-            # Create a file with information about the capture in general
-            # self.addDataToFile('Information.txt', 'Information about this slips run', file_mode='w+', data_type='text')
-            # self.addDataToFile('Information.txt', '================================\n', file_mode='a+', data_type='text')
-            # self.addDataToFile('Information.txt', 'Type of input: ' + , file_mode='a+', data_type='text')
+                # Create a file with information about the capture in general
+                # self.addDataToFile('Information.txt', 'Information about this slips run', file_mode='w+', data_type='text')
+                # self.addDataToFile('Information.txt', '================================\n', file_mode='a+', data_type='text')
+                # self.addDataToFile('Information.txt', 'Type of input: ' + , file_mode='a+', data_type='text')
 
         except KeyboardInterrupt:
             return True
@@ -764,7 +669,7 @@ class LogsProcess(multiprocessing.Process):
                 '01|[Logs] Error in process_global_data in LogsProcess'
             )
             self.outputqueue.put(f'01|[Logs] {type(inst)}')
-            self.outputqueue.put('01|[Logs] {}'.format(inst))
+            self.outputqueue.put(f'01|[Logs] {inst}')
             sys.exit(1)
 
 
@@ -797,8 +702,8 @@ class TimerThread(threading.Thread):
                 '01|[Logs] Error in process_global_data in LogsProcess'
             )
             self.outputqueue.put(f'01|[Logs] {type(inst)}')
-            self.outputqueue.put('01|[Logs] {}'.format(inst))
-            self.outputqueue.put('01|[Logs] {}'.format(traceback))
+            self.outputqueue.put(f'01|[Logs] {inst}')
+            self.outputqueue.put(f'01|[Logs] {traceback}')
             sys.exit(1)
             return True
 

@@ -82,7 +82,8 @@ def test_add_flow(outputQueue):
                   "module_labels": {}}
     assert add_flow(database) is True
     assert (
-        json.loads(database.r.hget(profileid + '_' + twid + '_' + 'flows', uid)) == added_flow
+        json.loads(database.r.hget(f'{profileid}_{twid}_flows', uid))
+        == added_flow
     )
 
 
@@ -143,7 +144,7 @@ def test_add_ips(outputQueue):
     assert (
         database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server') is True
     )
-    hash_id = profileid + '_' + twid
+    hash_id = f'{profileid}_{twid}'
     stored_dstips = database.r.hget(hash_id, 'SrcIPs')
     assert stored_dstips == '{"192.168.1.1": 1}'
 
@@ -166,7 +167,7 @@ def test_add_port(outputQueue):
         'starttime': '20.0',
     }
     database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
-    hash_key = profileid + '_' + twid
+    hash_key = f'{profileid}_{twid}'
     added_ports = database.r.hgetall(hash_key)
     assert 'DstPortsServerTCPNot Established' in added_ports.keys()
     assert test_ip in added_ports['DstPortsServerTCPNot Established']
@@ -186,8 +187,8 @@ def test_setEvidence(outputQueue):
     database.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                          timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    added_evidence = database.r.hget('evidence' + profileid, twid)
-    added_evidence2 = database.r.hget(profileid + '_' + twid, 'Evidence')
+    added_evidence = database.r.hget(f'evidence{profileid}', twid)
+    added_evidence2 = database.r.hget(f'{profileid}_{twid}', 'Evidence')
     assert added_evidence2 == added_evidence
 
     added_evidence = json.loads(added_evidence)
@@ -203,9 +204,9 @@ def test_deleteEvidence(outputQueue):
     database = create_db_instace(outputQueue)
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     database.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(database.r.hget('evidence' + profileid, twid))
+    added_evidence = json.loads(database.r.hget(f'evidence{profileid}', twid))
     added_evidence2 = json.loads(
-        database.r.hget(profileid + '_' + twid, 'Evidence')
+        database.r.hget(f'{profileid}_{twid}', 'Evidence')
     )
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2

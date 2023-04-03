@@ -75,7 +75,7 @@ class Utils(object):
 
     def threat_level_to_string(self, threat_level: float):
         for str_lvl, int_value in self.threat_levels.items():
-            if float(threat_level) <= int_value:
+            if threat_level <= int_value:
                 return str_lvl
 
     def is_valid_threat_level(self, threat_level):
@@ -185,14 +185,12 @@ class Utils(object):
             datetime_obj = self.convert_to_datetime(ts)
 
         # convert to the req format
-        if required_format == 'unixtimestamp':
-            result = datetime_obj.timestamp()
-        elif required_format == 'iso':
-            result = datetime_obj.astimezone().isoformat()
+        if required_format == 'iso':
+            return datetime_obj.astimezone().isoformat()
+        elif required_format == 'unixtimestamp':
+            return datetime_obj.timestamp()
         else:
-            result = datetime_obj.strftime(required_format)
-
-        return result
+            return datetime_obj.strftime(required_format)
 
     def get_local_timezone(self):
         """
@@ -200,9 +198,7 @@ class Utils(object):
         """
         now = datetime.now()
         local_now = now.astimezone()
-        local_tz = local_now.tzinfo
-        # local_tzname = local_tz.tzname(local_now)
-        return local_tz
+        return local_now.tzinfo
 
     def convert_to_local_timezone(self, ts):
         """
@@ -228,11 +224,11 @@ class Utils(object):
 
         given_format = self.define_time_format(ts)
 
-        if given_format == 'unixtimestamp':
-            datetime_obj = datetime.fromtimestamp(float(ts))
-        else:
-            datetime_obj = datetime.strptime(ts, given_format)
-        return datetime_obj
+        return (
+            datetime.fromtimestamp(float(ts))
+            if given_format == 'unixtimestamp'
+            else datetime.strptime(ts, given_format)
+        )
 
 
     def define_time_format(self, time: str) -> str:
@@ -243,8 +239,7 @@ class Utils(object):
         try:
             # Try unix timestamp in seconds.
             datetime.fromtimestamp(float(time))
-            time_format = 'unixtimestamp'
-            return time_format
+            return 'unixtimestamp'
         except ValueError:
             pass
 
@@ -317,15 +312,15 @@ class Utils(object):
         # Is the IP multicast, private? (including localhost)
         # local_link or reserved?
         # The broadcast address 255.255.255.255 is reserved.
-        if (
-            ip_obj.is_multicast
-            or ip_obj.is_private
-            or ip_obj.is_link_local
-            or ip_obj.is_reserved
-            or '.255' in ip_obj.exploded
-        ):
-            return True
-        return False
+        return bool(
+            (
+                ip_obj.is_multicast
+                or ip_obj.is_private
+                or ip_obj.is_link_local
+                or ip_obj.is_reserved
+                or '.255' in ip_obj.exploded
+            )
+        )
 
     def get_hash_from_file(self, filename):
         """
@@ -503,21 +498,16 @@ class Utils(object):
 
         elif 'domain' in attacker_direction:
             # the ioc is a domain
-            if validators.domain(attacker):
-                attacker_type = 'Hostname'
-            else:
-                attacker_type = 'URL'
-
+            attacker_type = 'Hostname' if validators.domain(attacker) else 'URL'
             target_info = {attacker_type: [attacker]}
             IDEA_dict['Target'] = [target_info]
 
             # update the dstdomain description if specified in the evidence
             if source_target_tag:
                 IDEA_dict['Target'][0].update({'Type': [source_target_tag]})
-        else:
+        elif source_target_tag:
             # the ioc is the srcip, therefore the tag is desscribing the source
-            if source_target_tag:
-                IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
+            IDEA_dict['Source'][0].update({'Type': [source_target_tag]})
 
 
 
@@ -556,22 +546,16 @@ class Utils(object):
 
         # only evidence of type scanning have conn_count
         if conn_count:
-            IDEA_dict.update({'ConnCount': conn_count})
+            IDEA_dict['ConnCount'] = conn_count
 
         if 'MaliciousDownloadedFile' in evidence_type:
-            IDEA_dict.update(
+            IDEA_dict['Attach'] = [
                 {
-                    'Attach': [
-                        {
-                            'Type': ['Malware'],
-                            'Hash': [f'md5:{attacker}'],
-                            'Size': int(
-                                description.split('size:')[1].split('from')[0]
-                            ),
-                        }
-                    ]
+                    'Type': ['Malware'],
+                    'Hash': [f'md5:{attacker}'],
+                    'Size': int(description.split('size:')[1].split('from')[0]),
                 }
-            )
+            ]
 
         return IDEA_dict
 
