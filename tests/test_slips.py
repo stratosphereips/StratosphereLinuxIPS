@@ -1,5 +1,7 @@
 """Unit test for ../slips.py"""
 from ..slips import *
+from ..redis_manager import RedisManager
+from ..process_manager import ProcessManager
 import os
 import argparse
 import subprocess
@@ -23,10 +25,14 @@ def create_Main_instance():
     main.line_type = False
     return main
 
+def create_redis_manager_instance():
+    return RedisManager()
+def create_process_manager_instance():
+    return ProcessManager(create_Main_instance())
 
 def test_load_modules():
-    main = create_Main_instance()
-    failed_to_load_modules = main.get_modules(
+    proc_manager = create_process_manager_instance()
+    failed_to_load_modules = proc_manager.get_modules(
         ['template', 'mldetection-1', 'ensembling']
     )[1]
     assert failed_to_load_modules == 0
@@ -70,7 +76,7 @@ def test_create_folder_for_logs():
 
 
 def test_clear_redis_cache_database():
-    main = create_Main_instance()
-    assert main.clear_redis_cache_database() == True
+    redis_manager = create_redis_manager_instance()
+    assert redis_manager.clear_redis_cache_database() == True
 
 
