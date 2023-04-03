@@ -89,14 +89,7 @@ class Checker:
 
         # Clear cache if the parameter was included
         if self.main.args.clearcache:
-            print('Deleting Cache DB in Redis.')
-            self.main.redis_man.clear_redis_cache_database()
-            self.main.input_information = ''
-            self.main.zeek_folder = ''
-            self.main.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
-            self.main.terminate_slips()
-
-
+            self.clear_redis_cache()
         # Clear cache if the parameter was included
         if self.main.args.blocking and not self.main.args.interface:
             print('Blocking is only allowed when running slips using an interface.')
@@ -127,27 +120,35 @@ class Checker:
                 print(
                     'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
                 )
-                self.main.terminate_slips()
             else:
-                # start only the blocking module process and the db
-                from slips_files.core.database.database import __database__
-                from multiprocessing import Queue, active_children
-                from modules.blocking.blocking import Module
-
-                blocking = Module(Queue())
-                blocking.start()
-                blocking.delete_slipsBlocking_chain()
-                # kill the blocking module manually because we can't
-                # run shutdown_gracefully here (not all modules has started)
-                for child in active_children():
-                    child.kill()
-                self.main.terminate_slips()
-
-
+                self.delete_blocking_chain()
+            self.main.terminate_slips()
         # Check if user want to save and load a db at the same time
         if self.main.args.save and self.main.args.db:
             print("Can't use -s and -d together")
             self.main.terminate_slips()
+
+    def delete_blocking_chain(self):
+        # start only the blocking module process and the db
+        from slips_files.core.database.database import __database__
+        from multiprocessing import Queue, active_children
+        from modules.blocking.blocking import Module
+
+        blocking = Module(Queue())
+        blocking.start()
+        blocking.delete_slipsBlocking_chain()
+        # kill the blocking module manually because we can't
+        # run shutdown_gracefully here (not all modules has started)
+        for child in active_children():
+            child.kill()
+
+    def clear_redis_cache(self):
+        print('Deleting Cache DB in Redis.')
+        self.main.redis_man.clear_redis_cache_database()
+        self.main.input_information = ''
+        self.main.zeek_folder = ''
+        self.main.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
+        self.main.terminate_slips()
     
     def check_output_redirection(self) -> tuple:
         """

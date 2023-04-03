@@ -1,3 +1,4 @@
+import contextlib
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
 from datetime import datetime
@@ -46,9 +47,7 @@ class RedisManager:
                     return False
 
                 print('[Main] Starting redis cache database..')
-                os.system(
-                    f'redis-server redis.conf --daemonize yes  > /dev/null 2>&1'
-                )
+                os.system('redis-server redis.conf --daemonize yes  > /dev/null 2>&1')
                 # give the server time to start
                 time.sleep(1)
                 tries += 1
@@ -65,8 +64,7 @@ class RedisManager:
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
             try:
-                connected = __database__.connect_to_redis_server(port)
-                if connected:
+                if __database__.connect_to_redis_server(port):
                     server_used = len(list(__database__.r.keys())) < 2
                     if server_used:
                         # if the db managed to connect to this random port, then this is
@@ -75,11 +73,10 @@ class RedisManager:
             except redis.exceptions.ConnectionError:
                 # Connection refused to this port
                 continue
-        else:
-            # there's no usable port in this range
-            print(f"All ports from {self.start_port} to {self.end_port} are used. "
-                   "Unable to start slips.\n")
-            return False
+        # there's no usable port in this range
+        print(f"All ports from {self.start_port} to {self.end_port} are used. "
+               "Unable to start slips.\n")
+        return False
     
     def clear_redis_cache_database(
         self, redis_host='localhost', redis_port=6379
@@ -111,22 +108,19 @@ class RedisManager:
 
 
         # closes all the ports in slips supported range of ports
-        slips_supported_range = [port for port in range(self.start_port, self.end_port + 1)]
+        slips_supported_range = list(range(self.start_port, self.end_port + 1))
         slips_supported_range.append(6379)
         for port in slips_supported_range:
-            pid = self.get_pid_of_redis_server(port)
-            if pid:
+            if pid := self.get_pid_of_redis_server(port):
                 self.flush_redis_server(pid=pid)
                 self.kill_redis_server(pid)
 
 
         # print(f"Successfully closed all redis servers on ports {self.start_port} to {self.end_port}")
-        print(f"Successfully closed all open redis servers")
+        print("Successfully closed all open redis servers")
 
-        try:
+        with contextlib.suppress(FileNotFoundError):
             os.remove(self.running_logfile)
-        except FileNotFoundError:
-            pass
         if self.terminate_slips:
             self.terminate_slips()
         return
@@ -335,12 +329,11 @@ class RedisManager:
             # fill the dict
             self.get_open_redis_servers()
 
-        try:
+        with contextlib.suppress(KeyboardInterrupt):
             # open_servers {counter: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
-            if not open_servers:
-                if self.terminate_slips:
-                    self.terminate_slips()
+            if not open_servers and self.terminate_slips:
+                self.terminate_slips()
 
             server_to_close = input()
             # close all ports in running_slips_logs.txt and in our supported range
@@ -362,7 +355,5 @@ class RedisManager:
                 except (KeyError, ValueError):
                     print(f"Invalid input {server_to_close}")
 
-        except KeyboardInterrupt:
-            pass
         if self.terminate_slips:
             self.terminate_slips()

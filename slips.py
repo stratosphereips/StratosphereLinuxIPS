@@ -17,6 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
+import contextlib
 from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
@@ -207,13 +208,10 @@ class Main:
         # We need to separate it from the path
         self.input_information = os.path.basename(self.input_information)
         # Remove the extension from the filename
-        try:
+        with contextlib.suppress(ValueError):
             self.input_information = self.input_information[
                 : self.input_information.index('.')
             ]
-        except ValueError:
-            # it's a zeek dir
-            pass
         # Give the exact path to save(), this is where our saved .rdb backup will be
         rdb_filepath = os.path.join(backups_dir, self.input_information)
         __database__.save(rdb_filepath)
@@ -262,13 +260,11 @@ class Main:
                         continue
 
                     file_path = os.path.join(self.args.output, file)
-                    try:
+                    with contextlib.suppress(Exception):
                         if os.path.isfile(file_path):
                             os.remove(file_path)
                         elif os.path.isdir(file_path):
                             shutil.rmtree(file_path)
-                    except Exception:
-                        pass
             else:
                 os.makedirs(self.args.output)
             return
@@ -404,22 +400,25 @@ class Main:
         if not __database__.load(self.args.db):
             print(f'Error loading the database {self.args.db}')
         else:
-            # to be able to use running_slips_info later as a non-root user,
-            # we shouldn't modify it as root
-
-            self.input_information = os.path.basename(self.args.db)
-            redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
-            self.zeek_folder = '""'
-            self.log_redis_server_PID(redis_port, redis_pid)
-            self.redis_man.remove_old_logline(redis_port)
-
-            print(
-                f'{self.args.db} loaded successfully.\n'
-                f'Run ./kalipso.sh and choose port {redis_port}'
-            )
+            self.load_redis_db(redis_port)
             # __database__.disable_redis_persistence()
 
         self.terminate_slips()
+
+    def load_redis_db(self, redis_port):
+        # to be able to use running_slips_info later as a non-root user,
+        # we shouldn't modify it as root
+
+        self.input_information = os.path.basename(self.args.db)
+        redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
+        self.zeek_folder = '""'
+        self.log_redis_server_PID(redis_port, redis_pid)
+        self.redis_man.remove_old_logline(redis_port)
+
+        print(
+            f'{self.args.db} loaded successfully.\n'
+            f'Run ./kalipso.sh and choose port {redis_port}'
+        )
 
     def get_input_file_type(self, input_information):
         """
@@ -488,180 +487,6 @@ class Main:
 
         return input_type
 
-    def check_input_type(self) -> tuple:
-        """
-        returns line_type, input_type, input_information
-        supported input types are:
-            interface, argus, suricata, zeek, nfdump, db
-        supported self.input_information:
-            given filepath, interface or type of line given in stdin
-        """
-        # only defined in stdin lines
-        line_type = False
-        # -I
-        if self.args.interface:
-            input_information = self.args.interface
-            input_type = 'interface'
-            # return input_type, self.input_information
-            return input_type, input_information, line_type
-
-        if self.args.db:
-            self.load_db()
-            return
-
-        if not self.args.filepath:
-            print('[Main] You need to define an input source.')
-            sys.exit(-1)
-        # -f file/stdin-type
-        input_information = self.args.filepath
-        if os.path.exists(input_information):
-            input_type = self.get_input_file_type(input_information)
-        else:
-            input_type, line_type = self.handle_flows_from_stdin(
-                input_information
-            )
-
-        return input_type, input_information, line_type
-
-    def check_given_flags(self):
-        """
-        check the flags that don't require starting slips
-        for ex: clear db, clearing the blocking chain, killing all servers, stopping the daemon, etc.
-        """
-
-        if self.args.help:
-            self.print_version()
-            arg_parser = self.conf.get_parser(help=True)
-            arg_parser.parse_arguments()
-            arg_parser.print_help()
-            self.terminate_slips()
-
-        if self.args.interface and self.args.filepath:
-            print('Only -i or -f is allowed. Stopping slips.')
-            self.terminate_slips()
-
-
-        if (self.args.save or self.args.db) and os.getuid() != 0:
-            print('Saving and loading the database requires root privileges.')
-            self.terminate_slips()
-
-        if (self.args.verbose and int(self.args.verbose) > 3) or (
-            self.args.debug and int(self.args.debug) > 3
-        ):
-            print('Debug and verbose values range from 0 to 3.')
-            self.terminate_slips()
-
-        # Check if redis server running
-        if not self.args.killall and self.check_redis_database() is False:
-            print('Redis database is not running. Stopping Slips')
-            self.terminate_slips()
-
-        if self.args.config and not os.path.exists(self.args.config):
-            print(f"{self.args.config} doesn't exist. Stopping Slips")
-            self.terminate_slips()
-
-        if self.args.interface:
-            interfaces = psutil.net_if_addrs().keys()
-            if self.args.interface not in interfaces:
-                print(f"{self.args.interface} is not a valid interface. Stopping Slips")
-                self.terminate_slips()
-
-
-        # Clear cache if the parameter was included
-        if self.args.clearcache:
-            print('Deleting Cache DB in Redis.')
-            self.clear_redis_cache_database()
-            self.input_information = ''
-            self.zeek_folder = ''
-            self.log_redis_server_PID(6379, self.get_pid_of_redis_server(6379))
-            self.terminate_slips()
-
-
-        # Clear cache if the parameter was included
-        if self.args.blocking and not self.args.interface:
-            print('Blocking is only allowed when running slips using an interface.')
-            self.terminate_slips()
-
-        # kill all open unused redis servers if the parameter was included
-        if self.args.killall:
-            self.close_open_redis_servers()
-            self.terminate_slips()
-
-        if self.args.version:
-            self.print_version()
-            self.terminate_slips()
-
-        if (
-            self.args.interface
-            and self.args.blocking
-            and os.geteuid() != 0
-        ):
-            # If the user wants to blocks, we need permission to modify iptables
-            print(
-                'Run Slips with sudo to enable the blocking module.'
-            )
-            self.terminate_slips()
-
-        if self.args.clearblocking:
-            if os.geteuid() != 0:
-                print(
-                    'Slips needs to be run as root to clear the slipsBlocking chain. Stopping.'
-                )
-                self.terminate_slips()
-            else:
-                # start only the blocking module process and the db
-                from slips_files.core.database.database import __database__
-                from multiprocessing import Queue, active_children
-                from modules.blocking.blocking import Module
-
-                blocking = Module(Queue())
-                blocking.start()
-                blocking.delete_slipsBlocking_chain()
-                # kill the blocking module manually because we can't
-                # run shutdown_gracefully here (not all modules has started)
-                for child in active_children():
-                    child.kill()
-                self.terminate_slips()
-
-
-        # Check if user want to save and load a db at the same time
-        if self.args.save and self.args.db:
-            print("Can't use -s and -d together")
-            self.terminate_slips()
-
-    def set_input_metadata(self):
-        """
-        save info about name, size, analysis start date in the db
-        """
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
-        to_ignore = self.conf.get_disabled_modules(self.input_type)
-
-        info = {
-            'slips_version': self.version,
-            'name': self.input_information,
-            'analysis_start': now,
-            'disabled_modules': json.dumps(to_ignore),
-            'output_dir': self.args.output,
-            'input_type': self.input_type,
-        }
-
-        if hasattr(self, 'zeek_folder'):
-            info.update({
-                'zeek_dir': self.zeek_folder
-            })
-
-        size_in_mb = '-'
-        if self.args.filepath not in (False, None) and os.path.exists(self.args.filepath):
-            size = os.stat(self.args.filepath).st_size
-            size_in_mb = float(size) / (1024 * 1024)
-            size_in_mb = format(float(size_in_mb), '.2f')
-
-        info.update({
-            'size_in_MB': size_in_mb,
-        })
-        # analysis end date will be set in shutdown_gracefully
-        # file(pcap,netflow, etc.) start date will be set in
-        __database__.set_input_metadata(info)
 
 
     def setup_print_levels(self):
