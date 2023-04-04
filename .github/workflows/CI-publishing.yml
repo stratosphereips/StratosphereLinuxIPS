@@ -37,7 +37,7 @@ jobs:
             name: ubuntu-image
             image_name: slips
             path: ./docker/ubuntu-image/Dockerfile
-          
+
           - type: macosm1-image
             name: macosm1-image
             image_name: slips_macos_m1
