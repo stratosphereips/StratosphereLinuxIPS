@@ -2,6 +2,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
@@ -30,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
+        self.jarm = JARM()
         __database__.start(redis_port)
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN()
@@ -520,6 +522,8 @@ class Module(Module, multiprocessing.Process):
                     )   # this is a dict {'uid':json flow data}
                     if domain := flow_data.get('query', False):
                         self.get_age(domain)
+                        jarm_hash = self.jarm.hash(domain)
+                        print(f"@@@@@@@@@@@@@@@@@@  jarm_hash {jarm_hash}")
 
                 message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
