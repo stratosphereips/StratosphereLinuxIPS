@@ -5,26 +5,23 @@ on:
     branches:
     - 'master'
     - '!develop'
-  pull_request:
-    branches:
-      - 'develop'
 
 jobs:
-  # auto add release tag
-#  create_tag:
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#      - name: Get slips version
-#        run: |
-#          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-#          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-#
-#      - uses: actions/checkout@v3
-#      - uses: rickstaa/action-create-tag@v1
-#        with:
-#          tag: ${{ env.SLIPS_VERSION }}
-#          message: ""
+  #   auto add release tag
+  create_tag:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get slips version
+        run: |
+          VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+
+      - uses: actions/checkout@v3
+      - uses: rickstaa/action-create-tag@v1
+        with:
+          tag: ${{ env.SLIPS_VERSION }}
+          message: ""
 
   publish_image:
     # runs the tests in a docker(built by this job) on stop of a GH VM
@@ -74,124 +71,124 @@ jobs:
         tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
         push: true
 
-#  publish_P2P_docker_image:
-#    # runs the tests in a docker(built by this job) on stop of a GH VM
-#    runs-on: ubuntu-20.04
-#    # 2 hours timeout
-#    timeout-minutes: 7200
-#
-#    steps:
-#    - name: Get slips version
-#      run: |
-#        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-#        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-#
-#    # clone slips and checkout branch
-#    # By default it checks out only one commit
-#    - uses: actions/checkout@v3
-#      with:
-#        ref: 'master'
-#        # Fetch all history for all tags and branches
-#        fetch-depth: ''
-#
-#    - name: Login to DockerHub
-#      uses: docker/login-action@v2
-#      with:
-#        username: stratosphereips
-#        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-#
-#    # Set up Docker Buildx with docker-container driver is required
-#    # at the moment to be able to use a subdirectory with Git context
-#    - name: Set up Docker Buildx
-#      uses: docker/setup-buildx-action@v2
-#
-#    # build p2p image for ubuntu from dockerfile
-#    - name: Build our p2p image from dockerfile
-#      id: docker_build_p2p_for_slips
-#      uses: docker/build-push-action@v3
-#      with:
-#        allow: network.host
-#        context: ./
-#        file: ./docker/P2P-image/Dockerfile
-#        tags: |
-#          stratosphereips/slips_p2p:latest
-#          stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
-#        push: true
-#
-#  update_code_docs:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v3
-#        with:
-#          ref: 'code-docs-branch'
-#          fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
-#
-#      - name: install doxygen and python
-#        run: |
-#          sudo apt update
-#          sudo apt install python3 doxygen
-#
-#      # deletes old docs, generates new ones, and adds all new files to git
-#      - name: update docs
-#        run: python3 docs/generate_docs.py
-#
-#      # commit and push to code docs branch
-#      - name: Commit & Push changes
-#        uses: actions-js/push@master
-#        with:
-#          github_token: ${{ secrets.GH_TOKEN_FOR_COMMITTING_AND_PUSHING_CODE_DOCS }}
-#          message: '[Github actions] Update code docs'
-#          branch: 'code-docs-branch'
+  publish_P2P_docker_image:
+    # runs the tests in a docker(built by this job) on stop of a GH VM
+    runs-on: ubuntu-20.04
+    # 2 hours timeout
+    timeout-minutes: 7200
 
-#  build_and_push_dependency_image:
-#
-#    runs-on: ubuntu-latest
-#
-#    steps:
-#    # clone slips and checkout branch
-#    - uses: actions/checkout@v3
-#      with:
-#        ref: 'master'
-#
-#    - name: Login to DockerHub
-#      uses: docker/login-action@v2
-#      with:
-#        username: stratosphereips
-#        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
-#
-#    - name: Build and push latest dependency image
-#      id: docker_build_dependency_image
-#      uses: docker/build-push-action@v2
-#      with:
-#        context: ./
-#        file: ./docker/dependency-image/Dockerfile
-#        tags: stratosphereips/slips_dependencies:latest
-#        push: true
+    steps:
+    - name: Get slips version
+      run: |
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
-#
-#  tweet_about_the_new_release:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Get slips version
-#        run: |
-#          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-#          VER2=$(echo $VER | sed 's/\.//g')
-#          DATE=$(date +'%Y/%m/%d')
-#          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-#          echo "VER2=$VER2" >> $GITHUB_ENV
-#          echo "DATE=$DATE" >> $GITHUB_ENV
-#
-#      - name: Tweet
-#        uses: snow-actions/tweet@v1.4.0
-#        with:
-#          status: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: ${{ env.BLOG_URL }}'
-#        env:
-#          CONSUMER_API_KEY: ${{ secrets.CONSUMER_KEY }}
-#          CONSUMER_API_SECRET_KEY: ${{ secrets.CONSUMER_SECRET }}
-#          ACCESS_TOKEN: ${{ secrets.ACCESS_KEY }}
-#          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_SECRET }}
-#          # same as SLIPS_VERSION without the v and the dots
-#          BLOG_URL: 'www.stratosphereips.org/blog/${{ env.DATE }}/new-slips-version-${{ env.VER2 }}-is-here'
+    # clone slips and checkout branch
+    # By default it checks out only one commit
+    - uses: actions/checkout@v3
+      with:
+        ref: 'master'
+        # Fetch all history for all tags and branches
+        fetch-depth: ''
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    # Set up Docker Buildx with docker-container driver is required
+    # at the moment to be able to use a subdirectory with Git context
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    # build p2p image for ubuntu from dockerfile
+    - name: Build our p2p image from dockerfile
+      id: docker_build_p2p_for_slips
+      uses: docker/build-push-action@v3
+      with:
+        allow: network.host
+        context: ./
+        file: ./docker/P2P-image/Dockerfile
+        tags: |
+          stratosphereips/slips_p2p:latest
+          stratosphereips/slips_p2p:${{ env.SLIPS_VERSION }}
+        push: true
+
+  update_code_docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          ref: 'code-docs-branch'
+          fetch-depth: 0 # otherwise, you will fail to push refs to the dest repo
+
+      - name: install doxygen and python
+        run: |
+          sudo apt update
+          sudo apt install python3 doxygen
+
+      # deletes old docs, generates new ones, and adds all new files to git
+      - name: update docs
+        run: python3 docs/generate_docs.py
+
+      # commit and push to code docs branch
+      - name: Commit & Push changes
+        uses: actions-js/push@master
+        with:
+          github_token: ${{ secrets.GH_TOKEN_FOR_COMMITTING_AND_PUSHING_CODE_DOCS }}
+          message: '[Github actions] Update code docs'
+          branch: 'code-docs-branch'
+
+  build_and_push_dependency_image:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    # clone slips and checkout branch
+    - uses: actions/checkout@v3
+      with:
+        ref: 'master'
+
+    - name: Login to DockerHub
+      uses: docker/login-action@v2
+      with:
+        username: stratosphereips
+        password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
+
+    - name: Build and push latest dependency image
+      id: docker_build_dependency_image
+      uses: docker/build-push-action@v2
+      with:
+        context: ./
+        file: ./docker/dependency-image/Dockerfile
+        tags: stratosphereips/slips_dependencies:latest
+        push: true
+
+
+  tweet_about_the_new_release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get slips version
+        run: |
+          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+          VER2=$(echo $VER | sed 's/\.//g')
+          DATE=$(date +'%Y/%m/%d')
+          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
+          echo "VER2=$VER2" >> $GITHUB_ENV
+          echo "DATE=$DATE" >> $GITHUB_ENV
+
+      - name: Tweet
+        uses: snow-actions/tweet@v1.4.0
+        with:
+          status: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: ${{ env.BLOG_URL }}'
+        env:
+          CONSUMER_API_KEY: ${{ secrets.CONSUMER_KEY }}
+          CONSUMER_API_SECRET_KEY: ${{ secrets.CONSUMER_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_KEY }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_SECRET }}
+          # same as SLIPS_VERSION without the v and the dots
+          BLOG_URL: 'www.stratosphereips.org/blog/${{ env.DATE }}/new-slips-version-${{ env.VER2 }}-is-here'
 
 
