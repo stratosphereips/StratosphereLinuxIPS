@@ -2,7 +2,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from modules.ip_info.jarm import JARM_hash
+from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
@@ -31,6 +31,7 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
+        self.jarm = JARM()
         __database__.start(redis_port)
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN()
@@ -40,7 +41,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
-        self.c4 = __database__.subscribe('check_jarm_hash')
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -472,39 +472,6 @@ class Module(Module, multiprocessing.Process):
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
 
-    def set_evidence_malicious_jarm_hash(
-            self,
-            flow,
-            uid,
-            profileid,
-            twid,
-    ):
-        print(f"@@@@@@@@@@@@@@@@@@  set_evidence_malicious_jarm_hash is called ")
-        dport = flow['dport']
-        dstip = flow['daddr']
-        timestamp = flow['starttime']
-        protocol = flow['protocol']
-
-        evidence_type = 'MaliciousJARM'
-        attacker_direction = 'dstip'
-        source_target_tag = 'Malware'
-        attacker = dstip
-        threat_level = 'medium'
-        confidence = 0.7
-        category = 'Anomaly.Traffic'
-        portproto = f'{dport}/{protocol}'
-        port_info = __database__.get_port_info(portproto)
-        port_info = port_info or ""
-        dstip_id = __database__.getIPIdentification(dstip)
-        description = (
-           f"Malicious JARM hash while connecting to destination IP: {dstip} {dstip_id}"
-           f" on port: {portproto} {port_info}"
-        )
-
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag,
-                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
-
     def run(self):
         utils.drop_root_privs()
 
@@ -555,6 +522,8 @@ class Module(Module, multiprocessing.Process):
                     )   # this is a dict {'uid':json flow data}
                     if domain := flow_data.get('query', False):
                         self.get_age(domain)
+                        jarm_hash = self.jarm.hash(domain)
+                        print(f"@@@@@@@@@@@@@@@@@@  jarm_hash {jarm_hash}")
 
                 message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
@@ -598,36 +567,6 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
-
-                message = __database__.get_message(self.c4)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'check_jarm_hash'):
-                    msg = json.loads(message['data'])
-                    # can be 'ip' or 'domain'
-                    attacker_type: str = msg['attacker_type']
-                    profileid = msg['profileid']
-                    twid = msg['twid']
-                    uid = msg['uid']
-                    # the actual ip or domain
-                    attacker = msg['attacker']
-                    flow = msg['flow']
-                    dport = flow['dport']
-                    # @@@@@@@@@@@@2 DLETE THIS
-                    dport = 443
-
-                    jarm_hash = JARM_hash(attacker, dport)
-                    if jarm_hash != '00000000000000000000000000000000000000000000000000000000000000':
-                        print(f"@@@@@@@@@@@@@@@@@@  checking if {jarm_hash} is malicious!")
-                        if __database__.is_malicious_jarm(jarm_hash):
-                            self.set_evidence_malicious_jarm_hash(
-                                flow,
-                                uid,
-                                profileid,
-                                twid,
-                            )
 
 
             except KeyboardInterrupt:
