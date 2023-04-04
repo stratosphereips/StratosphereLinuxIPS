@@ -329,13 +329,9 @@ class JARM():
             return "0"*62
         fuzzy_hash = ""
         handshakes = jarm_raw.split(",")
-        print(f"@@@@@@@@@@@@@@@@@@  jarm_raw {jarm_raw}")
         alpns_and_ext = ""
-        print(f"@@@@@@@@@@@@@@@@@@  handshakes {handshakes}")
         for handshake in handshakes:
-            print(f"@@@@@@@@@@@@@@@@@@  handshake {handshake}")
             components = handshake.split("|")
-            print(f"@@@@@@@@@@@@@@@@@@  components { components}")
             #Custom jarm hash includes a fuzzy hash of the ciphers and versions
             fuzzy_hash += self.cipher_bytes(components[0])
             fuzzy_hash += self.version_byte(components[1])
@@ -361,7 +357,7 @@ class JARM():
             list = self.cipher_mung(list, jarm_details[4])
         #Add GREASE to beginning of cipher list (if applicable)
         if jarm_details[5] == "GREASE":
-            list.insert(0,self.choose_grease())
+            list.insert(0, self.choose_grease())
         #Generate cipher list
         for cipher in list:
             selected_ciphers += cipher
