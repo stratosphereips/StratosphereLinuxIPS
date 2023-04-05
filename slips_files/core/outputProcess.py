@@ -59,7 +59,7 @@ class OutputProcess(multiprocessing.Process):
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
-            self.change_stdout(stdout)
+            self.change_stdout(self.stdout)
         if self.verbose > 2:
             print(
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
