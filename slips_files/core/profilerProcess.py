@@ -2036,8 +2036,9 @@ class ProfilerProcess(multiprocessing.Process):
         symbol = self.compute_symbol('InTuples')
 
         # Add the src tuple using the src ip, and dst port
-        tupleid = f'{self.daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        tupleid = f'{self.saddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
         role = 'Server'
+        # create the intuple
         __database__.add_tuple(
             profileid, twid, tupleid, symbol, role, self.starttime, self.uid
         )
