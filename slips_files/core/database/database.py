@@ -1196,7 +1196,7 @@ class Database(ProfilingFlowsDatabase, object):
                         twid = self.addNewTW(profileid, new_start)
                         self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
-                                # Now get the id of the last TW so we can return it
+                        # Now get the id of the last TW so we can return it
                 else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(

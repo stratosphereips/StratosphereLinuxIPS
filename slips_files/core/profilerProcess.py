@@ -43,7 +43,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
-        self.ctr = 0
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -629,7 +628,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'syslog'
         elif 'tunnel.log' in new_line['type']:
             self.column_values.update({
-                'type' : 'tunnel',
+                'type': 'tunnel',
                 'sport': line[3],
                 'dport': line[5],
                 'tunnel_type': line[6],
