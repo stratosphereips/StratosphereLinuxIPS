@@ -32,7 +32,7 @@ class JARM():
         grease = False
         #GREASE
         if jarm_details[5] == "GREASE":
-            all_extensions += choose_grease()
+            all_extensions += self.choose_grease()
             all_extensions += b"\x00\x00"
             grease = True
         #Server name
@@ -94,7 +94,7 @@ class JARM():
         ext = b"\x00\x33"
         #Add grease value if necessary
         if grease == True:
-            share_ext = choose_grease()
+            share_ext = self.choose_grease()
             share_ext += b"\x00\x01\x00"
         else:
             share_ext = b""
@@ -125,7 +125,7 @@ class JARM():
         ext = b"\x00\x2b"
         #Add GREASE if applicable
         if grease == True:
-            versions = choose_grease()
+            versions = self.choose_grease()
         else:
             versions = b""
         for version in tls:
@@ -136,6 +136,10 @@ class JARM():
         ext += struct.pack(">B", second_length)
         ext += versions
         return ext
+    #Randomly choose a grease value
+    def choose_grease(self):
+        grease_list = [b"\x0a\x0a", b"\x1a\x1a", b"\x2a\x2a", b"\x3a\x3a", b"\x4a\x4a", b"\x5a\x5a", b"\x6a\x6a", b"\x7a\x7a", b"\x8a\x8a", b"\x9a\x9a", b"\xaa\xaa", b"\xba\xba", b"\xca\xca", b"\xda\xda", b"\xea\xea", b"\xfa\xfa"]
+        return random.choice(grease_list)
     def cipher_mung(self, ciphers, request):
         output = []
         cipher_len = len(ciphers)
@@ -153,7 +157,7 @@ class JARM():
             if (cipher_len % 2 == 1):
                 output.append(ciphers[int(cipher_len/2)])
                 #Top half gets the middle cipher
-            output += cipher_mung(cipher_mung(ciphers, "REVERSE"),"BOTTOM_HALF")
+            output += self.cipher_mung(self.cipher_mung(ciphers, "REVERSE"),"BOTTOM_HALF")
         #Middle-out cipher order
         elif (request == "MIDDLE_OUT"):
             middle = int(cipher_len/2)
@@ -337,7 +341,9 @@ class JARM():
             fuzzy_hash += self.version_byte(components[1])
             alpns_and_ext += components[2]
             alpns_and_ext += components[3]
-        #Custom jarm hash has the sha256 of alpns and extensions added to the end
+
+        # Custom jarm hash has the sha256 of alpns
+        # and extensions added to the end
         sha256 = (hashlib.sha256(alpns_and_ext.encode())).hexdigest()
         fuzzy_hash += sha256[0:32]
         return
@@ -355,7 +361,7 @@ class JARM():
             list = self.cipher_mung(list, jarm_details[4])
         #Add GREASE to beginning of cipher list (if applicable)
         if jarm_details[5] == "GREASE":
-            list.insert(0,choose_grease())
+            list.insert(0,self.choose_grease())
         #Generate cipher list
         for cipher in list:
             selected_ciphers += cipher
@@ -392,7 +398,7 @@ class JARM():
             server_hello, ip = self.send_packet(payload)
             #Deal with timeout error
             if server_hello == "TIMEOUT":
-                jarm = "|||,|||,|||,|||,|||,|||,|||,|||,|||,|||"
+                jarm =  "|||,|||,|||,|||,|||,|||,|||,|||,|||,|||"
                 break
             ans = self.read_packet(server_hello, queue[iterate])
             jarm += ans
@@ -401,5 +407,5 @@ class JARM():
                 break
             else:
                 jarm += ","
-            #Fuzzy hash
-            return self.jarm_hash(jarm)
+        #Fuzzy hash
+        return self.jarm_hash(jarm)
