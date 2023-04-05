@@ -55,6 +55,7 @@ class OutputProcess(multiprocessing.Process):
         self.queue = inputqueue
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
+        self.stdout= stdout
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
