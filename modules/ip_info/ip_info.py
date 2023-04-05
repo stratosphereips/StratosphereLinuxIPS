@@ -523,7 +523,6 @@ class Module(Module, multiprocessing.Process):
                     if domain := flow_data.get('query', False):
                         self.get_age(domain)
                         jarm_hash = self.jarm.hash(domain)
-                        print(f"@@@@@@@@@@@@@@@@@@  jarm_hash {jarm_hash}")
 
                 message = __database__.get_message(self.c1)
                 # if timewindows are not updated for a long time (see at logsProcess.py),
