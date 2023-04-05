@@ -263,46 +263,46 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['starttime'] = ''
 
         try:
-            self.column_values['uid'] = line[1]
+            self.flow.uid = line[1]
         except IndexError:
-            self.column_values['uid'] = False
+            self.flow.uid = False
         try:
             self.column_values['saddr'] = line[2]
         except IndexError:
             self.column_values['saddr'] = ''
         try:
-            self.column_values['daddr'] = line[4]
+            self.flow.daddr = line[4]
         except IndexError:
-            self.column_values['daddr'] = ''
+            self.flow.daddr = ''
 
         if 'conn.log' in new_line['type']:
             self.column_values['type'] = 'conn'
             try:
-                self.column_values['dur'] = float(line[8])
+                self.self.flow.dur = float(line[8])
             except (IndexError, ValueError):
-                self.column_values['dur'] = 0
+                self.self.flow.dur = 0
             self.column_values['endtime'] = str(
                 self.column_values['starttime']
-            ) + str(timedelta(seconds=self.column_values['dur']))
-            self.column_values['proto'] = line[6]
+            ) + str(timedelta(seconds=self.self.flow.dur))
+            self.flow.proto = line[6]
             try:
-                self.column_values['appproto'] = line[7]
+                self.flow.appproto = line[7]
             except IndexError:
                 # no service recognized
-                self.column_values['appproto'] = ''
+                self.flow.appproto = ''
             try:
-                self.column_values['sport'] = line[3]
+                self.flow.sport = line[3]
             except IndexError:
-                self.column_values['sport'] = ''
+                self.flow.sport = ''
             self.column_values['dir'] = '->'
             try:
-                self.column_values['dport'] = line[5]
+                self.flow.dport = line[5]
             except IndexError:
-                self.column_values['dport'] = ''
+                self.flow.dport = ''
             try:
-                self.column_values['state'] = line[11]
+                self.flow.state = line[11]
             except IndexError:
-                self.column_values['state'] = ''
+                self.flow.state = ''
             try:
                 self.column_values['spkts'] = float(line[16])
             except (IndexError, ValueError):
@@ -311,7 +311,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['dpkts'] = float(line[18])
             except (IndexError, ValueError):
                 self.column_values['dpkts'] = 0
-            self.column_values['pkts'] = (
+            self.flow.pkts = (
                 self.column_values['spkts'] + self.column_values['dpkts']
             )
             try:
@@ -328,7 +328,7 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 self.column_values['state_hist'] = line[15]
             except IndexError:
-                self.column_values['state_hist'] = self.column_values['state']
+                self.column_values['state_hist'] = self.flow.state
 
             try:
                 self.column_values['smac'] = line[21]
@@ -347,9 +347,9 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['query'] = ''
             try:
-                self.column_values['qclass_name'] = line[11]
+                self.flow.qclass_name = line[11]
             except IndexError:
-                self.column_values['qclass_name'] = ''
+                self.flow.qclass_name = ''
             try:
                 self.column_values['qtype_name'] = line[13]
             except IndexError:
@@ -376,9 +376,9 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'http.log' in new_line['type']:
             self.column_values['type'] = 'http'
             try:
-                self.column_values['method'] = line[7]
+                self.flow.method = line[7]
             except IndexError:
-                self.column_values['method'] = ''
+                self.flow.method = ''
             try:
                 self.column_values['host'] = line[8]
             except IndexError:
@@ -388,9 +388,9 @@ class ProfilerProcess(multiprocessing.Process):
             except IndexError:
                 self.column_values['uri'] = ''
             try:
-                self.column_values['httpversion'] = line[11]
+                self.flow.httpversion = line[11]
             except IndexError:
-                self.column_values['httpversion'] = ''
+                self.flow.httpversion = ''
             try:
                 self.column_values['user_agent'] = line[12]
             except IndexError:
@@ -423,21 +423,21 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'ssl.log' in new_line['type']:
             self.column_values['type'] = 'ssl'
             try:
-                self.column_values['sport'] = line[3]
+                self.flow.sport = line[3]
             except IndexError:
-                self.column_values['sport'] = ''
+                self.flow.sport = ''
             try:
-                self.column_values['dport'] = line[5]
+                self.flow.dport = line[5]
             except IndexError:
-                self.column_values['dport'] = ''
+                self.flow.dport = ''
             try:
-                self.column_values['sslversion'] = line[6]
+                self.flow.sslversion = line[6]
             except IndexError:
-                self.column_values['sslversion'] = ''
+                self.flow.sslversion = ''
             try:
-                self.column_values['cipher'] = line[7]
+                self.flow.cipher = line[7]
             except IndexError:
-                self.column_values['cipher'] = ''
+                self.flow.cipher = ''
             try:
                 self.column_values['curve'] = line[8]
             except IndexError:
@@ -584,14 +584,14 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'dhcp.log' in new_line['type']:
             self.column_values['type'] = 'dhcp'
             #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
-            self.column_values['daddr'] = line[3]
+            self.flow.daddr = line[3]
             self.column_values['client_addr'] = line[2]   # the same as saddr
             self.column_values['server_addr'] = line[3]
             self.column_values['mac'] = line[4]   # this is the client mac
             self.column_values['host_name'] = line[5]
             self.column_values['requested_addr'] = line[8]
             self.column_values['saddr'] = self.column_values['client_addr']
-            self.column_values['daddr'] = self.column_values['server_addr']
+            self.flow.daddr = self.column_values['server_addr']
         elif 'dce_rpc' in new_line['type']:
             self.column_values['type'] = 'dce_rpc'
         elif 'dnp3' in new_line['type']:
@@ -622,7 +622,7 @@ class ProfilerProcess(multiprocessing.Process):
             # rcptto date from to reply_to msg_id in_reply_to subject x_originating_ip
             # first_received second_received last_reply path user_agent tls fuids is_webmail"
             self.column_values['type'] = 'smtp'
-            self.column_values['last_reply'] = line[20]
+            self.flow.last_reply = line[20]
         elif 'socks.log' in new_line['type']:
             self.column_values['type'] = 'socks'
         elif 'syslog.log' in new_line['type']:
@@ -649,23 +649,23 @@ class ProfilerProcess(multiprocessing.Process):
                     # keep it - as it is
                     pass
 
-            if self.column_values['daddr'] == '-':
-                self.column_values['daddr'] = line[14]  #  dst field
-            if self.column_values['daddr'] == '-':
-                self.column_values['daddr'] = self.column_values['saddr']
+            if self.flow.daddr == '-':
+                self.flow.daddr = line[14]  #  dst field
+            if self.flow.daddr == '-':
+                self.flow.daddr = self.column_values['saddr']
 
-            self.column_values['dport'] = line[5]   # id.orig_p
-            if self.column_values['dport'] == '-':
+            self.flow.dport = line[5]   # id.orig_p
+            if self.flow.dport == '-':
                 try:
-                    self.column_values['dport'] = line[15]   # p field
+                    self.flow.dport = line[15]   # p field
                 except IndexError:
                     # line doesn't have a p field
                     # keep it - as it is
                     pass
-            self.column_values['sport'] = line[3]
+            self.flow.sport = line[3]
             self.column_values['note'] = line[10]
             self.column_values['scanning_ip'] = self.column_values['saddr']
-            self.column_values['scanned_port'] = self.column_values['dport']
+            self.column_values['scanned_port'] = self.flow.dport
             self.column_values['msg'] = line[
                 11
             ]   # we're looking for self signed certs in this field
@@ -691,15 +691,15 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['type'] = 'arp'
             self.column_values['operation'] = line[1]
             self.column_values['src_mac'] = line[2]
-            self.column_values['dst_mac'] = line[3]
+            self.flow.dmac = line[3]
             self.column_values['saddr'] = line[4]
-            self.column_values['daddr'] = line[5]
+            self.flow.daddr = line[5]
             self.column_values['src_hw'] = line[6]
             self.column_values['dst_hw'] = line[7]
 
         elif 'weird' in new_line['type']:
             self.column_values['type'] = 'weird'
-            self.column_values['name'] = line[6]
+            self.flow.name = line[6]
             self.column_values['addl'] = line[7]
 
 
@@ -732,9 +732,9 @@ class ProfilerProcess(multiprocessing.Process):
         else:
             starttime = ''
 
-        # self.column_values['uid'] = line.get('uid', False)
+        # self.flow.uid = line.get('uid', False)
         # self.column_values['saddr'] = line.get('id.orig_h', '')
-        # self.column_values['daddr'] = line.get('id.resp_h', '')
+        # self.flow.daddr = line.get('id.resp_h', '')
 
         # Handle each zeek file type separately
         if 'conn' in file_type:
@@ -864,7 +864,7 @@ class ProfilerProcess(multiprocessing.Process):
             # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
             if (
                 self.column_values['saddr'] == ''
-                and self.column_values['daddr'] == ''
+                and self.flow.daddr == ''
                 and line.get('mac', False)
             ):
                 self.column_values['saddr'] = line.get('mac', '')
@@ -936,7 +936,7 @@ class ProfilerProcess(multiprocessing.Process):
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] == '':
                 self.column_values['saddr'] = line.get('src', '')
-            if self.column_values['daddr'] == '':
+            if self.flow.daddr == '':
                 # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
                 self.column_values.update(
                     {'daddr': line.get('dst', self.column_values['saddr'])}
@@ -949,7 +949,7 @@ class ProfilerProcess(multiprocessing.Process):
                 self.column_values['saddr'] = saddr
 
             if daddr := line.get('rx_hosts', [''])[0]:
-                self.column_values['daddr'] = daddr
+                self.flow.daddr = daddr
 
             self.column_values.update(
                 {
@@ -1043,15 +1043,15 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['dur'] = nline[self.column_idx['dur']]
+            self.self.flow.dur = nline[self.column_idx['dur']]
         except KeyError:
             pass
         try:
-            self.column_values['proto'] = nline[self.column_idx['proto']]
+            self.flow.proto = nline[self.column_idx['proto']]
         except KeyError:
             pass
         try:
-            self.column_values['appproto'] = nline[self.column_idx['appproto']]
+            self.flow.appproto = nline[self.column_idx['appproto']]
         except KeyError:
             pass
         try:
@@ -1059,7 +1059,7 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['sport'] = nline[self.column_idx['sport']]
+            self.flow.sport = nline[self.column_idx['sport']]
         except KeyError:
             pass
         try:
@@ -1067,19 +1067,19 @@ class ProfilerProcess(multiprocessing.Process):
         except KeyError:
             pass
         try:
-            self.column_values['daddr'] = nline[self.column_idx['daddr']]
+            self.flow.daddr = nline[self.column_idx['daddr']]
         except KeyError:
             pass
         try:
-            self.column_values['dport'] = nline[self.column_idx['dport']]
+            self.flow.dport = nline[self.column_idx['dport']]
         except KeyError:
             pass
         try:
-            self.column_values['state'] = nline[self.column_idx['state']]
+            self.flow.state = nline[self.column_idx['state']]
         except KeyError:
             pass
         try:
-            self.column_values['pkts'] = int(nline[self.column_idx['pkts']])
+            self.flow.pkts = int(nline[self.column_idx['pkts']])
         except KeyError:
             pass
         try:
@@ -1144,11 +1144,11 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['dur'] = nline[2]
+            self.self.flow.dur = nline[2]
         except IndexError:
             pass
         try:
-            self.column_values['proto'] = nline[7]
+            self.flow.proto = nline[7]
         except IndexError:
             pass
         try:
@@ -1156,7 +1156,7 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['sport'] = nline[5]
+            self.flow.sport = nline[5]
         except IndexError:
             pass
         try:
@@ -1165,15 +1165,15 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['daddr'] = nline[4]
+            self.flow.daddr = nline[4]
         except IndexError:
             pass
         try:
-            self.column_values['dport'] = nline[6]
+            self.flow.dport = nline[6]
         except IndexError:
             pass
         try:
-            self.column_values['state'] = nline[8]
+            self.flow.state = nline[8]
         except IndexError:
             pass
         try:
@@ -1185,7 +1185,7 @@ class ProfilerProcess(multiprocessing.Process):
         except IndexError:
             pass
         try:
-            self.column_values['pkts'] = (
+            self.flow.pkts = (
                 self.column_values['spkts'] + self.column_values['dpkts']
             )
         except IndexError:
@@ -1231,16 +1231,16 @@ class ProfilerProcess(multiprocessing.Process):
             # there this not valid time.
             self.column_values['starttime'] = False
         self.column_values['endtime'] = False
-        self.column_values['dur'] = 0
+        self.self.flow.dur = 0
         self.column_values['flow_id'] = line.get('flow_id', False)
         self.column_values['saddr'] = line.get('src_ip', False)
-        self.column_values['sport'] = line.get('src_port', False)
-        self.column_values['daddr'] = line.get('dest_ip', False)
-        self.column_values['dport'] = line.get('dest_port', False)
-        self.column_values['proto'] = line.get('proto', False)
+        self.flow.sport = line.get('src_port', False)
+        self.flow.daddr = line.get('dest_ip', False)
+        self.flow.dport = line.get('dest_port', False)
+        self.flow.proto = line.get('proto', False)
         self.column_values['type'] = line.get('event_type', False)
         self.column_values['dir'] = '->'
-        self.column_values['appproto'] = line.get('app_proto', False)
+        self.flow.appproto = line.get('app_proto', False)
 
         if self.column_values['type']:
             """
@@ -1274,12 +1274,12 @@ class ProfilerProcess(multiprocessing.Process):
                         self.column_values['endtime'] = False
 
                     try:
-                        self.column_values['dur'] = (
+                        self.self.flow.dur = (
                             self.column_values['endtime']
                             - self.column_values['starttime']
                         ).total_seconds()
                     except (KeyError, TypeError):
-                        self.column_values['dur'] = 0
+                        self.self.flow.dur = 0
                     try:
                         self.column_values['spkts'] = line['flow'][
                             'pkts_toserver'
@@ -1293,7 +1293,7 @@ class ProfilerProcess(multiprocessing.Process):
                     except KeyError:
                         self.column_values['dpkts'] = 0
 
-                    self.column_values['pkts'] = (
+                    self.flow.pkts = (
                         self.column_values['dpkts']
                         + self.column_values['spkts']
                     )
@@ -1324,17 +1324,17 @@ class ProfilerProcess(multiprocessing.Process):
                         these are: New, Established and Closed,for UDP only new and established.
                         For each of these states Suricata can employ different timeouts.
                         """
-                        self.column_values['state'] = line['flow']['state']
+                        self.flow.state = line['flow']['state']
                     except KeyError:
-                        self.column_values['state'] = ''
+                        self.flow.state = ''
             elif self.column_values['type'] == 'http':
                 if line.get('http', None):
                     try:
-                        self.column_values['method'] = line['http'][
+                        self.flow.method = line['http'][
                             'http_method'
                         ]
                     except KeyError:
-                        self.column_values['method'] = ''
+                        self.flow.method = ''
                     try:
                         self.column_values['host'] = line['http']['hostname']
                     except KeyError:
@@ -1356,11 +1356,11 @@ class ProfilerProcess(multiprocessing.Process):
                     except KeyError:
                         self.column_values['status_code'] = ''
                     try:
-                        self.column_values['httpversion'] = line['http'][
+                        self.flow.httpversion = line['http'][
                             'protocol'
                         ]
                     except KeyError:
-                        self.column_values['httpversion'] = ''
+                        self.flow.httpversion = ''
                     try:
                         self.column_values['response_body_len'] = line['http'][
                             'length'
@@ -1395,7 +1395,7 @@ class ProfilerProcess(multiprocessing.Process):
                     except KeyError:
                         self.column_values['qtype_name'] = ''
                     # can not find in eve.json:
-                    self.column_values['qclass_name'] = ''
+                    self.flow.qclass_name = ''
                     self.column_values['rcode_name'] = ''
                     self.column_values['answers'] = ''
                     if type(self.column_values['answers']) == str:
@@ -1407,11 +1407,11 @@ class ProfilerProcess(multiprocessing.Process):
             elif self.column_values['type'] == 'tls':
                 if line.get('tls', None):
                     try:
-                        self.column_values['sslversion'] = line['tls'][
+                        self.flow.sslversion = line['tls'][
                             'version'
                         ]
                     except KeyError:
-                        self.column_values['sslversion'] = ''
+                        self.flow.sslversion = ''
                     try:
                         self.column_values['subject'] = line['tls']['subject']
                     except KeyError:
@@ -1603,10 +1603,10 @@ class ProfilerProcess(multiprocessing.Process):
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
         to_send = {
-            'uid': self.uid,
-            'server_addr': self.column_values.get('server_addr', False),
-            'client_addr': self.column_values.get('client_addr', False),
-            'requested_addr': self.column_values.get('requested_addr', False),
+            'uid': self.flow.uid,
+            'server_addr': self.flow.server_addr or False,
+            'client_addr': self.flow.client_addr or False,
+            'requested_addr': self.flow.requested_addr or False,
             'profileid': self.profileid,
             'twid': __database__.get_timewindow(epoch_time, self.profileid),
             'ts': epoch_time
@@ -1699,181 +1699,86 @@ class ProfilerProcess(multiprocessing.Process):
     def handle_conn(self):
         role = 'Client'
 
-        tupleid = f'{self.daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        tupleid = f'{self.daddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
         # Compute the symbol for this flow, for this TW, for this profile.
         # The symbol is based on the 'letters' of the original Startosphere ips tool
         symbol = self.compute_symbol('OutTuples')
         # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
         # Add the out tuple
         __database__.add_tuple(
-            self.profileid, self.twid, tupleid, symbol, role, self.flow.starttime, self.uid
+            self.profileid, self.twid, tupleid, symbol, role, self.flow.starttime, self.flow.uid
         )
         # Add the dstip
-        __database__.add_ips(
-            self.profileid, self.twid, self.daddr_as_obj, self.column_values, role
-        )
+        __database__.add_ips(self.profileid, self.twid, self.daddr_as_obj, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(
-            self.profileid,
-            self.twid,
-            self.daddr_as_obj,
-            self.column_values,
-            role,
-            port_type,
-        )
+        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
         # Add the srcport
         port_type = 'Src'
-        __database__.add_port(
-            self.profileid,
-            self.twid,
-            self.daddr_as_obj,
-            self.column_values,
-            role,
-            port_type,
-        )
+        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
         # Add the flow with all the fields interpreted
         __database__.add_flow(
+            self.flow,
             profileid=self.profileid,
             twid=self.twid,
-            stime=self.flow.starttime,
-            dur=self.column_values['dur'],
-            saddr=str(self.saddr_as_obj),
-            sport=self.column_values['sport'],
-            daddr=str(self.daddr_as_obj),
-            dport=self.column_values['dport'],
-            proto=self.column_values['proto'],
-            state=self.column_values['state'],
-            pkts=self.column_values['pkts'],
-            allbytes=self.column_values['bytes'],
-            spkts=self.column_values['spkts'],
-            sbytes=self.column_values['sbytes'],
-            appproto=self.column_values['appproto'],
-            smac=self.column_values.get('smac',''),
-            dmac=self.column_values.get('dmac',''),
-            uid=self.uid,
             label=self.label,
-            flow_type=self.flow_type,
         )
-        self.publish_to_new_MAC(self.column_values.get('smac'), self.flow.saddr)
-        self.publish_to_new_MAC(self.column_values.get('dmac'), self.flow.daddr)
+        self.publish_to_new_MAC(self.flow.smac, self.flow.saddr)
+        self.publish_to_new_MAC(self.flow.dmac, self.flow.daddr)
 
     def handle_dns(self):
         __database__.add_out_dns(
             self.profileid,
             self.twid,
-            self.column_values['daddr'],
-            self.flow.starttime,
-            self.flow_type,
-            self.uid,
-            self.column_values['query'],
-            self.column_values['qclass_name'],
-            self.column_values['qtype_name'],
-            self.column_values['rcode_name'],
-            self.column_values['answers'],
-            self.column_values['TTLs']
+            self.flow
         )
 
     def handle_http(self):
         __database__.add_out_http(
-            self.flow.daddr,
+            self.flow,
             self.profileid,
             self.twid,
-            self.flow.starttime,
-            self.flow_type,
-            self.uid,
-            self.column_values['method'],
-            self.column_values['host'],
-            self.column_values['uri'],
-            self.column_values['httpversion'],
-            self.column_values['user_agent'],
-            self.column_values['request_body_len'],
-            self.column_values['response_body_len'],
-            self.column_values['status_code'],
-            self.column_values['status_msg'],
-            self.column_values['resp_mime_types'],
-            self.column_values['resp_fuids'],
         )
 
     def handle_ssl(self):
         __database__.add_out_ssl(
             self.profileid,
             self.twid,
-            self.flow.starttime,
-            self.daddr_as_obj,
-            self.column_values['dport'],
-            self.flow_type,
-            self.uid,
-            self.column_values['sslversion'],
-            self.column_values['cipher'],
-            self.column_values['resumed'],
-            self.column_values['established'],
-            self.column_values['cert_chain_fuids'],
-            self.column_values['client_cert_chain_fuids'],
-            self.column_values['subject'],
-            self.column_values['issuer'],
-            self.column_values['validation_status'],
-            self.column_values['curve'],
-            self.column_values['server_name'],
-            self.column_values['ja3'],
-            self.column_values['ja3s'],
-            self.column_values['is_DoH'],
+            self.flow
         )
 
     def handle_ssh(self):
         __database__.add_out_ssh(
             self.profileid,
             self.twid,
-            self.flow.starttime,
-            self.flow_type,
-            self.uid,
-            self.column_values['version'],
-            self.column_values['auth_attempts'],
-            self.column_values['auth_success'],
-            self.column_values['client'],
-            self.column_values['server'],
-            self.column_values['cipher_alg'],
-            self.column_values['mac_alg'],
-            self.column_values['compression_alg'],
-            self.column_values['kex_alg'],
-            self.column_values['host_key_alg'],
-            self.column_values['host_key'],
-            self.flow.daddr
+            self.flow
         )
 
     def handle_notice(self):
         __database__.add_out_notice(
                 self.profileid,
                 self.twid,
-                self.flow.starttime,
-                self.flow.daddr,
-                self.column_values['sport'],
-                self.column_values['dport'],
-                self.column_values['note'],
-                self.column_values['msg'],
-                self.column_values['scanned_port'],
-                self.column_values['scanning_ip'],
-                self.uid,
+                self.flow
         )
 
-        if 'Gateway_addr_identified' in self.column_values['note']:
+        if 'Gateway_addr_identified' in self.flow.note:
             # get the gw addr form the msg
-            gw_addr = self.column_values['msg'].split(': ')[-1].strip()
+            gw_addr = self.flow.msg.split(': ')[-1].strip()
             __database__.set_default_gateway("IP", gw_addr)
 
     def handle_ftp(self):
-        if used_port := self.column_values['used_port']:
+        if used_port := self.flow.used_port:
             __database__.set_ftp_port(used_port)
 
     def handle_smtp(self):
         to_send = {
-                'uid': self.uid,
+                'uid': self.flow.uid,
                 'daddr': self.flow.daddr,
                 'saddr': self.flow.saddr,
                 'profileid': self.profileid,
                 'twid': self.twid,
                 'ts': self.flow.starttime,
-                'last_reply': self.column_values['last_reply'],
+                'last_reply': self.flow.last_reply,
             }
         to_send = json.dumps(to_send)
         __database__.publish('new_smtp', to_send)
@@ -1885,7 +1790,7 @@ class ProfilerProcess(multiprocessing.Process):
         # they are not actual flows to add in slips,
         # they are info about some ips derived by zeek from the flows
         execluded_flows = ('software')
-        if self.flow_type in execluded_flows:
+        if self.flow.type_ in execluded_flows:
             return
         rev_profileid, rev_twid = self.get_rev_profile()
         self.store_features_going_in(rev_profileid, rev_twid)
@@ -1893,22 +1798,19 @@ class ProfilerProcess(multiprocessing.Process):
     def handle_software(self):
         __database__.add_software_to_profile(
             self.profileid,
-            self.column_values['software_type'],
-            self.column_values['version.major'],
-            self.column_values['version.minor'],
-            self.column_values['uid']
+            self.flow
         )
         self.publish_to_new_software()
 
     def handle_dhcp(self):
-        if self.column_values.get('mac', False):
+        if self.flow.mac:
             # send this to ip_info module to get vendor info about this MAC
             self.publish_to_new_MAC(
-                self.column_values.get('mac', False),
+                self.flow.mac or False,
                 self.flow.saddr,
-                host_name=(self.column_values.get('host_name', False))
+                host_name=(self.flow.host_name or False)
             )
-        if server_addr := self.column_values.get('server_addr', False):
+        if server_addr := self.flow.server_addr or False:
             __database__.store_dhcp_server(server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
@@ -1917,14 +1819,14 @@ class ProfilerProcess(multiprocessing.Process):
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
         to_send = {
-            'uid': self.uid,
+            'uid': self.flow.uid,
             'daddr': self.flow.daddr,
             'saddr': self.flow.saddr,
-            'size': self.column_values['size'],
-            'md5': self.column_values['md5'],
-            'sha1': self.column_values['sha1'],
-            'analyzers': self.column_values['analyzers'],
-            'source': self.column_values['source'],
+            'size': self.flow.size,
+            'md5': self.flow.md5,
+            'sha1': self.flow.sha1,
+            'analyzers': self.flow.analyzers,
+            'source': self.flow.source,
             'profileid': self.profileid,
             'twid': self.twid,
             'ts': self.flow.starttime,
@@ -1934,14 +1836,14 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_arp(self):
         to_send = {
-            'uid': self.uid,
+            'uid': self.flow.uid,
             'daddr': self.flow.daddr,
             'saddr': self.flow.saddr,
-            'dst_mac': self.column_values['dst_mac'],
-            'src_mac': self.column_values['src_mac'],
-            'dst_hw': self.column_values['dst_hw'],
-            'src_hw': self.column_values['src_hw'],
-            'operation': self.column_values['operation'],
+            'dst_mac': self.flow.dmac,
+            'src_mac': self.smac,
+            'dst_hw': self.dst_hw,
+            'src_hw': self.src_hw,
+            'operation': self.flow.operation,
             'ts': self.flow.starttime,
             'profileid': self.profileid,
             'twid': self.twid,
@@ -1951,10 +1853,10 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_arp', to_send)
 
         self.publish_to_new_MAC(
-            self.column_values['dst_mac'], self.flow.daddr
+            self.flow.dmac, self.flow.daddr
         )
         self.publish_to_new_MAC(
-            self.column_values['src_mac'], self.flow.saddr
+            self.flow.smac, self.flow.saddr
         )
 
         # Add the flow with all the fields interpreted
@@ -1963,10 +1865,10 @@ class ProfilerProcess(multiprocessing.Process):
             twid=self.twid,
             stime=self.flow.starttime,
             dur='0',
-            saddr=str(self.saddr_as_obj),
-            daddr=str(self.daddr_as_obj),
+            saddr=self.flow.saddr,
+            daddr=self.flow.daddr,
             proto='ARP',
-            uid=self.uid,
+            uid=self.flow.uid,
             flow_type='arp'
         )
 
@@ -1975,14 +1877,14 @@ class ProfilerProcess(multiprocessing.Process):
         handles weird.log zeek flows
         """
         to_send = {
-            'uid': self.uid,
+            'uid': self.flow.uid,
             'ts': self.flow.starttime,
             'daddr': self.flow.daddr,
             'saddr': self.flow.saddr,
             'profileid': self.profileid,
             'twid': self.twid,
-            'name': self.column_values['name'],
-            'addl': self.column_values['addl']
+            'name': self.flow.name,
+            'addl': self.flow.addl
         }
         to_send = json.dumps(to_send)
         __database__.publish('new_weird', to_send)
@@ -1990,15 +1892,15 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_tunnel(self):
         to_send = {
-            'uid': self.uid,
+            'uid': self.flow.uid,
             'ts': self.flow.starttime,
             'daddr': self.daddr,
             'profileid': self.profileid,
             'twid': self.twid,
-            'sport': self.column_values['sport'],
-            'dport': self.column_values['dport'],
-            'action': self.column_values['action'],
-            'tunnel_type': self.column_values['tunnel_type'],
+            'sport': self.flow.sport,
+            'dport': self.flow.dport,
+            'action': self.flow.action,
+            'tunnel_type': self.flow.tunnel_type,
 
         }
         to_send = json.dumps(to_send)
@@ -2058,58 +1960,28 @@ class ProfilerProcess(multiprocessing.Process):
         symbol = self.compute_symbol('InTuples')
 
         # Add the src tuple using the src ip, and dst port
-        tupleid = f'{self.saddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        tupleid = f'{self.saddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
         role = 'Server'
         # create the intuple
         __database__.add_tuple(
-            profileid, twid, tupleid, symbol, role, self.flow.starttime, self.uid
+            profileid, twid, tupleid, symbol, role, self.flow.starttime, self.flow.uid
         )
 
         # Add the srcip and srcport
-        __database__.add_ips(
-            profileid, twid, self.saddr_as_obj, self.column_values, role
-        )
+        __database__.add_ips(profileid, twid,self.flow, role)
         port_type = 'Src'
-        __database__.add_port(
-            profileid,
-            twid,
-            self.daddr_as_obj,
-            self.column_values,
-            role,
-            port_type,
-        )
+        __database__.add_port(profileid, twid, self.flow, role, port_type)
 
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(
-            profileid,
-            twid,
-            self.daddr_as_obj,
-            self.column_values,
-            role,
-            port_type,
-        )
+        __database__.add_port(profileid, twid,self.flow, role, port_type)
 
         # Add the flow with all the fields interpreted
         __database__.add_flow(
+            self.flow,
             profileid=profileid,
             twid=twid,
-            stime=self.flow.starttime,
-            dur=self.column_values['dur'],
-            saddr=str(self.saddr_as_obj),
-            sport=self.column_values['sport'],
-            daddr=str(self.daddr_as_obj),
-            dport=self.column_values['dport'],
-            proto=self.column_values['proto'],
-            state=self.column_values['state'],
-            pkts=self.column_values['pkts'],
-            allbytes=self.column_values['bytes'],
-            spkts=self.column_values['spkts'],
-            sbytes=self.column_values['sbytes'],
-            appproto=self.column_values['appproto'],
-            uid=self.uid,
             label=self.label,
-            flow_type=self.flow.type_
         )
         __database__.markProfileTWAsModified(profileid, twid, '')
 
@@ -2123,11 +1995,11 @@ class ProfilerProcess(multiprocessing.Process):
         Here we do not apply any detection model, we just create the letters
         as one more feature twid is the starttime of the flow
         """
-        tupleid = f'{self.daddr_as_obj}-{self.column_values["dport"]}-{self.column_values["proto"]}'
+        tupleid = f'{self.daddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
 
         # current_time = self.column_values['starttime']
-        current_duration = self.column_values['dur']
-        current_size = self.column_values['bytes']
+        current_duration = self.flow.dur
+        current_size = self.flow.bytes
 
         try:
             current_duration = float(current_duration)
@@ -2336,8 +2208,7 @@ class ProfilerProcess(multiprocessing.Process):
                     letter,
                     timechar,
                 ),
-                3,
-                0,
+                3, 0,
             )
             # p = __database__.end_profiling(p)
             symbol = zeros + letter + timechar
