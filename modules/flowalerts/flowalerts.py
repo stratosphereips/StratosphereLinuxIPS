@@ -49,6 +49,7 @@ class Module(Module, multiprocessing.Process):
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
         self.c10 = __database__.subscribe('new_weird')
+        self.c11 = __database__.subscribe('new_tunnel')
         self.whitelist = Whitelist(outputqueue, redis_port)
         # helper contains all functions used to set evidence
         self.helper = Helper()
@@ -1583,6 +1584,20 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 uid
             )
+    def check_GRE_tunnel(self, tunnel_flow: dict):
+        """
+        Detects GRE tunnels
+        @param tunnel_flow: dict containing tunnel zeek flow
+        @return: None
+        """
+        tunnel_type = tunnel_flow['tunnel_type']
+
+        if tunnel_type != 'Tunnel::GRE':
+            return
+
+        self.helper.set_evidence_GRE_tunnel(
+            tunnel_flow
+        )
 
     def check_non_ssl_port_443_conns(
             self,
@@ -2166,7 +2181,14 @@ class Module(Module, multiprocessing.Process):
                     msg = json.loads(message['data'])
                     self.check_weird_http_method(msg)
 
+                message = __database__.get_message(self.c11)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
 
+                if utils.is_msg_intended_for(message, 'new_tunnel'):
+                    msg = json.loads(message['data'])
+                    self.check_GRE_tunnel(msg)
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True

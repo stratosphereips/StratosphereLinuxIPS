@@ -43,7 +43,6 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
-        self.ctr = 0
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -628,7 +627,14 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'syslog.log' in new_line['type']:
             self.column_values['type'] = 'syslog'
         elif 'tunnel.log' in new_line['type']:
-            self.column_values['type'] = 'tunnel'
+            self.column_values.update({
+                'type': 'tunnel',
+                'sport': line[3],
+                'dport': line[5],
+                'tunnel_type': line[6],
+                'action': line[7],
+            })
+
         elif 'notice.log' in new_line['type']:
             # fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
@@ -902,7 +908,13 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'syslog' in file_type:
             self.column_values.update({'type': 'syslog'})
         elif 'tunnel' in file_type:
-            self.column_values.update({'type': 'tunnel'})
+            self.column_values.update({
+                'type': 'tunnel',
+                'sport': line.get('id.orig_p', ''),
+                'dport': line.get('id.resp_p', ''),
+                'tunnel_type': line.get('tunnel_type', ''),
+                'action': line.get('action', ''),
+            })
         elif 'notice' in file_type:
             """Parse the fields we're interested in in the notice.log file"""
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
@@ -1523,7 +1535,8 @@ class ProfilerProcess(multiprocessing.Process):
             'ftp',
             'smtp',
             'software',
-            'weird'
+            'weird',
+            'tunnel'
         )
 
         return bool(
@@ -1983,6 +1996,23 @@ class ProfilerProcess(multiprocessing.Process):
         to_send = json.dumps(to_send)
         __database__.publish('new_weird', to_send)
 
+
+    def handle_tunnel(self):
+        to_send = {
+            'uid': self.uid,
+            'ts': self.starttime,
+            'daddr': self.daddr,
+            'profileid': self.profileid,
+            'twid': self.twid,
+            'sport': self.column_values['sport'],
+            'dport': self.column_values['dport'],
+            'action': self.column_values['action'],
+            'tunnel_type': self.column_values['tunnel_type'],
+
+        }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_tunnel', to_send)
+
     def store_features_going_out(self):
         """
         function for adding the features going out of the profile
@@ -2004,6 +2034,7 @@ class ProfilerProcess(multiprocessing.Process):
             'dhcp': self.handle_dhcp,
             'software': self.handle_software,
             'weird': self.handle_weird,
+            'tunnel': self.handle_tunnel,
         }
 
         try:

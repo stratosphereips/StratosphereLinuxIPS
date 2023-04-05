@@ -58,6 +58,7 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_data_request',
         'p2p_gopy',
         'report_to_peers',
+        'new_tunnel',
     }
 
     """ Database object management """
@@ -1195,7 +1196,7 @@ class Database(ProfilingFlowsDatabase, object):
                         twid = self.addNewTW(profileid, new_start)
                         self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
-                                # Now get the id of the last TW so we can return it
+                        # Now get the id of the last TW so we can return it
                 else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(

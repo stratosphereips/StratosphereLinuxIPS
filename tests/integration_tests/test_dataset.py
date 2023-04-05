@@ -224,6 +224,7 @@ def test_binetflow(
                 'multiple empty HTTP connections to bing.com',
                 'suspicious user-agent',
                 'download of an executable',
+                'GRE tunnel'
             ],
             'test14-malicious-zeek-dir/',
             6670
