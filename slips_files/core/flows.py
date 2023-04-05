@@ -40,3 +40,27 @@ class Conn:
         self.pkts: int =  self.spkts + self.dpkts
         self.bytes: int =  self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
+
+@dataclass
+class DNS:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+
+    query: str
+
+    qclass_name: str
+    qtype_name: str
+    rcode_name: str
+
+    answers: str
+    TTLs: str
+
+    type_: str = 'dns'
+
+    def __post_init__(self) -> None:
+        # If the answer is only 1, Zeek gives a string
+        # so convert to a list
+        self.answers = [self.answers] if type(self.answers) == str else self.answers
