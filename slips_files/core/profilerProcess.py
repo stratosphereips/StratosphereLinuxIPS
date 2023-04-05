@@ -1536,7 +1536,8 @@ class ProfilerProcess(multiprocessing.Process):
             'ftp',
             'smtp',
             'software',
-            'weird'
+            'weird',
+            'tunnel'
         )
 
         return bool(
@@ -1996,6 +1997,23 @@ class ProfilerProcess(multiprocessing.Process):
         to_send = json.dumps(to_send)
         __database__.publish('new_weird', to_send)
 
+
+    def handle_tunnel(self):
+        to_send = {
+            'uid': self.uid,
+            'ts': self.starttime,
+            'daddr': self.daddr,
+            'profileid': self.profileid,
+            'twid': self.twid,
+            'sport': self.column_values['sport'],
+            'dport': self.column_values['dport'],
+            'action': self.column_values['action'],
+            'tunnel_type': self.column_values['tunnel_type'],
+
+        }
+        to_send = json.dumps(to_send)
+        __database__.publish('new_tunnel', to_send)
+
     def store_features_going_out(self):
         """
         function for adding the features going out of the profile
@@ -2017,6 +2035,7 @@ class ProfilerProcess(multiprocessing.Process):
             'dhcp': self.handle_dhcp,
             'software': self.handle_software,
             'weird': self.handle_weird,
+            'tunnel': self.handle_tunnel,
         }
 
         try:
