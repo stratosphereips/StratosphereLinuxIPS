@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn
+from slips_files.core.flows import Conn, DNS
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -757,28 +757,22 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('conn_state', ''),
                 line.get('history', ''),
             )
-            print(f"@@@@@@@@@@@@@@@@@@  {self.flow}")
-
             # orig_bytes: The number of payload bytes the src sent.
             # orig_ip_bytes: the length of the header + the payload
 
         elif 'dns' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'dns',
-                    'query': line.get('query', ''),
-                    'qclass_name': line.get('qclass_name', ''),
-                    'qtype_name': line.get('qtype_name', ''),
-                    'rcode_name': line.get('rcode_name', ''),
-                    'answers': line.get('answers', ''),
-                    'TTLs': line.get('TTLs', ''),
-                }
+            self.flow: DNS = DNS(
+                starttime,
+                line.get('uid', False),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+                line.get('qclass_name', ''),
+                line.get('qtype_name', ''),
+                line.get('rcode_name', ''),
+                line.get('answers', ''),
+                line.get('TTLs', ''),
             )
-
-            if type(self.column_values['answers']) == str:
-                # If the answer is only 1, Zeek gives a string
-                # so convert to a list
-                self.column_values['answers'] = [self.column_values['answers']]
+            #todo use it
 
         elif 'http' in file_type:
             self.column_values.update(
