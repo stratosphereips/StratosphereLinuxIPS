@@ -507,9 +507,11 @@ class ProfilingFlowsDatabase(object):
 
         try:
             self.print(
-                f'Add_tuple called with profileid {profileid}, twid {twid}, tupleid {tupleid}, data {data_tuple}',
-                3,
-                0,
+                f'Add_tuple called with profileid {profileid}, '
+                f'twid {twid}, '
+                f'tupleid {tupleid}, '
+                f'data {data_tuple}',
+                3, 0
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
@@ -525,16 +527,15 @@ class ProfilingFlowsDatabase(object):
                 tuples[tupleid]
                 # Disasemble the input
                 self.print(
-                    f'Not the first time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}. Add the symbol: {symbol_to_add}. Store previous_times: {previous_two_timestamps}. Prev Data: {tuples}',
-                    3,
-                    0,
+                    f'Not the first time for tuple {tupleid} as an {direction} for '
+                    f'{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. '
+                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {tuples}',
+                    3, 0,
                 )
                 # Get the last symbols of letters in the DB
                 prev_symbols = tuples[tupleid][0]
                 # Add it to form the string of letters
                 new_symbol = f'{prev_symbols}{symbol_to_add}'
-                # Bundle the data together
-                new_data = (new_symbol, previous_two_timestamps)
                 # analyze behavioral model with lstm model if the length is divided by 3 -
                 # so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
@@ -548,26 +549,27 @@ class ProfilingFlowsDatabase(object):
                     }
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
-                tuples[tupleid] = new_data
+
+                tuples[tupleid] = (new_symbol, previous_two_timestamps)
                 self.print(f'\tLetters so far for tuple {tupleid}: {new_symbol}', 3, 0)
                 tuples = json.dumps(tuples)
             except (TypeError, KeyError):
-                # TODO check that this condition is triggered correctly only for the first case and not the rest after...
+                # TODO check that this condition is triggered correctly
+                #  only for the first case and not the rest after...
                 # There was no previous data stored in the DB
                 self.print(
                     f'First time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}',
-                    3,
-                    0,
+                    3, 0,
                 )
                 # Here get the info from the ipinfo key
-                new_data = (symbol_to_add, previous_two_timestamps)
-                tuples[tupleid] = new_data
+                tuples[tupleid] = (symbol_to_add, previous_two_timestamps)
                 # Convet the dictionary to json
                 tuples = json.dumps(tuples)
             # Store the new data on the db
             self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
+
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
