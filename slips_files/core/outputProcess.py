@@ -252,6 +252,10 @@ class OutputProcess(multiprocessing.Process):
         if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
             # we don't know how to get the total number of flows slips is going to process, because they're growing
             return
+        if self.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
+            return
 
         total_flows = int(__database__.get_total_flows())
         # the bar_format arg is to disable ETA and unit display

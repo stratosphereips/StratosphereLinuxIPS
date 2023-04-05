@@ -152,7 +152,10 @@ class Checker:
     
     def check_output_redirection(self) -> tuple:
         """
-        Determine where slips will place stdout, stderr and logfile based on slips mode
+        Determine where slips will place stdout,
+         stderr and logfile based on slips mode
+         @return (current_stdout, stderr, slips_logfile)
+         current_stdout will be '' if it's not redirected to a file
         """
         # lsof will provide a list of all open fds belonging to slips
         command = f'lsof -p {self.main.pid}'
