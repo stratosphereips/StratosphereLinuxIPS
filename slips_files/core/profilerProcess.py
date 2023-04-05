@@ -1709,7 +1709,7 @@ class ProfilerProcess(multiprocessing.Process):
             self.profileid, self.twid, tupleid, symbol, role, self.flow.starttime, self.flow.uid
         )
         # Add the dstip
-        __database__.add_ips(self.profileid, self.twid, self.daddr_as_obj, self.flow, role)
+        __database__.add_ips(self.profileid, self.twid, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
         __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
@@ -1968,7 +1968,7 @@ class ProfilerProcess(multiprocessing.Process):
         )
 
         # Add the srcip and srcport
-        __database__.add_ips(profileid, twid,self.flow, role)
+        __database__.add_ips(profileid, twid, self.flow, role)
         port_type = 'Src'
         __database__.add_port(profileid, twid, self.flow, role, port_type)
 
