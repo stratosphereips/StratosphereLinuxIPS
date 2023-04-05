@@ -628,7 +628,14 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'syslog.log' in new_line['type']:
             self.column_values['type'] = 'syslog'
         elif 'tunnel.log' in new_line['type']:
-            self.column_values['type'] = 'tunnel'
+            self.column_values.update({
+                'type' : 'tunnel',
+                'sport': line[3],
+                'dport': line[5],
+                'tunnel_type': line[6],
+                'action': line[7],
+            })
+
         elif 'notice.log' in new_line['type']:
             # fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
             # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
@@ -902,7 +909,13 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'syslog' in file_type:
             self.column_values.update({'type': 'syslog'})
         elif 'tunnel' in file_type:
-            self.column_values.update({'type': 'tunnel'})
+            self.column_values.update({
+                'type': 'tunnel',
+                'sport': line.get('id.orig_p', ''),
+                'dport': line.get('id.resp_p', ''),
+                'tunnel_type': line.get('tunnel_type', ''),
+                'action': line.get('action', ''),
+            })
         elif 'notice' in file_type:
             """Parse the fields we're interested in in the notice.log file"""
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
