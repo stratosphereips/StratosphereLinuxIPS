@@ -358,7 +358,7 @@ class ProfilingFlowsDatabase(object):
 
         uid = flow.uid
         starttime = str(flow.starttime)
-        ip = self.flow.daddr if role=='Client' else self.flow.saddr
+        ip = flow.daddr if role=='Client' else flow.saddr
 
         """
         Depending if the traffic is going out or not, we are Client or Server
@@ -384,16 +384,16 @@ class ProfilingFlowsDatabase(object):
         # OTH means that we didnt see the true src ip and dst ip
         if flow.state != 'OTH':
             self.ask_for_ip_info(flow.saddr,
-                                 flow.profileid,
-                                 flow.twid,
+                                 profileid,
+                                 twid,
                                  flow.proto.upper(),
                                  flow.starttime,
                                  flow.uid,
                                  'srcip',
                                  daddr=flow.daddr)
             self.ask_for_ip_info(flow.daddr,
-                                 flow.profileid,
-                                 flow.twid,
+                                 profileid,
+                                 twid,
                                  flow.proto.upper(),
                                  flow.starttime,
                                  flow.uid,
@@ -403,7 +403,7 @@ class ProfilingFlowsDatabase(object):
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.getFinalStateFromFlags(flwo.state, flow.pkts)
+        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
 
         # Get the previous data about this key
         old_profileid_twid_data = self.getDataFromProfileTW(
@@ -799,62 +799,46 @@ class ProfilingFlowsDatabase(object):
 
     def add_flow(
         self,
+        flow,
         profileid='',
         twid='',
-        stime='',
-        dur='',
-        saddr='',
-        sport='',
-        daddr='',
-        dport='',
-        proto='',
-        state='',
-        pkts='',
-        allbytes='',
-        spkts='',
-        sbytes='',
-        appproto='',
-        smac='',
-        dmac='',
-        uid='',
         label='',
-        flow_type='',
     ):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
         : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
-        summaryState = self.getFinalStateFromFlags(state, pkts)
-        flow = {
-            'ts': stime,
-            'dur': dur,
-            'saddr': saddr,
-            'sport': sport,
-            'daddr': daddr,
-            'dport': dport,
-            'proto': proto,
-            'origstate': state,
+        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
+        flow_dict = {
+            'ts': flow.starttime,
+            'dur': flow.dur,
+            'saddr': flow.saddr,
+            'sport': flow.sport,
+            'daddr': flow.daddr,
+            'dport': flow.dport,
+            'proto': flow.proto,
+            'origstate': flow.state,
             'state': summaryState,
-            'pkts': pkts,
-            'allbytes': allbytes,
-            'spkts': spkts,
-            'sbytes': sbytes,
-            'appproto': appproto,
-            'smac': smac,
-            'dmac': dmac,
+            'pkts': flow.pkts,
+            'allbytes': flow.bytes,
+            'spkts': flow.spkts,
+            'sbytes': flow.sbytes,
+            'appproto': flow.appproto,
+            'smac': flow.smac,
+            'dmac': flow.dmac,
             'label': label,
-            'flow_type': flow_type,
+            'flow_type': flow.type_,
             'module_labels': {},
         }
 
         # Convert to json string
-        flow = json.dumps(flow)
+        flow_dict = json.dumps(flow_dict)
         # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}flows',
-            uid,
-            flow,
+            flow.uid,
+            flow_dict,
         )
         if not value:
             # duplicate flow
@@ -865,28 +849,28 @@ class ProfilingFlowsDatabase(object):
         if label:
             self.r.zincrby('labels', 1, label)
 
-        flow = {uid: flow}
+        flow_dict = {flow.uid: flow_dict}
 
         # Get the dictionary and convert to json string
-        flow = json.dumps(flow)
+        flow_dict = json.dumps(flow_dict)
         # Prepare the data to publish.
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': flow,
-            'stime': stime,
+            'flow': flow_dict,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(to_send)
 
         # set the pcap/file stime in the analysis key
         if self.first_flow:
-            self.set_input_metadata({'file_start': stime})
+            self.set_input_metadata({'file_start': flow.starttime})
             self.first_flow = False
 
-        self.set_local_network(saddr)
+        self.set_local_network(flow.saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
-        if flow_type != 'arp':
+        if flow.type_ != 'arp':
             self.publish('new_flow', to_send)
         return True
     def set_local_network(self, saddr):
