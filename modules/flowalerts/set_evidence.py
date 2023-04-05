@@ -337,9 +337,9 @@ class Helper:
             self, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
         
-        if (daddr == '0.0.0.0' or daddr == '255.255.255.255'):
+        if daddr in ['0.0.0.0', '255.255.255.255']:
             return
-        if (saddr == '0.0.0.0' or saddr == '255.255.255.255'):
+        if saddr in ['0.0.0.0', '255.255.255.255']:
             return
 
         confidence = 1
@@ -356,6 +356,41 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid,
                                  twid=twid, uid=uid)
+
+    def set_evidence_GRE_tunnel(
+            self,
+            tunnel_flow
+    ):
+        action = tunnel_flow['action']
+        profileid = tunnel_flow['profileid']
+        daddr = tunnel_flow['daddr']
+        twid = tunnel_flow['twid']
+        ts = tunnel_flow['ts']
+        uid = tunnel_flow['uid']
+        ip_identification = __database__.getIPIdentification(daddr)
+        saddr = profileid.split('_')[-1]
+        description = f'GRE tunnel from {saddr} ' \
+                      f'to {daddr} {ip_identification} ' \
+                      f'tunnel action: {action}'
+        confidence = 1
+        threat_level = 'info'
+        evidence_type = 'GRETunnel'
+        category = 'Info'
+        __database__.setEvidence(
+             evidence_type,
+             'dstip',
+             daddr,
+             threat_level,
+             confidence,
+             description,
+             ts,
+             category,
+             profileid=profileid,
+             twid=twid,
+             uid=uid
+        )
+
+
 
     def set_evidence_vertical_portscan(
             self, msg, scanning_ip, timestamp, profileid, twid, uid
