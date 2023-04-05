@@ -338,7 +338,7 @@ class ProfilingFlowsDatabase(object):
             )
             self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
 
-    def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
+    def add_ips(self, profileid, twid, flow, role):
         """
         Function to add information about an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP
@@ -356,22 +356,9 @@ class ProfilingFlowsDatabase(object):
             module. The information is added by the module directly in the DB.
         """
 
-        # Get the fields
-        dport = columns['dport']
-        totbytes = columns['bytes']
-        pkts = columns['pkts']
-        spkts = columns['spkts']
-        state = columns['state']
-        proto = columns['proto'].upper()
-        daddr = columns['daddr']
-        saddr = columns['saddr']
-        uid = columns['uid']
-        starttime = str(columns['starttime'])
-        ip = str(ip_as_obj)
-        # dpkts = columns.get('dpkts', 0)
-        # sport = columns['sport']
-        # sbytes = columns['sbytes']
-
+        uid = flow.uid
+        starttime = str(flow.starttime)
+        ip = self.flow.daddr if role=='Client' else self.flow.saddr
 
         """
         Depending if the traffic is going out or not, we are Client or Server
@@ -395,15 +382,28 @@ class ProfilingFlowsDatabase(object):
         #############
 
         # OTH means that we didnt see the true src ip and dst ip
-        if columns['state'] != 'OTH':
-            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip', daddr=daddr)
-            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid, 'dstip')
+        if flow.state != 'OTH':
+            self.ask_for_ip_info(flow.saddr,
+                                 flow.profileid,
+                                 flow.twid,
+                                 flow.proto.upper(),
+                                 flow.starttime,
+                                 flow.uid,
+                                 'srcip',
+                                 daddr=flow.daddr)
+            self.ask_for_ip_info(flow.daddr,
+                                 flow.profileid,
+                                 flow.twid,
+                                 flow.proto.upper(),
+                                 flow.starttime,
+                                 flow.uid,
+                                 'dstip')
 
 
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.getFinalStateFromFlags(state, pkts)
+        summaryState = self.getFinalStateFromFlags(flwo.state, flow.pkts)
 
         # Get the previous data about this key
         old_profileid_twid_data = self.getDataFromProfileTW(
@@ -411,25 +411,25 @@ class ProfilingFlowsDatabase(object):
             twid,
             direction,
             summaryState,
-            proto,
+            flow.proto,
             role,
             'IPs',
         )
 
         profileid_twid_data = self.update_ip_info(
             old_profileid_twid_data,
-            pkts,
-            dport,
-            spkts,
-            totbytes,
+            flow.pkts,
+            flow.dport,
+            flow.spkts,
+            flow.bytes,
             ip,
             starttime,
             uid
         )
 
-        proto = proto.upper()
+
         key_name = (
-            f'{direction}IPs{role}{proto}{summaryState}'
+            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
         )
         # Store this data in the profile hash
         self.r.hset(
@@ -696,32 +696,27 @@ class ProfilingFlowsDatabase(object):
         self.check_TW_to_close()
 
     def add_port(
-        self,
-        profileid: str,
-        twid: str,
-        ip_address: str,
-        columns: dict,
-        role: str,
-        port_type: str,
+            self, profileid: str, twid: str, ip_address: str, flow: dict, role: str, port_type: str
     ):
         """
         Store info learned from ports for this flow
         The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
         role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
-        port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
+        port_type: 'Dst' or 'Src'.
+        Depending if this port was a destination port or a source port
         """
         # Extract variables from columns
-        dport = columns['dport']
-        sport = columns['sport']
-        totbytes = int(columns['bytes'])
-        pkts = int(columns['pkts'])
-        state = columns['state']
-        proto = columns['proto'].upper()
-        starttime = str(columns['starttime'])
-        uid = columns['uid']
+        dport = flow.dport
+        sport = flow.sport
+        totbytes = int(flow.bytes)
+        pkts = int(flow.pkts)
+        state = flow.state
+        proto = flow.proto.upper()
+        starttime = str(flow.starttime)
+        uid = flow.uid
         ip = str(ip_address)
-        spkts = columns['spkts']
-        state_hist = columns.get('state_hist','')
+        spkts = flow.spkts
+        state_hist = flow.state_hist
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
