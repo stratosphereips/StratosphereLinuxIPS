@@ -934,86 +934,70 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        stime,
-        daddr_as_obj,
-        dport,
-        flowtype,
-        uid,
-        version,
-        cipher,
-        resumed,
-        established,
-        cert_chain_fuids,
-        client_cert_chain_fuids,
-        subject,
-        issuer,
-        validation_status,
-        curve,
-        server_name,
-        ja3,
-        ja3s,
-        is_DoH,
+        flow
     ):
         """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'version': version,
-            'cipher': cipher,
-            'resumed': resumed,
-            'established': established,
-            'cert_chain_fuids': cert_chain_fuids,
-            'client_cert_chain_fuids': client_cert_chain_fuids,
-            'subject': subject,
-            'issuer': issuer,
-            'validation_status': validation_status,
-            'curve': curve,
-            'server_name': server_name,
-            'daddr': str(daddr_as_obj),
-            'dport': dport,
-            'stime': stime,
-            'ja3': ja3,
-            'ja3s': ja3s,
-            'is_DoH': is_DoH,
+        ssl_flow = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'version': flow.version,
+            'cipher': flow.cipher,
+            'resumed': flow.resumed,
+            'established': flow.established,
+            'cert_chain_fuids': flow.cert_chain_fuids,
+            'client_cert_chain_fuids': flow.client_cert_chain_fuids,
+            'subject': flow.subject,
+            'issuer': flow.issuer,
+            'validation_status': flow.validation_status,
+            'curve': flow.curve,
+            'server_name': flow.server_name,
+            'daddr': flow.daddr,
+            'dport': flow.dport,
+            'stime': flow.starttime,
+            'ja3': flow.ja3,
+            'ja3s': flow.ja3s,
+            'is_DoH': flow.is_DoH,
         }
         # TODO do something with is_doh
         # Convert to json string
-        data = json.dumps(data)
+        ssl_flow = json.dumps(ssl_flow)
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            ssl_flow,
         )
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
+            'flow': ssl_flow,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
-        self.print(f'Adding SSL flow to DB: {data}', 3, 0)
-        # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        self.print(f'Adding SSL flow to DB: {ssl_flow}', 3, 0)
+        # Check if the server_name (SNI) is detected by the threat intelligence.
+        # Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
-        if not server_name:
+        if not flow.server_name:
             return False
 
         # We are giving only new server_name to the threat_intelligence module.
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, str(daddr_as_obj), lookup=server_name)
+        self.give_threat_intelligence(profileid, twid, 'dstip', flow.starttime,
+                                      flow.uid, flow.daddr, lookup=flow.server_name)
 
         # Save new server name in the IPInfo. There might be several server_name per IP.
-        if ipdata := self.getIPData(str(daddr_as_obj)):
+        if ipdata := self.getIPData(flow.daddr):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
 
         SNI_port = {
-            'server_name': server_name,
-            'dport': dport
+            'server_name': flow.server_name,
+            'dport': flow.dport
         }
         # We do not want any duplicates.
         if SNI_port not in sni_ipdata:
@@ -1027,7 +1011,7 @@ class ProfilingFlowsDatabase(object):
                         # add SNI to our db as it has a DNS resolution
                         sni_ipdata.append(SNI_port)
                         self.setInfoForIPs(
-                            str(daddr_as_obj), {'SNI': sni_ipdata}
+                            flow.daddr, {'SNI': sni_ipdata}
                         )
                         break
 

@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP
+from slips_files.core.flows import Conn, DNS, HTTP, SSL
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -795,30 +795,35 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'ssl' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'ssl',
-                    'sslversion': line.get('version', ''),
-                    'sport': line.get('id.orig_p', ','),
-                    'dport': line.get('id.resp_p', ','),
-                    'cipher': line.get('cipher', ''),
-                    'resumed': line.get('resumed', ''),
-                    'established': line.get('established', ''),
-                    'cert_chain_fuids': line.get('cert_chain_fuids', ''),
-                    'client_cert_chain_fuids': line.get(
-                        'client_cert_chain_fuids', ''
-                    ),
-                    'subject': line.get('subject', ''),
-                    'issuer': line.get('issuer', ''),
-                    'validation_status': line.get('validation_status', ''),
-                    'curve': line.get('curve', ''),
-                    'server_name': line.get('server_name', ''),
-                    'ja3': line.get('ja3', ''),
-                    'is_DoH': line.get('is_DoH', 'false'),
-                    'ja3s': line.get('ja3s', ''),
-                }
-            )
+            self.flow: SSL = SSL(
+                starttime,
+                line.get('uid', False),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
 
+                line.get('version', ''),
+                line.get('id.orig_p', ','),
+                line.get('id.resp_p', ','),
+
+                line.get('cipher', ''),
+                line.get('resumed', ''),
+
+                line.get('established', ''),
+                line.get('cert_chain_fuids', ''),
+                line.get('client_cert_chain_fuids', ''),
+
+                line.get('subject', ''),
+
+                line.get('issuer', ''),
+                line.get('validation_status', ''),
+                line.get('curve', ''),
+                line.get('server_name', ''),
+
+                line.get('ja3', ''),
+                line.get('ja3s', ''),
+                line.get('is_DoH', 'false'),
+
+            )
         elif 'ssh' in file_type:
             self.column_values.update(
                 {
