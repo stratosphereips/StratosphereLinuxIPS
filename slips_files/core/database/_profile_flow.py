@@ -1574,93 +1574,84 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        daddr,
-        stime,
-        flowtype,
-        uid,
-        query,
-        qclass_name,
-        qtype_name,
-        rcode_name,
-        answers,
-        ttls,
+        flow
     ):
         """
         Store in the DB a DNS request
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        All the type of flows that are not netflows are stored in a separate hash ordered by flow.uid.
+        The idea is that from the flow.uid of a netflow, you can access which other type of info is related to that flow.uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'query': query,
-            'qclass_name': qclass_name,
-            'qtype_name': qtype_name,
-            'rcode_name': rcode_name,
-            'answers': answers,
-            'ttls': ttls,
-            'stime': stime,
+        dns_flow = {
+            'flow.uid': flow.uid,
+            'type': flow.type_,
+            'query': flow.query,
+            'qclass_name': flow.qclass_name,
+            'flow.qtype_name': flow.qtype_name,
+            'rcode_name': flow.rcode_name,
+            'answers': flow.answers,
+            'ttls': flow.TTLs,
+            'stime': flow.starttime,
         }
 
         # Convert to json string
-        data = json.dumps(data)
+        dns_flow = json.dumps(dns_flow)
         # Set the dns as alternative flow
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            dns_flow,
         )
         # Publish the new dns received
+        # TODO we should just send the DNS obj!
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
-            'rcode_name': rcode_name,
-            'daddr': daddr,
-            'answers': answers
+            'flow': dns_flow,
+            'stime': flow.starttime,
+            'uid': flow.uid,
+            'rcode_name': flow.rcode_name,
+            'daddr': flow.daddr,
+            'answers': flow.answers
         }
 
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_dns_flow', to_send)
-        self.print(f'Adding DNS flow to DB: {data}', 3, 0)
-        # Check if the dns is detected by the threat intelligence.
+        # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,
             twid,
             'dstip',
-            stime,
-            uid,
-            daddr,
-            lookup=query
+            flow.starttime,
+            flow.uid,
+            flow.daddr,
+            lookup=flow.query
         )
 
 
         # Add DNS resolution to the db if there are answers for the query
-        if answers and answers !=  ['-'] :
+        if flow.answers and flow.answers !=  ['-'] :
             srcip = profileid.split('_')[1]
             self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip, twid
+                flow.query, flow.answers, flow.starttime, flow.uid, flow.qtype_name, srcip, twid
             )
             # send each dns answer to TI module
-            for answer in answers:
+            for answer in flow.answers:
                 if 'TXT' in answer:
                     continue
 
                 extra_info = {
                     'is_dns_response': True,
-                    'dns_query': query,
+                    'dns_query': flow.query,
                     'domain': answer,
                 }
                 self.give_threat_intelligence(
                     profileid,
                     twid,
                     'dstip',
-                    stime,
-                    uid,
-                    daddr,
+                    flow.starttime,
+                    flow.uid,
+                    flow.daddr,
                     lookup=answer,
                     extra_info=extra_info
                 )
