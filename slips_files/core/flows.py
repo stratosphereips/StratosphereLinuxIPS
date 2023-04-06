@@ -64,3 +64,28 @@ class DNS:
         # If the answer is only 1, Zeek gives a string
         # so convert to a list
         self.answers = [self.answers] if type(self.answers) == str else self.answers
+
+@dataclass
+class HTTP:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    method: str
+    host: str
+    uri: str
+    version: int
+    user_agent: str
+    request_body_len: int
+    response_body_len: int
+    status_code: str
+    status_msg: str
+    resp_mime_types: str
+    resp_fuids: str
+
+    type_: str = 'http'
+
+    def __post_init__(self) -> None:
+        # If the answer is only 1, Zeek gives a string
+        pass
