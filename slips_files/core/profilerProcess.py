@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS
+from slips_files.core.flows import Conn, DNS, HTTP
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -775,21 +775,23 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'http' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'http',
-                    'method': line.get('method', ''),
-                    'host': line.get('host', ''),
-                    'uri': line.get('uri', ''),
-                    'httpversion': line.get('version', 0),
-                    'user_agent': line.get('user_agent', ''),
-                    'request_body_len': line.get('request_body_len', 0),
-                    'response_body_len': line.get('response_body_len', 0),
-                    'status_code': line.get('status_code', ''),
-                    'status_msg': line.get('status_msg', ''),
-                    'resp_mime_types': line.get('resp_mime_types', ''),
-                    'resp_fuids': line.get('resp_fuids', ''),
-                }
+            self.flow: HTTP = HTTP(
+                starttime,
+                line.get('uid', False),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+
+                line.get('method', ''),
+                line.get('host', ''),
+                line.get('uri', ''),
+                line.get('version', 0),
+                line.get('user_agent', ''),
+                line.get('request_body_len', 0),
+                line.get('response_body_len', 0),
+                line.get('status_code', ''),
+                line.get('status_msg', ''),
+                line.get('resp_mime_types', ''),
+                line.get('resp_fuids', ''),
             )
 
         elif 'ssl' in file_type:
@@ -1729,9 +1731,10 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_http(self):
         __database__.add_out_http(
-            self.flow,
             self.profileid,
             self.twid,
+            self.flow,
+
         )
 
     def handle_ssl(self):
