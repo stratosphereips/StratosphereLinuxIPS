@@ -11,6 +11,7 @@ certifi==2019.11.28
 tensorflow==2.4.1
 colorama==0.4.4
 Keras==2.4.3
+transformers==4.27.4
 validators==0.18.2
 ipwhois==1.2.0
 matplotlib==3.1.2
