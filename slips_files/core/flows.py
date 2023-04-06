@@ -87,5 +87,35 @@ class HTTP:
     type_: str = 'http'
 
     def __post_init__(self) -> None:
-        # If the answer is only 1, Zeek gives a string
         pass
+
+@dataclass
+class SSL:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    version: str
+    sport: str
+    dport: str
+
+    cipher: str
+    resumed: str
+
+    established: str
+    cert_chain_fuids: str
+    client_cert_chain_fuids: str
+
+    subject: str
+
+    issuer: str
+    validation_status: str
+    curve: str
+    server_name: str
+
+    ja3: str
+    ja3s: str
+    is_DoH: str
+
+    type_: str = 'ssl'
