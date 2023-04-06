@@ -1128,78 +1128,82 @@ class ProfilingFlowsDatabase(object):
 
     def add_out_http(
         self,
-        daddr,
         profileid,
         twid,
-        stime,
-        flowtype,
-        uid,
-        method,
-        host,
-        uri,
-        version,
-        user_agent,
-        request_body_len,
-        response_body_len,
-        status_code,
-        status_msg,
-        resp_mime_types,
-        resp_fuids,
+        flow,
     ):
         """
         Store in the DB a http request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'method': method,
-            'host': host,
-            'uri': uri,
-            'version': version,
-            'user_agent': user_agent,
-            'request_body_len': request_body_len,
-            'response_body_len': response_body_len,
-            'status_code': status_code,
-            'status_msg': status_msg,
-            'resp_mime_types': resp_mime_types,
-            'resp_fuids': resp_fuids,
-            'stime': stime,
-            'daddr': daddr,
+        http_flow_dict = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'method': flow.method,
+            'host': flow.host,
+            'uri': flow.uri,
+            'version': flow.version,
+            'user_agent': flow.user_agent,
+            'request_body_len': flow.request_body_len,
+            'response_body_len': flow.response_body_len,
+            'status_code': flow.status_code,
+            'status_msg': flow.status_msg,
+            'resp_mime_types': flow.resp_mime_types,
+            'resp_fuids': flow.resp_fuids,
+            'stime': flow.starttime,
+            'daddr': flow.daddr,
         }
         # Convert to json string
-        data = json.dumps(data)
+        http_flow_dict = json.dumps(http_flow_dict)
 
         self.r.hset(
             f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
-            uid,
-            data,
+            flow.uid,
+            http_flow_dict,
         )
 
         http_flow = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
+            'flow': http_flow_dict,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(http_flow)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
 
-        self.print(f'Adding HTTP flow to DB: {data}', 3, 0)
+        self.print(f'Adding HTTP flow to DB: {http_flow_dict}', 3, 0)
 
         http_flow.pop('flow', None)
-        http_flow['uid'] = uid
+        http_flow['uid'] = flow.uid
 
         # Check if the host domain AND the url is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
-        if len(host) > 2:
-            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=host)
-            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=f'http://{host}{uri}')
+        if len(flow.host) > 2:
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dst',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=flow.host)
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dst',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=f'http://{flow.host}{flow.uri}')
         else:
             # use the daddr since there's no host
-            self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=f'http://{daddr}{uri}')
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dstip',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=f'http://{flow.daddr}{flow.uri}')
 
 
     def add_out_ssh(
