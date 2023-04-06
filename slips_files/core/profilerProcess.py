@@ -766,13 +766,13 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('uid', False),
                 line.get('id.orig_h', ''),
                 line.get('id.resp_h', ''),
+                line.get('query', ''),
                 line.get('qclass_name', ''),
                 line.get('qtype_name', ''),
                 line.get('rcode_name', ''),
                 line.get('answers', ''),
                 line.get('TTLs', ''),
             )
-            #todo use it
 
         elif 'http' in file_type:
             self.column_values.update(
