@@ -869,15 +869,12 @@ class ProfilerProcess(multiprocessing.Process):
 
 
         elif 'dce_rpc' in file_type:
-            self.column_values['type'] = 'dce_rpc'
+            pass
         elif 'dnp3' in file_type:
-            self.column_values['type'] = 'dnp3'
+            pass
         elif 'ftp' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'ftp',
-                    'used_port': line.get('data_channel.resp_p', False),
-                }
+            self.flow: FTP = FTP(
+                line.get('data_channel.resp_p', False),
             )
 
         elif 'kerberos' in file_type:
