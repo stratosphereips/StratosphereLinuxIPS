@@ -170,13 +170,22 @@ class DHCP:
 @dataclass
 class FTP:
     starttime: float
-    uids: List[str]
+    uid: List[str]
     saddr: str
     daddr: str
 
     used_port: int
     type_: str = "ftp"
 
+@dataclass
+class SMTP:
+    starttime: float
+    uid: List[str]
+    saddr: str
+    daddr: str
+
+    last_reply: str
+    type_: str = "smtp"
 
 
 

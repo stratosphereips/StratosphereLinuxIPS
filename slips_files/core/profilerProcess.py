@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -874,35 +874,45 @@ class ProfilerProcess(multiprocessing.Process):
             pass
         elif 'ftp' in file_type:
             self.flow: FTP = FTP(
+                starttime,
+                line.get('uids', []),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+
                 line.get('data_channel.resp_p', False),
             )
 
         elif 'kerberos' in file_type:
-            self.column_values.update({'type': 'kerberos'})
+            pass
         elif 'mysql' in file_type:
-            self.column_values.update({'type': 'mysql'})
+            pass
         elif 'modbus' in file_type:
-            self.column_values.update({'type': 'modbus'})
+            pass
         elif 'ntlm' in file_type:
-            self.column_values.update({'type': 'ntlm'})
+            pass
         elif 'rdp' in file_type:
-            self.column_values.update({'type': 'rdp'})
+            pass
         elif 'sip' in file_type:
-            self.column_values.update({'type': 'sip'})
+            pass
         elif 'smb_cmd' in file_type:
-            self.column_values.update({'type': 'smb_cmd'})
+            pass
         elif 'smb_files' in file_type:
-            self.column_values.update({'type': 'smb_files'})
+            pass
         elif 'smb_mapping' in file_type:
-            self.column_values.update({'type': 'smb_mapping'})
+            pass
         elif 'smtp' in file_type:
-            self.column_values.update(
-                {'type': 'smtp', 'last_reply': line.get('last_reply', '')}
+            self.flow: SMTP = SMTP(
+                starttime,
+                line.get('uids', []),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+
+                line.get('last_reply', '')
             )
         elif 'socks' in file_type:
-            self.column_values.update({'type': 'socks'})
+            pass
         elif 'syslog' in file_type:
-            self.column_values.update({'type': 'syslog'})
+            pass
         elif 'tunnel' in file_type:
             self.column_values.update({
                 'type': 'tunnel',
