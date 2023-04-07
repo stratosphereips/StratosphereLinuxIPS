@@ -903,7 +903,7 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'smtp' in file_type:
             self.flow: SMTP = SMTP(
                 starttime,
-                line.get('uids', []),
+                line.get('uid', ''),
                 line.get('id.orig_h', ''),
                 line.get('id.resp_h', ''),
 
