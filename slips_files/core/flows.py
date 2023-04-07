@@ -167,4 +167,18 @@ class DHCP:
         # address instead
         if not self.saddr and not self.daddr:
             self.saddr = self.mac
+@dataclass
+class FTP:
+    starttime: float
+    uids: List[str]
+    saddr: str
+    daddr: str
+
+    used_port: int
+    type_: str = "ftp"
+
+
+
+
+
 
