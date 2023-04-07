@@ -1231,47 +1231,42 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        stime,
-        daddr,
-        sport,
-        dport,
-        note,
-        msg,
-        scanned_port,
-        scanning_ip,
-        uid,
+        flow,
     ):
         """ " Send notice.log data to new_notice channel to look for self-signed certificates"""
-        data = {
+        notice_flow = {
             'type': 'notice',
-            'daddr': daddr,
-            'sport': sport,
-            'dport': dport,
-            'note': note,
-            'msg': msg,
-            'scanned_port': scanned_port,
-            'scanning_ip': scanning_ip,
-            'stime': stime,
+            'daddr': flow.daddr,
+            'sport': flow.sport,
+            'dport': flow.dport,
+            'note': flow.note,
+            'msg': flow.msg,
+            'scanned_port': flow.scanned_port,
+            'scanning_ip': flow.scanning_ip,
+            'stime': flow.starttime,
         }
-        data = json.dumps(
-            data
+        notice_flow = json.dumps(
+            notice_flow
         )   # this is going to be sent insidethe to_send dict
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
+            'flow': notice_flow,
+            'stime': flow.starttime,
+            'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            notice_flow,
         )
         self.publish('new_notice', to_send)
-        self.print(f'Adding notice flow to DB: {data}', 3, 0)
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
+        self.print(f'Adding notice flow to DB: {notice_flow}', 3, 0)
+        self.give_threat_intelligence(profileid, twid,
+                                      'dstip', flow.starttime,
+                                      flow.uid, flow.daddr,
+                                      lookup=flow.daddr)
 
     def get_dns_resolution(self, ip):
         """
