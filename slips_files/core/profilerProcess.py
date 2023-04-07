@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -849,32 +849,24 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'irc' in file_type:
-            self.column_values['type'] = 'irc'
+            pass
         elif 'long' in file_type:
-            self.column_values['type'] = 'long'
+            pass
         elif 'dhcp' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'dhcp',
-                    'client_addr': line.get('client_addr', ''),
-                    'server_addr': line.get('server_addr', ''),
-                    'host_name': line.get('host_name', ''),
-                    'mac': line.get('mac', ''),  # this is the client mac
-                    'saddr': line.get('client_addr', ''),
-                    'daddr': line.get('server_addr', ''),
-                    'requested_addr': line.get('requested_addr', ''),
-                }
-            )
-            # self.column_values['domain'] = line.get('domain','')
-            # self.column_values['assigned_addr'] = line.get('assigned_addr','')
+            self.flow: DHCP = DHCP(
+                starttime,
+                line.get('uids', []),
+                line.get('client_addr', ''), #saddr
+                line.get('server_addr', ''), #daddr
 
-            # Some zeek flow don't have saddr or daddr, seen in dhcp.log and notice.log use the mac address instead
-            if (
-                self.column_values['saddr'] == ''
-                and self.flow.daddr == ''
-                and line.get('mac', False)
-            ):
-                self.column_values['saddr'] = line.get('mac', '')
+                line.get('client_addr', ''),
+                line.get('server_addr', ''),
+                line.get('host_name', ''),
+                line.get('mac', ''),  # this is the client mac
+                line.get('requested_addr', ''),
+
+            )
+
 
         elif 'dce_rpc' in file_type:
             self.column_values['type'] = 'dce_rpc'
@@ -1564,8 +1556,7 @@ class ProfilerProcess(multiprocessing.Process):
         Generates a uid and adds it to the flow if none is found
         """
         # This uid check is for when we read things that are not zeek
-
-        if not self.flow.uid:
+        if not( hasattr(self.flow, 'uid') or hasattr(self.flow, 'uids') ):
             # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
             # Zeeks uses human-readable strings in Base62 format, from 112 bits usually.
             # We do base64 with some bits just because we need a fast unique way
@@ -1610,7 +1601,7 @@ class ProfilerProcess(multiprocessing.Process):
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
         to_send = {
-            'uid': self.flow.uid,
+            'uid': self.flow.uids,
             'server_addr': self.flow.server_addr or False,
             'client_addr': self.flow.client_addr or False,
             'requested_addr': self.flow.requested_addr or False,
@@ -1819,7 +1810,7 @@ class ProfilerProcess(multiprocessing.Process):
                 host_name=(self.flow.host_name or False)
             )
         if server_addr := self.flow.server_addr or False:
-            __database__.store_dhcp_server(server_addr)
+            __database__.store_dhcp_server(self.flow.server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
         self.publish_to_new_dhcp()

@@ -667,7 +667,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         if not requested_addr:
             # we are only interested in DHCPREQUEST flows, where a client is requesting an IP
             return
-
+        # this is a list of uids
         uid = flow['uid']
         profileid = flow['profileid']
         twid = flow['twid']
