@@ -2,6 +2,7 @@
 Data classes for all types of flows
 """
 from dataclasses import dataclass
+from typing import List
 from datetime import datetime, timedelta
 @dataclass
 class Conn:
@@ -143,3 +144,27 @@ class SSH:
     host_key: str
 
     type_: str = "ssh"
+
+@dataclass
+class DHCP:
+    starttime: float
+    uids: List[str]
+    saddr: str
+    daddr: str
+
+    client_addr: str
+    server_addr: str
+    host_name: str
+
+    mac: str  # this is the client mac
+    requested_addr: str
+
+    type_: str = "dhcp"
+
+    def __post_init__(self) -> None:
+        # Some zeek flow don't have saddr or daddr,
+        # seen in dhcp.log and notice.log use the mac
+        # address instead
+        if not self.saddr and not self.daddr:
+            self.saddr = self.mac
+
