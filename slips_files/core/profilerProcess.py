@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -825,21 +825,27 @@ class ProfilerProcess(multiprocessing.Process):
 
             )
         elif 'ssh' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'ssh',
-                    'version': line.get('version', ''),
-                    'auth_success': line.get('auth_success', ''),
-                    'auth_attempts': line.get('auth_attempts', ''),
-                    'client': line.get('client', ''),
-                    'server': line.get('server', ''),
-                    'cipher_alg': line.get('cipher_alg', ''),
-                    'mac_alg': line.get('mac_alg', ''),
-                    'compression_alg': line.get('compression_alg', ''),
-                    'kex_alg': line.get('kex_alg', ''),
-                    'host_key_alg': line.get('host_key_alg', ''),
-                    'host_key': line.get('host_key', ''),
-                }
+            self.flow: SSH = SSH(
+                starttime,
+                line.get('uid', False),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+
+                line.get('version', ''),
+                line.get('auth_success', ''),
+                line.get('auth_attempts', ''),
+
+                line.get('client', ''),
+                line.get('server', ''),
+                line.get('cipher_alg', ''),
+                line.get('mac_alg', ''),
+
+                line.get('compression_alg', ''),
+                line.get('kex_alg', ''),
+                line.get('host_key_alg', ''),
+                line.get('host_key', ''),
+
+
             )
 
         elif 'irc' in file_type:
