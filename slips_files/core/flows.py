@@ -4,6 +4,7 @@ Data classes for all types of flows
 from dataclasses import dataclass
 from typing import List
 from datetime import datetime, timedelta
+import json
 @dataclass
 class Conn:
     uid: str
@@ -231,6 +232,32 @@ class Notice:
             # that contains portscan doesn't have
             # a dst field and slips needs it to work
             self.daddr = self.dst or self.saddr
+
+@dataclass
+class Files:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    size: int
+    md5: int
+
+    source: int
+    analyzers: int
+    sha1: int
+
+    tx_hosts: List[str]
+    rx_hosts: str
+
+    type_: str = 'files'
+    def __post_init__(self) -> None:
+        if self.tx_hosts:
+            self.saddr = json.loads(self.tx_hosts[0])
+
+        if self.rx_hosts:
+            self.daddr = json.loads(self.rx_hosts[0])
+
 
 
 

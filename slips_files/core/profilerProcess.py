@@ -19,6 +19,8 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice
+from slips_files.core.flows import Files
+
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -945,25 +947,20 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'files.log' in file_type:
-            """Parse the fields we're interested in in the files.log file"""
-            # the slash before files to distinguish between 'files' in the dir name and file.log
-            if saddr := line.get('tx_hosts', [''])[0]:
-                self.column_values['saddr'] = saddr
+            self.flow: Files = Files(
+                starttime,
+                line.get('conn_uids', [''])[0],
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
 
-            if daddr := line.get('rx_hosts', [''])[0]:
-                self.flow.daddr = daddr
+                line.get('seen_bytes', ''),  # downloaded file size
+                line.get('md5', ''),
+                line.get('source', ''),
+                line.get('analyzers', ''),
+                line.get('sha1', ''),
+                line.get('tx_hosts',''),
+                line.get('rx_hosts',''),
 
-            self.column_values.update(
-                {
-                    'type': 'files',
-                    'uid': line.get('conn_uids', [''])[0],
-                    'size': line.get('seen_bytes', ''),  # downloaded file size
-                    'md5': line.get('md5', ''),
-                    # used for detecting ssl certs
-                    'source': line.get('source', ''),
-                    'analyzers': line.get('analyzers', ''),
-                    'sha1': line.get('sha1', ''),
-                }
             )
         elif 'arp' in file_type:
             self.column_values.update(
