@@ -194,13 +194,44 @@ class Tunnel:
     saddr: str
     daddr: str
 
-    sport: str
-    dport: str
+    sport: int
+    dport: int
 
     tunnel_type: str
     action: str
 
     type_: str = 'tunnel'
+
+@dataclass
+class Notice:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    sport: int
+    dport: int
+
+    note: str
+    msg: str
+
+    scanned_port: str
+    scanning_ip: str
+
+    #TODO srsly what is this?
+    dst: str
+
+    type_: str = 'notice'
+    def __post_init__(self) -> None:
+        # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
+        if not self.saddr:
+            self.saddr = self.scanning_ip
+        if not self.daddr:
+            # set daddr to src for now because the notice
+            # that contains portscan doesn't have
+            # a dst field and slips needs it to work
+            self.daddr = self.dst or self.saddr
+
 
 
 
