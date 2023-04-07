@@ -119,3 +119,27 @@ class SSL:
     is_DoH: str
 
     type_: str = 'ssl'
+
+@dataclass
+class SSH:
+    starttime: float
+    uid: str
+    saddr: str
+    daddr: str
+
+    version: int
+    auth_success: bool
+    auth_attempts: int
+
+    client: str
+    server: str
+    cipher_alg: str
+    mac_alg: str
+
+    compression_alg: str
+    kex_alg: str
+
+    host_key_alg: str
+    host_key: str
+
+    type_: str = "ssh"
