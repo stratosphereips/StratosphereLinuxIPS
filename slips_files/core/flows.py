@@ -170,7 +170,7 @@ class DHCP:
 @dataclass
 class FTP:
     starttime: float
-    uid: List[str]
+    uid: str
     saddr: str
     daddr: str
 
@@ -180,7 +180,7 @@ class FTP:
 @dataclass
 class SMTP:
     starttime: float
-    uid: List[str]
+    uid: str
     saddr: str
     daddr: str
 
