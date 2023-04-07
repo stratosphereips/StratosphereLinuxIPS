@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -928,31 +928,21 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'notice' in file_type:
-            """Parse the fields we're interested in in the notice.log file"""
-            # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
-            self.column_values.update(
-                {
-                    'type': 'notice',
-                    'sport': line.get('id.orig_p', ''),
-                    'dport': line.get('id.resp_p', ''),
-                    # self.column_values['scanned_ip'] = line.get('dst', '')
-                    'note': line.get('note', ''),
-                    'msg': line.get(
-                        'msg', ''
-                    ),  # we,'re looking for self signed certs in this field
-                    'scanned_port': line.get('p', ''),
-                    'scanning_ip': line.get('src', ''),
-                }
-            )
+            self.flow: Notice = Notice(
+                starttime,
+                line.get('uid', ''),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
 
-            # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] == '':
-                self.column_values['saddr'] = line.get('src', '')
-            if self.flow.daddr == '':
-                # set daddr to src for now because the notice that contains portscan doesn't have a dst field and slips needs it to work
-                self.column_values.update(
-                    {'daddr': line.get('dst', self.column_values['saddr'])}
-                )
+                line.get('id.orig_p', ''),
+                line.get('id.resp_p', ''),
+                line.get('note', ''),
+
+                line.get('msg', ''),  # we,'re looking for self signed certs in this field
+                line.get('p', ''),
+                line.get('src', ''),
+                line.get('dst', ''),
+            )
 
         elif 'files.log' in file_type:
             """Parse the fields we're interested in in the files.log file"""
