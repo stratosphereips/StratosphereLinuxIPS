@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
 import multiprocessing
@@ -914,13 +914,19 @@ class ProfilerProcess(multiprocessing.Process):
         elif 'syslog' in file_type:
             pass
         elif 'tunnel' in file_type:
-            self.column_values.update({
-                'type': 'tunnel',
-                'sport': line.get('id.orig_p', ''),
-                'dport': line.get('id.resp_p', ''),
-                'tunnel_type': line.get('tunnel_type', ''),
-                'action': line.get('action', ''),
-            })
+            self.flow: Tunnel = Tunnel(
+                starttime,
+                line.get('uid', ''),
+                line.get('id.orig_h', ''),
+                line.get('id.resp_h', ''),
+
+                line.get('id.orig_p', ''),
+                line.get('id.resp_p', ''),
+
+                line.get('tunnel_type', ''),
+                line.get('action', ''),
+            )
+
         elif 'notice' in file_type:
             """Parse the fields we're interested in in the notice.log file"""
             # notice fields: ts - uid id.orig_h(saddr) - id.orig_p(sport) - id.resp_h(daddr) - id.resp_p(dport) - note - msg
@@ -1900,7 +1906,7 @@ class ProfilerProcess(multiprocessing.Process):
         to_send = {
             'uid': self.flow.uid,
             'ts': self.flow.starttime,
-            'daddr': self.daddr,
+            'daddr': self.flow.daddr,
             'profileid': self.profileid,
             'twid': self.twid,
             'sport': self.flow.sport,

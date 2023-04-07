@@ -187,6 +187,25 @@ class SMTP:
     last_reply: str
     type_: str = "smtp"
 
+@dataclass
+class Tunnel:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    sport: str
+    dport: str
+
+    tunnel_type: str
+    action: str
+
+    type_: str = 'tunnel'
+
+
+
+
+
 
 
 
