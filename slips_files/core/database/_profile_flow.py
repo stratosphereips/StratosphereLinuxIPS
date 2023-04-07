@@ -1175,21 +1175,7 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        stime,
-        flowtype,
-        uid,
-        ssh_version,
-        auth_attempts,
-        auth_success,
-        client,
-        server,
-        cipher_alg,
-        mac_alg,
-        compression_alg,
-        kex_alg,
-        host_key_alg,
-        host_key,
-        daddr,
+        flow,
     ):
         """
         Store in the DB a SSH request
@@ -1198,45 +1184,47 @@ class ProfilingFlowsDatabase(object):
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'version': ssh_version,
-            'auth_attempts': auth_attempts,
-            'auth_success': auth_success,
-            'client': client,
-            'server': server,
-            'cipher_alg': cipher_alg,
-            'mac_alg': mac_alg,
-            'compression_alg': compression_alg,
-            'kex_alg': kex_alg,
-            'host_key_alg': host_key_alg,
-            'host_key': host_key,
-            'stime': stime,
-            'daddr': daddr
+        ssh_flow_dict = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'version': flow.version,
+            'auth_attempts': flow.auth_attempts,
+            'auth_success': flow.auth_success,
+            'client': flow.client,
+            'server': flow.server,
+            'cipher_alg': flow.cipher_alg,
+            'mac_alg': flow.mac_alg,
+            'compression_alg': flow.compression_alg,
+            'kex_alg': flow.kex_alg,
+            'host_key_alg': flow.host_key_alg,
+            'host_key': flow.host_key,
+            'stime': flow.starttime,
+            'daddr': flow.daddr
         }
         # Convert to json string
-        data = json.dumps(data)
+        ssh_flow_dict = json.dumps(ssh_flow_dict)
         # Set the dns as alternative flow
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            ssh_flow_dict,
         )
         # Publish the new dns received
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
+            'flow': ssh_flow_dict,
+            'stime': flow.starttime,
+            'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
-        self.print(f'Adding SSH flow to DB: {data}', 3, 0)
+        self.print(f'Adding SSH flow to DB: {ssh_flow_dict}', 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
+        self.give_threat_intelligence(profileid, twid, 'dstip', flow.starttime,
+                                      flow.uid,
+                                      flow.daddr, lookup=flow.daddr)
 
 
     def add_out_notice(
