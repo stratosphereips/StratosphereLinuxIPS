@@ -26,21 +26,10 @@ class ProfilingFlowsDatabase(object):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-        if (
-            type(ip) == ipaddress.IPv4Address
-            or type(ip) == ipaddress.IPv6Address
-        ):
-            ip = str(ip)
+        if type(ip) in [ipaddress.IPv4Address, ipaddress.IPv6Address]:
+            ip = ip
         data = self.rcache.hget('IPsInfo', ip)
-        if data:
-            # This means the IP was in the database, with or without data
-            # Convert the data
-            data = json.loads(data)
-            # print(f'In the DB: IP {ip}, and data {data}')
-        else:
-            # The IP was not in the DB
-            data = False
-            # print(f'In the DB: IP {ip}, and data {data}')
+        data = json.loads(data) if data else False
         return data
 
     def setNewIP(self, ip: str):
@@ -88,7 +77,7 @@ class ProfilingFlowsDatabase(object):
         is the ip param src or dst
         """
         # if the daddr key arg is not given, we know for sure that the ip given is the daddr
-        daddr = daddr if daddr else ip
+        daddr = daddr or ip
         data_to_send = self.give_threat_intelligence(
             profileid,
             twid,
@@ -123,7 +112,7 @@ class ProfilingFlowsDatabase(object):
 
         # Get the DstIPs data for this tw in this profile
         # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, direction + 'IPs')
+        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
         if not ips_contacted:
             ips_contacted = {}
 
@@ -136,7 +125,7 @@ class ProfilingFlowsDatabase(object):
             ips_contacted[ip] = 1
 
         ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, direction + 'IPs', str(ips_contacted))
+        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
 
     def getFinalStateFromFlags(self, state, pkts):
         """
@@ -257,18 +246,12 @@ class ProfilingFlowsDatabase(object):
                     # TCP. When -z B is not used in argus, states are single words. Most connections are reseted when finished and therefore are established
                     # It can happen that is reseted being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    if int(pkts) <= 3:
-                        return 'Not Established'
-                    else:
-                        return 'Established'
+                    return 'Not Established' if int(pkts) <= 3 else 'Established'
                 elif 'FIN' in pre:
                     # TCP. When -z B is not used in argus, states are single words. Most connections are finished with FIN when finished and therefore are established
                     # It can happen that is finished being not established, but we can't tell without -z b.
                     # So we use as heuristic the amount of packets. If <=3, then is not established because the OS retries 3 times.
-                    if int(pkts) <= 3:
-                        return 'Not Established'
-                    else:
-                        return 'Established'
+                    return 'Not Established' if int(pkts) <= 3 else 'Established'
                 else:
                     """
                     Examples:
@@ -281,12 +264,12 @@ class ProfilingFlowsDatabase(object):
                     """
                     return 'Not Established'
             return None
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getFinalStateFromFlags() in database.py line {exception_line}'
             )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
+            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
 
     def getDataFromProfileTW(
         self,
@@ -322,19 +305,19 @@ class ProfilingFlowsDatabase(object):
             if data:
                 portdata = json.loads(data)
                 value = portdata
-            elif not data:
+            else:
                 self.print(
-                    'There is no data for Key: {}. Profile {} TW {}'.format(
-                        key, profileid, twid
-                    ), 3, 0,
+                    f'There is no data for Key: {key}. Profile {profileid} TW {twid}',
+                    3,
+                    0,
                 )
             return value
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW database.py line {exception_line}'
             )
-            self.outputqueue.put('01|database|[DB] Inst: {}'.format(traceback.print_exc()))
+            self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
 
     def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
         """
@@ -524,9 +507,11 @@ class ProfilingFlowsDatabase(object):
 
         try:
             self.print(
-                'Add_tuple called with profileid {}, twid {}, tupleid {}, data {}'.format(
-                    profileid, twid, tupleid, data_tuple
-                ),3,0,
+                f'Add_tuple called with profileid {profileid}, '
+                f'twid {twid}, '
+                f'tupleid {tupleid}, '
+                f'data {data_tuple}',
+                3, 0
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
@@ -542,23 +527,15 @@ class ProfilingFlowsDatabase(object):
                 tuples[tupleid]
                 # Disasemble the input
                 self.print(
-                    'Not the first time for tuple {} as an {} for {} in TW {}. '
-                    'Add the symbol: {}. Store previous_times: {}. Prev Data: {}'.format(
-                        tupleid,
-                        direction,
-                        profileid,
-                        twid,
-                        symbol_to_add,
-                        previous_two_timestamps,
-                        tuples,
-                    ),3,0,
+                    f'Not the first time for tuple {tupleid} as an {direction} for '
+                    f'{profileid} in TW {twid}. Add the symbol: {symbol_to_add}. '
+                    f'Store previous_times: {previous_two_timestamps}. Prev Data: {tuples}',
+                    3, 0,
                 )
                 # Get the last symbols of letters in the DB
                 prev_symbols = tuples[tupleid][0]
                 # Add it to form the string of letters
                 new_symbol = f'{prev_symbols}{symbol_to_add}'
-                # Bundle the data together
-                new_data = (new_symbol, previous_two_timestamps)
                 # analyze behavioral model with lstm model if the length is divided by 3 -
                 # so we send when there is 3 more characters added
                 if len(new_symbol) % 3 == 0:
@@ -572,38 +549,33 @@ class ProfilingFlowsDatabase(object):
                     }
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
-                tuples[tupleid] = new_data
-                self.print(
-                    '\tLetters so far for tuple {}: {}'.format(
-                        tupleid, new_symbol
-                    ),3,0,
-                )
+
+                tuples[tupleid] = (new_symbol, previous_two_timestamps)
+                self.print(f'\tLetters so far for tuple {tupleid}: {new_symbol}', 3, 0)
                 tuples = json.dumps(tuples)
             except (TypeError, KeyError):
-                # TODO check that this condition is triggered correctly only for the first case and not the rest after...
+                # TODO check that this condition is triggered correctly
+                #  only for the first case and not the rest after...
                 # There was no previous data stored in the DB
                 self.print(
-                    'First time for tuple {} as an {} for {} in TW {}'.format(
-                        tupleid, direction, profileid, twid
-                    ),3,0,
+                    f'First time for tuple {tupleid} as an {direction} for {profileid} in TW {twid}',
+                    3, 0,
                 )
                 # Here get the info from the ipinfo key
-                new_data = (symbol_to_add, previous_two_timestamps)
-                tuples[tupleid] = new_data
+                tuples[tupleid] = (symbol_to_add, previous_two_timestamps)
                 # Convet the dictionary to json
                 tuples = json.dumps(tuples)
             # Store the new data on the db
             self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
-        except Exception as inst:
+
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
             )
-            self.outputqueue.put(
-                '01|database|[DB] {}'.format(traceback.format_exc())
-            )
+            self.outputqueue.put(f'01|database|[DB] {traceback.format_exc()}')
 
     def getSlipsInternalTime(self):
         return self.r.get('slips_internal_time')
@@ -974,13 +946,10 @@ class ProfilingFlowsDatabase(object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        data = {}
         temp = self.r.hget(
             f'{profileid}{self.separator}{twid}{self.separator}flows', uid
         )
-        data[uid] = temp
-        # Get the dictionary format
-        return data
+        return {uid: temp}
 
     def add_out_ssl(
         self,
@@ -1048,7 +1017,7 @@ class ProfilingFlowsDatabase(object):
         }
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
-        self.print('Adding SSL flow to DB: {}'.format(data), 3, 0)
+        self.print(f'Adding SSL flow to DB: {data}', 3, 0)
         # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
         if not server_name:
@@ -1057,10 +1026,8 @@ class ProfilingFlowsDatabase(object):
         # We are giving only new server_name to the threat_intelligence module.
         self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, str(daddr_as_obj), lookup=server_name)
 
-
         # Save new server name in the IPInfo. There might be several server_name per IP.
-        ipdata = self.getIPData(str(daddr_as_obj))
-        if ipdata:
+        if ipdata := self.getIPData(str(daddr_as_obj)):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
@@ -1073,8 +1040,7 @@ class ProfilingFlowsDatabase(object):
         if SNI_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS resolution
             # only add this SNI to our db if it has a DNS resolution
-            dns_resolutions = self.r.hgetall('DNSresolution')
-            if dns_resolutions:
+            if dns_resolutions := self.r.hgetall('DNSresolution'):
                 # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
@@ -1119,8 +1085,7 @@ class ProfilingFlowsDatabase(object):
         returns a dict of all p2p past reports about the given ip
         """
         #p2p_reports key is basically { ip:  { reporter1: [report1, report2, report3]} }
-        reports = self.rcache.hget('p2p_reports', ip)
-        if reports:
+        if reports := self.rcache.hget('p2p_reports', ip):
             return json.loads(reports)
         return {}
 
@@ -1142,11 +1107,11 @@ class ProfilingFlowsDatabase(object):
                 last_report_about_this_ip = cached_p2p_reports[reporter][-1]
                 score = report_data['score']
                 confidence = report_data['confidence']
-                report_time = report_data['report_time']
                 if (
                         last_report_about_this_ip['score'] == score
                         and last_report_about_this_ip['confidence'] == confidence
                 ):
+                    report_time = report_data['report_time']
                     # score and confidence are the same as the last report, only update the time
                     last_report_about_this_ip['report_time'] = report_time
                 else:
@@ -1224,14 +1189,10 @@ class ProfilingFlowsDatabase(object):
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
 
-        self.print('Adding HTTP flow to DB: {}'.format(data), 3, 0)
+        self.print(f'Adding HTTP flow to DB: {data}', 3, 0)
 
         http_flow.pop('flow', None)
-        http_flow.update(
-            {
-                'uid': uid,
-            }
-        )
+        http_flow['uid'] = uid
 
         # Check if the host domain AND the url is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
@@ -1306,7 +1267,7 @@ class ProfilingFlowsDatabase(object):
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
-        self.print('Adding SSH flow to DB: {}'.format(data), 3, 0)
+        self.print(f'Adding SSH flow to DB: {data}', 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
         self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
 
@@ -1354,7 +1315,7 @@ class ProfilingFlowsDatabase(object):
             data,
         )
         self.publish('new_notice', to_send)
-        self.print('Adding notice flow to DB: {}'.format(data), 3, 0)
+        self.print(f'Adding notice flow to DB: {data}', 3, 0)
         self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
 
     def get_dns_resolution(self, ip):
@@ -1367,8 +1328,7 @@ class ProfilingFlowsDatabase(object):
         If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
         """
-        ip_info = self.r.hget('DNSresolution', ip)
-        if ip_info:
+        if ip_info := self.r.hget('DNSresolution', ip):
             ip_info = json.loads(ip_info)
             # return a dict with 'ts' 'uid' 'domains' about this IP
             return ip_info
@@ -1392,10 +1352,10 @@ class ProfilingFlowsDatabase(object):
         while tws_to_search != current_twid:
             matching_tws = [i for i in tws if f'timewindow{current_twid}' in i]
 
-            if matching_tws != []:
+            if not matching_tws:
+                current_twid += 1
+            else:
                 return True
-
-            current_twid += 1
 
     def set_dns_resolution(
         self,
@@ -1419,88 +1379,87 @@ class ProfilingFlowsDatabase(object):
         # type A: for ipv4
         # type AAAA: for ipv6
         if (
-            (qtype_name == 'AAAA' or qtype_name == 'A')
-            and answers != '-'
-            and not query.endswith('arpa')
+            qtype_name not in ['AAAA', 'A']
+            or answers == '-'
+            or query.endswith('arpa')
         ):
-            # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
+            return
+        # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 
-            # Also store these IPs inside the domain
-            ips_to_add = []
-            CNAMEs = []
-            profileid_twid = f'profile_{srcip}_{twid}'
+        # Also store these IPs inside the domain
+        ips_to_add = []
+        CNAMEs = []
+        profileid_twid = f'profile_{srcip}_{twid}'
 
-            for answer in answers:
-                # Make sure it's an ip not a CNAME
-                if not validators.ipv6(answer) and not validators.ipv4(answer):
-                    if 'TXT' in answer:
-                        continue
-                    # now this is not an ip, it's a CNAME or a TXT
-                    # it's a CNAME
-                    CNAMEs.append(answer)
+        for answer in answers:
+            # Make sure it's an ip not a CNAME
+            if not validators.ipv6(answer) and not validators.ipv4(answer):
+                if 'TXT' in answer:
                     continue
+                # now this is not an ip, it's a CNAME or a TXT
+                # it's a CNAME
+                CNAMEs.append(answer)
+                continue
 
 
-                # get stored DNS resolution from our db
-                ip_info_from_db = self.get_dns_resolution(answer)
-                if ip_info_from_db == {}:
-                    # if the domain(query) we have isn't already in DNSresolution in the db
-                    resolved_by = [srcip]
-                    domains = []
-                    timewindows = [profileid_twid]
-                else:
-                    # we have info about this domain in DNSresolution in the db
-                    # keep track of all srcips that resolved this domain
-                    resolved_by = ip_info_from_db.get('resolved-by', [])
-                    if srcip not in resolved_by:
-                        resolved_by.append(srcip)
+            # get stored DNS resolution from our db
+            ip_info_from_db = self.get_dns_resolution(answer)
+            if ip_info_from_db == {}:
+                # if the domain(query) we have isn't already in DNSresolution in the db
+                resolved_by = [srcip]
+                domains = []
+                timewindows = [profileid_twid]
+            else:
+                # we have info about this domain in DNSresolution in the db
+                # keep track of all srcips that resolved this domain
+                resolved_by = ip_info_from_db.get('resolved-by', [])
+                if srcip not in resolved_by:
+                    resolved_by.append(srcip)
 
-                    # timewindows in which this odmain was resolved
-                    timewindows = ip_info_from_db.get('timewindows', [])
-                    if profileid_twid not in timewindows:
-                        timewindows.append(profileid_twid)
+                # timewindows in which this odmain was resolved
+                timewindows = ip_info_from_db.get('timewindows', [])
+                if profileid_twid not in timewindows:
+                    timewindows.append(profileid_twid)
 
-                    # we'll be appending the current answer to these cached domains
-                    domains = ip_info_from_db.get('domains', [])
+                # we'll be appending the current answer to these cached domains
+                domains = ip_info_from_db.get('domains', [])
 
-                # if the domain(query) we have isn't already in DNSresolution in the db, add it
-                if query not in domains:
-                    domains.append(query)
+            # if the domain(query) we have isn't already in DNSresolution in the db, add it
+            if query not in domains:
+                domains.append(query)
 
-                # domains should be a list, not a string!, so don't use json.dumps here
-                ip_info = {
-                    'ts': ts,
-                    'uid': uid,
-                    'domains': domains,
-                    'resolved-by': resolved_by,
-                    'timewindows': timewindows,
-                }
-                ip_info = json.dumps(ip_info)
-                # we store ALL dns resolutions seen since starting slips
-                # store with the IP as the key
-                self.r.hset('DNSresolution', answer, ip_info)
-                # store with the domain as the key:
-                self.r.hset('ResolvedDomains', domains[0], answer)
-                # these ips will be associated with the query in our db
-                ips_to_add.append(answer)
+            # domains should be a list, not a string!, so don't use json.dumps here
+            ip_info = {
+                'ts': ts,
+                'uid': uid,
+                'domains': domains,
+                'resolved-by': resolved_by,
+                'timewindows': timewindows,
+            }
+            ip_info = json.dumps(ip_info)
+            # we store ALL dns resolutions seen since starting slips
+            # store with the IP as the key
+            self.r.hset('DNSresolution', answer, ip_info)
+            # store with the domain as the key:
+            self.r.hset('ResolvedDomains', domains[0], answer)
+            # these ips will be associated with the query in our db
+            ips_to_add.append(answer)
 
             #  For each CNAME in the answer
             # store it in DomainsInfo in the cache db (used for kalipso)
             # and in CNAMEsInfo in the maion db  (used for detecting dns without resolution)
-            if ips_to_add:
-                domaindata = {}
-                domaindata['IPs'] = ips_to_add
+        if ips_to_add:
+            domaindata = {'IPs': ips_to_add}
+            # if an ip came in the DNS answer along with the last seen CNAME
+            try:
+                # store this CNAME in the db
+                domaindata['CNAME'] = CNAMEs
+            except NameError:
+                # no CNAME came with this query
+                pass
 
-                # if an ip came in the DNS answer along with the last seen CNAME
-                try:
-                    # store this CNAME in the db
-                    domaindata['CNAME'] = CNAMEs
-                except NameError:
-                    # no CNAME came with this query
-                    pass
-
-                self.setInfoForDomains(query, domaindata, mode='add')
-                self.set_domain_resolution(query, ips_to_add)
+            self.setInfoForDomains(query, domaindata, mode='add')
+            self.set_domain_resolution(query, ips_to_add)
 
     def set_domain_resolution(self, domain, ips):
         """
@@ -1518,17 +1477,7 @@ class ProfilingFlowsDatabase(object):
         3- Domain is not in the DB. Return False
         """
         data = self.rcache.hget('DomainsInfo', domain)
-        if data or data == {}:
-            # This means the domain was in the database, with or without data
-            # Case 1 and 2
-            # Convert the data
-            data = json.loads(data)
-            # print(f'In the DB: Domain {domain}, and data {data}')
-        else:
-            # The Domain was not in the DB
-            # Case 3
-            data = False
-            # print(f'In the DB: Domain {domain}, and data {data}')
+        data = json.loads(data) if data or data == {} else False
         return data
 
     def setNewDomain(self, domain: str):
@@ -1604,7 +1553,7 @@ class ProfilingFlowsDatabase(object):
                         prev_info = [prev_info]
                         # add the new data_to_store to our prev_info
                         domain_data[key] = prev_info.extend(data_to_store)
-                    elif prev_info == None:
+                    elif prev_info is None:
                         # no previous info about this domain
                         domain_data[key] = data_to_store
 
@@ -1678,7 +1627,7 @@ class ProfilingFlowsDatabase(object):
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_dns_flow', to_send)
-        self.print('Adding DNS flow to DB: {}'.format(data), 3, 0)
+        self.print(f'Adding DNS flow to DB: {data}', 3, 0)
         # Check if the dns is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,

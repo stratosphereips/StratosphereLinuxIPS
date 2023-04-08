@@ -103,7 +103,7 @@ class Module(Module, multiprocessing.Process):
                 self.clf.partial_fit(
                     X_flow, y_flow, classes=['Malware', 'Normal']
                 )
-            except Exception as ex:
+            except Exception:
                 self.print('Error while calling clf.train()')
                 self.print(traceback.print_exc())
 
@@ -123,7 +123,7 @@ class Module(Module, multiprocessing.Process):
             # Store the models on disk
             self.store_model()
 
-        except Exception as inst:
+        except Exception:
             self.print('Error in train()', 0 , 1)
             self.print(traceback.print_exc(), 0, 1)
 
@@ -215,7 +215,7 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
             return dataset
-        except Exception as ex:
+        except Exception:
             # Stop the timer
             self.print('Error in process_features()')
             self.print(traceback.print_exc(),0,1)
@@ -294,7 +294,7 @@ class Module(Module, multiprocessing.Process):
 
             # Update the flow to the processed version
             self.flows = df_flows
-        except Exception as ex:
+        except Exception:
             # Stop the timer
             self.print('Error in process_flows()')
             self.print(traceback.print_exc(),0,1)
@@ -311,7 +311,7 @@ class Module(Module, multiprocessing.Process):
             dflow = self.process_features(raw_flow)
             # Update the flow to the processed version
             self.flow = dflow
-        except Exception as inst:
+        except Exception:
             # Stop the timer
             self.print('Error in process_flow()')
             self.print(traceback.print_exc(),0,1)
@@ -331,7 +331,7 @@ class Module(Module, multiprocessing.Process):
             X_flow = self.scaler.transform(X_flow)
             pred = self.clf.predict(X_flow)
             return pred
-        except Exception as inst:
+        except Exception:
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
@@ -341,29 +341,25 @@ class Module(Module, multiprocessing.Process):
         """
         Store the trained model on disk
         """
-        self.print(f'Storing the trained model and scaler on disk.', 0, 2)
-        f = open('./modules/flowmldetection/model.bin', 'wb')
-        data = pickle.dumps(self.clf)
-        f.write(data)
-        f.close()
-        g = open('./modules/flowmldetection/scaler.bin', 'wb')
-        data = pickle.dumps(self.scaler)
-        g.write(data)
-        g.close()
+        self.print('Storing the trained model and scaler on disk.', 0, 2)
+        with open('./modules/flowmldetection/model.bin', 'wb') as f:
+            data = pickle.dumps(self.clf)
+            f.write(data)
+        with open('./modules/flowmldetection/scaler.bin', 'wb') as g:
+            data = pickle.dumps(self.scaler)
+            g.write(data)
 
     def read_model(self):
         """
         Read the trained model from disk
         """
         try:
-            self.print(f'Reading the trained model from disk.', 0, 2)
-            f = open('./modules/flowmldetection/model.bin', 'rb')
-            self.clf = pickle.load(f)
-            f.close()
-            self.print(f'Reading the trained scaler from disk.', 0, 2)
-            g = open('./modules/flowmldetection/scaler.bin', 'rb')
-            self.scaler = pickle.load(g)
-            g.close()
+            self.print('Reading the trained model from disk.', 0, 2)
+            with open('./modules/flowmldetection/model.bin', 'rb') as f:
+                self.clf = pickle.load(f)
+            self.print('Reading the trained scaler from disk.', 0, 2)
+            with open('./modules/flowmldetection/scaler.bin', 'rb') as g:
+                self.scaler = pickle.load(g)
         except FileNotFoundError:
             # If there is no model, create one empty
             self.print('There was no model. Creating a new empty model.', 0, 2)
@@ -390,9 +386,7 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'low'
         attacker_direction = 'flow'
         category = 'Anomaly.Traffic'
-        attacker = (
-            str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
-        )
+        attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
         evidence_type = 'MaliciousFlow'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
@@ -439,7 +433,7 @@ class Module(Module, multiprocessing.Process):
                         # Is the amount in the DB of labels enough to retrain?
                         # Use labeled flows
                         labels = __database__.get_labels()
-                        sum_labeled_flows = sum([i[1] for i in labels])
+                        sum_labeled_flows = sum(i[1] for i in labels)
                         if (
                             sum_labeled_flows >= self.minimum_lables_to_retrain
                             and sum_labeled_flows
@@ -503,7 +497,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 self.print('Error in run()')
                 self.print(traceback.format_exc(), 0, 1)
                 return True

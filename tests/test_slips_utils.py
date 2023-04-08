@@ -4,8 +4,7 @@ from ..slips_files.common.slips_utils import Utils
 def create_utils_instance():
     """Create an instance of threatintel.py
     needed by every other test in this file"""
-    utils = Utils()
-    return utils
+    return Utils()
 
 
 def test_get_hash_from_file():

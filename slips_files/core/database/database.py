@@ -58,6 +58,7 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_data_request',
         'p2p_gopy',
         'report_to_peers',
+        'new_tunnel',
     }
 
     """ Database object management """
@@ -92,7 +93,7 @@ class Database(ProfilingFlowsDatabase, object):
          when using a different port we override it with -p
         """
         self.redis_options=\
-            {
+                {
                 'port': 6379,
                 'daemonize': 'yes',
                 'stop-writes-on-bgsave-error': 'no',
@@ -174,7 +175,7 @@ class Database(ProfilingFlowsDatabase, object):
             time.sleep(1)
             self.r.client_list()
             return True
-        except redis.exceptions.ConnectionError as ex:
+        except redis.exceptions.ConnectionError:
             # unable to connect to this port
             # sometimes we open the server but we have trouble connecting,
             # so we need to close it
@@ -212,8 +213,7 @@ class Database(ProfilingFlowsDatabase, object):
             return 0
     
     def close_redis_server(self, redis_port):
-        server_pid = self.get_redis_server_PID(redis_port)
-        if server_pid:
+        if server_pid := self.get_redis_server_PID(redis_port):
             os.kill(int(server_pid), signal.SIGKILL)
 
     def read_configuration(self):
@@ -278,7 +278,7 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
     def is_connection_error_logged(self):
-        return True if self.r.get('logged_connection_error') else False
+        return bool(self.r.get('logged_connection_error'))
 
     def mark_connection_error_as_logged(self):
         """
@@ -330,11 +330,7 @@ class Database(ProfilingFlowsDatabase, object):
         ip = profileid.split(self.separator)[1]
         ip_obj = ipaddress.ip_address(ip)
 
-        for network in self.home_network:
-            if ip_obj in network:
-                return True
-
-        return False
+        return any(ip_obj in network for network in self.home_network)
 
     def set_loaded_ti_files(self, number_of_loaded_files: int):
         """
@@ -411,6 +407,19 @@ class Database(ProfilingFlowsDatabase, object):
         """
         self.r.hset(profileid, 'User-agent', user_agent)
 
+    def add_all_user_agent_to_profile(self, profileid, user_agent: str):
+        """
+        Used to keep history of past user agents of profile
+        :param user_agent: str of user_agent
+        """
+        if not self.r.hexists(profileid ,'past_user_agents'):
+            self.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
+        else:
+            user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
+            if user_agent not in user_agents:
+                user_agents.append(user_agent)
+                self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
+                
     def add_software_to_profile(
         self, profileid, software, version_major, version_minor, uid
     ):
@@ -514,7 +523,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         if self.gateway_MAC_found:
             # gateway MAC already set using this function
-            return True if __database__.get_gateway_MAC() == MAC else False
+            return __database__.get_gateway_MAC() == MAC
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
@@ -561,14 +570,12 @@ class Database(ProfilingFlowsDatabase, object):
         if validators.mac_address(incoming_ip):
             return False
 
-        if self.is_gw_mac(MAC_info, incoming_ip):
-            if incoming_ip != self.get_gateway_ip():
-                # we're trying to assign the gw mac to an ip that isn't the gateway's
-                return False
-            else:
-                # we're given the gw mac and ip, store them no issue
-                pass
-
+        if (
+            self.is_gw_mac(MAC_info, incoming_ip)
+            and incoming_ip != self.get_gateway_ip()
+        ):
+            # we're trying to assign the gw mac to an ip that isn't the gateway's
+            return False
         # get the ips that belong to this mac
         cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
         if not cached_ip:
@@ -577,7 +584,6 @@ class Database(ProfilingFlowsDatabase, object):
             self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
             self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
-            return True
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -637,7 +643,8 @@ class Database(ProfilingFlowsDatabase, object):
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
             self.r.hset('MAC', MAC_info['MAC'], cached_ips)
-            return True
+
+        return True
 
     def get_mac_addr_from_profile(self, profileid) -> str:
         """
@@ -647,10 +654,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_info = self.r.hget(profileid, 'MAC')
-        if MAC_info:
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info)['MAC']
-        return MAC_info
+        else:
+            return MAC_info
 
     def get_mac_vendor_from_profile(self, profileid) -> str:
         """
@@ -660,10 +667,10 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_info = self.r.hget(profileid, 'MAC')
-        if MAC_info:
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info)['Vendor']
-        return MAC_info
+        else:
+            return MAC_info
 
     def get_hostname_from_profile(self, profileid) -> str:
         """
@@ -673,32 +680,22 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        MAC_info = self.r.hget(profileid, 'MAC')
-        if MAC_info:
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info).get('host_name', False)
-        return MAC_info
+        else:
+            return MAC_info
 
     def get_ipv4_from_profile(self, profileid) -> str:
         """
         Returns ipv4 about a certain profile or None
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        ipv4 = self.r.hmget(profileid, 'IPv4')[0]
-        return ipv4
+        return self.r.hmget(profileid, 'IPv4')[0] if profileid else False
 
     def get_ipv6_from_profile(self, profileid) -> str:
         """
         Returns ipv6 about a certain profile or None
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        ipv6 = self.r.hmget(profileid, 'IPv6')[0]
-        return ipv6
+        return self.r.hmget(profileid, 'IPv6')[0] if profileid else False
 
     def get_the_other_ip_version(self, profileid):
         """
@@ -721,7 +718,7 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            profileid = 'profile' + self.separator + str(daddr_as_obj)
+            profileid = f'profile{self.separator}{str(daddr_as_obj)}'
             if data := self.r.sismember('profiles', profileid):
                 return profileid
             return False
@@ -743,23 +740,17 @@ class Database(ProfilingFlowsDatabase, object):
         Receives a profile id and returns the list of all the TW in that profile
         Returns a list of tuples (twid, ts) or an empty list
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-
-        data = self.r.zrange('tws' + profileid, 0, -1, withscores=True)
-        return data
+        return (
+            self.r.zrange(f'tws{profileid}', 0, -1, withscores=True)
+            if profileid
+            else False
+        )
 
     def getamountTWsfromProfile(self, profileid):
         """
         Receives a profile id and returns the number of all the TWs in that profile
         """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        return len(self.getTWsfromProfile(profileid))
+        return len(self.getTWsfromProfile(profileid)) if profileid else False
 
     def getSrcIPsfromProfileTW(self, profileid, twid):
         """
@@ -802,11 +793,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        return self.r.sismember('profiles', profileid)
+        return self.r.sismember('profiles', profileid) if profileid else False
 
     def getProfilesLen(self):
         """Return the amount of profiles. Redis should be faster than python to do this count"""
@@ -814,21 +801,19 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getLastTWforProfile(self, profileid):
         """Return the last TW id and the time for the given profile id"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        data = self.r.zrange('tws' + profileid, -1, -1, withscores=True)
-        return data
+        return (
+            self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
+            if profileid
+            else False
+        )
 
     def getFirstTWforProfile(self, profileid):
         """Return the first TW id and the time for the given profile id"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        data = self.r.zrange('tws' + profileid, 0, 0, withscores=True)
-        return data
+        return (
+            self.r.zrange(f'tws{profileid}', 0, 0, withscores=True)
+            if profileid
+            else False
+        )
 
     def getTWofTime(self, profileid, time):
         """
@@ -938,25 +923,18 @@ class Database(ProfilingFlowsDatabase, object):
         """Return the time when this TW in this profile was created"""
         # Get all the TW for this profile
         # We need to encode it to 'search' because the data in the sorted set is encoded
-        data = self.r.zscore('tws' + profileid, twid.encode('utf-8'))
-        return data
+        return self.r.zscore(f'tws{profileid}', twid.encode('utf-8'))
 
     def getAmountTW(self, profileid):
         """Return the number of tws for this profile id"""
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        return self.r.zcard('tws' + profileid)
+        return self.r.zcard(f'tws{profileid}') if profileid else False
 
     def getModifiedTWSinceTime(self, time):
         """Return the list of modified timewindows since a certain time"""
         data = self.r.zrangebyscore(
             'ModifiedTW', time, float('+inf'), withscores=True
         )
-        if not data:
-            return []
-        return data
+        return data or []
 
     def getModifiedProfilesSince(self, time):
         """Returns a set of modified profiles since a certain time and the time of the last modified profile"""
@@ -977,18 +955,12 @@ class Database(ProfilingFlowsDatabase, object):
     def getModifiedTW(self):
         """Return all the list of modified tw"""
         data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
-        if not data:
-            return []
-        return data
+        return data or []
 
     def wasProfileTWModified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
         data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
-        if not data:
-            # If for some reason we don't have the modified bit set,
-            # then it was not modified.
-            return False
-        return True
+        return bool(data)
 
     def setSlipsInternalTime(self, timestamp):
         self.r.set('slips_internal_time', timestamp)
@@ -1005,22 +977,20 @@ class Database(ProfilingFlowsDatabase, object):
                 portdata = json.loads(data)
                 value = portdata
             return value
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
                 f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
             )
-            self.outputqueue.put('01|database|[DB] {}'.format(traceback.print_exc()))
+            self.outputqueue.put(f'01|database|[DB] {traceback.print_exc()}')
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
-        data = self.r.hget(profileid + self.separator + twid, 'OutTuples')
-        return data
+        return self.r.hget(profileid + self.separator + twid, 'OutTuples')
 
     def getInTuplesfromProfileTW(self, profileid, twid):
         """Get the in tuples"""
-        data = self.r.hget(profileid + self.separator + twid, 'InTuples')
-        return data
+        return self.r.hget(profileid + self.separator + twid, 'InTuples')
 
     def getFieldSeparator(self):
         """Return the field separator"""
@@ -1031,8 +1001,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         returns a dict of dhcp flows that happaened in this profileid and twid
         """
-        flows = self.r.hget('DHCP_flows', f'{profileid}_{twid}')
-        if flows:
+        if flows := self.r.hget('DHCP_flows', f'{profileid}_{twid}'):
             return json.loads(flows)
 
 
@@ -1041,8 +1010,7 @@ class Database(ProfilingFlowsDatabase, object):
         Stores all dhcp flows sorted by profileid_twid
         """
         flow = {requested_addr: uid}
-        cached_flows: dict = self.get_dhcp_flows(profileid, twid)
-        if cached_flows:
+        if cached_flows := self.get_dhcp_flows(profileid, twid):
             # we already have flows in this twid, update them
             cached_flows.update(flow)
             self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
@@ -1095,13 +1063,12 @@ class Database(ProfilingFlowsDatabase, object):
             'score': score,
             'confidence': confidence
         }
-        cached_ip_data = self.getIPData(ip)
-        if not cached_ip_data:
-            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
-        else:
+        if cached_ip_data := self.getIPData(ip):
             # append the score and conf. to the already existing data
             cached_ip_data.update(score_confidence)
             self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_data))
+        else:
+            self.rcache.hset('IPsInfo', ip, json.dumps(score_confidence))
 
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
@@ -1164,9 +1131,7 @@ class Database(ProfilingFlowsDatabase, object):
             # we already have a twid with alerts in this profile, update it
             # the format of twid_alerts is {alert_hash: evidence_IDs}
             twid_alerts: dict = profile_alerts[twid]
-            twid_alerts.update({
-                alert_hash: evidence_IDs
-            })
+            twid_alerts[alert_hash] = evidence_IDs
             profile_alerts[twid] = twid_alerts
 
         profile_alerts = json.dumps(profile_alerts)
@@ -1195,9 +1160,9 @@ class Database(ProfilingFlowsDatabase, object):
                 lasttw_end_time = lasttw_start_time + self.width
                 flowtime = float(flowtime)
                 self.print(
-                    'The last TW id for profile {} was {}. Start:{}. End: {}'.format(
-                        profileid, lasttwid, lasttw_start_time, lasttw_end_time
-                    ), 3,0,
+                    f'The last TW id for profile {profileid} was {lasttwid}. Start:{lasttw_start_time}. End: {lasttw_end_time}',
+                    3,
+                    0,
                 )
                 # There was a last TW, so check if the current flow belongs here.
                 if (
@@ -1205,47 +1170,41 @@ class Database(ProfilingFlowsDatabase, object):
                     and lasttw_start_time <= flowtime
                 ):
                     self.print(
-                        'The flow ({}) is on the last time window ({})'.format(
-                            flowtime, lasttw_end_time
-                        ), 3, 0
+                        f'The flow ({flowtime}) is on the last time window ({lasttw_end_time})',
+                        3,
+                        0,
                     )
                     twid = lasttwid
                 elif lasttw_end_time <= flowtime:
                     # The flow was not in the last TW, its NEWER than it
                     self.print(
-                        'The flow ({}) is NOT on the last time window ({}). Its newer'.format(
-                            flowtime, lasttw_end_time
-                        ), 3, 0
+                        f'The flow ({flowtime}) is NOT on the last time window ({lasttw_end_time}). Its newer',
+                        3,
+                        0,
                     )
                     amount_of_new_tw = int(
                         (flowtime - lasttw_end_time) / self.width
                     )
                     self.print(
-                        'We have to create {} empty TWs in the midle.'.format(
-                            amount_of_new_tw
-                        ), 3, 0
+                        f'We have to create {amount_of_new_tw} empty TWs in the midle.',
+                        3,
+                        0,
                     )
                     temp_end = lasttw_end_time
-                    for id in range(0, amount_of_new_tw + 1):
+                    for _ in range(amount_of_new_tw + 1):
                         new_start = temp_end
                         twid = self.addNewTW(profileid, new_start)
-                        self.print(
-                            'Creating the TW id {}. Start: {}.'.format(
-                                twid, new_start
-                            ), 3, 0
-                        )
+                        self.print(f'Creating the TW id {twid}. Start: {new_start}.', 3, 0)
                         temp_end = new_start + self.width
-                    # Now get the id of the last TW so we can return it
-                elif lasttw_start_time > flowtime:
+                        # Now get the id of the last TW so we can return it
+                else:
                     # The flow was not in the last TW, its OLDER that it
                     self.print(
-                        'The flow ({}) is NOT on the last time window ({}). Its older'.format(
-                            flowtime, lasttw_end_time
-                        ), 3, 0
+                        f'The flow ({flowtime}) is NOT on the last time window ({lasttw_end_time}). Its older',
+                        3,
+                        0,
                     )
-                    # Find out if we already have this TW in the past
-                    data = __database__.getTWofTime(profileid, flowtime)
-                    if data:
+                    if data := __database__.getTWofTime(profileid, flowtime):
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
                         return twid
@@ -1262,11 +1221,7 @@ class Database(ProfilingFlowsDatabase, object):
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
-                        self.print(
-                            'We need to create {} TW before the first'.format(
-                                diff + 1
-                            ), 3, 0
-                        )
+                        self.print(f'We need to create {diff + 1} TW before the first', 3, 0)
                         # Get the first TW
                         [
                             (firsttwid, firsttw_start_time)
@@ -1274,18 +1229,14 @@ class Database(ProfilingFlowsDatabase, object):
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
-                        for id in range(0, diff + 1):
+                        for _ in range(diff + 1):
                             new_start = temp_start
                             # The method to add an older TW is the same as
                             # to add a new one, just the starttime changes
                             twid = __database__.addNewOlderTW(
                                 profileid, new_start
                             )
-                            self.print(
-                                'Creating the new older TW id {}. Start: {}.'.format(
-                                    twid, new_start
-                                ), 3, 0
-                            )
+                            self.print(f'Creating the new older TW id {twid}. Start: {new_start}.', 3, 0)
                             temp_start = new_start - self.width
             except ValueError:
                 # There is no last tw. So create the first TW
@@ -1295,7 +1246,7 @@ class Database(ProfilingFlowsDatabase, object):
                     # Seconds in 1 year = 31536000
                     startoftw = float(flowtime - (31536000 * 100))
                 else:
-                    startoftw = float(flowtime)
+                    startoftw = flowtime
 
                 # Add this TW, of this profile, to the DB
                 twid = self.addNewTW(profileid, startoftw)
@@ -1303,7 +1254,7 @@ class Database(ProfilingFlowsDatabase, object):
             return twid
         except Exception as e:
             self.print('Error in get_timewindow().', 0, 1)
-            self.print('{}'.format(e), 0, 1)
+            self.print(f'{e}', 0, 1)
 
     def get_profileid_twid_alerts(self, profileid, twid) -> dict:
         """
@@ -1322,11 +1273,9 @@ class Database(ProfilingFlowsDatabase, object):
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
-        if alerts:
+        if alerts := self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts'):
             alerts = json.loads(alerts)
-            evidence = alerts.get(alert_ID, False)
-            return evidence
+            return alerts.get(alert_ID, False)
         return False
 
     def get_evidence_by_ID(self, profileid, twid, ID):
@@ -1337,7 +1286,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         evidence: dict = json.loads(evidence)
         # loop through each evidence in this tw
-        for description, evidence_details in evidence.items():
+        for evidence_details in evidence.values():
             evidence_details = json.loads(evidence_details)
             if evidence_details.get('ID') == ID:
                 # found an evidence that has a matching ID
@@ -1363,10 +1312,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_flows_causing_evidence(self, evidence_ID) -> list:
         uids = self.r.hget("flows_causing_evidence", evidence_ID)
-        if not uids:
-            return []
-        else:
-            return json.loads(uids)
+        return json.loads(uids) if uids else []
 
 
     def setEvidence(
@@ -1454,16 +1400,16 @@ class Database(ProfilingFlowsDatabase, object):
         }
         # not all evidence requires a conn_coun, scans only
         if conn_count:
-            evidence_to_send.update({'conn_count': conn_count})
+            evidence_to_send['conn_count'] = conn_count
 
         # source_target_tag is defined only if attacker_direction is srcip or dstip
         if source_target_tag:
-            evidence_to_send.update({'source_target_tag': source_target_tag})
+            evidence_to_send['source_target_tag'] = source_target_tag
 
         if port:
-            evidence_to_send.update({'port': port})
+            evidence_to_send['port'] = port
         if proto:
-            evidence_to_send.update({'proto': proto})
+            evidence_to_send['proto'] = proto
 
         evidence_to_send = json.dumps(evidence_to_send)
 
@@ -1471,16 +1417,8 @@ class Database(ProfilingFlowsDatabase, object):
         # Check if we have and get the current evidence stored in the DB for
         # this profileid in this twid
         current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
-            current_evidence = {}
-
-        # make ure it's not a duplicate evidence
-        should_publish = False
-        if evidence_ID not in current_evidence.keys():
-            should_publish = True
-
+        current_evidence = json.loads(current_evidence) if current_evidence else {}
+        should_publish = evidence_ID not in current_evidence.keys()
         # update our current evidence for this profileid and twid.
         # now the evidence_ID is used as the key
         current_evidence.update({evidence_ID: evidence_to_send})
@@ -1491,7 +1429,7 @@ class Database(ProfilingFlowsDatabase, object):
             profileid + self.separator + twid, 'Evidence', current_evidence
         )
 
-        self.r.hset('evidence' + profileid, twid, current_evidence)
+        self.r.hset(f'evidence{profileid}', twid, current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
@@ -1546,10 +1484,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         # 1. delete evidence from 'evidence' key
         current_evidence = self.getEvidenceForTW(profileid, twid)
-        if current_evidence:
-            current_evidence = json.loads(current_evidence)
-        else:
-            current_evidence = {}
+        current_evidence = json.loads(current_evidence) if current_evidence else {}
         # Delete the key regardless of whether it is in the dictionary
         current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
@@ -1558,7 +1493,7 @@ class Database(ProfilingFlowsDatabase, object):
             'Evidence',
             current_evidence_json,
         )
-        self.r.hset('evidence' + profileid, twid, current_evidence_json)
+        self.r.hset(f'evidence{profileid}', twid, current_evidence_json)
         # 2. delete evidence from 'alerts' key
         profile_alerts = self.r.hget('alerts', profileid)
         if not profile_alerts:
@@ -1637,9 +1572,7 @@ class Database(ProfilingFlowsDatabase, object):
         Check if profile and timewindow is blocked
         """
         profile_tws = self.getBlockedProfTW(profileid)
-        if twid in profile_tws:
-            return True
-        return False
+        return twid in profile_tws
 
     def set_first_stage_ensembling_label_to_flow(
         self, profileid, twid, uid, ensembling_label
@@ -1647,8 +1580,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Add a final label to the flow
         """
-        flow = self.get_flow(profileid, twid, uid)
-        if flow:
+        if flow := self.get_flow(profileid, twid, uid):
             data = json.loads(flow[uid])
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
@@ -1695,8 +1627,7 @@ class Database(ProfilingFlowsDatabase, object):
         flow = self.get_flow(profileid, twid, uid)
         if flow and flow.get(uid, False):
             flow = json.loads(flow[uid])
-            labels = flow.get('module_labels', '')
-            return labels
+            return flow.get('module_labels', '')
         else:
             return {}
 
@@ -1708,13 +1639,11 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getAllBlockedProfTW(self):
         """Return all the list of blocked tws"""
-        data = self.r.hgetall('BlockedProfTW')
-        return data
+        return self.r.hgetall('BlockedProfTW')
 
     def getBlockedProfTW(self, profileid):
         """Return all the list of blocked tws"""
-        tws = self.r.hget('BlockedProfTW', profileid)
-        if tws:
+        if tws := self.r.hget('BlockedProfTW', profileid):
             return json.loads(tws)
         return []
 
@@ -1729,13 +1658,11 @@ class Database(ProfilingFlowsDatabase, object):
         if current_data:
             if 'asn' in current_data:
                 asn_details = ''
-                asnorg = current_data['asn'].get('org', '')
-                if asnorg:
-                    asn_details += asnorg + ' '
+                if asnorg := current_data['asn'].get('org', ''):
+                    asn_details += f'{asnorg} '
 
-                number = current_data['asn'].get('number', '')
-                if number:
-                    asn_details += number + ' '
+                if number := current_data['asn'].get('number', ''):
+                    asn_details += f'{number} '
 
                 if len(asn_details) >1:
                     identification += f'AS: {asn_details}'
@@ -1780,13 +1707,7 @@ class Database(ProfilingFlowsDatabase, object):
         3- IP is not in the DB. Return False
         """
         data = self.rcache.hget('URLsInfo', url)
-        if data:
-            # This means the URL was in the database, with or without data
-            # Convert the data
-            data = json.loads(data)
-        else:
-            # The IP was not in the DB
-            data = False
+        data = json.loads(data) if data else False
         return data
 
 
@@ -1869,10 +1790,9 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Return a list of all the flows in this profileid and twid
         """
-        data = self.r.hgetall(
+        if data := self.r.hgetall(
             profileid + self.separator + twid + self.separator + 'flows'
-        )
-        if data:
+        ):
             return data
 
     def get_all_flows_in_profileid(self, profileid):
@@ -1887,8 +1807,7 @@ class Database(ProfilingFlowsDatabase, object):
         profileid_flows = []
         # get all tws in this profile
         for twid, time in self.getTWsfromProfile(profileid):
-            flows = self.get_all_flows_in_profileid_twid(profileid, twid)
-            if flows:
+            if flows := self.get_all_flows_in_profileid_twid(profileid, twid):
                 for uid, flow in list(flows.items()):
                     profileid_flows.append({uid: json.loads(flow)})
         return profileid_flows
@@ -1901,10 +1820,9 @@ class Database(ProfilingFlowsDatabase, object):
         flows = []
         for profileid in self.getProfiles():
             for (twid, time) in self.getTWsfromProfile(profileid):
-                flows_dict = self.get_all_flows_in_profileid_twid(
+                if flows_dict := self.get_all_flows_in_profileid_twid(
                     profileid, twid
-                )
-                if flows_dict:
+                ):
                     for flow in flows_dict.values():
                         dict_flow = json.loads(flow)
                         flows.append(dict_flow)
@@ -1938,13 +1856,13 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        return self.r.hget(
-            profileid + self.separator + twid + self.separator + 'altflows',
-            uid,
+        return (
+            self.r.hget(
+                profileid + self.separator + twid + self.separator + 'altflows',
+                uid,
+            )
+            if profileid
+            else False
         )
 
     def add_timeline_line(self, profileid, twid, data, timestamp):
@@ -1953,17 +1871,12 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return
-        self.print(
-            'Adding timeline for {}, {}: {}'.format(profileid, twid, data),
-            3,
-            0,
-        )
+        self.print(f'Adding timeline for {profileid}, {twid}: {data}', 3, 0)
         key = str(
             profileid + self.separator + twid + self.separator + 'timeline'
         )
         data = json.dumps(data)
-        mapping = {}
-        mapping[data] = timestamp
+        mapping = {data: timestamp}
         self.r.zadd(key, mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
@@ -2037,8 +1950,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_all_zeek_file(self):
         """Return all entries from the list of zeek files"""
-        data = self.r.smembers('zeekfiles')
-        return data
+        return self.r.smembers('zeekfiles')
 
     def get_gateway_ip(self):
         return self.r.hget('default_gateway', 'IP')
@@ -2064,9 +1976,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
-        if info == None:
-            return False
-        return info
+        return False if info is None else info
 
     def set_profile_module_label(self, profileid, module, label):
         """
@@ -2092,10 +2002,7 @@ class Database(ProfilingFlowsDatabase, object):
             # outside of home_network when this param is given
             return {}
         data = self.r.hget(profileid, 'modules_labels')
-        if data:
-            data = json.loads(data)
-        else:
-            data = {}
+        data = json.loads(data) if data else {}
         return data
 
     def delete_ips_from_IoC_ips(self, ips):
@@ -2242,10 +2149,7 @@ class Database(ProfilingFlowsDatabase, object):
         the traffic (profileid, twid)
         """
         data = self.r.hget('MaliciousIPs', ip)
-        if data:
-            data = json.loads(data)
-        else:
-            data = {}
+        data = json.loads(data) if data else {}
         return data
 
     def get_malicious_domain(self, domain):
@@ -2254,10 +2158,7 @@ class Database(ProfilingFlowsDatabase, object):
         the traffic (profileid, twid)
         """
         data = self.r.hget('MaliciousDomains', domain)
-        if data:
-            data = json.loads(data)
-        else:
-            data = {}
+        data = json.loads(data) if data else {}
         return data
 
     def get_domain_resolution(self, domain):
@@ -2265,16 +2166,11 @@ class Database(ProfilingFlowsDatabase, object):
         Returns the IPs resolved by this domain
         """
         ips = self.r.hget("DomainsResolved", domain)
-        if not ips:
-            return []
-        return json.loads(ips)
+        return json.loads(ips) if ips else []
 
     def get_all_dns_resolutions(self):
         dns_resolutions = self.r.hgetall('DNSresolution')
-        if not dns_resolutions:
-            return []
-        else:
-            return dns_resolutions
+        return dns_resolutions or []
 
 
     def set_passive_dns(self, ip, data):
@@ -2289,8 +2185,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Gets passive DNS from the db
         """
-        data = self.rcache.hget('passiveDNS', ip)
-        if data:
+        if data := self.rcache.hget('passiveDNS', ip):
             return json.loads(data)
         else:
             return False
@@ -2299,22 +2194,19 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Get all IPs and their description from IoC_ips
         """
-        data = self.rcache.hgetall('IoC_ips')
-        return data
+        return self.rcache.hgetall('IoC_ips')
 
     def get_Domains_in_IoC(self):
         """
         Get all Domains and their description from IoC_domains
         """
-        data = self.rcache.hgetall('IoC_domains')
-        return data
+        return self.rcache.hgetall('IoC_domains')
 
     def get_ja3_in_IoC(self):
         """
         Get all ja3 and their description from IoC_JA3
         """
-        data = self.rcache.hgetall('IoC_JA3')
-        return data
+        return self.rcache.hgetall('IoC_JA3')
 
     def search_IP_in_IoC(self, ip: str) -> str:
         """
@@ -2322,10 +2214,7 @@ class Database(ProfilingFlowsDatabase, object):
         description if we found a match
         """
         ip_description = self.rcache.hget('IoC_ips', ip)
-        if ip_description == None:
-            return False
-        else:
-            return ip_description
+        return False if ip_description is None else ip_description
 
     def getReconnectionsForTW(self, profileid, twid):
         """Get the reconnections for this TW for this Profile"""
@@ -2334,10 +2223,7 @@ class Database(ProfilingFlowsDatabase, object):
             # outside of home_network when this param is given
             return False
         data = self.r.hget(profileid + self.separator + twid, 'Reconnections')
-        if data:
-            data = json.loads(data)
-        else:
-            data = {}
+        data = json.loads(data) if data else {}
         return data
 
     def setReconnections(self, profileid, twid, data):
@@ -2357,7 +2243,7 @@ class Database(ProfilingFlowsDatabase, object):
         bool: True if we found a match for exactly the given domain False if we matched a subdomain
         """
         domain_description = self.rcache.hget('IoC_domains', domain)
-        if domain_description == None:
+        if domain_description is None:
             # try to match subdomain
             ioc_domains = self.rcache.hgetall('IoC_domains')
             for malicious_domain, description in ioc_domains.items():
@@ -2379,12 +2265,7 @@ class Database(ProfilingFlowsDatabase, object):
 
 
     def is_profile_malicious(self, profileid: str) -> str:
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return False
-        data = self.r.hget(profileid, 'labeled_as_malicious')
-        return data
+        return self.r.hget(profileid, 'labeled_as_malicious') if profileid else False
 
     def set_TI_file_info(self, file, data):
         """
@@ -2419,10 +2300,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param file: a valid filename not a feed url
         """
         data = self.rcache.hget('TI_files_info', file)
-        if data:
-            data = json.loads(data)
-        else:
-            data = {}
+        data = json.loads(data) if data else {}
         return data
 
     def delete_file_info(self, file):
@@ -2460,9 +2338,7 @@ class Database(ProfilingFlowsDatabase, object):
             
         }
         """
-        # get all the ranges in our cache that start witht hte same octet
-        cached_asn:str = self.get_asn_cache(first_octet=first_octet)
-        if cached_asn:
+        if cached_asn := self.get_asn_cache(first_octet=first_octet):
             # we already have a cached asn of a range that starts with the same first octet
             cached_asn: dict = json.loads(cached_asn)
             cached_asn.update(range_info)
@@ -2511,11 +2387,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param info_type: supported types are 'asn', 'domains'
         " returns a json serialized dict with info
         """
-        # info will be stored in OrgInfo key {'facebook_asn': .., 'twitter_domains': ...}
-        org_info = self.rcache.hget('OrgInfo', f'{org}_{info_type}')
-        if not org_info:
-            org_info = '[]'
-        return org_info
+        return self.rcache.hget('OrgInfo', f'{org}_{info_type}') or '[]'
 
     def get_org_IPs(self, org):
         org_info = self.rcache.hget('OrgInfo', f'{org}_IPs')
@@ -2547,8 +2419,7 @@ class Database(ProfilingFlowsDatabase, object):
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        whitelist = self.r.hget('whitelist', key)
-        if whitelist:
+        if whitelist := self.r.hget('whitelist', key):
             return json.loads(whitelist)
         else:
             return {}
@@ -2609,10 +2480,10 @@ class Database(ProfilingFlowsDatabase, object):
                 return False
 
             # Check if valid .rdb file
-            command = 'file ' + backup_file
+            command = f'file {backup_file}'
             result = subprocess.run(command.split(), stdout=subprocess.PIPE)
             file_type = result.stdout.decode('utf-8')
-            if not 'Redis' in file_type:
+            if 'Redis' not in file_type:
                 print(
                     f'{backup_file} is not a valid redis database file.'
                 )
@@ -2633,12 +2504,12 @@ class Database(ProfilingFlowsDatabase, object):
                 for option, val in self.redis_options.items():
                     f.write(f'{option} {val}\n')
             # Stop the server first in order for redis to load another db
-            os.system(self.sudo + 'service redis-server stop')
+            os.system(f'{self.sudo}service redis-server stop')
 
             # Start the server again, but make sure it's flushed and doesnt have any keys
-            os.system(f'redis-server redis.conf > /dev/null 2>&1')
+            os.system('redis-server redis.conf > /dev/null 2>&1')
             return True
-        except Exception as e:
+        except Exception:
             self.print(
                 f'Error loading the database {backup_file}.'
             )
@@ -2677,10 +2548,7 @@ class Database(ProfilingFlowsDatabase, object):
         returns epoch time of last poll
         """
         time = self.r.hget('Warden', 'poll')
-        if time:
-            time = float(time)
-        else:
-            time = float('-inf')
+        time = float(time) if time else float('-inf')
         return time
 
     def start_profiling(self):

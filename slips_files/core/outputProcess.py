@@ -55,10 +55,11 @@ class OutputProcess(multiprocessing.Process):
         self.queue = inputqueue
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
+        self.stdout= stdout
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
-            self.change_stdout(stdout)
+            self.change_stdout(self.stdout)
         if self.verbose > 2:
             print(
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
@@ -77,8 +78,7 @@ class OutputProcess(multiprocessing.Process):
         self.printable_twid_width = conf.get_tw_width()
 
     def log_branch_info(self, logfile):
-        branch_info = utils.get_branch_info()
-        if branch_info:
+        if branch_info := utils.get_branch_info():
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
@@ -193,7 +193,7 @@ class OutputProcess(multiprocessing.Process):
                 sys.exit(-1)
             return (level, sender, msg)
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
@@ -252,6 +252,10 @@ class OutputProcess(multiprocessing.Process):
         """
         if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
             # we don't know how to get the total number of flows slips is going to process, because they're growing
+            return
+        if self.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
             return
 
         total_flows = int(__database__.get_total_flows())
@@ -356,7 +360,7 @@ class OutputProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',

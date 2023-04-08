@@ -7,7 +7,6 @@ from slips_files.common.slips_utils import utils
 import traceback
 
 # Your imports
-import os
 import json
 import sys
 import requests
@@ -72,7 +71,7 @@ class Module(Module, multiprocessing.Process):
                 'query': ip
             }
             response = requests.get(
-                f'https://api.riskiq.net/pt/v2/dns/passive',
+                'https://api.riskiq.net/pt/v2/dns/passive',
                 params=params,
                 timeout=20,
                 verify=False,
@@ -140,7 +139,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

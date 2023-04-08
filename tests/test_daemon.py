@@ -2,10 +2,6 @@
 """Unit test for ../dameon.py"""
 from ..slips import *
 import os
-import argparse
-import subprocess
-import time
-import pytest
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 

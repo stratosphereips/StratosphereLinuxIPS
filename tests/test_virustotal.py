@@ -43,10 +43,7 @@ def have_available_quota(api_key):
             quotas = (api_requests_daily, api_requests_hourly, api_requests_monthly)
             quotas = list(map(int, quotas))
 
-            if not any(quotas):
-                # one of the above is 0
-                return f'Not enough quota.'
-            return True
+            return True if any(quotas) else 'Not enough quota.'
         else:
             error = json.loads(response.text)['error']
             code = error['code']
@@ -64,11 +61,11 @@ def have_available_quota(api_key):
 API_KEY = get_vt_key()
 enough_quota = have_available_quota(API_KEY)
 error_msg = 'API key not found'
-if enough_quota != True:
+if enough_quota is not True:
     error_msg = f"server response {enough_quota}"
 
 valid_api_key = pytest.mark.skipif(
-    len(API_KEY) != 64 or enough_quota != True,
+    len(API_KEY) != 64 or enough_quota is not True,
     reason=f'API KEY not found or you do not have quota. error: {error_msg}',
 )
 
@@ -114,7 +111,7 @@ def test_interpret_rsponse(outputQueue, ip):
 @valid_api_key
 def test_get_domain_vt_data(outputQueue):
     virustotal = create_virustotal_instance(outputQueue)
-    assert virustotal.get_domain_vt_data('google.com') != False
+    assert virustotal.get_domain_vt_data('google.com') is not False
 
 
 

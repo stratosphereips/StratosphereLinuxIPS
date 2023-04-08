@@ -1,5 +1,5 @@
 <div class="row top-buffer flex-nowrap">
-  <div class="col-2 card" id="col_profiles">
+<div class="col-2 card" id="col_profiles">
     <div id="profiles">
       <div class="filter-wrapper" id="filter_profiles" style="margin: 10px">
         <input type="radio" class="filter-checkbox" name="filter" data-filter="" value="all" checked="checked" />
@@ -33,15 +33,15 @@
       <table id="table_ipinfo" class="table">
         <thead>
           <tr>
-            <th>IP</th>
-            <th>Country</th>
-            <th>Reverse DNS</th>
-            <th>ASN</th>
-            <th>Threat Intel</th>
-            <th>URL score</th>
-            <th>Download score</th>
-            <th>Reference score</th>
-            <th>Communication score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Internet Protocol address">IP</th>
+            <th data-toggle="tooltip" data-placement="top" title="Country by Geolocation">Country</th>
+            <th data-toggle="tooltip" data-placement="top" title="Reverse Domain Name System">Reverse DNS</th>
+            <th data-toggle="tooltip" data-placement="top" title="Autonomous System Numbers">ASN</th>
+            <th data-toggle="tooltip" data-placement="top" title="Threat Intelligence">Threat Intel</th>
+            <th data-toggle="tooltip" data-placement="top" title="The higher the score the more malicious this IP is">URL score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of samples downloaded from this ip  by virustotal">Download score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of malicious files obtained from the same referrer as this ip by virustotal">Reference score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of malicious files communicating with this IP by virustotal">Communication score</th>
           </tr>
         </thead>
       </table>

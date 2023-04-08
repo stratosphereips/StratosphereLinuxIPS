@@ -137,18 +137,16 @@ features_per_sample = 1
 # x_data is a list of lists. The 1st dimension is the outtuple, the second the letter. Each letter is now an int value. shape=(num_outuples, features_per_sample)
 x_data = df['state'].to_numpy()
 if args.verbose:
-    print('There are {} outtuples'.format(len(x_data)))
+    print(f'There are {len(x_data)} outtuples')
 # y_data is a list of ints that are 0 or 1. One integer per outtupple. shape=(num_outuples, 1)
 y_data = df['label'].to_numpy()
 if args.verbose:
-    print('There are {} labels'.format(len(y_data)))
+    print(f'There are {len(y_data)} labels')
 # Search the sample with max len in the training. It should be already cuted by the csv_read function to a max. Here we just check
 max_length_of_outtupple = max([len(sublist) for sublist in df.state.to_list()])
 if args.verbose:
     print(
-        'The max len of the letters in all outtuples is: {}'.format(
-            max_length_of_outtupple
-        )
+        f'The max len of the letters in all outtuples is: {max_length_of_outtupple}'
     )
 
 # Here x_data is a array of lists [[]]

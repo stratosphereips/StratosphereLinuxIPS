@@ -21,11 +21,9 @@ def connect_to_redis(redis_port):
 def is_evidence_present(log_file, expected_evidence):
     """Function to read the log file line by line and returns when it finds the expected evidence"""
     with open(log_file, 'r') as f:
-        line = f.readline()
-        while line:
+        while line := f.readline():
             if expected_evidence in line:
                 return True
-            line = f.readline()
         # evidence not found in any line
         return False
 
@@ -108,7 +106,7 @@ def test_conf_file(
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -119,10 +117,10 @@ def test_conf_file(
 
     # testing disabled_detections param in the configuration file
     disabled_evidence = 'a connection without DNS resolution'
-    assert is_evidence_present(log_file, disabled_evidence) == False
+    assert is_evidence_present(log_file, disabled_evidence) is False
 
     # testing time_window_width param in the configuration file
-    assert check_for_text('in the last 115740 days', output_dir) == True
+    assert check_for_text('in the last 115740 days', output_dir) is True
 
     # test delete_zeek_files param
     zeek_output_dir = database.get_zeek_output_dir()[2:]
@@ -177,7 +175,7 @@ def test_conf_file2(
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
 

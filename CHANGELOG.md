@@ -1,3 +1,12 @@
+-1.0.4 (April 2023)
+- keep a history of the past user agents  by @haleelsada
+- Add the detection of GRE tunnels 
+- Fix connection to private IP false positives
+- Refactor code thanks to @danieltherealyang
+- add more descriptive titles to vt scores in the web UI thanks to @shubhangi
+- Auto publish our MacOS docker image when there's a new release thanks to @pjflux2001
+- 
+- 
 -1.0.3 (March 2023)
 - Add HTTP unencrypted traffic detection by @haleelsada
 - use termcolor by @haleelsada
