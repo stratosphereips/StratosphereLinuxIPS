@@ -352,7 +352,7 @@ function initAllAnalysisTables() {
         // custom search
         $('[type=search]').each(function () {
 
-            $(this).attr("placeholder", "Search...");
+            $(this).attr({"type":"search","placeholder":"Search...","class":"search-box"});
             $(this).before('<span class="fa fa-search"></span>');
         });
     }
