@@ -346,73 +346,34 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'ssl.log' in new_line['type']:
-            self.column_values['type'] = 'ssl'
-            try:
-                self.flow.sport = line[3]
-            except IndexError:
-                self.flow.sport = ''
-            try:
-                self.flow.dport = line[5]
-            except IndexError:
-                self.flow.dport = ''
-            try:
-                self.flow.sslversion = line[6]
-            except IndexError:
-                self.flow.sslversion = ''
-            try:
-                self.flow.cipher = line[7]
-            except IndexError:
-                self.flow.cipher = ''
-            try:
-                self.column_values['curve'] = line[8]
-            except IndexError:
-                self.column_values['curve'] = ''
-            try:
-                self.column_values['server_name'] = line[9]
-            except IndexError:
-                self.column_values['server_name'] = ''
-            try:
-                self.column_values['resumed'] = line[10]
-            except IndexError:
-                self.column_values['resumed'] = ''
-            try:
-                self.column_values['established'] = line[13]
-            except IndexError:
-                self.column_values['established'] = ''
-            try:
-                self.column_values['cert_chain_fuids'] = line[14]
-            except IndexError:
-                self.column_values['cert_chain_fuids'] = ''
-            try:
-                self.column_values['client_cert_chain_fuids'] = line[15]
-            except IndexError:
-                self.column_values['client_cert_chain_fuids'] = ''
-            try:
-                self.column_values['subject'] = line[16]
-            except IndexError:
-                self.column_values['subject'] = ''
-            try:
-                self.column_values['issuer'] = line[17]
-            except IndexError:
-                self.column_values['issuer'] = ''
-            try:
-                self.column_values['validation_status'] = line[20]
-            except IndexError:
-                self.column_values['validation_status'] = ''
+            self.flow: SSL = SSL(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
 
-            try:
-                self.column_values['ja3'] = line[21]
-            except IndexError:
-                self.column_values['ja3'] = ''
-            try:
-                self.column_values['ja3s'] = line[22]
-            except IndexError:
-                self.column_values['ja3s'] = ''
+                get_value_at(6),
+                get_value_at(3),
+                get_value_at(5),
 
-            try:
-                self.column_values['is_DoH'] = line[23]
-            except IndexError:
-                self.column_values['is_DoH'] = ''
+                get_value_at(7),
+                get_value_at(10),
+
+                get_value_at(13),
+                get_value_at(14),
+                get_value_at(15),
+
+                get_value_at(16),
+
+                get_value_at(17),
+                get_value_at(20),
+                get_value_at(8),
+                get_value_at(9),
+
+                get_value_at(21),
+                get_value_at(22),
+                get_value_at(23),
+            )
 
         elif 'ssh.log' in new_line['type']:
             self.column_values['type'] = 'ssh'
