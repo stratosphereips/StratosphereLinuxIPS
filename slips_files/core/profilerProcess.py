@@ -376,97 +376,54 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'ssh.log' in new_line['type']:
-            self.column_values['type'] = 'ssh'
-            try:
-                self.column_values['version'] = line[6]
-            except IndexError:
-                self.column_values['version'] = ''
             # Zeek can put in column 7 the auth success if it has one
             # or the auth attempts only. However if the auth
             # success is there, the auth attempts are too.
-            if 'T' in line[7]:
-                try:
-                    self.column_values['auth_success'] = line[7]
-                except IndexError:
-                    self.column_values['auth_success'] = ''
-                try:
-                    self.column_values['auth_attempts'] = line[8]
-                except IndexError:
-                    self.column_values['auth_attempts'] = ''
-                try:
-                    self.column_values['client'] = line[10]
-                except IndexError:
-                    self.column_values['client'] = ''
-                try:
-                    self.column_values['server'] = line[11]
-                except IndexError:
-                    self.column_values['server'] = ''
-                try:
-                    self.column_values['cipher_alg'] = line[12]
-                except IndexError:
-                    self.column_values['cipher_alg'] = ''
-                try:
-                    self.column_values['mac_alg'] = line[13]
-                except IndexError:
-                    self.column_values['mac_alg'] = ''
-                try:
-                    self.column_values['compression_alg'] = line[14]
-                except IndexError:
-                    self.column_values['compression_alg'] = ''
-                try:
-                    self.column_values['kex_alg'] = line[15]
-                except IndexError:
-                    self.column_values['kex_alg'] = ''
-                try:
-                    self.column_values['host_key_alg'] = line[16]
-                except IndexError:
-                    self.column_values['host_key_alg'] = ''
-                try:
-                    self.column_values['host_key'] = line[17]
-                except IndexError:
-                    self.column_values['host_key'] = ''
+            auth_success = get_value_at(7)
+            if 'T' in auth_success:
+                self.flow: SSH = SSH(
+                    starttime,
+                    get_value_at(1, False),
+                    get_value_at(2),
+                    get_value_at(4),
+
+                    get_value_at(6),
+                    get_value_at(7),
+                    get_value_at(8),
+
+                    get_value_at(10),
+                    get_value_at(11),
+                    get_value_at(12),
+                    get_value_at(13),
+
+                    get_value_at(14),
+                    get_value_at(15),
+
+                    get_value_at(16),
+                    get_value_at(17),
+                )
             else:
-                self.column_values['auth_success'] = ''
-                try:
-                    self.column_values['auth_attempts'] = line[7]
-                except IndexError:
-                    self.column_values['auth_attempts'] = ''
-                try:
-                    self.column_values['client'] = line[9]
-                except IndexError:
-                    self.column_values['client'] = ''
-                try:
-                    self.column_values['server'] = line[10]
-                except IndexError:
-                    self.column_values['server'] = ''
-                try:
-                    self.column_values['cipher_alg'] = line[11]
-                except IndexError:
-                    self.column_values['cipher_alg'] = ''
-                try:
-                    self.column_values['mac_alg'] = line[12]
-                except IndexError:
-                    self.column_values['mac_alg'] = ''
-                try:
-                    self.column_values['compression_alg'] = line[13]
-                except IndexError:
-                    self.column_values['compression_alg'] = ''
-                try:
-                    self.column_values['kex_alg'] = line[14]
-                except IndexError:
-                    self.column_values['kex_alg'] = ''
-                try:
-                    self.column_values['host_key_alg'] = line[15]
-                except IndexError:
-                    self.column_values['host_key_alg'] = ''
-                try:
-                    self.column_values['host_key'] = line[16]
-                except IndexError:
-                    self.column_values['host_key'] = ''
-        elif 'irc' in new_line['type']:
-            self.column_values['type'] = 'irc'
-        elif 'long' in new_line['type']:
-            self.column_values['type'] = 'long'
+                self.flow: SSH = SSH(
+                    starttime,
+                    get_value_at(1, False),
+                    get_value_at(2),
+                    get_value_at(4),
+
+                    get_value_at(6),
+                    '',
+                    get_value_at(7),
+
+                    get_value_at(9),
+                    get_value_at(10),
+                    get_value_at(11),
+                    get_value_at(12),
+
+                    get_value_at(13),
+                    get_value_at(14),
+
+                    get_value_at(15),
+                    get_value_at(16),
+                )
         elif 'dhcp.log' in new_line['type']:
             self.column_values['type'] = 'dhcp'
             #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
@@ -478,31 +435,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.column_values['requested_addr'] = line[8]
             self.column_values['saddr'] = self.column_values['client_addr']
             self.flow.daddr = self.column_values['server_addr']
-        elif 'dce_rpc' in new_line['type']:
-            self.column_values['type'] = 'dce_rpc'
-        elif 'dnp3' in new_line['type']:
-            self.column_values['type'] = 'dnp3'
-        elif 'ftp' in new_line['type']:
-            self.column_values['type'] = 'ftp'
-            self.column_values['used_port'] = line[17]
-        elif 'kerberos' in new_line['type']:
-            self.column_values['type'] = 'kerberos'
-        elif 'mysql' in new_line['type']:
-            self.column_values['type'] = 'mysql'
-        elif 'modbus' in new_line['type']:
-            self.column_values['type'] = 'modbus'
-        elif 'ntlm' in new_line['type']:
-            self.column_values['type'] = 'ntlm'
-        elif 'rdp' in new_line['type']:
-            self.column_values['type'] = 'rdp'
-        elif 'sip' in new_line['type']:
-            self.column_values['type'] = 'sip'
-        elif 'smb_cmd' in new_line['type']:
-            self.column_values['type'] = 'smb_cmd'
-        elif 'smb_files' in new_line['type']:
-            self.column_values['type'] = 'smb_files'
-        elif 'smb_mapping' in new_line['type']:
-            self.column_values['type'] = 'smb_mapping'
         elif 'smtp.log' in new_line['type']:
             # "ts uid id.orig_h id.orig_p id.resp_h id.resp_p trans_depth helo mailfrom
             # rcptto date from to reply_to msg_id in_reply_to subject x_originating_ip
