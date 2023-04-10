@@ -18,8 +18,8 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice, Software
-from slips_files.core.flows import Files, ARP
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
+from slips_files.core.flows import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -997,13 +997,16 @@ class ProfilerProcess(multiprocessing.Process):
 
 
         elif 'weird' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'weird',
-                    'name': line.get('name', ''),
-                    'addl': line.get('addl', ''),
-                }
+            self.flow: Weird =  Weird(
+                starttime,
+                line.get('uid', ''),
+                line.get('host', ''),
+                line.get('resp_h', ''),
+
+                line.get('name', ''),
+                line.get('addl', ''),
             )
+
         else:
             return False
         return True
