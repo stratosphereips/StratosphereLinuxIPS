@@ -8,13 +8,13 @@ import json
 
 @dataclass
 class Conn:
+    starttime: str
     uid: str
 
     saddr: str
     daddr: str
 
     dur: float
-    starttime: str
 
     proto: str
     appproto: str
