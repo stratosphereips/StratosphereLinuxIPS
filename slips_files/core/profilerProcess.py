@@ -425,38 +425,44 @@ class ProfilerProcess(multiprocessing.Process):
                     get_value_at(16),
                 )
         elif 'dhcp.log' in new_line['type']:
-            self.column_values['type'] = 'dhcp'
-            #  daddr in dhcp.log is the server_addr at index 3, not 4 like most log files
-            self.flow.daddr = line[3]
-            self.column_values['client_addr'] = line[2]   # the same as saddr
-            self.column_values['server_addr'] = line[3]
-            self.column_values['mac'] = line[4]   # this is the client mac
-            self.column_values['host_name'] = line[5]
-            self.column_values['requested_addr'] = line[8]
-            self.column_values['saddr'] = self.column_values['client_addr']
-            self.flow.daddr = self.column_values['server_addr']
-        elif 'smtp.log' in new_line['type']:
-            # "ts uid id.orig_h id.orig_p id.resp_h id.resp_p trans_depth helo mailfrom
-            # rcptto date from to reply_to msg_id in_reply_to subject x_originating_ip
-            # first_received second_received last_reply path user_agent tls fuids is_webmail"
-            self.column_values['type'] = 'smtp'
-            self.flow.last_reply = line[20]
-        elif 'socks.log' in new_line['type']:
-            self.column_values['type'] = 'socks'
-        elif 'syslog.log' in new_line['type']:
-            self.column_values['type'] = 'syslog'
-        elif 'tunnel.log' in new_line['type']:
-            self.column_values.update({
-                'type': 'tunnel',
-                'sport': line[3],
-                'dport': line[5],
-                'tunnel_type': line[6],
-                'action': line[7],
-            })
+            self.flow: DHCP = DHCP(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(3),   #  daddr in dhcp.log is the server_addr at index 3 not 4 like most log files
 
+                get_value_at(2), # client_addr is the same as saddr
+                get_value_at(3),
+                get_value_at(5),
+
+                get_value_at(4),
+                get_value_at(8),
+
+            )
+        elif 'smtp.log' in new_line['type']:
+            self.flow: SMTP = SMTP(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
+
+                get_value_at(20)
+            )
+        elif 'tunnel.log' in new_line['type']:
+            self.flow: Tunnel = Tunnel(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
+
+                get_value_at(3),
+                get_value_at(5),
+
+                get_value_at(6),
+                get_value_at(7),
+
+            )
         elif 'notice.log' in new_line['type']:
-            # fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	fuid	file_mime_type	file_desc
-            # proto	note	msg	sub	src	dst	p	n	peer_descr	actions	suppress_for
             self.column_values['type'] = 'notice'
             # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
             if self.column_values['saddr'] == '-':
