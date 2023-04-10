@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import List
 from datetime import datetime, timedelta
 import json
+
 @dataclass
 class Conn:
     uid: str
@@ -308,6 +309,22 @@ class Software:
         # store info about everything except http:broswer
         # we're already reading browser UA from http.log
         self.http_browser = self.software == 'HTTP::BROWSER'
+
+@dataclass
+class Weird:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    name: str
+    addl: str
+
+    type_: str = 'weird'
+
+
+
+
 
 
 
