@@ -18,7 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice
+from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows import Files, ARP
 
 from datetime import datetime, timedelta
@@ -980,21 +980,21 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'software' in file_type:
-            software_type = line.get('software_type', '')
-            # store info about everything except http:broswer
-            # we're already reading browser UA from http.log
-            if software_type == 'HTTP::BROWSER':
-                return True
-            self.column_values.update(
-                {
-                    'type': 'software',
-                    'saddr': line.get('host', ''),
-                    'software_type': software_type,
-                    'unparsed_version': line.get('unparsed_version', ''),
-                    'version.major': line.get('version.major', ''),
-                    'version.minor': line.get('version.minor', ''),
-                }
+            self.flow: Software = Software(
+                starttime,
+                line.get('uid', ''),
+                line.get('host', ''),
+                line.get('resp_h', ''),
+
+                line.get('software_type', ''),
+
+                line.get('unparsed_version', ''),
+                line.get('version.major', ''),
+                line.get('version.minor', ''),
             )
+            if self.flow.http_browser:
+                return True
+
 
         elif 'weird' in file_type:
             self.column_values.update(
@@ -1799,10 +1799,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.store_features_going_in(rev_profileid, rev_twid)
 
     def handle_software(self):
-        __database__.add_software_to_profile(
-            self.profileid,
-            self.flow
-        )
+        profile = __database__.add_software_to_profile(self.profileid, self.flow)
         self.publish_to_new_software()
 
     def handle_dhcp(self):
