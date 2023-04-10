@@ -76,12 +76,16 @@ class HTTP:
     method: str
     host: str
     uri: str
+
     version: int
     user_agent: str
+
     request_body_len: int
     response_body_len: int
+
     status_code: str
     status_msg: str
+
     resp_mime_types: str
     resp_fuids: str
 

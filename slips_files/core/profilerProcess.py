@@ -321,51 +321,29 @@ class ProfilerProcess(multiprocessing.Process):
             )
 
         elif 'http.log' in new_line['type']:
-            self.column_values['type'] = 'http'
-            try:
-                self.flow.method = line[7]
-            except IndexError:
-                self.flow.method = ''
-            try:
-                self.column_values['host'] = line[8]
-            except IndexError:
-                self.column_values['host'] = ''
-            try:
-                self.column_values['uri'] = line[9]
-            except IndexError:
-                self.column_values['uri'] = ''
-            try:
-                self.flow.httpversion = line[11]
-            except IndexError:
-                self.flow.httpversion = ''
-            try:
-                self.column_values['user_agent'] = line[12]
-            except IndexError:
-                self.column_values['user_agent'] = ''
-            try:
-                self.column_values['request_body_len'] = line[13]
-            except IndexError:
-                self.column_values['request_body_len'] = 0
-            try:
-                self.column_values['response_body_len'] = line[14]
-            except IndexError:
-                self.column_values['response_body_len'] = 0
-            try:
-                self.column_values['status_code'] = line[15]
-            except IndexError:
-                self.column_values['status_code'] = ''
-            try:
-                self.column_values['status_msg'] = line[16]
-            except IndexError:
-                self.column_values['status_msg'] = ''
-            try:
-                self.column_values['resp_mime_types'] = line[28]
-            except IndexError:
-                self.column_values['resp_mime_types'] = ''
-            try:
-                self.column_values['resp_fuids'] = line[26]
-            except IndexError:
-                self.column_values['resp_fuids'] = ''
+            self.flow: HTTP = HTTP(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
+
+                get_value_at(7),
+                get_value_at(8),
+                get_value_at(9),
+
+                get_value_at(11),
+                get_value_at(12),
+
+                int(get_value_at(13, 0)),
+                int(get_value_at(14, 0)),
+
+                get_value_at(15),
+                get_value_at(16),
+
+                get_value_at(28),
+                get_value_at(26),
+
+            )
 
         elif 'ssl.log' in new_line['type']:
             self.column_values['type'] = 'ssl'
