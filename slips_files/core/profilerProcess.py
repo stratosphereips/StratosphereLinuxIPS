@@ -278,7 +278,6 @@ class ProfilerProcess(multiprocessing.Process):
             self.flow: Conn = Conn(
                 starttime,
                 get_value_at(1, False),
-
                 get_value_at(2),
                 get_value_at(4),
 
@@ -305,38 +304,22 @@ class ProfilerProcess(multiprocessing.Process):
 
 
         elif 'dns.log' in new_line['type']:
-            self.column_values['type'] = 'dns'
-            try:
-                self.column_values['query'] = line[9]
-            except IndexError:
-                self.column_values['query'] = ''
-            try:
-                self.flow.qclass_name = line[11]
-            except IndexError:
-                self.flow.qclass_name = ''
-            try:
-                self.column_values['qtype_name'] = line[13]
-            except IndexError:
-                self.column_values['qtype_name'] = ''
-            try:
-                self.column_values['rcode_name'] = line[15]
-            except IndexError:
-                self.column_values['rcode_name'] = ''
-            try:
-                answers = line[21]
-                if type(answers) == str:
-                    # If the answer is only 1, Zeek gives a string
-                    # so convert to a list
-                    answers = answers.split(',')
-                # ignore dns TXT records
-                answers = [answer for answer in answers if 'TXT ' not in answer]
-                self.column_values['answers'] = answers
-            except IndexError:
-                self.column_values['answers'] = ''
-            try:
-                self.column_values['TTLs'] = line[22]
-            except IndexError:
-                self.column_values['TTLs'] = ''
+            self.flow: DNS = DNS(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
+
+                get_value_at(9),
+
+                get_value_at(11),
+                get_value_at(13),
+                get_value_at(15),
+
+                get_value_at(21),
+                get_value_at(22),
+            )
+
         elif 'http.log' in new_line['type']:
             self.column_values['type'] = 'http'
             try:

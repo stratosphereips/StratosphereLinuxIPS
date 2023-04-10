@@ -10,7 +10,6 @@ import json
 class Conn:
     starttime: str
     uid: str
-
     saddr: str
     daddr: str
 
@@ -50,7 +49,6 @@ class DNS:
     uid: str
     saddr: str
     daddr: str
-
 
     query: str
 
