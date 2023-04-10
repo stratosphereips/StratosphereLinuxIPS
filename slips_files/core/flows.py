@@ -290,6 +290,25 @@ class ARP:
     appproto: str = ''
 
     type_: str = 'arp'
+@dataclass
+class Software:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    software: str
+
+    unparsed_version: str
+    version_major: str
+    version_minor: str
+    type_: str = 'software'
+
+    def __post_init__(self) -> None:
+        # store info about everything except http:broswer
+        # we're already reading browser UA from http.log
+        self.http_browser = self.software == 'HTTP::BROWSER'
+
 
 
 
