@@ -19,7 +19,7 @@ from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP, SMTP, Tunnel, Notice
-from slips_files.core.flows import Files
+from slips_files.core.flows import Files, ARP
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -955,26 +955,30 @@ class ProfilerProcess(multiprocessing.Process):
 
                 line.get('seen_bytes', ''),  # downloaded file size
                 line.get('md5', ''),
+
                 line.get('source', ''),
                 line.get('analyzers', ''),
                 line.get('sha1', ''),
+
                 line.get('tx_hosts',''),
                 line.get('rx_hosts',''),
-
             )
         elif 'arp' in file_type:
-            self.column_values.update(
-                {
-                    'type': 'arp',
-                    'src_mac': line.get('src_mac', ''),
-                    'dst_mac': line.get('dst_mac', ''),
-                    'saddr': line.get('orig_h', ''),
-                    'daddr': line.get('resp_h', ''),
-                    'dst_hw': line.get('resp_hw', ''),
-                    'src_hw': line.get('orig_hw', ''),
-                    'operation': line.get('operation', ''),
-                }
+            self.flow: ARP = ARP(
+                starttime,
+                line.get('uid', ''),
+                line.get('orig_h', ''),
+                line.get('resp_h', ''),
+
+                line.get('src_mac', ''),
+                line.get('dst_mac', ''),
+
+                line.get('orig_hw', ''),
+                line.get('resp_hw', ''),
+                line.get('operation', ''),
+
             )
+
         elif 'software' in file_type:
             software_type = line.get('software_type', '')
             # store info about everything except http:broswer
@@ -1834,14 +1838,15 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_downloaded_file', to_send)
 
     def handle_arp(self):
+        # todo this fun shoud be moved to the db
         to_send = {
             'uid': self.flow.uid,
             'daddr': self.flow.daddr,
             'saddr': self.flow.saddr,
             'dst_mac': self.flow.dmac,
-            'src_mac': self.smac,
-            'dst_hw': self.dst_hw,
-            'src_hw': self.src_hw,
+            'src_mac': self.flow.smac,
+            'dst_hw': self.flow.dst_hw,
+            'src_hw': self.flow.src_hw,
             'operation': self.flow.operation,
             'ts': self.flow.starttime,
             'profileid': self.profileid,
@@ -1857,18 +1862,14 @@ class ProfilerProcess(multiprocessing.Process):
         self.publish_to_new_MAC(
             self.flow.smac, self.flow.saddr
         )
+        #todo therse are add flow params
+
 
         # Add the flow with all the fields interpreted
         __database__.add_flow(
-            profileid=self.profileid,
-            twid=self.twid,
-            stime=self.flow.starttime,
-            dur='0',
-            saddr=self.flow.saddr,
-            daddr=self.flow.daddr,
-            proto='ARP',
-            uid=self.flow.uid,
-            flow_type='arp'
+            self.flow,
+            self.profileid,
+            self.twid,
         )
 
     def handle_weird(self):
