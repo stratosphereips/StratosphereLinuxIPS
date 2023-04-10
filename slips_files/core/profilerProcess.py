@@ -463,39 +463,28 @@ class ProfilerProcess(multiprocessing.Process):
 
             )
         elif 'notice.log' in new_line['type']:
-            self.column_values['type'] = 'notice'
-            # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
-            if self.column_values['saddr'] == '-':
-                try:
-                    self.column_values['saddr'] = line[13]   #  src field
-                except IndexError:
-                    # line doesn't have a p field
-                    # keep it - as it is
-                    pass
+            # portscan notices don't have id.orig_h or id.resp_h fields,
+            # instead they have src and dst
+            self.flow: Notice = Notice(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(13, '-'),    #  src field
+                get_value_at(4),
 
-            if self.flow.daddr == '-':
-                self.flow.daddr = line[14]  #  dst field
-            if self.flow.daddr == '-':
-                self.flow.daddr = self.column_values['saddr']
+                get_value_at(3),
+                get_value_at(5, ''),
 
-            self.flow.dport = line[5]   # id.orig_p
-            if self.flow.dport == '-':
-                try:
-                    self.flow.dport = line[15]   # p field
-                except IndexError:
-                    # line doesn't have a p field
-                    # keep it - as it is
-                    pass
-            self.flow.sport = line[3]
-            self.column_values['note'] = line[10]
-            self.column_values['scanning_ip'] = self.column_values['saddr']
-            self.column_values['scanned_port'] = self.flow.dport
-            self.column_values['msg'] = line[
-                11
-            ]   # we're looking for self signed certs in this field
+
+                get_value_at(10), # note
+                get_value_at(11), # msg
+
+                get_value_at(15), # scanned_port
+                get_value_at(13, '-'), # scanning_ip
+
+                get_value_at(14), # dst
+
+            )
         elif 'files.log' in new_line['type']:
-            """Parse the fields we're interested in in the files.log file"""
-            # the slash before files to distinguish between 'files' in the dir name and file.log
             self.column_values.update(
                 {
                     'type': 'files',
@@ -731,7 +720,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                 line.get('msg', ''),  # we,'re looking for self signed certs in this field
                 line.get('p', ''),
-                line.get('src', ''),
+                line.get('src', ''), # this is the scanning_ip
                 line.get('dst', ''),
             )
 
