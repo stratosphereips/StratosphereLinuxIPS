@@ -150,6 +150,36 @@ The hash should be your 64 character API Key.
   
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf```
 
+## RNN C&C Detection Module
+
+This module is used to detect command and control channels in a network by analyzing the features of the network flows and representing them as Stratosphere Behavioral Letters(Stratoletters). This is achieved through the use of a recurrent neural network, which is trained on these letters to identify and classify potential C&C traffic.
+
+### Stratoletters
+
+Stratoletters is a method used to represent network flows in a concise and standardized manner.
+Stratoletters encodes information about the periodicity, duration, and size of network flows into a string of letter(s) and character(s).
+
+The string represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
+```
+symbol = zeros + letter + timechar
+ ```
+*zero* : hours passed since last flow, can be null
+
+*letter* : a letter/number derived from a 3d matrix based on periodicity,size and duration of the flow. 
+
+*timechar* : character to denote the time eloped since last flow, can be null
+
+```commandline
+Example:
+symbol = 99*z*i.i* 
+model_score = 0.9573354
+symbol = 99. 
+model_score = 0.9063127
+symbol = 77*g.g*g*g.g.g.g*x*x*x*g.g.
+model_score = 0.96772265
+```
+In first example **9** is Stratoletter of current flow. **9*** is previous one, **z*** is before that and so on.
+
 ## Leak Detection Module
 
 This module on runs on pcaps, it uses YARA rules to detect leaks.
