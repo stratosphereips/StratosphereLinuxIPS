@@ -18,8 +18,8 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
-from slips_files.core.flows import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
+from slips_files.core.flows.zeek_flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
+from slips_files.core.flows.zeek_flows import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -255,92 +255,54 @@ class ProfilerProcess(multiprocessing.Process):
         # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
         # using regex split, split line when you encounter more than 2 spaces in a row
         line = line.split('\t') if '\t' in line else split(r'\s{2,}', line)
-        # Generic fields in Zeek
-        # We need to set it to empty at the beginning so any new flow has
-        # the key 'type'
-        self.column_values: dict = {'type': ''}
-        try:
-            self.column_values['starttime'] = utils.convert_to_datetime(line[0])
-        except IndexError:
-            self.column_values['starttime'] = ''
 
-        try:
-            self.flow.uid = line[1]
-        except IndexError:
-            self.flow.uid = False
-        try:
-            self.column_values['saddr'] = line[2]
-        except IndexError:
-            self.column_values['saddr'] = ''
-        try:
-            self.flow.daddr = line[4]
-        except IndexError:
-            self.flow.daddr = ''
+        if ts := line[0]:
+            starttime = utils.convert_to_datetime(ts)
+        else:
+            starttime = ''
+
+        def get_value_at(index: int, default_=''):
+            try:
+                val = line[index]
+                return default_ if val == '-' else val
+            except IndexError:
+                return default_
+
+        uid = get_value_at(1)
+        saddr = get_value_at(2, '')
+        saddr = get_value_at(3, '')
+
+
 
         if 'conn.log' in new_line['type']:
-            self.column_values['type'] = 'conn'
-            try:
-                self.self.flow.dur = float(line[8])
-            except (IndexError, ValueError):
-                self.self.flow.dur = 0
-            self.column_values['endtime'] = str(
-                self.column_values['starttime']
-            ) + str(timedelta(seconds=self.self.flow.dur))
-            self.flow.proto = line[6]
-            try:
-                self.flow.appproto = line[7]
-            except IndexError:
-                # no service recognized
-                self.flow.appproto = ''
-            try:
-                self.flow.sport = line[3]
-            except IndexError:
-                self.flow.sport = ''
-            self.column_values['dir'] = '->'
-            try:
-                self.flow.dport = line[5]
-            except IndexError:
-                self.flow.dport = ''
-            try:
-                self.flow.state = line[11]
-            except IndexError:
-                self.flow.state = ''
-            try:
-                self.column_values['spkts'] = float(line[16])
-            except (IndexError, ValueError):
-                self.column_values['spkts'] = 0
-            try:
-                self.column_values['dpkts'] = float(line[18])
-            except (IndexError, ValueError):
-                self.column_values['dpkts'] = 0
-            self.flow.pkts = (
-                self.column_values['spkts'] + self.column_values['dpkts']
-            )
-            try:
-                self.column_values['sbytes'] = float(line[9])
-            except (IndexError, ValueError):
-                self.column_values['sbytes'] = 0
-            try:
-                self.column_values['dbytes'] = float(line[10])
-            except (IndexError, ValueError):
-                self.column_values['dbytes'] = 0
-            self.column_values['bytes'] = (
-                self.column_values['sbytes'] + self.column_values['dbytes']
-            )
-            try:
-                self.column_values['state_hist'] = line[15]
-            except IndexError:
-                self.column_values['state_hist'] = self.flow.state
+            self.flow: Conn = Conn(
+                starttime,
+                get_value_at(1, False),
 
-            try:
-                self.column_values['smac'] = line[21]
-            except IndexError:
-                self.column_values['smac'] = ''
+                get_value_at(2),
+                get_value_at(4),
 
-            try:
-                self.column_values['dmac'] = line[22]
-            except IndexError:
-                self.column_values['dmac'] = ''
+                float(get_value_at(8, 0)),
+
+                get_value_at(6, False),
+                get_value_at(7),
+
+                int(get_value_at(3)),
+                int(get_value_at(5)),
+
+                int(get_value_at(16, 0)),
+                int(get_value_at(18, 0)),
+
+                int(get_value_at(9, 0)),
+                int(get_value_at(10, 0)),
+
+                get_value_at(21),
+                get_value_at(22),
+
+                get_value_at(11),
+                get_value_at(15),
+            )
+
 
         elif 'dns.log' in new_line['type']:
             self.column_values['type'] = 'dns'
@@ -722,6 +684,7 @@ class ProfilerProcess(multiprocessing.Process):
             # to fix this, only use the file name as file 'type'
             file_type = file_type.split('/')[-1]
 
+        # @@@@@@@@@@ todo remove this remove everything column_values
         # Generic fields in Zeek
         self.column_values = {
             'type': '',
@@ -741,11 +704,11 @@ class ProfilerProcess(multiprocessing.Process):
         # Handle each zeek file type separately
         if 'conn' in file_type:
             self.flow: Conn = Conn(
+                starttime,
                 line.get('uid', False),
                 line.get('id.orig_h', ''),
                 line.get('id.resp_h', ''),
                 line.get('duration', 0),
-                starttime,
                 line['proto'],
                 line.get('service', ''),
                 line.get('id.orig_p', ''),
@@ -849,11 +812,6 @@ class ProfilerProcess(multiprocessing.Process):
 
 
             )
-
-        elif 'irc' in file_type:
-            pass
-        elif 'long' in file_type:
-            pass
         elif 'dhcp' in file_type:
             self.flow: DHCP = DHCP(
                 starttime,
@@ -868,12 +826,6 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('requested_addr', ''),
 
             )
-
-
-        elif 'dce_rpc' in file_type:
-            pass
-        elif 'dnp3' in file_type:
-            pass
         elif 'ftp' in file_type:
             self.flow: FTP = FTP(
                 starttime,
@@ -883,25 +835,6 @@ class ProfilerProcess(multiprocessing.Process):
 
                 line.get('data_channel.resp_p', False),
             )
-
-        elif 'kerberos' in file_type:
-            pass
-        elif 'mysql' in file_type:
-            pass
-        elif 'modbus' in file_type:
-            pass
-        elif 'ntlm' in file_type:
-            pass
-        elif 'rdp' in file_type:
-            pass
-        elif 'sip' in file_type:
-            pass
-        elif 'smb_cmd' in file_type:
-            pass
-        elif 'smb_files' in file_type:
-            pass
-        elif 'smb_mapping' in file_type:
-            pass
         elif 'smtp' in file_type:
             self.flow: SMTP = SMTP(
                 starttime,
@@ -911,10 +844,6 @@ class ProfilerProcess(multiprocessing.Process):
 
                 line.get('last_reply', '')
             )
-        elif 'socks' in file_type:
-            pass
-        elif 'syslog' in file_type:
-            pass
         elif 'tunnel' in file_type:
             self.flow: Tunnel = Tunnel(
                 starttime,
@@ -1997,7 +1926,6 @@ class ProfilerProcess(multiprocessing.Process):
         """
         tupleid = f'{self.daddr_as_obj}-{self.flow.dport}-{self.flow.proto}'
 
-        # current_time = self.column_values['starttime']
         current_duration = self.flow.dur
         current_size = self.flow.bytes
 
