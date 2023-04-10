@@ -241,14 +241,14 @@ class Files:
     daddr: str
 
     size: int
-    md5: int
+    md5: str
 
-    source: int
-    analyzers: int
-    sha1: int
+    source: str
+    analyzers: str
+    sha1: str
 
     tx_hosts: List[str]
-    rx_hosts: str
+    rx_hosts: List[str]
 
     type_: str = 'files'
     def __post_init__(self) -> None:
@@ -259,6 +259,37 @@ class Files:
             self.daddr = json.loads(self.rx_hosts[0])
 
 
+@dataclass
+class ARP:
+    starttime: str
+    uid: str
+    saddr: str
+    daddr: str
+
+    smac: str
+    dmac: str
+
+    src_hw: str
+    dst_hw: str
+
+    operation: str
+    # the following fields are necessary for the add_flow() function
+    # the main goal is to treal ARP flows as conn.log flows and show
+    # them in the timeline
+    dur: str = '0'
+    proto: str = 'ARP'
+    state: str = ''
+    pkts: int = 0
+    sport: str = ''
+    dport: str = ''
+    bytes: str = ''
+    sbytes: str = ''
+    dbytes: str = ''
+    spkts: str = ''
+    dpkts: str = ''
+    appproto: str = ''
+
+    type_: str = 'arp'
 
 
 
