@@ -485,36 +485,48 @@ class ProfilerProcess(multiprocessing.Process):
 
             )
         elif 'files.log' in new_line['type']:
-            self.column_values.update(
-                {
-                    'type': 'files',
-                    'uid': line[4],
-                    'saddr': line[2],
-                    'daddr': line[3],  # rx_hosts
-                    'size': line[13],  # downloaded file size
-                    'md5': line[19],
-                    # used for detecting ssl certs
-                    'source': line[5],
-                    'analyzers': line[7],
-                    'sha1': line[19],
-                }
+            self.flow: Files = Files(
+                starttime,
+                get_value_at(4, False),
+                get_value_at(2),
+                get_value_at(3),
+
+                get_value_at(13),
+                get_value_at(19),
+
+                get_value_at(5),
+                get_value_at(7),
+                get_value_at(19),
+
+                get_value_at(2),
+                get_value_at(3),
+            )
+        elif 'arp.log' in new_line['type']:
+            self.flow: ARP = ARP(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(4),
+                get_value_at(5),
+
+                get_value_at(2),
+                get_value_at(3),
+
+                get_value_at(6),
+                get_value_at(7),
+
+                get_value_at(1),
             )
 
-        elif 'arp.log' in new_line['type']:
-            self.column_values['type'] = 'arp'
-            self.column_values['operation'] = line[1]
-            self.column_values['src_mac'] = line[2]
-            self.flow.dmac = line[3]
-            self.column_values['saddr'] = line[4]
-            self.flow.daddr = line[5]
-            self.column_values['src_hw'] = line[6]
-            self.column_values['dst_hw'] = line[7]
-
         elif 'weird' in new_line['type']:
-            self.column_values['type'] = 'weird'
-            self.flow.name = line[6]
-            self.column_values['addl'] = line[7]
+            self.flow: Weird = Weird(
+                starttime,
+                get_value_at(1, False),
+                get_value_at(2),
+                get_value_at(4),
 
+                get_value_at(6),
+                get_value_at(7),
+            )
 
     def process_zeek_input(self, new_line: dict):
         """

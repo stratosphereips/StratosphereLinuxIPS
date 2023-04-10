@@ -251,7 +251,7 @@ class Files:
     saddr: str
     daddr: str
 
-    size: int
+    size: int # downloaded file size
     md5: str
 
     source: str
@@ -286,7 +286,7 @@ class ARP:
     operation: str
     # the following fields are necessary for the add_flow() function
     # the main goal is to treal ARP flows as conn.log flows and show
-    # them in the timeline
+    # them in the timeline #TODO find a better way
     dur: str = '0'
     proto: str = 'ARP'
     state: str = ''
