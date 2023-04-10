@@ -230,12 +230,20 @@ class Notice:
         # portscan notices don't have id.orig_h or id.resp_h fields, instead they have src and dst
         if not self.saddr:
             self.saddr = self.scanning_ip
+
         if not self.daddr:
             # set daddr to src for now because the notice
             # that contains portscan doesn't have
             # a dst field and slips needs it to work
             self.daddr = self.dst or self.saddr
 
+        if not self.dport:
+            # set the dport to the p field if it's there
+            self.dport = self.scanned_port
+
+        if not self.scanned_port:
+            # set the dport to the p field if it's there
+            self.dport = self.dport
 @dataclass
 class Files:
     starttime: str
