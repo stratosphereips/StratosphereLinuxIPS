@@ -171,6 +171,9 @@ The **letter** is the key part in a Stratoletter string. It is derived from a di
 
 *duration* : Number that denotes the duration of flow, range from 1 to 3
 
+A visual representation of the dictionary from which letter is derived
+
+![stratoletters letter mapping matrix](https://github.com/haleelsada/StratosphereLinuxIPS/blob/haleel_stratoletters/docs/images/stratoletters.png?raw=true)
 
 Example:
 ```commandline
