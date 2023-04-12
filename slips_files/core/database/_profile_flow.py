@@ -52,7 +52,23 @@ class ProfilingFlowsDatabase(object):
             # Publish that there is a new IP ready in the channel
             self.publish('new_ip', ip)
 
-    def give_threat_intelligence(self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False):
+    def init_ti_queue(self):
+        """used when the TI module starts to initialize the queue size """
+        self.r.set('threat_intelligence_q_size', 0)
+
+    def mark_as_analyzed_by_ti_module(self):
+        """
+        everytime an ip/domain is analyzed by the ti module, this function will decrease the
+        ti queue by 1
+        """
+        self.r.incrby('threat_intelligence_q_size', -1)
+
+    def get_ti_queue_size(self):
+        return self.r.get('threat_intelligence_q_size')
+
+    def give_threat_intelligence(
+            self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False
+    ):
         data_to_send = {
                 'to_lookup': str(lookup),
                 'profileid': str(profileid),
@@ -70,6 +86,9 @@ class ProfilingFlowsDatabase(object):
         self.publish(
             'give_threat_intelligence', json.dumps(data_to_send)
         )
+        # this is a trick to know how many ips/domains that slips needs to analyze before stopping
+        self.r.incr("threat_intelligence_q_size")
+
         return data_to_send
 
     def ask_for_ip_info(self, ip, profileid, twid, proto, starttime, uid, ip_state, daddr=False):
@@ -901,7 +920,7 @@ class ProfilingFlowsDatabase(object):
         """
         return self.r.zscore('labels', label)
 
-    def get_disabled_modules(self)-> list:
+    def get_disabled_modules(self) -> list:
         return json.loads(self.r.hget('analysis', 'disabled_modules'))
 
     def set_input_metadata(self, info:dict):

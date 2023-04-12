@@ -207,6 +207,22 @@ class ProcessManager:
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
         return True if diff >= wait_for_modules_to_finish else False
 
+    def get_modules_to_be_killed_last(self) -> list:
+        """
+        based on what modules were started in this instance of slips return the list of processes that we want to kill last
+        @return: list of modules to be kileld last
+        """
+        modules_to_be_killed_last = [
+            'Evidence',
+            # 'Blocking',
+            # 'Exporting Alerts',
+        ]
+        if self.main.args.blocking:
+            modules_to_be_killed_last.append('Blocking')
+        if 'exporting_alerts' not in __database__.get_disabled_modules():
+            modules_to_be_killed_last.append('Exporting Alerts')
+        return modules_to_be_killed_last
+
     def shutdown_gracefully(self):
         """
         Wait for all modules to confirm that they're done processing
@@ -245,12 +261,7 @@ class ProcessManager:
                 profilesLen = __database__.getProfilesLen()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
-
-            modules_to_be_killed_last = {
-                'EvidenceProcess',
-                'Blocking',
-                'Exporting Alerts',
-            }
+            modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
 
             self.stop_core_processes()
             # only print that modules are still running once
@@ -266,12 +277,12 @@ class ProcessManager:
             # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
             if not self.main.args.stopdaemon:
                 #  modules_to_be_killed_last are ignored when they publish a msg in finished modules channel,
-                # we will kill them aletr, so we shouldn't be looping and waiting for them to get outta the loop
+                # we will kill them later, so we shouldn't be waiting for them to get outta the loop
                 slips_processes = len(list(self.main.PIDs.keys())) - len(modules_to_be_killed_last)
 
                 try:
                     while (
-                        len(finished_modules) < slips_processes  and max_loops != 0
+                        len(finished_modules) < slips_processes and max_loops != 0
                     ):
                         # print(f"Modules not finished yet {set(loaded_modules) - set(finished_modules)}")
                         try:
@@ -287,7 +298,6 @@ class ProcessManager:
                             # receiving the stop_process msg
                             # to confirm that all processing is done and we can safely exit now
                             module_name = message['data']
-
                             if module_name in modules_to_be_killed_last:
                                 # we should kill these modules the very last, or else we'll miss evidence generated
                                 # right before slips stops
@@ -311,7 +321,9 @@ class ProcessManager:
                         # make sure we're not processing
                         # the logical flow is self.pids should be empty by now as all modules
                         # are closed, the only ones left are the ones we want to kill last
-                        if len(self.main.PIDs) > len(modules_to_be_killed_last) and max_loops < 2:
+                        modules_running = len(self.main.PIDs)
+                        modules_that_should_be_running = len(modules_to_be_killed_last)
+                        if modules_running > modules_that_should_be_running and max_loops < 2:
                             if not warning_printed and self.warn_about_pending_modules(finished_modules):
                                 if 'Update Manager' not in finished_modules:
                                     print(

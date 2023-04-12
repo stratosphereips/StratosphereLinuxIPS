@@ -360,7 +360,7 @@ class Module(Module, multiprocessing.Process):
                         exported_to_stix = self.export_to_STIX(msg_to_send)
                         if not exported_to_stix:
                             self.print('Problem in export_to_STIX()', 0, 3)
-                            continue
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()

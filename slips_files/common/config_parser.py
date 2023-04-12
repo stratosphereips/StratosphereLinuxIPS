@@ -690,7 +690,7 @@ class ConfigParser(object):
                 'stix' not in export_to
                 and 'slack' not in export_to
         ):
-            to_ignore.append('exporting_alerts')
+            to_ignore.append('Exporting Alerts')
 
         if (
                 not use_p2p
