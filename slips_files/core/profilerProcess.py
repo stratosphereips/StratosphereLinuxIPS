@@ -22,7 +22,7 @@ from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows.argus import ArgusConn
 from slips_files.core.flows.nfdump import NfdumpConn
-from slips_files.core.flows.suricata import SuricataFlow
+from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -915,15 +915,11 @@ class ProfilerProcess(multiprocessing.Process):
                 return default_
         if event_type == 'flow':
             self.flow: SuricataFlow = SuricataFlow(
-
                 flow_id,
-
                 saddr,
                 sport,
-
                 daddr,
                 dport,
-
                 proto,
                 appproto,
 
@@ -939,70 +935,32 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('flow', 'state', ''),
             )
 
+        elif event_type == 'http':
+            self.flow: SuricataHTTP = SuricataHTTP(
+                timestamp,
+                flow_id,
+                saddr,
+                sport,
+                daddr,
+                dport,
+                proto,
+                appproto,
+                get_value_at('http', 'http_method', ''),
+                get_value_at('http', 'hostname', ''),
+                get_value_at('http', 'url', ''),
 
-        #
-        # self.column_values['endtime'] = False
-        # self.self.flow.dur = 0
-        # self.column_values['flow_id'] = line.get('flow_id', False)
-        # self.column_values['saddr'] = line.get('src_ip', False)
-        # self.flow.sport = line.get('src_port', False)
-        # self.flow.daddr = line.get('dest_ip', False)
-        # self.flow.dport = line.get('dest_port', False)
-        # self.flow.proto = line.get('proto', False)
-        # self.column_values['type'] = line.get('event_type', False)
-        # self.column_values['dir'] = '->'
-        # self.flow.appproto = line.get('app_proto', False)
+                get_value_at('http', 'http_user_agent', ''),
+                get_value_at('http', 'status', ''),
 
-        #     elif self.column_values['type'] == 'http':
-        #         if line.get('http', None):
-        #             try:
-        #                 self.flow.method = line['http'][
-        #                     'http_method'
-        #                 ]
-        #             except KeyError:
-        #                 self.flow.method = ''
-        #             try:
-        #                 self.column_values['host'] = line['http']['hostname']
-        #             except KeyError:
-        #                 self.column_values['host'] = ''
-        #             try:
-        #                 self.column_values['uri'] = line['http']['url']
-        #             except KeyError:
-        #                 self.column_values['uri'] = ''
-        #             try:
-        #                 self.column_values['user_agent'] = line['http'][
-        #                     'http_user_agent'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['user_agent'] = ''
-        #             try:
-        #                 self.column_values['status_code'] = line['http'][
-        #                     'status'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['status_code'] = ''
-        #             try:
-        #                 self.flow.httpversion = line['http'][
-        #                     'protocol'
-        #                 ]
-        #             except KeyError:
-        #                 self.flow.httpversion = ''
-        #             try:
-        #                 self.column_values['response_body_len'] = line['http'][
-        #                     'length'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['response_body_len'] = 0
-        #             try:
-        #                 self.column_values['request_body_len'] = line['http'][
-        #                     'request_body_len'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['request_body_len'] = 0
-        #             self.column_values['status_msg'] = ''
-        #             self.column_values['resp_mime_types'] = ''
-        #             self.column_values['resp_fuids'] = ''
-        #
+                get_value_at('http', 'protocol', ''),
+
+
+                int(get_value_at('http', 'request_body_len', 0)),
+                int(get_value_at('http', 'length', 0)),
+            )
+
+
+
         #     elif self.column_values['type'] == 'dns':
         #         if line.get('dns', None):
         #             try:

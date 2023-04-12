@@ -59,4 +59,33 @@ class SuricataFlow:
         self.pkts = self.dpkts + self.spkts
         self.bytes = self.dbytes + self.sbytes
 
+@dataclass
+class SuricataHTTP:
+    starttime: str
+    flow_id: str
 
+    saddr: str
+    sport: str
+
+    daddr: str
+    dport: str
+
+    proto: str
+    appproto: str
+
+    method: str
+    host: str
+    uri: str
+
+    user_agent: str
+    status_code: str
+
+    version: str
+
+    request_body_len: int
+    response_body_len: int
+
+    status_msg: str = ''
+    resp_mime_types: str = ''
+    resp_fuids: str = ''
+    type_ = 'http'
