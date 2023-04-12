@@ -159,18 +159,72 @@ This module is used to detect command and control channels in a network by analy
 Stratoletters is a method used to represent network flows in a concise and standardized manner.
 Stratoletters encodes information about the periodicity, duration, and size of network flows into a string of letter(s) and character(s).
 
-The string represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
+The **letter** is the key part in a Stratoletter string. It is derived from a dictionary and defined based on the features of the flow such as periodicity, size and duration.
+
+*periodicity* : A number that denotes how frequent the flow is, calculated based on time of past flows
+
+-1 = No previous data
+
+1-4 = 1 strongly periodic to 4 strongly not periodic
+
+*size* : Number denotes the size of flow, range from 1 to 3
+
+*duration* : Number that denotes the duration of flow, range from 1 to 3
+
+
+Example:
+```commandline
+# Slips computed value of the flow
+periodicity = 1     # Strongly periodic
+duration = 1
+size = 3
+letter = g          # lowercase letter for periodicity 1(Strongly periodic) and 3(Weakly not periodic)
+```
+```commandline
+periodicity = -1    # no previous flow data
+duration = 2
+size = 3
+letter = 8          # the letter will be an integer if there is no previous data
+```
+```commandline
+periodicity = 4     # Weakly not periodic
+duration = 3
+size = 3
+letter = Z          # uppercase letter for periodicity 2(Weakly periodicity) and 4(Strongly not periodicity)
+```
+
+Stratoletters represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
 ```
 symbol = zeros + letter + timechar
  ```
-*zero* : hours passed since last flow, can be null
+*zero* : hours passed since last flow, can be null eg: `00`
 
-*letter* : a letter/number derived from a 3d matrix based on periodicity,size and duration of the flow. 
+*letter* : the letter, eg: `1`,`w`,`H`
 
-*timechar* : character to denote the time eloped since last flow, can be null
+*timechar* : character to denote the time eloped since last flow, can be null eg: `.`, `,`, `+`, `*`
 
 ```commandline
-Example:
+# Ultimately this is how a Stratoletter is formed
+No of hours passed since last flow = 2
+periodicity = 2     # Weakly not periodicity
+duration = 1
+size = 1
+timechar = 
+stratoletter of last flow = 9*z*
+letter = A          
+symbol = 00A9*z*
+
+No of hours passed since last flow = 0
+periodicity = 3     # Weakly not periodic
+duration = 1
+size = 2
+timechar = *
+stratoletter of last flow = e.
+letter = u
+symbol = u*e.
+```
+Then the model will predict how secure each flow is based on the Stratoletter
+```commandline
 symbol = 99*z*i.i* 
 model_score = 0.9573354
 symbol = 99. 
