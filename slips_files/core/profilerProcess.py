@@ -22,7 +22,7 @@ from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows.argus import ArgusConn
 from slips_files.core.flows.nfdump import NfdumpConn
-from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP
+from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP, SuricataDNS
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -876,6 +876,7 @@ class ProfilerProcess(multiprocessing.Process):
             get_value_at(14),
         )
 
+
     def process_suricata_input(self, line) -> None:
         """Read suricata json input and store it in column_values"""
 
@@ -913,6 +914,7 @@ class ProfilerProcess(multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
+
         if event_type == 'flow':
             self.flow: SuricataFlow = SuricataFlow(
                 flow_id,
@@ -954,40 +956,27 @@ class ProfilerProcess(multiprocessing.Process):
 
                 get_value_at('http', 'protocol', ''),
 
-
                 int(get_value_at('http', 'request_body_len', 0)),
                 int(get_value_at('http', 'length', 0)),
             )
+        elif event_type == 'dns':
+            answers: list = self.get_suricata_answers(line)
+            self.flow: SuricataDNS = SuricataDNS(
+                timestamp,
+                flow_id,
+                saddr,
+                sport,
+                daddr,
+                dport,
+                proto,
+                appproto,
 
+                get_value_at('dns', 'rdata', ''),
+                get_value_at('dns', 'ttl', ''),
+                get_value_at('qtype_name', 'rrtype', ''),
+                answers
+            )
 
-
-        #     elif self.column_values['type'] == 'dns':
-        #         if line.get('dns', None):
-        #             try:
-        #                 self.column_values['query'] = line['dns']['rdata']
-        #             except KeyError:
-        #                 self.column_values['query'] = ''
-        #             try:
-        #                 self.column_values['TTLs'] = line['dns']['ttl']
-        #             except KeyError:
-        #                 self.column_values['TTLs'] = ''
-        #
-        #             try:
-        #                 self.column_values['qtype_name'] = line['dns'][
-        #                     'rrtype'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['qtype_name'] = ''
-        #             # can not find in eve.json:
-        #             self.flow.qclass_name = ''
-        #             self.column_values['rcode_name'] = ''
-        #             self.column_values['answers'] = ''
-        #             if type(self.column_values['answers']) == str:
-        #                 # If the answer is only 1, Zeek gives a string
-        #                 # so convert to a list
-        #                 self.column_values['answers'] = [
-        #                     self.column_values['answers']
-        #                 ]
         #     elif self.column_values['type'] == 'tls':
         #         if line.get('tls', None):
         #             try:

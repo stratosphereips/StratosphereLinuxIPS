@@ -89,3 +89,28 @@ class SuricataHTTP:
     resp_mime_types: str = ''
     resp_fuids: str = ''
     type_ = 'http'
+
+@dataclass
+class SuricataDNS:
+    starttime: str
+    flow_id: str
+
+    saddr: str
+    sport: str
+
+    daddr: str
+    dport: str
+
+    proto: str
+    appproto: str
+
+    query: str
+    TTLs: str
+    qtype_name: str
+    answers: list
+
+    # these alues are not present in eve.json
+    qclass_name: str = ''
+    rcode_name: str = ''
+    type_: str = 'dns'
+
