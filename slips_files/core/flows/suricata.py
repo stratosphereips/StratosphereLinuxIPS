@@ -139,3 +139,52 @@ class SuricataTLS:
     notafter: str
 
     type_: str = 'ssl'
+
+
+@dataclass
+class SuricataFile:
+    starttime: str
+    flow_id: str
+
+    saddr: str
+    sport: str
+
+    daddr: str
+    dport: str
+
+    proto: str
+    appproto: str
+
+    filesize: int
+    type_ = 'file'
+
+@dataclass
+class SuricataSSH:
+    starttime: str
+    flow_id: str
+
+    saddr: str
+    sport: str
+
+    daddr: str
+    dport: str
+
+    proto: str
+    appproto: str
+
+    client: str
+    version: str
+    server: str
+
+    # these fields aren't available in suricata, they're available in zeek only
+    auth_success: str = ''
+    auth_attempts: str = ''
+    cipher_alg: str = ''
+    mac_alg: str = ''
+    kex_alg: str = ''
+    compression_alg: str = ''
+    host_key_alg: str = ''
+    host_key: str = ''
+
+    type_: str = 'ssh'
+
