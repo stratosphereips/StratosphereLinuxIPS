@@ -876,6 +876,22 @@ class ProfilerProcess(multiprocessing.Process):
             get_value_at(14),
         )
 
+    def get_suricata_answers(self, line: dict) -> list:
+        """
+        reads the suricata dns answer and extracts the cname and IPs in the dns answerr=
+        """
+        line = line.get('dns', False)
+        if not line:
+            return []
+
+        answers: dict = line.get('grouped', False)
+        if not answers:
+            return []
+
+        cnames: list = answers.get('CNAME', [])
+        ips: list = answers.get('A', [])
+
+        return cnames + ips
 
     def process_suricata_input(self, line) -> None:
         """Read suricata json input and store it in column_values"""
