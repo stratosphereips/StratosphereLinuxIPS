@@ -18,11 +18,13 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+
 from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows.argus import ArgusConn
 from slips_files.core.flows.nfdump import NfdumpConn
-from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP, SuricataDNS, SuricataTLS
+from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP, SuricataDNS
+from slips_files.core.flows.suricata import SuricataFile,  SuricataTLS, SuricataSSH
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -993,7 +995,7 @@ class ProfilerProcess(multiprocessing.Process):
                 answers
             )
         elif event_type == 'tls':
-            self.flow: SuricataDNS = SuricataTLS(
+            self.flow: SuricataTLS = SuricataTLS(
                 timestamp,
                 flow_id,
                 saddr,
@@ -1013,57 +1015,36 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('tls', 'notafter', ''),
                 get_value_at('tls', 'sni', ''),
             )
+        elif event_type == 'fileinfo':
+            self.flow: SuricataFile = SuricataFile(
+                timestamp,
+                flow_id,
+                saddr,
+                sport,
+                daddr,
+                dport,
+                proto,
+                appproto,
+                get_value_at('fileinfo', 'size', ''),
 
-        #     elif self.column_values['type'] == 'alert':
-        #         if line.get('alert', None):
-        #             try:
-        #                 self.column_values['signature'] = line['alert'][
-        #                     'signature'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['signature'] = ''
-        #             try:
-        #                 self.column_values['category'] = line['alert'][
-        #                     'category'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['category'] = ''
-        #             try:
-        #                 self.column_values['severity'] = line['alert'][
-        #                     'severity'
-        #                 ]
-        #             except KeyError:
-        #                 self.column_values['severity'] = ''
-        #     elif self.column_values['type'] == 'fileinfo':
-        #         try:
-        #             self.column_values['filesize'] = line['fileinfo']['size']
-        #         except KeyError:
-        #             self.column_values['filesize'] = ''
-        #     elif self.column_values['type'] == 'ssh':
-        #         try:
-        #             self.column_values['client'] = line['ssh']['client']['software_version']
-        #         except KeyError:
-        #             self.column_values['client'] = ''
-        #
-        #         try:
-        #             self.column_values['version'] = line['ssh']['client']['proto_version']
-        #         except KeyError:
-        #             self.column_values['version'] = ''
-        #
-        #         try:
-        #             self.column_values['server'] = line['ssh']['server']['software_version']
-        #         except KeyError:
-        #             self.column_values['server'] = ''
-        #         # these fields aren't available in suricata, they're available in zeek only
-        #         self.column_values['auth_success'] = ''
-        #         self.column_values['auth_attempts'] = ''
-        #         self.column_values['cipher_alg'] = ''
-        #         self.column_values['mac_alg'] = ''
-        #         self.column_values['kex_alg'] = ''
-        #         self.column_values['compression_alg'] = ''
-        #         self.column_values['host_key_alg'] = ''
-        #         self.column_values['host_key'] = ''
-        #
+            )
+
+
+        elif event_type == 'ssh':
+            self.flow: SuricataSSH = SuricataSSH(
+                timestamp,
+                flow_id,
+                saddr,
+                sport,
+                daddr,
+                dport,
+                proto,
+                appproto,
+                get_value_at('ssh', 'client', {}).get('software_version', ''),
+                get_value_at('ssh', 'client', {}).get('proto_version', ''),
+                get_value_at('ssh', 'server', {}).get('software_version', ''),
+
+            )
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
