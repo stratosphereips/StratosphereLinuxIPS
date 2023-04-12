@@ -39,8 +39,8 @@ class Conn:
     def __post_init__(self) -> None:
         endtime = str(self.starttime) + str(timedelta(seconds=self.dur))
         self.endtime: str = endtime
-        self.pkts: int =  self.spkts + self.dpkts
-        self.bytes: int =  self.sbytes + self.dbytes
+        self.pkts: int = self.spkts + self.dpkts
+        self.bytes: int = self.sbytes + self.dbytes
         self.state_hist: str = self.history or self.state
 
 @dataclass

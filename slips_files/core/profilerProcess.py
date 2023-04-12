@@ -18,9 +18,10 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows.zeek_flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
-from slips_files.core.flows.zeek_flows import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
-from slips_files.core.flows.argus_flows import ArgusConn
+from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
+from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
+from slips_files.core.flows.argus import ArgusConn
+from slips_files.core.flows.nfdump import NfdumpConn
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -841,98 +842,36 @@ class ProfilerProcess(multiprocessing.Process):
         Process the line and extract columns for nfdump
         """
         self.separator = ','
-        self.column_values = {
-            'starttime': False,
-            'endtime': False,
-            'dur': False,
-            'proto': False,
-            'appproto': False,
-            'saddr': False,
-            'sport': False,
-            'dir': False,
-            'daddr': False,
-            'dport': False,
-            'state': False,
-            'pkts': False,
-            'spkts': False,
-            'dpkts': False,
-            'bytes': False,
-            'sbytes': False,
-            'dbytes': False,
-            'type': 'nfdump',
-        }
-        # Read the lines fast
         line = new_line['data']
         nline = line.strip().split(self.separator)
-        try:
-            self.column_values['starttime'] = utils.convert_to_datetime(nline[0])
-        except IndexError:
-            pass
-        try:
-            self.column_values['endtime'] = utils.convert_to_datetime(nline[1])
-        except IndexError:
-            pass
-        try:
-            self.self.flow.dur = nline[2]
-        except IndexError:
-            pass
-        try:
-            self.flow.proto = nline[7]
-        except IndexError:
-            pass
-        try:
-            self.column_values['saddr'] = nline[3]
-        except IndexError:
-            pass
-        try:
-            self.flow.sport = nline[5]
-        except IndexError:
-            pass
-        try:
-            # Direction: ingress=0, egress=1
-            self.column_values['dir'] = nline[22]
-        except IndexError:
-            pass
-        try:
-            self.flow.daddr = nline[4]
-        except IndexError:
-            pass
-        try:
-            self.flow.dport = nline[6]
-        except IndexError:
-            pass
-        try:
-            self.flow.state = nline[8]
-        except IndexError:
-            pass
-        try:
-            self.column_values['spkts'] = nline[11]
-        except IndexError:
-            pass
-        try:
-            self.column_values['dpkts'] = nline[13]
-        except IndexError:
-            pass
-        try:
-            self.flow.pkts = (
-                self.column_values['spkts'] + self.column_values['dpkts']
-            )
-        except IndexError:
-            pass
-        try:
-            self.column_values['sbytes'] = nline[12]
-        except IndexError:
-            pass
-        try:
-            self.column_values['dbytes'] = nline[14]
-        except IndexError:
-            pass
-        try:
-            self.column_values['bytes'] = (
-                self.column_values['sbytes'] + self.column_values['dbytes']
-            )
-        except IndexError:
-            pass
+        def get_value_at(indx, default_=False):
+            try:
+                val = nline[indx]
+                return val or default_
+            except (IndexError, KeyError):
+                return default_
+        self.flow: NfdumpConn = NfdumpConn(
+            utils.convert_to_datetime(get_value_at(0)),
+            utils.convert_to_datetime(get_value_at(1)),
+
+            get_value_at(2),
+            get_value_at(7),
+
+            get_value_at(3),
+            get_value_at(5),
+
+            get_value_at(22),
+
+            get_value_at(4),
+            get_value_at(6),
+
+            get_value_at(8),
+            get_value_at(11),
+            get_value_at(13),
+
+            get_value_at(12),
+            get_value_at(14),
+        )
 
     def process_suricata_input(self, line) -> None:
         """Read suricata json input and store it in column_values"""
