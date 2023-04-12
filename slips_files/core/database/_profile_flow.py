@@ -716,7 +716,7 @@ class ProfilingFlowsDatabase(object):
         uid = flow.uid
         ip = str(ip_address)
         spkts = flow.spkts
-        state_hist = flow.state_hist
+        state_hist = flow.state_hist if hasattr(flow, 'state_hist') else ''
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']

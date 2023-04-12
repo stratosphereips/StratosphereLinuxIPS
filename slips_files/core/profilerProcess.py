@@ -20,6 +20,7 @@ from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek_flows import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek_flows import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
+from slips_files.core.flows.argus_flows import ArgusConn
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -271,8 +272,6 @@ class ProfilerProcess(multiprocessing.Process):
         uid = get_value_at(1)
         saddr = get_value_at(2, '')
         saddr = get_value_at(3, '')
-
-
 
         if 'conn.log' in new_line['type']:
             self.flow: Conn = Conn(
@@ -806,102 +805,36 @@ class ProfilerProcess(multiprocessing.Process):
         Process the line and extract columns for argus
         """
         line = new_line['data']
-        self.column_values = {
-            'starttime': False,
-            'endtime': False,
-            'dur': False,
-            'proto': False,
-            'appproto': False,
-            'saddr': False,
-            'sport': False,
-            'dir': False,
-            'daddr': False,
-            'dport': False,
-            'state': False,
-            'pkts': False,
-            'spkts': False,
-            'dpkts': False,
-            'bytes': False,
-            'sbytes': False,
-            'dbytes': False,
-            'type': 'argus',
-        }
-
         nline = line.strip().split(self.separator)
-        try:
-            self.column_values['starttime'] = utils.convert_to_datetime(
-                nline[self.column_idx['starttime']]
-            )
-        except KeyError:
-            pass
-        try:
-            self.column_values['endtime'] = nline[self.column_idx['endtime']]
-        except KeyError:
-            pass
-        try:
-            self.self.flow.dur = nline[self.column_idx['dur']]
-        except KeyError:
-            pass
-        try:
-            self.flow.proto = nline[self.column_idx['proto']]
-        except KeyError:
-            pass
-        try:
-            self.flow.appproto = nline[self.column_idx['appproto']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['saddr'] = nline[self.column_idx['saddr']]
-        except KeyError:
-            pass
-        try:
-            self.flow.sport = nline[self.column_idx['sport']]
-        except KeyError:
-            pass
-        try:
-            self.column_values['dir'] = nline[self.column_idx['dir']]
-        except KeyError:
-            pass
-        try:
-            self.flow.daddr = nline[self.column_idx['daddr']]
-        except KeyError:
-            pass
-        try:
-            self.flow.dport = nline[self.column_idx['dport']]
-        except KeyError:
-            pass
-        try:
-            self.flow.state = nline[self.column_idx['state']]
-        except KeyError:
-            pass
-        try:
-            self.flow.pkts = int(nline[self.column_idx['pkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['spkts'] = int(nline[self.column_idx['spkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['dpkts'] = int(nline[self.column_idx['dpkts']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['bytes'] = int(nline[self.column_idx['bytes']])
-        except KeyError:
-            pass
-        try:
-            self.column_values['sbytes'] = int(
-                nline[self.column_idx['sbytes']]
-            )
-        except KeyError:
-            pass
-        try:
-            self.column_values['dbytes'] = int(
-                nline[self.column_idx['dbytes']]
-            )
-        except KeyError:
-            pass
+        def get_value_at(field_name, default_=False):
+            """field_name is used to get the index of
+             the field from the column_idx dict"""
+            try:
+                val = nline[self.column_idx[field_name]]
+                return val or default_
+            except (IndexError, KeyError):
+                return default_
+
+        self.flow: ArgusConn = ArgusConn(
+            utils.convert_to_datetime(get_value_at('starttime')),
+            get_value_at('endtime'),
+            get_value_at('dur'),
+            get_value_at('proto'),
+            get_value_at('appproto'),
+            get_value_at('saddr'),
+            get_value_at('sport'),
+            get_value_at('dir'),
+            get_value_at('daddr'),
+            get_value_at('dport'),
+            get_value_at('state'),
+            get_value_at('pkts'),
+            get_value_at('spkts'),
+            get_value_at('dpkts'),
+            int(get_value_at('bytes')),
+            int(get_value_at('sbytes')),
+            int(get_value_at('dbytes')),
+        )
+
 
     def process_nfdump_input(self, new_line):
         """
