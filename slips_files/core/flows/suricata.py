@@ -114,3 +114,28 @@ class SuricataDNS:
     rcode_name: str = ''
     type_: str = 'dns'
 
+
+@dataclass
+class SuricataTLS:
+    starttime: str
+    flow_id: str
+
+    saddr: str
+    sport: str
+
+    daddr: str
+    dport: str
+
+    proto: str
+    appproto: str
+
+    sslversion: str
+    subject: str
+
+    issuer: str
+    server_name: str
+
+    notbefore: str
+    notafter: str
+
+    type_: str = 'ssl'
