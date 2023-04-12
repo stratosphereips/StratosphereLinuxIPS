@@ -852,6 +852,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 self.urlhaus.set_evidence_malicious_hash(file_info)
             else:
                 self.set_evidence_malicious_hash(file_info)
+        __database__.mark_as_analyzed_by_ti_module()
+
 
     def is_malicious_url(
             self,
@@ -913,6 +915,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             domain, profileid, twid
         )
 
+
     def update_local_file(self, filename):
         """
         Updates the given local ti file if the hash of it has changed
@@ -931,6 +934,15 @@ class Module(Module, multiprocessing.Process, URLhaus):
             __database__.set_TI_file_info(filename, malicious_file_info)
             return True
 
+    def have_pending_ips_in_queue(self):
+        """ check if this module has pending ips/domains to analyse """
+        q_size = __database__.get_ti_queue_size()
+        if q_size is None:
+            return False
+        if int(q_size) > 0:
+            return True
+        return False
+
     def run(self):
         try:
             utils.drop_root_privs()
@@ -940,10 +952,11 @@ class Module(Module, multiprocessing.Process, URLhaus):
             self.update_local_file('own_malicious_iocs.csv')
             self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
+            __database__.init_ti_queue()
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_exc(), 0, 1)
             return True
 
         while True:
@@ -1005,6 +1018,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             profileid,
                             twid
                         )
+                    __database__.mark_as_analyzed_by_ti_module()
+
 
                 message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
@@ -1013,10 +1028,11 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
                     self.is_malicious_hash(file_info)
-                    continue
 
-                if self.should_shutdown:
-                     self.shutdown_gracefully()
+                if self.should_shutdown and not self.have_pending_ips_in_queue():
+                    self.shutdown_gracefully()
+                    return
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
