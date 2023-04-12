@@ -22,7 +22,7 @@ from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows.argus import ArgusConn
 from slips_files.core.flows.nfdump import NfdumpConn
-from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP, SuricataDNS
+from slips_files.core.flows.suricata import SuricataFlow, SuricataHTTP, SuricataDNS, SuricataTLS
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -992,42 +992,28 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('qtype_name', 'rrtype', ''),
                 answers
             )
+        elif event_type == 'tls':
+            self.flow: SuricataDNS = SuricataTLS(
+                timestamp,
+                flow_id,
+                saddr,
+                sport,
+                daddr,
+                dport,
+                proto,
+                appproto,
 
-        #     elif self.column_values['type'] == 'tls':
-        #         if line.get('tls', None):
-        #             try:
-        #                 self.flow.sslversion = line['tls'][
-        #                     'version'
-        #                 ]
-        #             except KeyError:
-        #                 self.flow.sslversion = ''
-        #             try:
-        #                 self.column_values['subject'] = line['tls']['subject']
-        #             except KeyError:
-        #                 self.column_values['subject'] = ''
-        #             try:
-        #                 self.column_values['issuer'] = line['tls']['issuerdn']
-        #             except KeyError:
-        #                 self.column_values['issuer'] = ''
-        #             try:
-        #                 self.column_values['server_name'] = line['tls']['sni']
-        #             except KeyError:
-        #                 self.column_values['server_name'] = ''
-        #
-        #             try:
-        #                 self.column_values['notbefore'] = utils.convert_to_datetime(
-        #                     line['tls']['notbefore']
-        #                 )
-        #             except KeyError:
-        #                 self.column_values['notbefore'] = ''
-        #
-        #             try:
-        #                 self.column_values['notafter'] = utils.convert_to_datetime(
-        #                     line['tls']['notafter']
-        #                 )
-        #             except KeyError:
-        #                 self.column_values['notafter'] = ''
-        #
+                get_value_at('tls', 'version', ''),
+                get_value_at('tls', 'subject', ''),
+
+                get_value_at('tls', 'issuerdn', ''),
+                get_value_at('tls', 'sni', ''),
+
+                get_value_at('tls', 'notbefore', ''),
+                get_value_at('tls', 'notafter', ''),
+                get_value_at('tls', 'sni', ''),
+            )
+
         #     elif self.column_values['type'] == 'alert':
         #         if line.get('alert', None):
         #             try:
