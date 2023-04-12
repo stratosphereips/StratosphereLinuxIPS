@@ -1,5 +1,5 @@
 """
-Data classes for all types of flows
+Data classes for all types of zeek flows
 """
 from dataclasses import dataclass
 from typing import List

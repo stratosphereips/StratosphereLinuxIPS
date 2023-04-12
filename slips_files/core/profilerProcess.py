@@ -22,6 +22,7 @@ from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
 from slips_files.core.flows.argus import ArgusConn
 from slips_files.core.flows.nfdump import NfdumpConn
+from slips_files.core.flows.suricata import SuricataFlow
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
@@ -844,12 +845,14 @@ class ProfilerProcess(multiprocessing.Process):
         self.separator = ','
         line = new_line['data']
         nline = line.strip().split(self.separator)
+
         def get_value_at(indx, default_=False):
             try:
                 val = nline[indx]
                 return val or default_
             except (IndexError, KeyError):
                 return default_
+
         self.flow: NfdumpConn = NfdumpConn(
             utils.convert_to_datetime(get_value_at(0)),
             utils.convert_to_datetime(get_value_at(1)),
@@ -878,285 +881,240 @@ class ProfilerProcess(multiprocessing.Process):
 
         # convert to dict if it's not a dict already
         if type(line) == str:
-            # lien is the actual data
             line = json.loads(line)
         else:
             # line is a dict with data and type as keys
-            try:
-                line = json.loads(line['data'])
-            except KeyError:
-                # can't find the line!
-                return
+            line = json.loads(line.get('data', False))
 
-        self.column_values: dict = {}
+        if not line:
+            return
+        # these fields are common in all suricata lines regardless of the event type
+        event_type = line['event_type']
+        flow_id = line['flow_id']
+        saddr = line['src_ip']
+        sport = line['src_port']
+        daddr = line['dest_ip']
+        dport = line['dest_port']
+        proto = line['proto']
+        appproto = line.get('app_proto', False)
+
         try:
-            self.column_values['starttime'] = utils.convert_to_datetime(line['timestamp'])
-        # except (KeyError, ValueError):
+            timestamp = utils.convert_to_datetime(line['timestamp'])
         except ValueError:
             # Reason for catching ValueError:
             # "ValueError: time data '1900-01-00T00:00:08.511802+0000' does not match format '%Y-%m-%dT%H:%M:%S.%f%z'"
             # It means some flow do not have valid timestamp. It seems to me if suricata does not know the timestamp, it put
             # there this not valid time.
-            self.column_values['starttime'] = False
-        self.column_values['endtime'] = False
-        self.self.flow.dur = 0
-        self.column_values['flow_id'] = line.get('flow_id', False)
-        self.column_values['saddr'] = line.get('src_ip', False)
-        self.flow.sport = line.get('src_port', False)
-        self.flow.daddr = line.get('dest_ip', False)
-        self.flow.dport = line.get('dest_port', False)
-        self.flow.proto = line.get('proto', False)
-        self.column_values['type'] = line.get('event_type', False)
-        self.column_values['dir'] = '->'
-        self.flow.appproto = line.get('app_proto', False)
+            timestamp = False
 
-        if self.column_values['type']:
-            """
-            suricata available event_type values:
-            -flow
-            -tls
-            -http
-            -dns
-            -alert
-            -fileinfo
-            -stats (only one line - it is conclusion of entire capture)
-            """
-            if self.column_values['type'] == 'flow':
-                # A suricata line of flow type usually has 2 components.
-                # 1. flow information
-                # 2. tcp information
-                if line.get('flow', None):
-                    try:
-                        # Define time again, because this is line of flow type and
-                        # we do not want timestamp but start time.
-                        self.column_values['starttime'] = utils.convert_to_datetime(
-                            line['flow']['start']
-                        )
-                    except KeyError:
-                        self.column_values['starttime'] = False
-                    try:
-                        self.column_values['endtime'] = utils.convert_to_datetime(
-                            line['flow']['end']
-                        )
-                    except KeyError:
-                        self.column_values['endtime'] = False
+        def get_value_at(field, subfield, default_=False):
+            try:
+                val = line[field][subfield]
+                return val or default_
+            except (IndexError, KeyError):
+                return default_
+        if event_type == 'flow':
+            self.flow: SuricataFlow = SuricataFlow(
 
-                    try:
-                        self.self.flow.dur = (
-                            self.column_values['endtime']
-                            - self.column_values['starttime']
-                        ).total_seconds()
-                    except (KeyError, TypeError):
-                        self.self.flow.dur = 0
-                    try:
-                        self.column_values['spkts'] = line['flow'][
-                            'pkts_toserver'
-                        ]
-                    except KeyError:
-                        self.column_values['spkts'] = 0
-                    try:
-                        self.column_values['dpkts'] = line['flow'][
-                            'pkts_toclient'
-                        ]
-                    except KeyError:
-                        self.column_values['dpkts'] = 0
+                flow_id,
 
-                    self.flow.pkts = (
-                        self.column_values['dpkts']
-                        + self.column_values['spkts']
-                    )
+                saddr,
+                sport,
 
-                    try:
-                        self.column_values['sbytes'] = line['flow'][
-                            'bytes_toserver'
-                        ]
-                    except KeyError:
-                        self.column_values['sbytes'] = 0
+                daddr,
+                dport,
 
-                    try:
-                        self.column_values['dbytes'] = line['flow'][
-                            'bytes_toclient'
-                        ]
-                    except KeyError:
-                        self.column_values['dbytes'] = 0
+                proto,
+                appproto,
 
-                    self.column_values['bytes'] = (
-                        self.column_values['dbytes']
-                        + self.column_values['sbytes']
-                    )
+                utils.convert_to_datetime(get_value_at('flow', 'start')),
+                utils.convert_to_datetime(get_value_at('flow', 'end')),
 
-                    try:
-                        """
-                        There are different states in which a flow can be.
-                        Suricata distinguishes three flow-states for TCP and two for UDP. For TCP,
-                        these are: New, Established and Closed,for UDP only new and established.
-                        For each of these states Suricata can employ different timeouts.
-                        """
-                        self.flow.state = line['flow']['state']
-                    except KeyError:
-                        self.flow.state = ''
-            elif self.column_values['type'] == 'http':
-                if line.get('http', None):
-                    try:
-                        self.flow.method = line['http'][
-                            'http_method'
-                        ]
-                    except KeyError:
-                        self.flow.method = ''
-                    try:
-                        self.column_values['host'] = line['http']['hostname']
-                    except KeyError:
-                        self.column_values['host'] = ''
-                    try:
-                        self.column_values['uri'] = line['http']['url']
-                    except KeyError:
-                        self.column_values['uri'] = ''
-                    try:
-                        self.column_values['user_agent'] = line['http'][
-                            'http_user_agent'
-                        ]
-                    except KeyError:
-                        self.column_values['user_agent'] = ''
-                    try:
-                        self.column_values['status_code'] = line['http'][
-                            'status'
-                        ]
-                    except KeyError:
-                        self.column_values['status_code'] = ''
-                    try:
-                        self.flow.httpversion = line['http'][
-                            'protocol'
-                        ]
-                    except KeyError:
-                        self.flow.httpversion = ''
-                    try:
-                        self.column_values['response_body_len'] = line['http'][
-                            'length'
-                        ]
-                    except KeyError:
-                        self.column_values['response_body_len'] = 0
-                    try:
-                        self.column_values['request_body_len'] = line['http'][
-                            'request_body_len'
-                        ]
-                    except KeyError:
-                        self.column_values['request_body_len'] = 0
-                    self.column_values['status_msg'] = ''
-                    self.column_values['resp_mime_types'] = ''
-                    self.column_values['resp_fuids'] = ''
+                int(get_value_at('flow', 'pkts_toserver', 0)),
+                int(get_value_at('flow', 'pkts_toclient', 0)),
 
-            elif self.column_values['type'] == 'dns':
-                if line.get('dns', None):
-                    try:
-                        self.column_values['query'] = line['dns']['rdata']
-                    except KeyError:
-                        self.column_values['query'] = ''
-                    try:
-                        self.column_values['TTLs'] = line['dns']['ttl']
-                    except KeyError:
-                        self.column_values['TTLs'] = ''
+                int(get_value_at('flow', 'bytes_toserver', 0)),
+                int(get_value_at('flow', 'bytes_toclient', 0)),
 
-                    try:
-                        self.column_values['qtype_name'] = line['dns'][
-                            'rrtype'
-                        ]
-                    except KeyError:
-                        self.column_values['qtype_name'] = ''
-                    # can not find in eve.json:
-                    self.flow.qclass_name = ''
-                    self.column_values['rcode_name'] = ''
-                    self.column_values['answers'] = ''
-                    if type(self.column_values['answers']) == str:
-                        # If the answer is only 1, Zeek gives a string
-                        # so convert to a list
-                        self.column_values['answers'] = [
-                            self.column_values['answers']
-                        ]
-            elif self.column_values['type'] == 'tls':
-                if line.get('tls', None):
-                    try:
-                        self.flow.sslversion = line['tls'][
-                            'version'
-                        ]
-                    except KeyError:
-                        self.flow.sslversion = ''
-                    try:
-                        self.column_values['subject'] = line['tls']['subject']
-                    except KeyError:
-                        self.column_values['subject'] = ''
-                    try:
-                        self.column_values['issuer'] = line['tls']['issuerdn']
-                    except KeyError:
-                        self.column_values['issuer'] = ''
-                    try:
-                        self.column_values['server_name'] = line['tls']['sni']
-                    except KeyError:
-                        self.column_values['server_name'] = ''
+                get_value_at('flow', 'state', ''),
+            )
 
-                    try:
-                        self.column_values['notbefore'] = utils.convert_to_datetime(
-                            line['tls']['notbefore']
-                        )
-                    except KeyError:
-                        self.column_values['notbefore'] = ''
 
-                    try:
-                        self.column_values['notafter'] = utils.convert_to_datetime(
-                            line['tls']['notafter']
-                        )
-                    except KeyError:
-                        self.column_values['notafter'] = ''
+        #
+        # self.column_values['endtime'] = False
+        # self.self.flow.dur = 0
+        # self.column_values['flow_id'] = line.get('flow_id', False)
+        # self.column_values['saddr'] = line.get('src_ip', False)
+        # self.flow.sport = line.get('src_port', False)
+        # self.flow.daddr = line.get('dest_ip', False)
+        # self.flow.dport = line.get('dest_port', False)
+        # self.flow.proto = line.get('proto', False)
+        # self.column_values['type'] = line.get('event_type', False)
+        # self.column_values['dir'] = '->'
+        # self.flow.appproto = line.get('app_proto', False)
 
-            elif self.column_values['type'] == 'alert':
-                if line.get('alert', None):
-                    try:
-                        self.column_values['signature'] = line['alert'][
-                            'signature'
-                        ]
-                    except KeyError:
-                        self.column_values['signature'] = ''
-                    try:
-                        self.column_values['category'] = line['alert'][
-                            'category'
-                        ]
-                    except KeyError:
-                        self.column_values['category'] = ''
-                    try:
-                        self.column_values['severity'] = line['alert'][
-                            'severity'
-                        ]
-                    except KeyError:
-                        self.column_values['severity'] = ''
-            elif self.column_values['type'] == 'fileinfo':
-                try:
-                    self.column_values['filesize'] = line['fileinfo']['size']
-                except KeyError:
-                    self.column_values['filesize'] = ''
-            elif self.column_values['type'] == 'ssh':
-                try:
-                    self.column_values['client'] = line['ssh']['client']['software_version']
-                except KeyError:
-                    self.column_values['client'] = ''
-
-                try:
-                    self.column_values['version'] = line['ssh']['client']['proto_version']
-                except KeyError:
-                    self.column_values['version'] = ''
-
-                try:
-                    self.column_values['server'] = line['ssh']['server']['software_version']
-                except KeyError:
-                    self.column_values['server'] = ''
-                # these fields aren't available in suricata, they're available in zeek only
-                self.column_values['auth_success'] = ''
-                self.column_values['auth_attempts'] = ''
-                self.column_values['cipher_alg'] = ''
-                self.column_values['mac_alg'] = ''
-                self.column_values['kex_alg'] = ''
-                self.column_values['compression_alg'] = ''
-                self.column_values['host_key_alg'] = ''
-                self.column_values['host_key'] = ''
-
+        #     elif self.column_values['type'] == 'http':
+        #         if line.get('http', None):
+        #             try:
+        #                 self.flow.method = line['http'][
+        #                     'http_method'
+        #                 ]
+        #             except KeyError:
+        #                 self.flow.method = ''
+        #             try:
+        #                 self.column_values['host'] = line['http']['hostname']
+        #             except KeyError:
+        #                 self.column_values['host'] = ''
+        #             try:
+        #                 self.column_values['uri'] = line['http']['url']
+        #             except KeyError:
+        #                 self.column_values['uri'] = ''
+        #             try:
+        #                 self.column_values['user_agent'] = line['http'][
+        #                     'http_user_agent'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['user_agent'] = ''
+        #             try:
+        #                 self.column_values['status_code'] = line['http'][
+        #                     'status'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['status_code'] = ''
+        #             try:
+        #                 self.flow.httpversion = line['http'][
+        #                     'protocol'
+        #                 ]
+        #             except KeyError:
+        #                 self.flow.httpversion = ''
+        #             try:
+        #                 self.column_values['response_body_len'] = line['http'][
+        #                     'length'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['response_body_len'] = 0
+        #             try:
+        #                 self.column_values['request_body_len'] = line['http'][
+        #                     'request_body_len'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['request_body_len'] = 0
+        #             self.column_values['status_msg'] = ''
+        #             self.column_values['resp_mime_types'] = ''
+        #             self.column_values['resp_fuids'] = ''
+        #
+        #     elif self.column_values['type'] == 'dns':
+        #         if line.get('dns', None):
+        #             try:
+        #                 self.column_values['query'] = line['dns']['rdata']
+        #             except KeyError:
+        #                 self.column_values['query'] = ''
+        #             try:
+        #                 self.column_values['TTLs'] = line['dns']['ttl']
+        #             except KeyError:
+        #                 self.column_values['TTLs'] = ''
+        #
+        #             try:
+        #                 self.column_values['qtype_name'] = line['dns'][
+        #                     'rrtype'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['qtype_name'] = ''
+        #             # can not find in eve.json:
+        #             self.flow.qclass_name = ''
+        #             self.column_values['rcode_name'] = ''
+        #             self.column_values['answers'] = ''
+        #             if type(self.column_values['answers']) == str:
+        #                 # If the answer is only 1, Zeek gives a string
+        #                 # so convert to a list
+        #                 self.column_values['answers'] = [
+        #                     self.column_values['answers']
+        #                 ]
+        #     elif self.column_values['type'] == 'tls':
+        #         if line.get('tls', None):
+        #             try:
+        #                 self.flow.sslversion = line['tls'][
+        #                     'version'
+        #                 ]
+        #             except KeyError:
+        #                 self.flow.sslversion = ''
+        #             try:
+        #                 self.column_values['subject'] = line['tls']['subject']
+        #             except KeyError:
+        #                 self.column_values['subject'] = ''
+        #             try:
+        #                 self.column_values['issuer'] = line['tls']['issuerdn']
+        #             except KeyError:
+        #                 self.column_values['issuer'] = ''
+        #             try:
+        #                 self.column_values['server_name'] = line['tls']['sni']
+        #             except KeyError:
+        #                 self.column_values['server_name'] = ''
+        #
+        #             try:
+        #                 self.column_values['notbefore'] = utils.convert_to_datetime(
+        #                     line['tls']['notbefore']
+        #                 )
+        #             except KeyError:
+        #                 self.column_values['notbefore'] = ''
+        #
+        #             try:
+        #                 self.column_values['notafter'] = utils.convert_to_datetime(
+        #                     line['tls']['notafter']
+        #                 )
+        #             except KeyError:
+        #                 self.column_values['notafter'] = ''
+        #
+        #     elif self.column_values['type'] == 'alert':
+        #         if line.get('alert', None):
+        #             try:
+        #                 self.column_values['signature'] = line['alert'][
+        #                     'signature'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['signature'] = ''
+        #             try:
+        #                 self.column_values['category'] = line['alert'][
+        #                     'category'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['category'] = ''
+        #             try:
+        #                 self.column_values['severity'] = line['alert'][
+        #                     'severity'
+        #                 ]
+        #             except KeyError:
+        #                 self.column_values['severity'] = ''
+        #     elif self.column_values['type'] == 'fileinfo':
+        #         try:
+        #             self.column_values['filesize'] = line['fileinfo']['size']
+        #         except KeyError:
+        #             self.column_values['filesize'] = ''
+        #     elif self.column_values['type'] == 'ssh':
+        #         try:
+        #             self.column_values['client'] = line['ssh']['client']['software_version']
+        #         except KeyError:
+        #             self.column_values['client'] = ''
+        #
+        #         try:
+        #             self.column_values['version'] = line['ssh']['client']['proto_version']
+        #         except KeyError:
+        #             self.column_values['version'] = ''
+        #
+        #         try:
+        #             self.column_values['server'] = line['ssh']['server']['software_version']
+        #         except KeyError:
+        #             self.column_values['server'] = ''
+        #         # these fields aren't available in suricata, they're available in zeek only
+        #         self.column_values['auth_success'] = ''
+        #         self.column_values['auth_attempts'] = ''
+        #         self.column_values['cipher_alg'] = ''
+        #         self.column_values['mac_alg'] = ''
+        #         self.column_values['kex_alg'] = ''
+        #         self.column_values['compression_alg'] = ''
+        #         self.column_values['host_key_alg'] = ''
+        #         self.column_values['host_key'] = ''
+        #
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
