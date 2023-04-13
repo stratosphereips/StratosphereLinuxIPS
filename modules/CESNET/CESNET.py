@@ -172,7 +172,7 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(
-            f'Uploading 1 event to warden server.', 2, 0
+            'Uploading 1 event to warden server.', 2, 0
         )
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
@@ -229,7 +229,7 @@ class Module(Module, multiprocessing.Process):
         )
 
         if len(events) == 0:
-            self.print(f'Error getting event from warden server.')
+            self.print('Error getting event from warden server.')
             return False
 
         # now that we received from warden server,
@@ -345,7 +345,7 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

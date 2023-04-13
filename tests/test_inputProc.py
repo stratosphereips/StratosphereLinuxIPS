@@ -3,11 +3,13 @@ from slips_files.core.inputProcess import InputProcess
 import shutil
 import os
 
+
+zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
+redis_port = 6531
+
 def do_nothing(*arg):
     """Used to override the print function because using the print causes broken pipes"""
     pass
-
-zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
 def check_zeek_or_bro():
     """
@@ -28,6 +30,8 @@ def create_inputProcess_instance(
 ):
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
+    global redis_port
+    redis_port +=1
     inputProcess = InputProcess(
         outputQueue,
         profilerQueue,
@@ -37,8 +41,9 @@ def create_inputProcess_instance(
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        65531
+        redis_port
     )
+
     inputProcess.bro_timeout = 1
     # override the print function to avoid broken pipes
     inputProcess.print = do_nothing
@@ -60,14 +65,15 @@ def test_handle_pcap_and_interface(
         outputQueue, profilerQueue, input_information, input_type
     )
     inputProcess.zeek_pid = 'False'
-    assert inputProcess.handle_pcap_and_interface() == True
+    inputProcess.is_zeek_tabs = True
+    assert inputProcess.handle_pcap_and_interface() is True
 
 
 @pytest.mark.parametrize(
     'input_type,input_information',
     [
-        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'),
-        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'),
+        ('zeek_folder', 'dataset/test10-mixed-zeek-dir/'), # tabs
+        ('zeek_folder', 'dataset/test9-mixed-zeek-dir/'), # json
     ],
 )
 def test_read_zeek_folder(
@@ -76,23 +82,24 @@ def test_read_zeek_folder(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.read_zeek_folder() == True
-
+    assert inputProcess.read_zeek_folder() is True
 
 @pytest.mark.parametrize(
-    'input_type,input_information',
+    'input_type,input_information,expected_output',
     [
-        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir-2/conn.log'),
-        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log'),
+        ('zeek_log_file', 'dataset/test10-mixed-zeek-dir/conn.log', True), #tabs
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn.log', True), # json
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/conn', False), # json
+        ('zeek_log_file', 'dataset/test9-mixed-zeek-dir/x509.log', False), # json
     ],
 )
 def test_handle_zeek_log_file(
-    outputQueue, profilerQueue, input_type, input_information
+    outputQueue, profilerQueue, input_type, input_information, expected_output
 ):
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_zeek_log_file() == True
+    assert inputProcess.handle_zeek_log_file() == expected_output
 
 
 @pytest.mark.parametrize(
@@ -104,7 +111,7 @@ def test_handle_nfdump(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_nfdump() == True
+    assert inputProcess.handle_nfdump() is True
 
 
 @pytest.mark.skipif(
@@ -125,7 +132,7 @@ def test_handle_binetflow(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_binetflow() == True
+    assert inputProcess.handle_binetflow() is True
 
 
 @pytest.mark.parametrize(
@@ -138,4 +145,4 @@ def test_handle_suricata(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_suricata() == True
+    assert inputProcess.handle_suricata() is True

@@ -115,7 +115,7 @@ class Module(Module, multiprocessing.Process):
     def send_to_slack(self, msg_to_send: str) -> bool:
         # Msgs sent in this channel will be exported to slack
         # Token to login to your slack bot. it should be set in slack_bot_token_secret
-        if self.BOT_TOKEN is '':
+        if self.BOT_TOKEN == '':
             # The file is empty
             self.print(
                 f"Can't find SLACK_BOT_TOKEN in {self.slack_token_filepath}.",0,2,
@@ -124,7 +124,7 @@ class Module(Module, multiprocessing.Process):
 
         slack_client = WebClient(token=self.BOT_TOKEN)
         try:
-            response = slack_client.chat_postMessage(
+            slack_client.chat_postMessage(
                 # Channel name is set in slips.conf
                 channel=self.slack_channel_name,
                 # Sensor name is set in slips.conf
@@ -152,7 +152,7 @@ class Module(Module, multiprocessing.Process):
             discovery_path=self.discovery_path,
         )
         # jwt_auth_url is optional
-        if self.jwt_auth_path is not '':
+        if self.jwt_auth_path != '':
             client.set_auth(
                 username=self.taxii_username,
                 password=self.taxii_password,
@@ -235,16 +235,14 @@ class Module(Module, multiprocessing.Process):
             # Get the ip
             attacker = attacker.split(':')[0]
         ioc_type = utils.detect_data_type(attacker)
-        if ioc_type is 'ip':
-            pattern = "[ip-addr:value = '{}']".format(attacker)
-        elif ioc_type is 'domain':
-            pattern = "[domain-name:value = '{}']".format(attacker)
-        elif ioc_type is 'url':
-            pattern = "[url:value = '{}']".format(attacker)
+        if ioc_type == 'ip':
+            pattern = f"[ip-addr:value = '{attacker}']"
+        elif ioc_type == 'domain':
+            pattern = f"[domain-name:value = '{attacker}']"
+        elif ioc_type == 'url':
+            pattern = f"[url:value = '{attacker}']"
         else:
-            self.print(
-                "Can't set pattern for STIX. {}".format(attacker), 0, 3
-            )
+            self.print(f"Can't set pattern for STIX. {attacker}", 0, 3)
             return False
         # Required Indicator Properties: type, spec_version, id, created, modified , all are set automatically
         # Valid_from, created and modified attribute will be set to the current time
@@ -275,7 +273,7 @@ class Module(Module, multiprocessing.Process):
             # Append mode to add the new indicator to the objects array
             with open('STIX_data.json', 'a') as stix_file:
                 # Append the indicator in the objects array
-                stix_file.write(',' + str(indicator) + ']\n}\n')
+                stix_file.write(f',{str(indicator)}' + ']\n}\n')
 
         # Set of unique ips added to stix_data.json to avoid duplicates
         self.added_ips.add(attacker)
@@ -362,12 +360,12 @@ class Module(Module, multiprocessing.Process):
                         exported_to_stix = self.export_to_STIX(msg_to_send)
                         if not exported_to_stix:
                             self.print('Problem in export_to_STIX()', 0, 3)
-                            continue
+
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

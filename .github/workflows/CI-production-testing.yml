@@ -15,7 +15,7 @@ jobs:
     timeout-minutes: 7200
 
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
 
     steps:
     - uses: actions/checkout@v3
@@ -74,7 +74,20 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
     env:
-      SLIPS_VERSION: v1.0.1
+      SLIPS_VERSION: v1.0.2
+
+    strategy:
+      matrix:
+        include:
+          - type: ubuntu-image
+            name: ubuntu-image
+            image_name: slips
+            path: ./docker/ubuntu-image/Dockerfile
+#
+#          - type: macosm1-image
+#            name: macosm1-image
+#            image_name: slips_macos_m1
+#            path: ./docker/macosm1-image/Dockerfile
 
     steps:
 
@@ -84,15 +97,16 @@ jobs:
       with:
         ref: 'develop'
 
-    # build slips from ubuntu dockerfile, but don't push
-    - name: Build our ubuntu image from dockerfile
+    # build slips from target dockerfile, but don't push
+    - name: Build our ${{ matrix.name }} from dockerfile
       id: docker_build_slips
       uses: docker/build-push-action@v2
       with:
         context: ./
-        file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        file: ${{ matrix.path }}
+        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
         push: false
+
 
     # use the built image to run unit tests inside docker
     # we ignore the blocking module unit tests because we cannot run
@@ -102,11 +116,15 @@ jobs:
       with:
         image: stratosphereips/slips:latest
         run: |
+          git reset --hard
           git pull & git checkout origin/develop
+          python3 -m pip install -r requirements.txt 
           redis-server --daemonize yes
+          git show-branch --no-name HEAD
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
           python3  -m pytest tests/test_database.py -p no:warnings -vv
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
+          printf "0" | ./slips.py -k
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 

@@ -38,7 +38,7 @@ Helper functions for testing
 def is_json(myjson):
   try:
     json.loads(myjson)
-  except ValueError as e:
+  except ValueError:
     return False
   return True
 
@@ -47,71 +47,71 @@ def is_json(myjson):
 Test functions
 """
 def test_type_profiles_correct():
-    test_key = "profiles"
-    assert __database__.type(test_key) == TYPE_SET
-    assert ("profile_" in list(__database__.smembers(test_key))[0]) == True
+  test_key = "profiles"
+  assert __database__.type(test_key) == TYPE_SET
+  assert 'profile_' in list(__database__.smembers(test_key))[0]
 
 
 def test_type_tws_correct():
-    test_key = "twsprofile_188.110.58.51"
-    assert __database__.type(test_key) == TYPE_ZSET
-    assert ("timewindow" in __database__.zrange(test_key, 0, -1)[0]) == True
+  test_key = "twsprofile_188.110.58.51"
+  assert __database__.type(test_key) == TYPE_ZSET
+  assert 'timewindow' in __database__.zrange(test_key, 0, -1)[0]
 
 
 def test_type_outtuples_correct():
-    test_key = "profile_188.110.58.51_timewindow1"
-    test_field = "OutTuples"
-    assert __database__.type(test_key) == TYPE_HASH
+  test_key = "profile_188.110.58.51_timewindow1"
+  test_field = "OutTuples"
+  assert __database__.type(test_key) == TYPE_HASH
 
-    outtuples = __database__.hget(test_key, test_field)
-    assert is_json(outtuples) == True
+  outtuples = __database__.hget(test_key, test_field)
+  assert is_json(outtuples) is True
 
-    outtuples = json.loads(outtuples)
-    assert (type(outtuples) is dict) == True
+  outtuples = json.loads(outtuples)
+  assert type(outtuples) is dict
 
-    first_keypair = list(outtuples.items())[0]
-    assert (type(first_keypair[1]) is list) == True
+  first_keypair = list(outtuples.items())[0]
+  assert type(first_keypair[1]) is list
 
 
 def test_type_IPsInfo_correct():
-    test_key = "IPsInfo"
-    test_field = "188.110.58.51"
+  test_key = "IPsInfo"
+  test_field = "188.110.58.51"
 
-    assert __cache__.type(test_key) == TYPE_HASH
-    ip_info = __cache__.hget(test_key, test_field)
-    assert is_json(ip_info) == True
+  assert __cache__.type(test_key) == TYPE_HASH
+  ip_info = __cache__.hget(test_key, test_field)
+  assert is_json(ip_info) is True
 
-    ip_info = json.loads(ip_info)
-    assert (type(ip_info) is dict) == True
+  ip_info = json.loads(ip_info)
+  assert type(ip_info) is dict
 
 
 def test_type_timeline_correct():
-    test_key = "profile_188.110.58.51_timewindow1_timeline"
-    table_fields = ["timestamp", "dport_name", "preposition", "daddr"]
-    assert __database__.type(test_key) == TYPE_ZSET
+  test_key = "profile_188.110.58.51_timewindow1_timeline"
+  table_fields = ["timestamp", "dport_name", "preposition", "daddr"]
+  assert __database__.type(test_key) == TYPE_ZSET
 
-    timeline = __database__.zrange(test_key, 0,-1)
-    for id in range(0, len(timeline)):
-        line = timeline[id]
-        assert is_json(line)
-        line = json.loads(line)
-        for field in table_fields:
-            assert (field in line) == True
+  timeline = __database__.zrange(test_key, 0,-1)
+  for id in range(len(timeline)):
+    line = timeline[id]
+    assert is_json(line)
+    line = json.loads(line)
+    for field in table_fields:
+      assert field in line
 
 
 def test_type_flows_correct():
-    test_key = "profile_188.110.58.51_timewindow1_flows"
-    table_fields = ["ts", "dur", "saddr", "sport", "daddr", "dport", "proto", "origstate","state", "pkts", "allbytes", "spkts", "sbytes"]
+  test_key = "profile_188.110.58.51_timewindow1_flows"
+  table_fields = ["ts", "dur", "saddr", "sport", "daddr", "dport", "proto", "origstate","state", "pkts", "allbytes", "spkts", "sbytes"]
 
-    assert __database__.type(test_key) == TYPE_HASH
-    flows = __database__.hgetall(test_key)
+  assert __database__.type(test_key) == TYPE_HASH
+  flows = __database__.hgetall(test_key)
 
-    for key, value in flows.items():
-        line = flows[key]
-        assert is_json(line)
-        line = json.loads(line)
-        for field in table_fields:
-            assert (field in line) == True
+  for key, value in flows.items():
+    line = flows[key]
+    assert is_json(line)
+    line = json.loads(line)
+    for field in table_fields:
+      assert field in line
 
 
 if __name__ == "__main__":

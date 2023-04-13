@@ -1,7 +1,5 @@
 """Unit test for modules/threat_intelligence/threat_intelligence.py"""
 from ..modules.threat_intelligence.threat_intelligence import Module
-from ..slips_files.common.slips_utils import utils
-import configparser
 import os
 import pytest
 
@@ -25,7 +23,7 @@ def test_parse_ti_file(database, outputQueue):
     local_ti_files_dir = threatintel.path_to_local_ti_files
     local_ti_file = os.path.join(local_ti_files_dir, 'own_malicious_iocs.csv')
     # this is an ip we know we have in own_maicious_iocs.csv
-    assert threatintel.parse_local_ti_file(local_ti_file) == True
+    assert threatintel.parse_local_ti_file(local_ti_file) is True
     assert database.search_IP_in_IoC('54.192.46.116')
 
 

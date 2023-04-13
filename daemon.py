@@ -1,6 +1,4 @@
-from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
-import configparser
 from slips_files.common.config_parser import ConfigParser
 import sys
 import os

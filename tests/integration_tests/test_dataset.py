@@ -9,11 +9,15 @@ from pathlib import Path
 import shutil
 
 alerts_file = 'alerts.log'
+integration_tests_dir = 'output/integration_tests/'
+#create the integration tests dir
 
+if not os.path.exists(integration_tests_dir):
+    path = Path(integration_tests_dir)
+    path.mkdir(parents=True, exist_ok=True)
 
 def connect_to_redis(redis_port):
     from slips_files.core.database.database import __database__
-
     __database__.connect_to_redis_server(redis_port)
     return __database__
 
@@ -21,11 +25,9 @@ def connect_to_redis(redis_port):
 def is_evidence_present(log_file, expected_evidence):
     """Function to read the log file line by line and returns when it finds the expected evidence"""
     with open(log_file, 'r') as f:
-        line = f.readline()
-        while line:
+        while line := f.readline():
             if expected_evidence in line:
                 return True
-            line = f.readline()
         # evidence not found in any line
         return False
 
@@ -35,7 +37,7 @@ def create_output_dir(dirname):
     returns a full path to the created output dir
     """
 
-    path = Path(os.path.join('output/integration_tests/', dirname))
+    path = Path(os.path.join(integration_tests_dir, dirname))
     # clear output dir before running the test
     if os.path.exists(path):
         shutil.rmtree(path)
@@ -90,7 +92,7 @@ def create_Main_instance(input_information):
             'dataset/test7-malicious.pcap',
             15,
             'test7/',
-            'horizontal port scan to port  23',
+            'A device changing IPs',
             6666,
         ),
         ('dataset/test8-malicious.pcap', 3, 'test8/', 'performing an arp scan', 6665),
@@ -105,7 +107,7 @@ def test_pcap(
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -113,7 +115,7 @@ def test_pcap(
 
     # log_file = output_dir + alerts_file
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
+    assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
 
     slips = create_Main_instance(pcap_path)
@@ -175,14 +177,14 @@ def test_binetflow(
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
+    assert is_evidence_present(log_file, expected_evidence) is True
 
     shutil.rmtree(output_dir)
 
@@ -221,7 +223,8 @@ def test_binetflow(
                 'SMTP login bruteforce to 80.75.42.226. 3 logins in 10 seconds',
                 'multiple empty HTTP connections to bing.com',
                 'suspicious user-agent',
-                'DOS executable binary download',
+                'download of an executable',
+                'GRE tunnel'
             ],
             'test14-malicious-zeek-dir/',
             6670
@@ -261,7 +264,7 @@ def test_zeek_dir(
     command = f'./slips.py -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -271,9 +274,9 @@ def test_zeek_dir(
     if type(expected_evidence) == list:
         # make sure all the expected evidence are there
         for evidence in expected_evidence:
-            assert is_evidence_present(log_file, evidence) == True
+            assert is_evidence_present(log_file, evidence) is True
     else:
-        assert is_evidence_present(log_file, expected_evidence) == True
+        assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
 
 
@@ -310,14 +313,14 @@ def test_zeek_conn_log(
     command = f'./slips.py -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert is_evidence_present(log_file, expected_evidence) == True
+    assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
 
 
@@ -353,7 +356,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port, expected_evid
     # this function returns when slips is done
     os.system(command)
 
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
@@ -361,7 +364,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port, expected_evid
     assert profiles > 10
 
     log_file = os.path.join(output_dir, alerts_file)
-    assert any([is_evidence_present(log_file, ev) for ev in expected_evidence])
+    assert any(is_evidence_present(log_file, ev) for ev in expected_evidence)
     shutil.rmtree(output_dir)
 
 
@@ -388,7 +391,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
-    assert has_errors(output_dir) == False
+    assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips
     # doesn't generate a const number of profiles per file)

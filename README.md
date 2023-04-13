@@ -1,12 +1,9 @@
 <h1 align="center"> 
-
-Slips v1.0.1
-
-
-<h3 align="center"> 
+Slips v1.0.3
+</h1>
 
 [Documentation](https://stratospherelinuxips.readthedocs.io/en/develop/) — [Features](https://stratospherelinuxips.readthedocs.io/en/develop/features.html) — [Installation](#installation) — [Authors](#people-involved) — [Contributions](#contribute-to-slips)
-</h3>
+
 
 
 [![License](https://img.shields.io/badge/license-GPLv2-blue)](./LICENSE)
@@ -55,13 +52,13 @@ Follow the next steps to perform a Slips test-run:
 
 - Create a new container from the latest Slips docker image: `docker run -it -d --name slips stratosphereips/slips:latest`
 - Access the container: `docker container exec -ti slips /bin/bash`
-- Run Slips on a sample pcap to test things work as expected: `python3 slips.py -e 1 -f dataset/hide-and-seek-short.pcap` 
-- Checking Slips output files: `cd output/hide-and-seek-short.pcap_<ts>/` && `cat alerts.log`
+- Run Slips on a sample pcap to test things work as expected: `python3 slips.py -e 1 -f dataset/test7-malicious.pcap` 
+- Checking Slips output files: `cd output/test7-malicious.pcap_<ts>/` && `cat alerts.log`
 
 To download the Slips docker image, spawn a new container in daemon mode and run Slips on a 
 test pcap in one command from your host computer:
 ```bash
-    docker run -it -d --name slips stratosphereips/slips ./slips.py -e 1 -f dataset/hide-and-seek-short.pcap
+    docker run -it -d --name slips stratosphereips/slips ./slips.py -e 1 -f dataset/test7-malicious.pcap
 ```
 
 ### Run Slips sharing files between the host and the container
@@ -142,7 +139,7 @@ To build a Docker image of Slips for macOS follow the next steps:
     cd StratosphereLinuxIPS/
     
     # build the MacOS image from the recommended Dockerfile
-    docker build --no-cache -t slips -f docker/macos-image/Dockerfile .
+    docker build --no-cache -t slips -f docker/macosm1-image/Dockerfile .
 ```
 
 To use Slips with files already inside the Docker you can do;

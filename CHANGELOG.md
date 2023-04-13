@@ -1,3 +1,21 @@
+-1.0.4 (April 2023)
+- keep a history of the past user agents  by @haleelsada
+- Add the detection of GRE tunnels 
+- Fix connection to private IP false positives
+- Refactor code thanks to @danieltherealyang
+- add more descriptive titles to vt scores in the web UI thanks to @shubhangi
+- Auto publish our MacOS docker image when there's a new release thanks to @pjflux2001
+- 
+- 
+-1.0.3 (March 2023)
+- Add HTTP unencrypted traffic detection by @haleelsada
+- use termcolor by @haleelsada
+- Instead of dos detection. slips is now detecting all executables thanks to @Onyx2406 
+- Updated the docs for contributing 
+- Fix Leak detector errors when a different version of yara is used.
+- fix problem with counting the number of flows to be processed in the progress bar
+- Remove debugging prints printed by the whois python library to stderr
+
 -1.0.2 (Feb 2023)
 - Support ASNs in our own_malicious_iocs.csv file
 - Add a zeek script to recognize the gateway IP and add it to notice.log 
@@ -9,7 +27,18 @@
 - Add the uids that caused an evidence to the evidence description in alerts.json
 - Add a blocking indicator in alerts.json
 - Fix wrong Source/Target type in alerts.json
-- 
+- Fix error parsing AIP TI list.
+- Update slips default whitelist
+- Kill web interface on ctrl+c
+- Use the current user's timezone in alerts.log and alets.json
+- Fix problem displaying data from the db in the web interface 
+- Add the option to view blocked profiles only in the web interface
+- Fix displaying alerts of profile in the webinterface
+- Add the option to display all evidence in a profile
+- Fix searching in the web interface
+- Fix caching ASN ranges
+- Code optimizations
+
 - 1.0.1 (Jan 2023)
 - fix FP horizontal portscans caused by zeek flipping connections
 - Fix Duplicate evidence in multiple alerts

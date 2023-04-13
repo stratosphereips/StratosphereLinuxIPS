@@ -31,6 +31,7 @@ The detection techniques are:
 - Connection to private IPs outside the current local network
 - High entropy DNS TXT answers 
 - Devices changing IPs
+- GRE tunnels
 The details of each detection follows.
 
 
@@ -333,3 +334,9 @@ Slips stores the MAC of each new IP it sees in conn.log.
 Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
 
 If so, it alerts "Device changing IPs".
+
+
+## GRE tunnels
+
+Slips uses zeek tunnel.log to alert on GRE tunnels when found. 
+evidence of this type are just informational.

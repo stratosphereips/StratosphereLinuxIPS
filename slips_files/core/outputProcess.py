@@ -55,10 +55,11 @@ class OutputProcess(multiprocessing.Process):
         self.queue = inputqueue
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
+        self.stdout= stdout
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
-            self.change_stdout(stdout)
+            self.change_stdout(self.stdout)
         if self.verbose > 2:
             print(
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
@@ -77,8 +78,7 @@ class OutputProcess(multiprocessing.Process):
         self.printable_twid_width = conf.get_tw_width()
 
     def log_branch_info(self, logfile):
-        branch_info = utils.get_branch_info()
-        if branch_info:
+        if branch_info := utils.get_branch_info():
             # it's false when we're in docker because there's no .git/ there
             commit, branch = branch_info[0], branch_info[1]
             now = datetime.now()
@@ -193,7 +193,7 @@ class OutputProcess(multiprocessing.Process):
                 sys.exit(-1)
             return (level, sender, msg)
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             print(
                 f'\tProblem with process line in OutputProcess() line '
@@ -253,26 +253,32 @@ class OutputProcess(multiprocessing.Process):
         if __database__.get_input_type() in ('pcap', 'interface') or '-g' in sys.argv:
             # we don't know how to get the total number of flows slips is going to process, because they're growing
             return
+        if self.stdout != '':
+            # this means that stdout was redirected to a file,
+            # no need to print the progress bar
+            return
 
         total_flows = int(__database__.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
-            total=total_flows+1,
+            total=total_flows,
             leave=True,
             colour="green",
             desc="Flows processed",
-            mininterval=0,
+            mininterval=0, # defines how long to wait between each refresh.
             unit=' flow',
             smoothing=1,
             bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt}{postfix}",
             position=0,
+            initial=0, #initial value of the flows processed
             file=sys.stdout
         )
 
     def update_progress_bar(self):
         """
         wrapper for tqdm.update()
+        adds 1 to the number of flows processed
         """
         if not hasattr(self, 'progress_bar'):
             # this module wont have the progress_bar set if it's running on pcap or interface
@@ -281,7 +287,6 @@ class OutputProcess(multiprocessing.Process):
         # todo profile slips with and without the bar !
         if self.slips_mode == 'daemonized':
             return
-
 
         self.progress_bar.update(1)
         # self.progress_bar.refresh()
@@ -294,6 +299,9 @@ class OutputProcess(multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def update_progress_bar_stats(self):
+        """
+        updates the statistics shown next to the progress bar
+        """
         if not hasattr(self, 'progress_bar'):
             return
 
@@ -352,7 +360,7 @@ class OutputProcess(multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',

@@ -10,7 +10,7 @@ import os
 import subprocess
 import json
 import traceback
-
+import shutil
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -44,11 +44,11 @@ class Module(Module, multiprocessing.Process):
         """
         cmd = 'yara -h > /dev/null 2>&1'
         returncode = os.system(cmd)
-        if returncode == 256 or returncode == 0:
+        if returncode in [256, 0]:
             # it is installed
             return True
         # elif returncode == 32512:
-        self.print(f"yara is not installed. install it using:\nsudo apt-get install yara")
+        self.print("yara is not installed. install it using:\nsudo apt-get install yara")
         return False
 
     def shutdown_gracefully(self):
@@ -212,20 +212,14 @@ class Module(Module, multiprocessing.Process):
                 profileid = src_profileid
                 attacker = dstip
                 ip_identification = __database__.getIPIdentification(dstip)
-                description = (
-                    f'{rule} to destination address: {dstip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             elif __database__.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
                 ip_identification = __database__.getIPIdentification(srcip)
-                description = (
-                    f'{rule} to destination address: {srcip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             else:
                 # no profiles in slips for either IPs
@@ -275,7 +269,12 @@ class Module(Module, multiprocessing.Process):
                 self.print(f"Error compiling {yara_rule}.")
                 return False
         return True
-
+    def delete_compiled_rules(self):
+        """
+        delete old YARA compiled rules when a new version of yara is being used
+        """
+        shutil.rmtree(self.compiled_yara_rules_path)
+        os.mkdir(self.compiled_yara_rules_path)
 
     def find_matches(self):
         """Run yara rules on the given pcap and find matches"""
@@ -296,8 +295,14 @@ class Module(Module, multiprocessing.Process):
             lines, error = yara_proc.communicate()
             lines = lines.decode()
             if error:
-                self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
-                return
+                if b'rules were compiled with a different version of YARA' in error.strip():
+                    self.delete_compiled_rules()
+                    # will re-compile and save rules again and try to find matches
+                    self.run()
+                else:
+                    self.print (f"YARA error {yara_proc.returncode}: {error.strip()}")
+                    return
+
             if not lines:
                 # no match
                 return
@@ -314,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                 var = line[1].replace('$', '')
                 # strings_matched is exactly the string that was found that triggered this detection
                 # starts from the var until the end of the line
-                strings_matched = ' '.join([s for s in line[2:]])
+                strings_matched = ' '.join(list(line[2:]))
                 self.set_evidence_yara_match({
                     'rule': matching_rule,
                     'vars_matched': var,
@@ -335,7 +340,7 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)

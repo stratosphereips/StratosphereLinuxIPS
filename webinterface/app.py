@@ -1,6 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, current_app
-from argparse import ArgumentParser
-import os.path
+from flask import Flask, render_template, redirect, url_for, current_app
 
 from database.database import __database__
 from database.signals import message_sent

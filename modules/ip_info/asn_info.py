@@ -24,8 +24,6 @@ class ASN:
         :param ip: str
         if teh range of this ip was found, this function returns a dict with {'number' , 'org'}
         """
-        if ip.startswith('185'):
-            pass
         first_octet: str = utils.get_first_octet(ip)
         if not first_octet:
             # invalid ip or no cached asns
@@ -60,10 +58,7 @@ class ASN:
         :param cached_data: ip cached info from the database, dict
         """
         try:
-            update = (
-                time.time() - cached_data['asn']['timestamp']
-            ) > update_period
-            return update
+            return (time.time() - cached_data['asn']['timestamp']) > update_period
         except (KeyError, TypeError):
             # no there's no cached asn info,or no timestamp, or cached_data is None
             # we should update
@@ -188,8 +183,7 @@ class ASN:
         Gets ASN info about IP, either cached, from our offline mmdb or from ip-api.com
         """
         # do we have asn cached for this range?
-        cached_asn: dict = self.get_cached_asn(ip)
-        if cached_asn:
+        if cached_asn := self.get_cached_asn(ip):
             self.update_ip_info(ip, cached_ip_info, cached_asn)
             return
 
@@ -197,24 +191,19 @@ class ASN:
             # now we have 2 options, either search for the ASN in our offline db, or online
             # either way we need to cache the asn of this ip's range so we don't search for ips in the same range
             # cache this range in our redis db
-            asn:dict = self.cache_ip_range(ip)
-            if asn:
+            if asn := self.cache_ip_range(ip):
                 # range is cached and we managed to get the number and org of the given ip using whois
                 # no need to search online or offline
                 self.update_ip_info(ip, cached_ip_info, asn)
                 return
 
-
             # we don't have it cached in our db, get it from geolite
-            asn: dict = self.get_asn_info_from_geolite(ip)
-            if asn:
+            if asn := self.get_asn_info_from_geolite(ip):
                 self.update_ip_info(ip, cached_ip_info, asn)
                 return
 
-
             # can't find asn in mmdb or using whois library, try using ip-info
-            asn: dict = self.get_asn_online(ip)
-            if asn:
+            if asn := self.get_asn_online(ip):
                 # found it online
                 self.update_ip_info(ip, cached_ip_info, asn)
                 return

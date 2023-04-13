@@ -147,16 +147,14 @@ class Module(Module, multiprocessing.Process):
         """
 
         def is_valid_response(response: dict) -> bool:
-            if not type(response) == dict:
+            if type(response) != dict:
                 return False
 
             response_code = response.get('response_code', -1)
             if response_code == -1:
                 return False
             verbose_msg = response.get('verbose_msg', '')
-            if 'Resource does not exist' in verbose_msg:
-                return False
-            return True
+            return 'Resource does not exist' not in verbose_msg
 
         response = self.api_query_(url)
         # Can't get url report
@@ -284,7 +282,7 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, passive_dns, as_owner
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_ip_vt_data() line {exception_line}', 0, 1
@@ -308,7 +306,7 @@ class Module(Module, multiprocessing.Process):
             scores = self.interpret_response(response)
             self.counter += 1
             return scores, as_owner
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem in the get_domain_vt_data() line {exception_line}',
@@ -321,10 +319,7 @@ class Module(Module, multiprocessing.Process):
     def get_ioc_type(self, ioc):
         """Check the type of ioc, returns url, ip, domain or hash type"""
         # don't move this to utils, this is the only module that supports urls
-        if validators.url(ioc):
-            return 'url'
-
-        return utils.detect_data_type(ioc)
+        return 'url' if validators.url(ioc) else utils.detect_data_type(ioc)
 
     def api_query_(self, ioc, save_data=False):
         """
@@ -461,6 +456,7 @@ class Module(Module, multiprocessing.Process):
         )
 
         # compute how many tests were run on the detected samples. This will return tuple (detections, total)
+        # URLs that have been detected as malicious by one or more antivirus engines
         detected_url_score = self.count_positives(
             response, 'detected_urls', 'positives', 'total'
         )
@@ -482,15 +478,19 @@ class Module(Module, multiprocessing.Process):
         down_file_detections = (
                 undetected_download_score[0] + detected_download_score[0]
         )
+        # samples downloaded from this ip
         if down_file_total := (
                 undetected_download_score[1] + detected_download_score[1]):
             down_file_ratio = down_file_detections / down_file_total
         else:
             down_file_ratio = 0
-
+        # samples  that were obtained from the same referrer as the file or URL being analyzed,
+        # but have not been detected as malicious
         undetected_ref_score = self.count_positives(
             response, 'undetected_referrer_samples', 'positives', 'total'
         )
+         # that were obtained from the same referrer as the file or URL being analyzed,
+        # that have been detected as malicious
         detected_ref_score = self.count_positives(
             response, 'detected_referrer_samples', 'positives', 'total'
         )
@@ -500,9 +500,11 @@ class Module(Module, multiprocessing.Process):
         else:
             ref_file_ratio = 0
 
+        # non-malicious files communicating with this IP
         undetected_com_score = self.count_positives(
             response, 'undetected_communicating_samples', 'positives', 'total'
         )
+        # malicious files communicating with this IP
         detected_com_score = self.count_positives(
             response, 'detected_communicating_samples', 'positives', 'total'
         )
@@ -534,7 +536,7 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.print_exc(),0,1)
@@ -651,7 +653,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as ex:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

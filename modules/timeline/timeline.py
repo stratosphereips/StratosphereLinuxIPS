@@ -210,14 +210,14 @@ class Module(Module, multiprocessing.Process):
                 warning = ''
                 if type(sport) == int:
                     # zeek puts the number
-                    if sport == 8:
-                        dport_name = 'PING echo'
-
-                    elif sport == 11:
+                    if sport == 11:
                         dport_name = 'ICMP Time Excedded in Transit'
 
                     elif sport == 3:
                         dport_name = 'ICMP Destination Net Unreachable'
+
+                    elif sport == 8:
+                        dport_name = 'PING echo'
 
                     else:
                         dport_name = 'ICMP Unknown type'
@@ -233,7 +233,7 @@ class Module(Module, multiprocessing.Process):
                         dport_name = 'ICMP Host Unreachable'
                     elif '0x0303' in sport:
                         dport_name = 'ICMP Port Unreachable'
-                        warning =  'unreachable port is ' + str(int(dport, 16))
+                        warning = f'unreachable port is {int(dport, 16)}'
                     elif '0x000b' in sport:
                         dport_name = ''
                     elif '0x0003' in sport:
@@ -319,7 +319,7 @@ class Module(Module, multiprocessing.Process):
                     http_data = {
                         k: v
                         for k, v in http_data_all.items()
-                        if v is not '' and v is not '/'
+                        if v != '' and v != '/'
                     }
                     alt_activity = {'info': http_data}
                 elif alt_flow['type'] == 'ssl':
@@ -328,7 +328,7 @@ class Module(Module, multiprocessing.Process):
                         resumed = 'False'
                     elif (
                         not alt_flow['validation_status']
-                        and alt_flow['resumed'] == True
+                        and alt_flow['resumed'] is True
                     ):
                         # If there is no validation and it is a resumed ssl.
                         # It means that there was a previous connection with
@@ -377,7 +377,7 @@ class Module(Module, multiprocessing.Process):
             )
 
 
-        except Exception as ex:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f'Problem on process_flow() line {exception_line}', 0, 1
@@ -417,7 +417,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
