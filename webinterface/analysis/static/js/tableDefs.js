@@ -66,7 +66,7 @@ let analysisTableDefs = {
         ],
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             if(aData['info']){
-                $('td', nRow).css('background-color', '#ECFEE8')
+                $('td', nRow).css('background-color', '#c2e2fa')
             }
         }
     },
