@@ -348,12 +348,13 @@ function initAllAnalysisTables() {
         });
         // init datatables
         $("#table_" + key).DataTable(value);
-
         // custom search
         $('[type=search]').each(function () {
-
             $(this).attr("placeholder", "Search...");
-            $(this).before('<span class="fa fa-search"></span>');
+            // $(this).attr("size", 30); // hardcoded 
+
+            // to display search icon
+            // $(this).before('<span class="fa fa-search"></span>');
         });
     }
 
