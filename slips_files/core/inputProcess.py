@@ -239,7 +239,10 @@ class InputProcess(multiprocessing.Process):
             nline = zeek_line
             timestamp = nline.split('\t')[0]
         else:
-            nline = json.loads(zeek_line)
+            try:
+                nline = json.loads(zeek_line)
+            except json.decoder.JSONDecodeError:
+                return False, False
             # In some Zeek files there may not be a ts field
             # Like in some weird smb files
             timestamp = nline.get('ts', 0)
