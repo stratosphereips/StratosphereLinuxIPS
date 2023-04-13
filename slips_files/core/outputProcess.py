@@ -64,6 +64,7 @@ class OutputProcess(multiprocessing.Process):
             print(
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
             )
+        self.done_reading_flows = False
         # Start the DB
         __database__.start(redis_port)
         # are we in daemon of interactive mode
@@ -233,10 +234,16 @@ class OutputProcess(multiprocessing.Process):
                 # we use tqdm.write() instead of print() to make sure we
                 # don't get progress bar duplicates in the cli
                 tqdm.write(f'{msg}')
-                # print(f'{msg}')
                 return
 
-            tqdm.write(f'{sender}{msg}')
+            # when the pbar reaches 100% aka we're done_reading_flows
+            # we print alerts at the very botttom of the screen using print
+            # instead of printing alerts at the top of the pbar using tqdm
+            if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+                print(f'{sender}{msg}')
+            else:
+                tqdm.write(f'{sender}{msg}')
+
             # print(f'{sender}{msg}')
             self.log_line(sender, msg)
 
@@ -258,11 +265,11 @@ class OutputProcess(multiprocessing.Process):
             # no need to print the progress bar
             return
 
-        total_flows = int(__database__.get_total_flows())
+        self.total_flows = int(__database__.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
-            total=total_flows,
+            total=self.total_flows,
             leave=True,
             colour="green",
             desc="Flows processed",
@@ -289,6 +296,10 @@ class OutputProcess(multiprocessing.Process):
             return
 
         self.progress_bar.update(1)
+        if self.progress_bar.n == self.total_flows:
+            print(f"Done Reading all flows. Slips is now processing.")
+            # remove it from the bar because we'll be prining it in a new line
+            self.done_reading_flows = True
         # self.progress_bar.refresh()
 
 
@@ -298,9 +309,10 @@ class OutputProcess(multiprocessing.Process):
                                         'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
-    def update_progress_bar_stats(self):
+
+    def update_stats(self):
         """
-        updates the statistics shown next to the progress bar
+        updates the statistics shown next to the progress bar or shown in a new line
         """
         if not hasattr(self, 'progress_bar'):
             return
@@ -314,19 +326,27 @@ class OutputProcess(multiprocessing.Process):
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
         modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
         profilesLen = __database__.getProfilesLen()
-        self.progress_bar.set_postfix_str(
-            f'Total analyzed IPs: '
-            f'{profilesLen}. '
-            f'IPs sending traffic in the last '
-            f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. '
-            f'({now})',
-            refresh=True
-        )
+        
+        msg = f'Total analyzed IPs: ' \
+              f'{profilesLen}. ' \
+              f'IPs sending traffic in the last ' \
+              f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. ' \
+              f'({now})'
+        # if we're done reading flows, aka pbar reached 100%
+        # we print the stats in a new line, instead of next to the pbar
+        if hasattr(self, 'done_reading_flows') and self.done_reading_flows:
+            print(msg, end='\r')
+        else:
+            # print the stats in a the bar
+            self.progress_bar.set_postfix_str(
+                msg,
+                refresh=True
+            )
 
     def run(self):
         while True:
             try:
-                self.update_progress_bar_stats()
+                self.update_stats()
                 line = self.queue.get()
                 if line == 'quiet':
                     self.quiet = True
@@ -365,5 +385,5 @@ class OutputProcess(multiprocessing.Process):
                 print(
                     f'\tProblem with OutputProcess() line {exception_line}',
                 )
-                self.print(traceback.print_exc(), 0, 1)
+                print(traceback.print_exc(), 0, 1)
                 return True
