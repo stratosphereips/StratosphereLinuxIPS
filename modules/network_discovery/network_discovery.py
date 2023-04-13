@@ -72,28 +72,9 @@ class PortScanProcess(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def check_horizontal_portscan(self, profileid, twid):
-
         def get_uids():
             """
             returns all the uids of flows to this port
@@ -190,11 +171,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                             key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
+                            # to make sure this function isn't adding evidence of another ps while the
+                            # wait thread is calling set_evidence
+                            lock = threading.Lock()
+                            lock.acquire()
                             try:
                                 self.pending_horizontal_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_horizontal_ps_evidence[key] = [evidence_details]
+                            lock.release()
 
     def wait_for_vertical_scans(self):
         while True:
@@ -273,7 +259,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dport,
                     amount_of_dips
                 )
-            # reset the dict sinse we already combiner
+            # reset the dict since we already combined the evidence
             self.pending_horizontal_ps_evidence = {}
             lock.release()
 
@@ -421,11 +407,16 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                             evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
 
+                            # to make sure the pending dict isn't being accessed by the thread while
+                             # we're modifying it here
+                            lock = threading.Lock()
+                            lock.acquire()
                             try:
                                 self.pending_vertical_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_vertical_ps_evidence[key] = [evidence_details]
+                            lock.release()
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
