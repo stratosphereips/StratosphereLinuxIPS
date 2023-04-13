@@ -298,7 +298,7 @@ class OutputProcess(multiprocessing.Process):
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
             self.remove_stats_from_progress_bar()
-            print(f"Done Reading all flows. Slips is now processing.")
+            print(f"Done reading all flows. Slips is now processing them.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
         # self.progress_bar.refresh()
