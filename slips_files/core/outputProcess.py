@@ -297,6 +297,7 @@ class OutputProcess(multiprocessing.Process):
 
         self.progress_bar.update(1)
         if self.progress_bar.n == self.total_flows:
+            self.remove_stats_from_progress_bar()
             print(f"Done Reading all flows. Slips is now processing.")
             # remove it from the bar because we'll be prining it in a new line
             self.done_reading_flows = True
@@ -309,6 +310,12 @@ class OutputProcess(multiprocessing.Process):
                                         'Check alerts.log for full evidence list.')
         __database__.publish('finished_modules', self.name)
 
+    def remove_stats_from_progress_bar(self):
+        # remove the stats from the progress bar
+        self.progress_bar.set_postfix_str(
+            '',
+            refresh=True
+        )
 
     def update_stats(self):
         """
