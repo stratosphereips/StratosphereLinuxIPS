@@ -238,7 +238,7 @@ class InputProcess(multiprocessing.Process):
         if self.is_zeek_tabs:
             # It is not JSON format. It is tab format line.
             nline = zeek_line
-            nline_list = line.split('\t') if '\t' in nline else split(r'\s{2,}', nline)
+            nline_list = nline.split('\t') if '\t' in nline else split(r'\s{2,}', nline)
             timestamp = nline_list[0]
         else:
             try:
