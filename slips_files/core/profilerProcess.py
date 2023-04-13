@@ -945,6 +945,7 @@ class ProfilerProcess(multiprocessing.Process):
 
                 get_value_at('flow', 'state', ''),
             )
+            return True
 
         elif event_type == 'http':
             self.flow: SuricataHTTP = SuricataHTTP(
@@ -968,6 +969,8 @@ class ProfilerProcess(multiprocessing.Process):
                 int(get_value_at('http', 'request_body_len', 0)),
                 int(get_value_at('http', 'length', 0)),
             )
+            return True
+
         elif event_type == 'dns':
             answers: list = self.get_suricata_answers(line)
             self.flow: SuricataDNS = SuricataDNS(
@@ -985,6 +988,8 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('qtype_name', 'rrtype', ''),
                 answers
             )
+            return True
+
         elif event_type == 'tls':
             self.flow: SuricataTLS = SuricataTLS(
                 timestamp,
@@ -1006,6 +1011,8 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('tls', 'notafter', ''),
                 get_value_at('tls', 'sni', ''),
             )
+            return True
+
         elif event_type == 'fileinfo':
             self.flow: SuricataFile = SuricataFile(
                 timestamp,
@@ -1019,6 +1026,7 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('fileinfo', 'size', ''),
 
             )
+            return True
 
 
         elif event_type == 'ssh':
@@ -1034,8 +1042,10 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('ssh', 'client', {}).get('software_version', ''),
                 get_value_at('ssh', 'client', {}).get('proto_version', ''),
                 get_value_at('ssh', 'server', {}).get('software_version', ''),
-
             )
+            return True
+        else:
+            return False
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
@@ -1832,9 +1842,11 @@ class ProfilerProcess(multiprocessing.Process):
                         # Define columns. Do not add this line to profile, its only headers
                         self.define_columns(line)
                 elif self.input_type == 'suricata':
-                    self.process_suricata_input(line)
-                    # Add the flow to the profile
-                    self.add_flow_to_profile()
+                    if self.process_suricata_input(line):
+                        # Add the flow to the profile
+                        self.add_flow_to_profile()
+                    # update progress bar anyway because 1 flow was processed even
+                    # if slips didn't use it
                     self.outputqueue.put("update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
