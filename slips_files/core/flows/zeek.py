@@ -160,7 +160,7 @@ class DHCP:
     server_addr: str
     host_name: str
 
-    mac: str  # this is the client mac
+    smac: str  # this is the client mac
     requested_addr: str
 
     type_: str = "dhcp"
@@ -170,7 +170,8 @@ class DHCP:
         # seen in dhcp.log and notice.log use the mac
         # address instead
         if not self.saddr and not self.daddr:
-            self.saddr = self.mac
+            self.saddr = self.smac
+
 @dataclass
 class FTP:
     starttime: float
