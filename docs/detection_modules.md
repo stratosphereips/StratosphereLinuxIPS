@@ -173,7 +173,12 @@ The **letter** is the key part in a Stratoletter string. It is derived from a di
 
 A visual representation of the dictionary from which letter is derived
 
+In this image, each block represents the possible values of the letter, 
+We choose the block based on the periodicity
+and choose the letter from the block based on the duration(number of row) and size (number of column).
+
 ![stratoletters letter mapping matrix](https://github.com/haleelsada/StratosphereLinuxIPS/blob/haleel_stratoletters/docs/images/stratoletters.png?raw=true)
+
 
 Example:
 ```commandline
@@ -197,24 +202,29 @@ letter = Z          # uppercase letter for periodicity 2(Weakly periodicity) and
 ```
 
 Stratoletters represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
+
+each symbol consists of hrs passed since last flow + a letter that represents the periodicity,size and dur of the 
+flow + a char showing the time passed since last flow
+
 ```
 symbol = zeros + letter + timechar
  ```
-*zero* : hours passed since last flow, can be null eg: `00`
 
-*letter* : the letter, eg: `1`,`w`,`H`
+*zero* : hours passed since last flow, each hour is represented by 1 zero. foe xample, 2 hours = ```00```
 
-*timechar* : character to denote the time eloped since last flow, can be null eg: `.`, `,`, `+`, `*`
+*letter* : chosen based on the periodicity, size, and dur of the flow eg: `1`,`w`,`H`
 
+*timechar* : character to denote the time eloped since last flow, can be: `.`, `,`, `+`, `*` or null
+
+Ultimately this is how a Stratoletter is formed
 ```commandline
-# Ultimately this is how a Stratoletter is formed
 No of hours passed since last flow = 2
 periodicity = 2     # Weakly not periodicity
 duration = 1
 size = 1
 timechar = 
 stratoletter of last flow = 9*z*
-letter = A          
+letter = A
 symbol = 00A9*z*
 
 No of hours passed since last flow = 0

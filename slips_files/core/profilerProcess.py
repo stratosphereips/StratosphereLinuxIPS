@@ -2247,7 +2247,10 @@ class ProfilerProcess(multiprocessing.Process):
                     return 3
 
             def compute_letter():
-                """Function to compute letter"""
+                """
+                Function to compute letter
+                based on the periodicity, size, and dur of the flow
+                """
                 # format of this map is as follows
                 # {periodicity: {'size' : {duration: letter, duration: letter, etc.}}
                 periodicity_map = {
