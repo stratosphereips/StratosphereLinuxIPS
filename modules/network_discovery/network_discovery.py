@@ -164,9 +164,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                             if 'spkts' not in dstips[dip]:
                                 # In argus files there are no src pkts, only pkts.
                                 # So it is better to have the total pkts than to have no packets count
-                                pkts_sent += dstips[dip]["pkts"]
+                                pkts_sent += int(dstips[dip]["pkts"])
                             else:
-                                pkts_sent += dstips[dip]["spkts"]
+                                pkts_sent += int(dstips[dip]["spkts"])
 
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
