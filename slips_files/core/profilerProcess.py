@@ -28,6 +28,7 @@ from slips_files.core.flows.suricata import SuricataFile,  SuricataTLS, Suricata
 
 from datetime import datetime, timedelta
 from .whitelist import Whitelist
+from dataclasses import asdict
 import multiprocessing
 import json
 import sys
@@ -548,24 +549,12 @@ class ProfilerProcess(multiprocessing.Process):
             # to fix this, only use the file name as file 'type'
             file_type = file_type.split('/')[-1]
 
-        # @@@@@@@@@@ todo remove this remove everything column_values
-        # Generic fields in Zeek
-        self.column_values = {
-            'type': '',
-            'starttime': utils.convert_to_datetime(ts)
-            if (ts := line.get('ts', False))
-            else '',
-        }
         if ts := line.get('ts', False):
             starttime = utils.convert_to_datetime(ts)
         else:
             starttime = ''
 
-        # self.flow.uid = line.get('uid', False)
-        # self.column_values['saddr'] = line.get('id.orig_h', '')
-        # self.flow.daddr = line.get('id.resp_h', '')
 
-        # Handle each zeek file type separately
         if 'conn' in file_type:
             self.flow: Conn = Conn(
                 starttime,
@@ -921,8 +910,10 @@ class ProfilerProcess(multiprocessing.Process):
             timestamp = utils.convert_to_datetime(line['timestamp'])
         except ValueError:
             # Reason for catching ValueError:
-            # "ValueError: time data '1900-01-00T00:00:08.511802+0000' does not match format '%Y-%m-%dT%H:%M:%S.%f%z'"
-            # It means some flow do not have valid timestamp. It seems to me if suricata does not know the timestamp, it put
+            # "ValueError: time data '1900-01-00T00:00:08.511802+0000'
+            # does not match format '%Y-%m-%dT%H:%M:%S.%f%z'"
+            # It means some flow do not have valid timestamp. It seems
+            # to me if suricata does not know the timestamp, it put
             # there this not valid time.
             timestamp = False
 
@@ -1174,14 +1165,14 @@ class ProfilerProcess(multiprocessing.Process):
         Send the whole flow to new_software channel
         """
         epoch_time = utils.convert_format(self.flow.starttime, 'unixtimestamp')
-        self.column_values.update(
-            {
-                'starttime': epoch_time,
-                'twid': __database__.get_timewindow(epoch_time, self.profileid),
-            }
-        )
+        self.flow.starttime = epoch_time
+        to_send = {
+            'sw_flow': asdict(self.flow),
+            'twid':  __database__.get_timewindow(epoch_time, self.profileid),
+        }
+
         __database__.publish(
-            'new_software', json.dumps(self.column_values)
+            'new_software', json.dumps(to_send)
         )
 
     def add_flow_to_profile(self):

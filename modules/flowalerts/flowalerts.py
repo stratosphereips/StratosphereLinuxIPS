@@ -956,13 +956,8 @@ class Module(Module, multiprocessing.Process):
 
     def check_multiple_ssh_versions(
         self,
-        starttime,
-        saddr,
-        used_software,
-        major_v,
-        minor_v,
+        flow: dict,
         twid,
-        uid,
         role='SSH::CLIENT'
     ):
         """
@@ -970,10 +965,10 @@ class Module(Module, multiprocessing.Process):
          ssh client or server versions before
         :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
         """
-        if role not in used_software:
+        if role not in flow['software']:
             return
 
-        profileid = f'profile_{saddr}'
+        profileid = f'profile_{flow["saddr"]}'
         # what software was used before for this profile?
         # returns a dict with
         # software:
@@ -986,18 +981,20 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # these are the versions that this profile once used
-        cached_ssh_versions = cached_used_sw[used_software]
-        cached_versions = f"{cached_ssh_versions['version-major']}_{cached_ssh_versions['version-minor']}"
+        cached_ssh_versions = cached_used_sw[flow['software']]
+        cached_versions = f"{cached_ssh_versions['version-major']}_" \
+                          f"{cached_ssh_versions['version-minor']}"
 
-        current_versions = f'{major_v}_{minor_v}'
+        current_versions = f"{flow['version_major']}_{flow['version_minor']}"
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
 
         # get the uid of the cached versions, and the uid of the current used versions
-        uids = [cached_ssh_versions['uid'], uid]
+        uids = [cached_ssh_versions['uid'], flow['uid']]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uids, role=role
+            flow['saddr'], cached_versions, current_versions,
+            flow['starttime'], twid, uids, role=role
         )
         return True
 
@@ -2121,33 +2118,17 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_software'):
-                    flow = json.loads(message['data'])
-                    starttime = flow.get('starttime', '')
-                    saddr = flow.get('saddr', '')
-                    uid = flow.get('uid', '')
-                    twid = flow.get('twid', '')
-                    # can be 'SSH::SERVER' or 'SSH::CLIENT'
-                    software_type = flow.get('software_type', '')
-                    major_v = flow.get('version.major', '')
-                    minor_v = flow.get('version.minor', '')
+                    msg = json.loads(message['data'])
+                    flow:dict = msg['sw_flow']
+                    twid = msg['twid']
                     self.check_multiple_ssh_versions(
-                        starttime,
-                        saddr,
-                        software_type,
-                        major_v,
-                        minor_v,
+                        flow,
                         twid,
-                        uid,
                         role='SSH::CLIENT'
                     )
                     self.check_multiple_ssh_versions(
-                        starttime,
-                        saddr,
-                        software_type,
-                        major_v,
-                        minor_v,
+                        flow,
                         twid,
-                        uid,
                         role='SSH::SERVER'
                     )
 
