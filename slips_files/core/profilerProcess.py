@@ -1347,14 +1347,14 @@ class ProfilerProcess(multiprocessing.Process):
         self.publish_to_new_software()
 
     def handle_dhcp(self):
-        if self.flow.mac:
+        if self.flow.smac:
             # send this to ip_info module to get vendor info about this MAC
             self.publish_to_new_MAC(
-                self.flow.mac or False,
+                self.flow.smac or False,
                 self.flow.saddr,
                 host_name=(self.flow.host_name or False)
             )
-        if server_addr := self.flow.server_addr or False:
+        if self.flow.server_addr:
             __database__.store_dhcp_server(self.flow.server_addr)
             __database__.mark_profile_as_dhcp(self.profileid)
 
