@@ -2,17 +2,27 @@ const headers2 = {
     headers: { 'Content-Type': 'application/json' }
 }
 
+function round(value, precision) {
+    var multiplier = Math.pow(10, precision || 0);
+    return Math.round(value * multiplier) / multiplier;
+}
+function calcDur(analysis_start, analysis_end){
+    /* 
+        Calcuialte duration in seconds
+    */
+    let start = new Date(analysis_start)
+    let end = new Date(analysis_end)
+    return round((Date.parse(end)- Date.parse(start)) / 60000, 1).toString() + "s"
+}
 function fetchDetailedInfo() {
     fetch("/info", {
         method: "GET",
         headers: headers2
     }).then(response => response.json())
         .then(data => {
-            document.getElementById("slips_version").textContent = "Slips " + data['slips_version'];
-            document.getElementById("fileName").textContent = data['name'];
-            document.getElementById("fileSize").textContent = data['size_in_MB'];
-            document.getElementById("analysisStart").textContent = data['analysis_start'];
-            document.getElementById("analysisEnd").textContent = data['analysis_end'];
+            document.getElementById("num_profiles").textContent = data['num_profiles'];
+            document.getElementById("num_alerts").textContent = data['num_alerts'];
+            document.getElementById("dur").textContent = calcDur(data['analysis_start'], data['analysis_end']);
         });
 }
 
@@ -65,6 +75,7 @@ function fetchDataDB() {
 function initPage() {
     initializeWidgetsAndListeners();
     fetchDataDB();
+    fetchDetailedInfo();
 }
 $(document).ready(function () {
     initPage();
