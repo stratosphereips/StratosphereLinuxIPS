@@ -1113,15 +1113,18 @@ class ProfilerProcess(multiprocessing.Process):
         """
         Generates a uid and adds it to the flow if none is found
         """
-        # This uid check is for when we read things that are not zeek
-        if not( hasattr(self.flow, 'uid') or hasattr(self.flow, 'uids') ):
+        # dhcp flows have uids field instead of uid
+        if (
+                (type(self.flow) == DHCP and not self.flow.uids)
+                or
+                (type(self.flow) != DHCP and not self.flow.uid)
+        ):
             # In the case of other tools that are not Zeek, there is no UID. So we generate a new one here
             # Zeeks uses human-readable strings in Base62 format, from 112 bits usually.
             # We do base64 with some bits just because we need a fast unique way
             self.flow.uid = base64.b64encode(
                 binascii.b2a_hex(os.urandom(9))
             ).decode('utf-8')
-        return
 
     def get_rev_profile(self):
         """
