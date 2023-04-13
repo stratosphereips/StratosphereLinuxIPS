@@ -43,6 +43,15 @@ def set_pcap_info():
     Set information about the pcap.
     """
     info = __database__.db.hgetall("analysis")
+
+    profiles = __database__.db.smembers('profiles')
+    info["num_profiles"] = len(profiles) if profiles else 0
+
+    alerts = __database__.db.hgetall('alerts')
+    info["num_alerts"] = len(alerts) if alerts else 0
+
+
+
     return info
 
 
