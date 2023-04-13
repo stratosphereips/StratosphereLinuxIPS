@@ -171,11 +171,16 @@ class PortScanProcess(Module, multiprocessing.Process):
                             key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
+                            # to make sure this function isn't adding evidence of another ps while the
+                            # wait thread is calling set_evidence
+                            lock = threading.Lock()
+                            lock.acquire()
                             try:
                                 self.pending_horizontal_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_horizontal_ps_evidence[key] = [evidence_details]
+                            lock.release()
 
     def wait_for_vertical_scans(self):
         while True:
@@ -254,7 +259,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     dport,
                     amount_of_dips
                 )
-            # reset the dict sinse we already combiner
+            # reset the dict since we already combined the evidence
             self.pending_horizontal_ps_evidence = {}
             lock.release()
 
@@ -402,11 +407,16 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                             evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
 
+                            # to make sure the pending dict isn't being accessed by the thread while
+                             # we're modifying it here
+                            lock = threading.Lock()
+                            lock.acquire()
                             try:
                                 self.pending_vertical_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_vertical_ps_evidence[key] = [evidence_details]
+                            lock.release()
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
