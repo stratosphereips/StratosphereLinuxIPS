@@ -264,11 +264,16 @@ class Files:
 
     type_: str = 'files'
     def __post_init__(self) -> None:
-        if self.tx_hosts:
-            self.saddr = self.tx_hosts[0] if type(self.tx_hosts)==list else json.loads(self.tx_hosts)[0]
+        if type(self.tx_hosts) != list:
+            self.tx_hosts = [self.tx_hosts]
+        if saddr := self.tx_hosts[0]:
+            self.saddr = saddr
 
-        if self.rx_hosts:
-            self.daddr = self.rx_hosts[0] if type(self.tx_hosts)==list else json.loads(self.rx_hosts)[0]
+        if type(self.rx_hosts) != list:
+            self.rx_hosts = [self.rx_hosts]
+
+        if daddr := self.rx_hosts[0]:
+            self.daddr = daddr
 
 
 @dataclass
