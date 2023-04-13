@@ -13,13 +13,14 @@ class ArgusConn:
     daddr: str
     dport: str
     state: str
-    pkts: str
-    spkts: str
-    dpkts: str
+    pkts: int
+    spkts: int
+    dpkts: int
     bytes: int
     sbytes: int
     dbytes: int
     # required to be able to add_flow
     smac: str = ''
     dmac: str = ''
+    uid = False
     type_: str = 'argus'

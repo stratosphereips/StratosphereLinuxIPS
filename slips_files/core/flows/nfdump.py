@@ -23,9 +23,10 @@ class NfdumpConn:
     sbytes: int
     dbytes: int
     # required to be able to add_flow
-    smac: str = False
-    dmac: str = False
-    appproto: str = False
+    smac = False
+    dmac = False
+    appproto = False
+    uid = False
     type_: str = 'nfdump'
 
 
