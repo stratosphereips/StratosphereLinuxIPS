@@ -161,19 +161,17 @@ class Whitelist:
             domains_to_check_dst,
             domains_to_check_src,
         ) = self.get_domains_of_flow(saddr, daddr)
-        # TODO @@@@@@@@@@@ we need to check the type of flow in this function
-
         # check if we have whitelisted domains
 
         # first get the domains of the flows we ewnt to check if whitelisted
         # Domain names are stored in different zeek files using different names.
         # Try to get the domain from each file.
         domains_to_check = []
-        if type(flow) == 'ssl':
+        if flow_type == 'ssl':
             domains_to_check.append(flow.server_name)
-        if type(flow) == 'http':
+        elif flow_type == 'http':
             domains_to_check.append(flow.host)
-        if type(flow) == 'notice':
+        elif flow_type == 'notice':
             domains_to_check.append(flow.sub.replace(
                 'CN=', ''
             ))
@@ -210,16 +208,12 @@ class Whitelist:
 
         if whitelisted_macs := __database__.get_whitelist('mac'):
             # try to get the mac address of the current flow
-            src_mac = flow.smac
-            if not src_mac:
-                # @@@@@@@@@@@@@@22 TODO what is this
-                src_mac = flow.mac
+            src_mac = flow.smac if hasattr(flow, 'smac') else False
 
             if not src_mac:
-                src_mac = __database__.get_mac_addr_from_profile(
+                if src_mac := __database__.get_mac_addr_from_profile(
                     f'profile_{saddr}'
-                )
-                if src_mac:
+                ):
                     src_mac = src_mac[0]
 
             if src_mac and src_mac in list(whitelisted_macs.keys()):
@@ -230,12 +224,12 @@ class Whitelist:
                 if (
                     ('src' in from_ or 'both' in from_)
                     and
-                    (self.should_ignore_flows(what_to_ignore))
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
                     return True
 
-            dst_mac = flow.dmac
+            dst_mac = flow.dmac if hasattr(flow, 'smac') else False
             if dst_mac and dst_mac in list(whitelisted_macs.keys()):
                 # the dst mac of this flow is whitelisted, but which direction?
                 from_ = whitelisted_macs[dst_mac]['from']
@@ -244,7 +238,7 @@ class Whitelist:
                 if (
                     ('dst' in from_ or 'both' in from_)
                     and
-                    (self.should_ignore_flows(what_to_ignore))
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
                     return True
