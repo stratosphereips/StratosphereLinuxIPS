@@ -265,10 +265,10 @@ class Files:
     type_: str = 'files'
     def __post_init__(self) -> None:
         if self.tx_hosts:
-            self.saddr = json.loads(self.tx_hosts[0])
+            self.saddr = self.tx_hosts[0] if type(self.tx_hosts)==list else json.loads(self.tx_hosts)[0]
 
         if self.rx_hosts:
-            self.daddr = json.loads(self.rx_hosts[0])
+            self.daddr = self.rx_hosts[0] if type(self.tx_hosts)==list else json.loads(self.rx_hosts)[0]
 
 
 @dataclass
