@@ -171,8 +171,8 @@ class Whitelist:
             domains_to_check.append(flow.server_name)
         elif flow_type == 'http':
             domains_to_check.append(flow.host)
-        elif flow_type == 'notice':
-            domains_to_check.append(flow.sub.replace(
+        elif flow_type == 'ssl':
+            domains_to_check.append(flow.subject.replace(
                 'CN=', ''
             ))
 
