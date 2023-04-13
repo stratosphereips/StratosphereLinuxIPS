@@ -20,7 +20,7 @@ class SuricataFlow:
     # A suricata line of flow type usually has 2 components.
     # 1. flow information
     # 2. tcp information
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
@@ -62,7 +62,7 @@ class SuricataFlow:
 @dataclass
 class SuricataHTTP:
     starttime: str
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
@@ -93,7 +93,7 @@ class SuricataHTTP:
 @dataclass
 class SuricataDNS:
     starttime: str
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
@@ -118,7 +118,7 @@ class SuricataDNS:
 @dataclass
 class SuricataTLS:
     starttime: str
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
@@ -144,7 +144,7 @@ class SuricataTLS:
 @dataclass
 class SuricataFile:
     starttime: str
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
@@ -161,7 +161,7 @@ class SuricataFile:
 @dataclass
 class SuricataSSH:
     starttime: str
-    flow_id: str
+    uid: str
 
     saddr: str
     sport: str
