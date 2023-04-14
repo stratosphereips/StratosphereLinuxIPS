@@ -1332,14 +1332,10 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_smtp(self):
         to_send = {
-                'uid': self.flow.uid,
-                'daddr': self.flow.daddr,
-                'saddr': self.flow.saddr,
-                'profileid': self.profileid,
-                'twid': self.twid,
-                'ts': self.flow.starttime,
-                'last_reply': self.flow.last_reply,
-            }
+            'flow': asdict(self.flow),
+            'profileid': self.profileid,
+            'twid': self.twid,
+        }
         to_send = json.dumps(to_send)
         __database__.publish('new_smtp', to_send)
 
