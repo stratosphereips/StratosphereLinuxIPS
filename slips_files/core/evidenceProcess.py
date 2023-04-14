@@ -47,13 +47,14 @@ class EvidenceProcess(multiprocessing.Process):
         output_folder,
         logs_folder,
         redis_port,
+        prefix,
     ):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
-        self.whitelist = Whitelist(outputqueue, redis_port)
-        __database__.start(redis_port)
+        self.whitelist = Whitelist(outputqueue, prefix, redis_port)
+        __database__.start(prefix, redis_port)
         self.separator = __database__.separator
         # Read the configuration
         self.read_configuration()
