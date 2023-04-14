@@ -370,14 +370,17 @@ class Helper:
 
     def set_evidence_GRE_tunnel(
             self,
-            tunnel_flow
+            tunnel_info: dict
     ):
+        tunnel_flow = tunnel_info['flow']
+        profileid = tunnel_info['profileid']
+        twid = tunnel_info['twid']
+
         action = tunnel_flow['action']
-        profileid = tunnel_flow['profileid']
         daddr = tunnel_flow['daddr']
-        twid = tunnel_flow['twid']
-        ts = tunnel_flow['ts']
+        ts = tunnel_flow['starttime']
         uid = tunnel_flow['uid']
+
         ip_identification = __database__.getIPIdentification(daddr)
         saddr = profileid.split('_')[-1]
         description = f'GRE tunnel from {saddr} ' \
