@@ -1389,16 +1389,9 @@ class ProfilerProcess(multiprocessing.Process):
     def handle_arp(self):
         # todo this fun shoud be moved to the db
         # @@@@@@@@@@@@@@@@@@@@ TODO fix all the to_send
+        # @@@@@@@@@@@@@@@@@@@@ TODO fix ts
         to_send = {
-            'uid': self.flow.uid,
-            'daddr': self.flow.daddr,
-            'saddr': self.flow.saddr,
-            'dst_mac': self.flow.dmac,
-            'src_mac': self.flow.smac,
-            'dst_hw': self.flow.dst_hw,
-            'src_hw': self.flow.src_hw,
-            'operation': self.flow.operation,
-            'ts': self.flow.starttime,
+            'flow': asdict(self.flow),
             'profileid': self.profileid,
             'twid': self.twid,
         }
