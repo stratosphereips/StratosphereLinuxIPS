@@ -40,12 +40,14 @@ class LogsProcess(multiprocessing.Process):
         debug,
         mainfoldername,
         redis_port,
+        prefix,
     ):
         self.name = 'Logs'
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
+        self.prefix = prefix
         self.separator = '_'
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue

@@ -46,12 +46,14 @@ class InputProcess(multiprocessing.Process):
             zeek_folder,
             line_type,
             redis_port,
+            prefix,
     ):
         multiprocessing.Process.__init__(self)
         self.name = 'Input'
         self.outputqueue = outputqueue
         self.profilerqueue = profilerqueue
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
+        self.prefix = prefix
         self.redis_port = redis_port
         self.input_type = input_type
         # in case of reading from stdin, the user mst tell slips what type of lines is the input
@@ -631,7 +633,7 @@ class InputProcess(multiprocessing.Process):
         # some process to tell us which files to read in real time when they appear
         # Get the file eventhandler
         # We have to set event_handler and event_observer before running zeek.
-        event_handler = FileEventHandler(self.redis_port, self.zeek_folder, self.input_type)
+        event_handler = FileEventHandler(self.redis_port, self.prefix, self.zeek_folder, self.input_type)
         # Create an observer
         self.event_observer = Observer()
         # Schedule the observer with the callback on the file handler
