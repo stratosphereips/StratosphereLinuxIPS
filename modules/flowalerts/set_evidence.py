@@ -154,11 +154,13 @@ class Helper:
             self,
             profileid,
             twid,
-            daddr,
-            weird_method,
-            uid,
-            timestamp,
+            flow: dict
     ):
+        daddr = flow['daddr']
+        weird_method = flow['addl']
+        uid = flow['uid']
+        timestamp = flow['starttime']
+
         confidence = 0.9
         threat_level = 'medium'
         category = 'Anomaly.Traffic'
@@ -167,8 +169,17 @@ class Helper:
         attacker = profileid.split("_")[-1]
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 timestamp,
+                                 category,
+                                 profileid=profileid,
+                                 twid=twid,
+                                 uid=uid)
 
     def set_evidence_incompatible_CN(
             self, org, timestamp, daddr, profileid, twid, uid

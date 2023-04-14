@@ -1208,8 +1208,8 @@ class ProfilerProcess(multiprocessing.Process):
                 self.daddr_as_obj = ipaddress.ip_address(self.flow.daddr)
             except (ipaddress.AddressValueError, ValueError):
                 # Its a mac
-                if self.flow.type_ != 'software':
-                    # software flows are allowed to not have a daddr
+                if self.flow.type_ not in ('software', 'weird'):
+                    # software and weird.log flows are allowed to not have a daddr
                     return False
 
             # Check if the flow is whitelisted and we should not process
@@ -1420,14 +1420,9 @@ class ProfilerProcess(multiprocessing.Process):
         handles weird.log zeek flows
         """
         to_send = {
-            'uid': self.flow.uid,
-            'ts': self.flow.starttime,
-            'daddr': self.flow.daddr,
-            'saddr': self.flow.saddr,
             'profileid': self.profileid,
             'twid': self.twid,
-            'name': self.flow.name,
-            'addl': self.flow.addl
+            'flow': asdict(self.flow)
         }
         to_send = json.dumps(to_send)
         __database__.publish('new_weird', to_send)
@@ -1472,7 +1467,6 @@ class ProfilerProcess(multiprocessing.Process):
             'weird': self.handle_weird,
             'tunnel': self.handle_tunnel,
         }
-
         try:
             # call the function that handles this flow
             cases[self.flow.type_]()

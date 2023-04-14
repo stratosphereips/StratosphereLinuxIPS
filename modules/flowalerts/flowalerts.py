@@ -1536,27 +1536,20 @@ class Module(Module, multiprocessing.Process):
         """
         detect weird http methods in zeek's weird.log
         """
+        flow = msg['flow']
+        profileid = msg['profileid']
+        twid = msg['twid']
 
         # what's the weird.log about
-        name = msg['name']
+        name = flow['name']
 
         if 'unknown_HTTP_method' not in name:
             return False
 
-        addl = msg['addl']
-        uid = msg['uid']
-        profileid = msg['profileid']
-        twid = msg['twid']
-        daddr = msg['daddr']
-        ts = msg['ts']
-
         self.helper.set_evidence_weird_http_method(
             profileid,
             twid,
-            daddr,
-            addl,
-            uid,
-            ts
+            flow
         )
 
     def check_non_http_port_80_conns(
