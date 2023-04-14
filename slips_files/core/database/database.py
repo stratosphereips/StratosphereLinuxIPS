@@ -193,21 +193,21 @@ class Database(ProfilingFlowsDatabase, object):
         function to store the current mode (daemonized/interactive)
         in the db
         """
-        self.r.set("mode", slips_mode)
+        self.r.set(self.prefix + self.separator + "mode", slips_mode)
 
     def get_slips_mode(self):
         """
         function to get the current mode (daemonized/interactive)
         in the db
         """
-        self.r.get("mode")
+        self.r.get(self.prefix + self.separator + "mode")
     
     def get_modified_ips_in_the_last_tw(self):
         """
         this number is updated in the db every 5s by slips.py
         used for printing running stats in slips.py or outputprocess
         """
-        if modified_ips := self.r.hget('analysis', 'modified_ips_in_the_last_tw'):
+        if modified_ips := self.r.hget(self.prefix + self.separator + 'analysis', 'modified_ips_in_the_last_tw'):
             return modified_ips
         else:
             return 0
@@ -239,12 +239,18 @@ class Database(ProfilingFlowsDatabase, object):
                                                         "slave 268435456 67108864 60 "
                                                         "pubsub 4294967296 2147483648 600")
 
-    def start(self, redis_port):
+    def setPrefix(self,prefix):
+        super().set_prefix(prefix)
+        self.prefix = prefix
+    
+    def start(self, prefix, redis_port:str = '6379'):
         """Start the DB. Allow it to read the conf"""
         self.read_configuration()
 
         # Read values from the configuration file
         try:
+            super().set_prefix(prefix)
+            self.prefix = prefix
             if not hasattr(self, 'r'):
                 self.connect_to_redis_server(redis_port)
                 # Set the memory limits of the output buffer,  For normal clients: no limits
@@ -266,7 +272,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
                 # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
                 # Even if the DB is not deleted. We need to delete some temp data
-                self.r.delete('zeekfiles')
+                self.r.delete(self.prefix + self.separator + 'zeekfiles')
 
 
             # By default the slips internal time is 0 until we receive something
@@ -278,14 +284,14 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
     def is_connection_error_logged(self):
-        return bool(self.r.get('logged_connection_error'))
+        return bool(self.r.get(self.prefix + self.separator + 'logged_connection_error'))
 
     def mark_connection_error_as_logged(self):
         """
         When redis connection error occurs, to prevent every module from logging it to slips.log and the console,
         set this variable in the db
         """
-        self.r.set('logged_connection_error', 'True')
+        self.r.set(self.prefix + self.separator + 'logged_connection_error', 'True')
 
     def get_message(self, channel, timeout=0.0000001):
         """
@@ -305,11 +311,11 @@ class Database(ProfilingFlowsDatabase, object):
     def set_slips_start_time(self):
         """store the time slips started (datetime obj)"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.r.set('slips_start_time', now)
+        self.r.set(self.prefix + self.separator + 'slips_start_time', now)
 
     def get_slips_start_time(self):
         """get the time slips started (datetime obj)"""
-        if start_time := self.r.get('slips_start_time'):
+        if start_time := self.r.get(self.prefix + self.separator + 'slips_start_time'):
             start_time = utils.convert_format(start_time, utils.alerts_format)
             return start_time
 
@@ -327,7 +333,7 @@ class Database(ProfilingFlowsDatabase, object):
             # no home_network is specified
             return True
 
-        ip = profileid.split(self.separator)[1]
+        ip = profileid.split(self.separator)[-1]
         ip_obj = ipaddress.ip_address(ip)
 
         return any(ip_obj in network for network in self.home_network)
@@ -336,13 +342,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Stores the number of successfully loaded TI files
         """
-        self.r.set('loaded TI files', number_of_loaded_files)
+        self.r.set(self.prefix + self.separator +'loaded TI files', number_of_loaded_files)
 
     def get_loaded_ti_files(self):
         """
         returns the number of successfully loaded TI files. or 0 if none is loaded
         """
-        return self.r.get('loaded TI files') or 0
+        return self.r.get(self.prefix + self.separator +'loaded TI files') or 0
 
     def addProfile(self, profileid, starttime, duration):
         """
@@ -352,24 +358,24 @@ class Database(ProfilingFlowsDatabase, object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if self.r.sismember('profiles', str(profileid)):
+            if self.r.sismember(self.prefix + self.separator + 'profiles', str(profileid)):
                 # we already have this profile
                 return False
             # execlude ips outside of local network is it's set in slips.conf
             if not self.should_add(profileid):
                 return False
-            # Add the profile to the index. The index is called 'profiles'
-            self.r.sadd('profiles', str(profileid))
+            # Add the profile to the index. The index is called prefix + separator + 'profiles'
+            self.r.sadd(self.prefix + self.separator + 'profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
             # Add the start time of profile
-            self.r.hset(profileid, 'starttime', starttime)
+            self.r.hset(self.prefix + self.separator + str(profileid), 'starttime', starttime)
             # For now duration of the TW is fixed
-            self.r.hset(profileid, 'duration', duration)
+            self.r.hset(self.prefix + self.separator + str(profileid), 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.r.hset(profileid, 'threat_level', 0)
-            self.r.hset(profileid, 'confidence', 0.05)
+            self.r.hset(self.prefix + self.separator + str(profileid), 'threat_level', 0)
+            self.r.hset(self.prefix + self.separator + str(profileid), 'confidence', 0.05)
             # The IP of the profile should also be added as a new IP we know about.
-            ip = profileid.split(self.separator)[1]
+            ip = profileid.split(self.separator)[-1]
             # If the ip is new add it to the list of ips
             self.setNewIP(ip)
             # Publish that we have a new profile
@@ -391,34 +397,34 @@ class Database(ProfilingFlowsDatabase, object):
         # but not in conn.log yet
 
         # if the ip's not in the following key, then its the first flow seen of this ip
-        return self.r.sismember("srcips_seen_in_connlog", ip)
+        return self.r.sismember(self.prefix + self.separator +"srcips_seen_in_connlog", ip)
 
     def mark_srcip_as_seen_in_connlog(self, ip):
         """
         Marks the given ip as seen in conn.log
         if an ip is not present in this set, it means we may have seen it but not in conn.log
         """
-        self.r.sadd("srcips_seen_in_connlog", ip)
+        self.r.sadd(self.prefix + self.separator +"srcips_seen_in_connlog", ip)
 
     def add_user_agent_to_profile(self, profileid, user_agent: dict):
         """
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.r.hset(profileid, 'User-agent', user_agent)
+        self.r.hset(self.prefix + self.separator + str(profileid), 'User-agent', user_agent)
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.r.hexists(profileid ,'past_user_agents'):
-            self.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
+        if not self.r.hexists(self.prefix + self.separator + str(profileid) ,'past_user_agents'):
+            self.r.hset(self.prefix + self.separator + str(profileid), 'past_user_agents', json.dumps([user_agent]))
         else:
-            user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
+            user_agents = json.loads(self.r.hget(self.prefix + self.separator + str(profileid), 'past_user_agents'))
             if user_agent not in user_agents:
                 user_agents.append(user_agent)
-                self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
+                self.r.hset(self.prefix + self.separator + str(profileid), 'past_user_agents', json.dumps(user_agents))
                 
     def add_software_to_profile(
         self, profileid, software, version_major, version_minor, uid
@@ -442,10 +448,10 @@ class Database(ProfilingFlowsDatabase, object):
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.r.hset(profileid, 'used_software', json.dumps(cached_sw))
+            self.r.hset(self.prefix + self.separator + profileid, 'used_software', json.dumps(cached_sw))
         else:
             # first time for this profile to use a software
-            self.r.hset(profileid, 'used_software', json.dumps(sw_dict))
+            self.r.hset(self.prefix + self.separator + profileid, 'used_software', json.dumps(sw_dict))
 
     def get_software_from_profile(self, profileid):
         """
@@ -454,7 +460,7 @@ class Database(ProfilingFlowsDatabase, object):
         if not profileid:
             return False
 
-        if used_software := self.r.hmget(profileid, 'used_software')[0]:
+        if used_software := self.r.hmget(self.prefix + self.separator + str(profileid), 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
 
@@ -468,7 +474,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
+        if user_agent := self.r.hmget(self.prefix + self.separator + str(profileid), 'User-agent')[0]:
             # user agents may be OpenSSH_8.6 , no need to deserialize them
             if '{' in user_agent:
                 user_agent = json.loads(user_agent)
@@ -484,13 +490,13 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         # returns a list of dhcp if the profile is in the db
-        profile_in_db = self.r.hmget(profileid, 'dhcp')
+        profile_in_db = self.r.hmget(self.prefix + self.separator + str(profileid), 'dhcp')
         if not profile_in_db:
             return False
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.r.hset(profileid, 'dhcp', 'true')
+            self.r.hset(self.prefix + self.separator + str(profileid), 'dhcp', 'true')
 
 
     def mark_profile_as_gateway(self, profileid):
@@ -502,14 +508,14 @@ class Database(ProfilingFlowsDatabase, object):
             # outside of home_network when this param is given
             return False
 
-        self.r.hset(profileid, 'gateway', 'true')
+        self.r.hset(self.prefix + self.separator + str(profileid), 'gateway', 'true')
 
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-        self.r.hset(profileid, 'IPv6',  json.dumps(ip))
+        self.r.hset(self.prefix + self.separator + str(profileid), 'IPv6',  json.dumps(ip))
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.r.hset(profileid, 'IPv4', json.dumps([ip]))
+        self.r.hset(self.prefix + self.separator + str(profileid), 'IPv4', json.dumps([ip]))
 
     def is_gw_mac(self, MAC_info, ip) -> bool:
         """
@@ -545,7 +551,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Returns the IP associated with the given MAC in our database
         """
-        return self.r.hget('MAC', MAC)
+        return self.r.hget(self.prefix + self.separator + 'MAC', MAC)
 
     def add_mac_addr_to_profile(self, profileid, MAC_info):
         """
@@ -563,7 +569,7 @@ class Database(ProfilingFlowsDatabase, object):
         if '0.0.0.0' in profileid:
             return False
 
-        incoming_ip = profileid.split('_')[1]
+        incoming_ip = profileid.split(self.separator)[-1]
 
         # sometimes we create profiles with the mac address.
         # don't save that in MAC hash
@@ -577,13 +583,13 @@ class Database(ProfilingFlowsDatabase, object):
             # we're trying to assign the gw mac to an ip that isn't the gateway's
             return False
         # get the ips that belong to this mac
-        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
+        cached_ip = self.r.hmget(self.prefix + self.separator + 'MAC', MAC_info['MAC'])[0]
         if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.r.hset('MAC', MAC_info['MAC'], ip)
+            self.r.hset(self.prefix + self.separator + 'MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
-            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
+            self.r.hset(self.prefix + self.separator + str(profileid), 'MAC', json.dumps(MAC_info))
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -611,7 +617,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # If 2 IPV6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
                 # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
-                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
+                ipv6: str = self.r.hmget(self.prefix + self.separator + str(profileid), 'IPv6')[0]
                 if not ipv6:
                     ipv6 = [found_ip]
                 else:
@@ -622,7 +628,7 @@ class Database(ProfilingFlowsDatabase, object):
                 self.set_ipv6_of_profile(profileid, ipv6)
 
                 # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
-                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
+                ipv6: str = self.r.hmget(f'{self.prefix}_profile_{found_ip}', 'IPv6')[0]
                 if not ipv6:
                     ipv6 = [incoming_ip]
                 else:
@@ -642,7 +648,7 @@ class Database(ProfilingFlowsDatabase, object):
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            self.r.hset(self.prefix + self.separator + 'MAC', MAC_info['MAC'], cached_ips)
 
         return True
 
@@ -654,7 +660,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(self.prefix + self.separator + str(profileid), 'MAC'):
             return json.loads(MAC_info)['MAC']
         else:
             return MAC_info
@@ -667,7 +673,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(self.prefix + self.separator + str(profileid), 'MAC'):
             return json.loads(MAC_info)['Vendor']
         else:
             return MAC_info
@@ -680,7 +686,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(self.prefix + self.separator + str(profileid), 'MAC'):
             return json.loads(MAC_info).get('host_name', False)
         else:
             return MAC_info
@@ -689,13 +695,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Returns ipv4 about a certain profile or None
         """
-        return self.r.hmget(profileid, 'IPv4')[0] if profileid else False
+        return self.r.hmget(self.prefix + self.separator + str(profileid), 'IPv4')[0] if profileid else False
 
     def get_ipv6_from_profile(self, profileid) -> str:
         """
         Returns ipv6 about a certain profile or None
         """
-        return self.r.hmget(profileid, 'IPv6')[0] if profileid else False
+        return self.r.hmget(self.prefix + self.separator + str(profileid), 'IPv6')[0] if profileid else False
 
     def get_the_other_ip_version(self, profileid):
         """
@@ -706,7 +712,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        srcip = profileid.split('_')[1]
+        srcip = profileid.split(self.separator)[-1]
         ip = False
         if validators.ipv4(srcip):
             ip = self.get_ipv6_from_profile(profileid)
@@ -718,8 +724,8 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            profileid = f'profile{self.separator}{str(daddr_as_obj)}'
-            if data := self.r.sismember('profiles', profileid):
+            profileid = f'{self.prefix}_profile{self.separator}{str(daddr_as_obj)}'
+            if data := self.r.sismember(self.prefix + self.separator + 'profiles', profileid):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -731,7 +737,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getProfiles(self):
         """Get a list of all the profiles"""
-        profiles = self.r.smembers('profiles')
+        profiles = self.r.smembers(self.prefix + self.separator + 'profiles')
         return profiles if profiles != set() else {}
 
 
@@ -741,7 +747,7 @@ class Database(ProfilingFlowsDatabase, object):
         Returns a list of tuples (twid, ts) or an empty list
         """
         return (
-            self.r.zrange(f'tws{profileid}', 0, -1, withscores=True)
+            self.r.zrange(self.prefix + self.separator + f'tws{profileid}', 0, -1, withscores=True)
             if profileid
             else False
         )
@@ -756,13 +762,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        return self.r.hget(profileid + self.separator + twid, 'SrcIPs')
+        return self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'SrcIPs')
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        return self.r.hget(profileid + self.separator + twid, 'DstIPs')
+        return self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'DstIPs')
 
     def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
         """
@@ -770,7 +776,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         try:
             hash_id = profileid + self.separator + twid
-            data = self.r.hget(hash_id, tuple_key)
+            data = self.r.hget(self.prefix + self.separator + str(hash_id), tuple_key)
             if not data:
                 return False, False
             data = json.loads(data)
@@ -793,16 +799,16 @@ class Database(ProfilingFlowsDatabase, object):
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        return self.r.sismember('profiles', profileid) if profileid else False
+        return self.r.sismember(self.prefix + self.separator + 'profiles', profileid) if profileid else False
 
     def getProfilesLen(self):
         """Return the amount of profiles. Redis should be faster than python to do this count"""
-        return self.r.scard('profiles')
+        return self.r.scard(self.prefix + self.separator + 'profiles')
 
     def getLastTWforProfile(self, profileid):
         """Return the last TW id and the time for the given profile id"""
         return (
-            self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
+            self.r.zrange(self.prefix + self.separator + f'tws{profileid}', -1, -1, withscores=True)
             if profileid
             else False
         )
@@ -810,7 +816,7 @@ class Database(ProfilingFlowsDatabase, object):
     def getFirstTWforProfile(self, profileid):
         """Return the first TW id and the time for the given profile id"""
         return (
-            self.r.zrange(f'tws{profileid}', 0, 0, withscores=True)
+            self.r.zrange(self.prefix + self.separator + f'tws{profileid}', 0, 0, withscores=True)
             if profileid
             else False
         )
@@ -825,7 +831,7 @@ class Database(ProfilingFlowsDatabase, object):
         # [-1] so we bring the last TW that matched this time.
         try:
             data = self.r.zrangebyscore(
-                f'tws{profileid}',
+                self.prefix + self.separator + f'tws{profileid}',
                 float('-inf'),
                 float(time),
                 withscores=True,
@@ -836,7 +842,7 @@ class Database(ProfilingFlowsDatabase, object):
         except IndexError:
             # We dont have any last tw?
             data = self.r.zrangebyscore(
-                f'tws{profileid}',
+                self.prefix + self.separator + f'tws{profileid}',
                 0,
                 float(time),
                 withscores=True,
@@ -867,7 +873,7 @@ class Database(ProfilingFlowsDatabase, object):
                 pass
             # Add the new TW to the index of TW
             data = {str(twid): float(startoftw)}
-            self.r.zadd(f'tws{profileid}', data)
+            self.r.zadd(self.prefix + self.separator + f'tws{profileid}', data)
             self.outputqueue.put(
                 f'04|database|[DB]: Created and added to DB the new older TW with id {twid}. Time: {startoftw} '
             )
@@ -904,7 +910,7 @@ class Database(ProfilingFlowsDatabase, object):
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
             data = {twid: float(startoftw)}
-            self.r.zadd(f'tws{profileid}', data)
+            self.r.zadd(self.prefix + self.separator + f'tws{profileid}', data)
             self.outputqueue.put(
                 f'04|database|[DB]: Created and added to DB for profile {profileid} on TW with id {twid}. Time: {startoftw} '
             )
@@ -923,16 +929,16 @@ class Database(ProfilingFlowsDatabase, object):
         """Return the time when this TW in this profile was created"""
         # Get all the TW for this profile
         # We need to encode it to 'search' because the data in the sorted set is encoded
-        return self.r.zscore(f'tws{profileid}', twid.encode('utf-8'))
+        return self.r.zscore(self.prefix + self.separator + f'tws{profileid}', twid.encode('utf-8'))
 
     def getAmountTW(self, profileid):
         """Return the number of tws for this profile id"""
-        return self.r.zcard(f'tws{profileid}') if profileid else False
+        return self.r.zcard(self.prefix + self.separator + f'tws{profileid}') if profileid else False
 
     def getModifiedTWSinceTime(self, time):
         """Return the list of modified timewindows since a certain time"""
         data = self.r.zrangebyscore(
-            'ModifiedTW', time, float('+inf'), withscores=True
+            self.prefix + self.separator + 'ModifiedTW', time, float('+inf'), withscores=True
         )
         return data or []
 
@@ -954,16 +960,16 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getModifiedTW(self):
         """Return all the list of modified tw"""
-        data = self.r.zrange('ModifiedTW', 0, -1, withscores=True)
+        data = self.r.zrange(self.prefix + self.separator + 'ModifiedTW', 0, -1, withscores=True)
         return data or []
 
     def wasProfileTWModified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
-        data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
+        data = self.r.zrank(self.prefix + self.separator + 'ModifiedTW', profileid + self.separator + twid)
         return bool(data)
 
     def setSlipsInternalTime(self, timestamp):
-        self.r.set('slips_internal_time', timestamp)
+        self.r.set(self.prefix + self.separator + 'slips_internal_time', timestamp)
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -971,7 +977,7 @@ class Database(ProfilingFlowsDatabase, object):
             key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed]
             Example: key_name = 'SrcPortClientTCPEstablished'
             """
-            data = self.r.hget(hash_key, key_name)
+            data = self.r.hget(self.prefix + self.separator + str(hash_key), key_name)
             value = {}
             if data:
                 portdata = json.loads(data)
@@ -986,11 +992,11 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
-        return self.r.hget(profileid + self.separator + twid, 'OutTuples')
+        return self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'OutTuples')
 
     def getInTuplesfromProfileTW(self, profileid, twid):
         """Get the in tuples"""
-        return self.r.hget(profileid + self.separator + twid, 'InTuples')
+        return self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'InTuples')
 
     def getFieldSeparator(self):
         """Return the field separator"""
@@ -1001,7 +1007,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         returns a dict of dhcp flows that happaened in this profileid and twid
         """
-        if flows := self.r.hget('DHCP_flows', f'{profileid}_{twid}'):
+        if flows := self.r.hget(self.prefix + self.separator + 'DHCP_flows', f'{profileid}_{twid}'):
             return json.loads(flows)
 
 
@@ -1013,9 +1019,9 @@ class Database(ProfilingFlowsDatabase, object):
         if cached_flows := self.get_dhcp_flows(profileid, twid):
             # we already have flows in this twid, update them
             cached_flows.update(flow)
-            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
+            self.r.hset(self.prefix + self.separator + 'DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
         else:
-            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
+            self.r.hset(self.prefix + self.separator + 'DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
 
 
     def update_threat_level(self, profileid, threat_level: str, confidence):
@@ -1024,12 +1030,12 @@ class Database(ProfilingFlowsDatabase, object):
         :param threat_level: available options are 'low', 'medium' 'critical' etc
         """
 
-        self.r.hset(profileid, 'threat_level', threat_level)
+        self.r.hset(self.prefix + self.separator + profileid, 'threat_level', threat_level)
         now = time.time()
         now = utils.convert_format(now, utils.alerts_format)
         # keep track of old threat levels
         confidence = f'confidence: {confidence}'
-        past_threat_levels = self.r.hget(profileid, 'past_threat_levels')
+        past_threat_levels = self.r.hget(self.prefix + self.separator + profileid, 'past_threat_levels')
         # this is what we'll be storing in the db, tl, ts, and confidence
         threat_level_data = (threat_level, now, confidence)
         if past_threat_levels:
@@ -1052,7 +1058,7 @@ class Database(ProfilingFlowsDatabase, object):
             # threat_levels_update_time = [now]
 
         past_threat_levels = json.dumps(past_threat_levels)
-        self.r.hset(profileid, 'past_threat_levels', past_threat_levels)
+        self.r.hset(self.prefix + self.separator + profileid, 'past_threat_levels', past_threat_levels)
 
         # set the score and confidence of the given ip in the db when it causes an evidence
         # these 2 values will be needed when sharing with peers
@@ -1094,7 +1100,7 @@ class Database(ProfilingFlowsDatabase, object):
             profileid_twid_alerts = json.dumps(alert)
 
 
-        self.r.hset(f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
+        self.r.hset(self.prefix + self.separator + f'{profileid}{self.separator}{twid}', 'alerts', profileid_twid_alerts)
 
         # the structure of alerts key is
         # alerts {
@@ -1106,7 +1112,7 @@ class Database(ProfilingFlowsDatabase, object):
         #             }
         # }
 
-        profile_alerts = self.r.hget('alerts', profileid)
+        profile_alerts = self.r.hget(self.prefix + self.separator + 'alerts', profileid)
         # alert ids look like this profile_192.168.131.2_timewindow1_92a3b9c2-330b-47ab-b73e-c5380af90439
         alert_hash = alert_ID.split('_')[-1]
         alert = {
@@ -1117,7 +1123,7 @@ class Database(ProfilingFlowsDatabase, object):
         if not profile_alerts:
             # first alert in this profile
             alert = json.dumps(alert)
-            self.r.hset('alerts', profileid, alert)
+            self.r.hset(self.prefix + self.separator + 'alerts', profileid, alert)
             return
 
         # the format of this dict is {twid1: {alert_hash: [evidence_IDs]},
@@ -1135,7 +1141,7 @@ class Database(ProfilingFlowsDatabase, object):
             profile_alerts[twid] = twid_alerts
 
         profile_alerts = json.dumps(profile_alerts)
-        self.r.hset('alerts', profileid, profile_alerts)
+        self.r.hset(self.prefix + self.separator + 'alerts', profileid, profile_alerts)
 
 
     def get_timewindow(self, flowtime, profileid):
@@ -1261,7 +1267,7 @@ class Database(ProfilingFlowsDatabase, object):
         The format for the returned dict is
             {profile123_twid1_<alert_uuid>: [ev_uuid1, ev_uuid2, ev_uuid3]}
         """
-        alerts = self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts')
+        alerts = self.r.hget(self.prefix + self.separator + f'{profileid}{self.separator}{twid}', 'alerts')
         if not alerts:
             return {}
         alerts = json.loads(alerts)
@@ -1273,7 +1279,7 @@ class Database(ProfilingFlowsDatabase, object):
         :param alert_ID: ID of alert to export to warden server
         for example profile_10.0.2.15_timewindow1_4e4e4774-cdd7-4e10-93a3-e764f73af621
         """
-        if alerts := self.r.hget(f'{profileid}{self.separator}{twid}', 'alerts'):
+        if alerts := self.r.hget(self.prefix + self.separator + f'{profileid}{self.separator}{twid}', 'alerts'):
             alerts = json.loads(alerts)
             return alerts.get(alert_ID, False)
         return False
@@ -1308,10 +1314,10 @@ class Database(ProfilingFlowsDatabase, object):
 
 
     def set_flow_causing_evidence(self, uids: list, evidence_ID):
-        self.r.hset("flows_causing_evidence", evidence_ID, json.dumps(uids))
+        self.r.hset(self.prefix + self.separator + "flows_causing_evidence", evidence_ID, json.dumps(uids))
 
     def get_flows_causing_evidence(self, evidence_ID) -> list:
-        uids = self.r.hget("flows_causing_evidence", evidence_ID)
+        uids = self.r.hget(self.prefix + self.separator + "flows_causing_evidence", evidence_ID)
         return json.loads(uids) if uids else []
 
 
@@ -1426,10 +1432,10 @@ class Database(ProfilingFlowsDatabase, object):
         # Set evidence in the database.
         current_evidence = json.dumps(current_evidence)
         self.r.hset(
-            profileid + self.separator + twid, 'Evidence', current_evidence
+            self.prefix + self.separator + profileid + self.separator + twid, 'Evidence', current_evidence
         )
 
-        self.r.hset(f'evidence{profileid}', twid, current_evidence)
+        self.r.hset(self.prefix + self.separator + f'evidence{profileid}', twid, current_evidence)
 
         # This is done to ignore repetition of the same evidence sent.
         # note that publishing HAS TO be done after updating the 'Evidence' keys
@@ -1452,10 +1458,10 @@ class Database(ProfilingFlowsDatabase, object):
         """
         If an evidence was processed by the evidenceprocess, mark it in the db
         """
-        self.r.sadd('processed_evidence', evidence_ID)
+        self.r.sadd(self.prefix + self.separator + 'processed_evidence', evidence_ID)
 
     def is_evidence_processed(self, evidence_ID):
-        return self.r.sismember('processed_evidence', evidence_ID)
+        return self.r.sismember(self.prefix + self.separator + 'processed_evidence', evidence_ID)
 
     def store_tranco_whitelisted_domain(self, domain):
         """
@@ -1475,7 +1481,7 @@ class Database(ProfilingFlowsDatabase, object):
         Set evidence for the profile in the same format as json in alerts.json
         """
         evidence = json.dumps(evidence)
-        self.r.sadd('Evidence', evidence)
+        self.r.sadd(self.prefix + self.separator + 'Evidence', evidence)
 
 
     def deleteEvidence(self, profileid, twid, evidence_ID: str):
@@ -1489,13 +1495,13 @@ class Database(ProfilingFlowsDatabase, object):
         current_evidence.pop(evidence_ID, None)
         current_evidence_json = json.dumps(current_evidence)
         self.r.hset(
-            profileid + self.separator + twid,
+            self.prefix + self.separator + profileid + self.separator + twid,
             'Evidence',
             current_evidence_json,
         )
-        self.r.hset(f'evidence{profileid}', twid, current_evidence_json)
+        self.r.hset(self.prefix + self.separator + f'evidence{profileid}', twid, current_evidence_json)
         # 2. delete evidence from 'alerts' key
-        profile_alerts = self.r.hget('alerts', profileid)
+        profile_alerts = self.r.hget(self.prefix + self.separator + 'alerts', profileid)
         if not profile_alerts:
             # this means that this evidence wasn't a part of an alert
             # give redis time to the save the changes before calling this function again
@@ -1538,13 +1544,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         # without this function, slips gets the stored evidence id from the db,
         # before deleteEvidence is called, so we need to keep track of whitelisted evidence ids
-        self.r.sadd('whitelisted_evidence', evidence_ID)
+        self.r.sadd(self.prefix + self.separator + 'whitelisted_evidence', evidence_ID)
 
     def is_whitelisted_evidence(self, evidence_ID):
         """
         Check if we have the evidence ID as whitelisted in the db to avoid showing it in alerts
         """
-        return self.r.sismember('whitelisted_evidence', evidence_ID)
+        return self.r.sismember(self.prefix + self.separator + 'whitelisted_evidence', evidence_ID)
 
     def remove_whitelisted_evidence(self, all_evidence:str) -> str:
         """
@@ -1562,7 +1568,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def getEvidenceForTW(self, profileid, twid):
         """Get the evidence for this TW for this Profile"""
-        evidence = self.r.hget(profileid + self.separator + twid, 'Evidence')
+        evidence = self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'Evidence')
         if evidence:
             evidence = self.remove_whitelisted_evidence(evidence)
         return evidence
@@ -1585,7 +1591,7 @@ class Database(ProfilingFlowsDatabase, object):
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
             self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
+                self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
             )
@@ -1594,11 +1600,11 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Mark a dir as growing so it can be treated like the zeek logs generated by an interface
         """
-        self.r.set('growing_zeek_dir', 'yes')
+        self.r.set(self.prefix + self.separator + 'growing_zeek_dir', 'yes')
 
     def is_growing_zeek_dir(self):
         """ Did slips mark the given dir as growing?"""
-        return 'yes' in str(self.r.get('growing_zeek_dir'))
+        return 'yes' in str(self.r.get(self.prefix + self.separator + 'growing_zeek_dir'))
 
     def set_module_label_to_flow(
         self, profileid, twid, uid, module_name, module_label
@@ -1613,7 +1619,7 @@ class Database(ProfilingFlowsDatabase, object):
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
             self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
+                self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
             )
@@ -1635,15 +1641,15 @@ class Database(ProfilingFlowsDatabase, object):
         """Add this profile and tw to the list of blocked"""
         tws = self.getBlockedProfTW(profileid)
         tws.append(twid)
-        self.r.hset('BlockedProfTW', profileid, json.dumps(tws))
+        self.r.hset(self.prefix + self.separator + 'BlockedProfTW', profileid, json.dumps(tws))
 
     def getAllBlockedProfTW(self):
         """Return all the list of blocked tws"""
-        return self.r.hgetall('BlockedProfTW')
+        return self.r.hgetall(self.prefix + self.separator + 'BlockedProfTW')
 
     def getBlockedProfTW(self, profileid):
         """Return all the list of blocked tws"""
-        if tws := self.r.hget('BlockedProfTW', profileid):
+        if tws := self.r.hget(self.prefix + self.separator + 'BlockedProfTW', profileid):
             return json.loads(tws)
         return []
 
@@ -1695,7 +1701,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         this is can only be called when p2p is enabled, this value is set by p2p pigeon
         """
-        return self.r.get('multiAddress')
+        return self.r.get(self.prefix + self.separator + 'multiAddress')
 
     def getURLData(self, url):
         """
@@ -1772,7 +1778,7 @@ class Database(ProfilingFlowsDatabase, object):
 
         self.pubsub = self.r.pubsub()
         self.pubsub.subscribe(
-            channel, ignore_subscribe_messages=ignore_subscribe_messages
+            self.prefix + self.separator + str(channel), ignore_subscribe_messages=ignore_subscribe_messages
         )
         return self.pubsub
 
@@ -1784,14 +1790,14 @@ class Database(ProfilingFlowsDatabase, object):
         all_channels_list = self.r.pubsub_channels()
         self.print('Sending the stop signal to all listeners', 0, 3)
         for channel in all_channels_list:
-            self.r.publish(channel, 'stop_process')
+            self.r.publish(self.prefix + self.separator + str(channel), 'stop_process')
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
         """
         Return a list of all the flows in this profileid and twid
         """
         if data := self.r.hgetall(
-            profileid + self.separator + twid + self.separator + 'flows'
+            self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'flows'
         ):
             return data
 
@@ -1852,13 +1858,13 @@ class Database(ProfilingFlowsDatabase, object):
         Return the amount of each label so far in the DB
         Used to know how many labels are available during training
         """
-        return self.r.zrange('labels', 0, -1, withscores=True)
+        return self.r.zrange(self.prefix + self.separator + 'labels', 0, -1, withscores=True)
 
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
         return (
             self.r.hget(
-                profileid + self.separator + twid + self.separator + 'altflows',
+                self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'altflows',
                 uid,
             )
             if profileid
@@ -1871,9 +1877,9 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return
-        self.print(f'Adding timeline for {profileid}, {twid}: {data}', 3, 0)
+        self.print(f'Adding timeline for {self.prefix}, {profileid}, {twid}: {data}', 3, 0)
         key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
+            self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'timeline'
         )
         data = json.dumps(data)
         mapping = {data: timestamp}
@@ -1890,7 +1896,7 @@ class Database(ProfilingFlowsDatabase, object):
             # outside of home_network when this param is given
             return [], []
         key = str(
-            profileid + self.separator + twid + self.separator + 'timeline'
+            self.prefix + self.separator + profileid + self.separator + twid + self.separator + 'timeline'
         )
         # The the amount of lines in this list
         last_index = self.r.zcard(key)
@@ -1917,11 +1923,11 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Stores the used ftp port in our main db (not the cache like set_port_info)
         """
-        self.r.lpush('used_ftp_ports', str(port))
+        self.r.lpush(self.prefix + self.separator + 'used_ftp_ports', str(port))
 
     def is_ftp_port(self, port):
         # get all used ftp ports
-        used_ftp_ports = self.r.lrange('used_ftp_ports', 0, -1)
+        used_ftp_ports = self.r.lrange(self.prefix + self.separator + 'used_ftp_ports', 0, -1)
         # check if the given port is used as ftp port
         return str(port) in used_ftp_ports
 
@@ -1946,20 +1952,20 @@ class Database(ProfilingFlowsDatabase, object):
 
     def add_zeek_file(self, filename):
         """Add an entry to the list of zeek files"""
-        self.r.sadd('zeekfiles', filename)
+        self.r.sadd(self.prefix + self.separator + 'zeekfiles', filename)
 
     def get_all_zeek_file(self):
         """Return all entries from the list of zeek files"""
-        return self.r.smembers('zeekfiles')
+        return self.r.smembers(self.prefix + self.separator + 'zeekfiles')
 
     def get_gateway_ip(self):
-        return self.r.hget('default_gateway', 'IP')
+        return self.r.hget(self.prefix + self.separator + 'default_gateway', 'IP')
 
     def get_gateway_MAC(self):
-        return self.r.hget('default_gateway', 'MAC')
+        return self.r.hget(self.prefix + self.separator + 'default_gateway', 'MAC')
 
     def get_gateway_MAC_Vendor(self):
-        return self.r.hget('default_gateway', 'Vendor')
+        return self.r.hget(self.prefix + self.separator + 'default_gateway', 'Vendor')
 
     def set_default_gateway(self, address_type:str, address:str):
         """
@@ -1972,7 +1978,7 @@ class Database(ProfilingFlowsDatabase, object):
                 or address_type == 'MAC' and not self.get_gateway_MAC()
                 or address_type == 'Vendor' and not self.get_gateway_MAC_Vendor()
         ):
-            self.r.hset('default_gateway', address_type, address)
+            self.r.hset(self.prefix + self.separator + 'default_gateway', address_type, address)
 
     def get_ssl_info(self, sha1):
         info = self.rcache.hmget('IoC_SSL', sha1)[0]
@@ -1991,7 +1997,7 @@ class Database(ProfilingFlowsDatabase, object):
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.r.hset(profileid, 'modules_labels', data)
+        self.r.hset(self.prefix + self.separator + str(profileid), 'modules_labels', data)
 
     def get_profile_modules_labels(self, profileid):
         """
@@ -2001,7 +2007,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        data = self.r.hget(profileid, 'modules_labels')
+        data = self.r.hget(self.prefix + self.separator + str(profileid), 'modules_labels')
         data = json.loads(data) if data else {}
         return data
 
@@ -2113,7 +2119,7 @@ class Database(ProfilingFlowsDatabase, object):
             )                   # add key-pair to the dict if does not exist
         data = json.dumps(ip_profileid_twid)
 
-        self.r.hset('MaliciousIPs', ip, data)
+        self.r.hset(self.prefix + self.separator + 'MaliciousIPs', ip, data)
 
     def set_malicious_domain(self, domain, profileid, twid):
         """
@@ -2141,14 +2147,14 @@ class Database(ProfilingFlowsDatabase, object):
             )               # add key-pair to the dict if does not exist
         data = json.dumps(domain_profiled_twid)
 
-        self.r.hset('MaliciousDomains', domain, data)
+        self.r.hset(self.prefix + self.separator + 'MaliciousDomains', domain, data)
 
     def get_malicious_ip(self, ip):
         """
         Return malicious IP and its list of presence in
         the traffic (profileid, twid)
         """
-        data = self.r.hget('MaliciousIPs', ip)
+        data = self.r.hget(self.prefix + self.separator + 'MaliciousIPs', ip)
         data = json.loads(data) if data else {}
         return data
 
@@ -2157,7 +2163,7 @@ class Database(ProfilingFlowsDatabase, object):
         Return malicious domain and its list of presence in
         the traffic (profileid, twid)
         """
-        data = self.r.hget('MaliciousDomains', domain)
+        data = self.r.hget(self.prefix + self.separator + 'MaliciousDomains', domain)
         data = json.loads(data) if data else {}
         return data
 
@@ -2165,11 +2171,11 @@ class Database(ProfilingFlowsDatabase, object):
         """
         Returns the IPs resolved by this domain
         """
-        ips = self.r.hget("DomainsResolved", domain)
+        ips = self.r.hget(self.prefix + self.separator + "DomainsResolved", domain)
         return json.loads(ips) if ips else []
 
     def get_all_dns_resolutions(self):
-        dns_resolutions = self.r.hgetall('DNSresolution')
+        dns_resolutions = self.r.hgetall(self.prefix + self.separator +'DNSresolution')
         return dns_resolutions or []
 
 
@@ -2222,7 +2228,7 @@ class Database(ProfilingFlowsDatabase, object):
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        data = self.r.hget(profileid + self.separator + twid, 'Reconnections')
+        data = self.r.hget(self.prefix + self.separator + profileid + self.separator + twid, 'Reconnections')
         data = json.loads(data) if data else {}
         return data
 
@@ -2230,7 +2236,7 @@ class Database(ProfilingFlowsDatabase, object):
         """Set the reconnections for this TW for this Profile"""
         data = json.dumps(data)
         self.r.hset(
-            profileid + self.separator + twid, 'Reconnections', str(data)
+            self.prefix + self.separator + profileid + self.separator + twid, 'Reconnections', str(data)
         )
 
 
@@ -2257,15 +2263,15 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_host_ip(self):
         """Get the IP addresses of the host from a db. There can be more than one"""
-        return self.r.smembers('hostIP')
+        return self.r.smembers(self.prefix + self.separator + 'hostIP')
 
     def set_host_ip(self, ip):
         """Store the IP address of the host in a db. There can be more than one"""
-        self.r.sadd('hostIP', ip)
+        self.r.sadd(self.prefix + self.separator + 'hostIP', ip)
 
 
     def is_profile_malicious(self, profileid: str) -> str:
-        return self.r.hget(profileid, 'labeled_as_malicious') if profileid else False
+        return self.r.hget(self.prefix + self.separator + str(profileid), 'labeled_as_malicious') if profileid else False
 
     def set_TI_file_info(self, file, data):
         """
@@ -2364,11 +2370,11 @@ class Database(ProfilingFlowsDatabase, object):
         :param pid: int
         :param process: str
         """
-        self.r.hset('PIDs', process, pid)
+        self.r.hset(self.prefix + self.separator + 'PIDs', process, pid)
 
     def get_PIDs(self):
         """returns a dict with module names as keys and pids as values"""
-        return self.r.hgetall('PIDs')
+        return self.r.hgetall(self.prefix + self.separator + 'PIDs')
 
     def set_org_info(self, org, org_info, info_type):
         """
@@ -2408,18 +2414,18 @@ class Database(ProfilingFlowsDatabase, object):
         :param type: supporte types are IPs, domains and organizations
         :param whitelist_dict: the dict of IPs, domains or orgs to store
         """
-        self.r.hset('whitelist', type, json.dumps(whitelist_dict))
+        self.r.hset(self.prefix + self.separator + 'whitelist', type, json.dumps(whitelist_dict))
 
     def get_all_whitelist(self):
         """Return dict of 3 keys: IPs, domains, organizations or mac"""
-        return self.r.hgetall('whitelist')
+        return self.r.hgetall(self.prefix + self.separator + 'whitelist')
 
     def get_whitelist(self, key):
         """
         Whitelist supports different keys like : IPs domains and organizations
         this function is used to check if we have any of the above keys whitelisted
         """
-        if whitelist := self.r.hget('whitelist', key):
+        if whitelist := self.r.hget(self.prefix + self.separator + 'whitelist', key):
             return json.loads(whitelist)
         else:
             return {}
@@ -2435,9 +2441,9 @@ class Database(ProfilingFlowsDatabase, object):
             # not a valid ip skip
             return False
         # make sure the server isn't there before adding
-        DHCP_servers = self.r.lrange('DHCP_servers', 0, -1)
+        DHCP_servers = self.r.lrange(self.prefix + self.separator + 'DHCP_servers', 0, -1)
         if server_addr not in DHCP_servers:
-            self.r.lpush('DHCP_servers', server_addr)
+            self.r.lpush(self.prefix + self.separator + 'DHCP_servers', server_addr)
 
     def save(self, backup_file):
         """
@@ -2541,13 +2547,13 @@ class Database(ProfilingFlowsDatabase, object):
         """
         :param time: epoch
         """
-        self.r.hset('Warden', 'poll', time)
+        self.r.hset(self.prefix + self.separator + 'Warden', 'poll', time)
 
     def get_last_warden_poll_time(self):
         """
         returns epoch time of last poll
         """
-        time = self.r.hget('Warden', 'poll')
+        time = self.r.hget(self.prefix + self.separator + 'Warden', 'poll')
         time = float(time) if time else float('-inf')
         return time
 
@@ -2578,11 +2584,11 @@ class Database(ProfilingFlowsDatabase, object):
 
     def store_zeek_path(self, path):
         """used to store the path of zeek log files slips is currently using"""
-        self.r.set('zeek_path', path)
+        self.r.set(self.prefix + self.separator + 'zeek_path', path)
 
     def get_zeek_path(self) -> str:
         """return the path of zeek log files slips is currently using"""
-        return self.r.get('zeek_path')
+        return self.r.get(self.prefix + self.separator + 'zeek_path')
 
     def store_std_file(self, **kwargs):
         """
@@ -2596,9 +2602,9 @@ class Database(ProfilingFlowsDatabase, object):
                 }
         """
         for file_type, path in kwargs.items():
-            self.r.set(file_type, path)
+            self.r.set(self.prefix + self.separator + str(file_type), path)
 
     def get_stdfile(self, file_type):
-        return self.r.get(file_type)
+        return self.r.get(self.prefix + self.separator + str(file_type))
 
 __database__ = Database()
