@@ -48,11 +48,10 @@ class SuricataFlow:
     state: str
 
     # required to be able to add_flow
-    # smac: str = False
-    # dmac: str = False
-    # appproto: str = False
+    smac: str = ''
+    dmac: str = ''
     dir_: str = '->'
-    type_: str = 'suricata'
+    type_: str = 'conn'
 
     def __post_init__(self):
         self.dur = (self.endtime - self.starttime).total_seconds() or 0
@@ -155,8 +154,15 @@ class SuricataFile:
     proto: str
     appproto: str
 
-    filesize: int
-    type_ = 'file'
+    size: int
+    type_ = 'files'
+    # required to match zeek files.log
+    md5: str = ''
+    sha1: str = ''
+    source: str =''
+    analyzers: str =''
+    tx_hosts: str = ''
+    rx_hosts: str = ''
 
 @dataclass
 class SuricataSSH:
