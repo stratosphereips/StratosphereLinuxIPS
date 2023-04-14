@@ -1158,17 +1158,14 @@ class ProfilerProcess(multiprocessing.Process):
         Publish the GW addr in the new_dhcp channel
         """
         epoch_time = utils.convert_format(self.flow.starttime, 'unixtimestamp')
+        self.flow.starttime = epoch_time
         # this channel is used for setting the default gw ip,
         # only 1 flow is enough for that
         # on home networks, the router serves as a simple DHCP server
         to_send = {
-            'uid': self.flow.uids,
-            'server_addr': self.flow.server_addr or False,
-            'client_addr': self.flow.client_addr or False,
-            'requested_addr': self.flow.requested_addr or False,
             'profileid': self.profileid,
             'twid': __database__.get_timewindow(epoch_time, self.profileid),
-            'ts': epoch_time
+            'flow': asdict(self.flow)
         }
         __database__.publish('new_dhcp', json.dumps(to_send))
 
