@@ -8,7 +8,7 @@ let active_tw_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
-// Global var to track shown child rows
+// Global vars to track shown child rows
 let childRowsProfile = null;
 let childRowsAnalysis = null;
 let profilesScrollingContainer;
@@ -398,4 +398,7 @@ $(document).ready(function () {
     initAnalysisPage();
     document.onkeydown = hotkeyPress;
 });
+
+export { update };
+
 
