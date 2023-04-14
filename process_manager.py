@@ -131,13 +131,13 @@ class ProcessManager:
             if 'P2P Trust' == module_name:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port,
+                    self.main.prefix,
                     output_dir=self.main.args.output
                 )
             else:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port
+                    self.main.prefix
                 )
             module.start()
             __database__.store_process_PID(
