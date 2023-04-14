@@ -1,3 +1,7 @@
+// import { update } from './analysis.js';
+import {update} from '../analysis/analysis/static/js/analysis.js';
+
+
 const headers2 = {
     headers: { 'Content-Type': 'application/json' }
 }
@@ -40,6 +44,9 @@ function initializeWidgetsAndListeners() {
             { data: 'filename' },
             { data: 'redis_port' }
         ]
+    })
+    $('#reload_button').click(function(){
+        update(); // This one is imported from analysis.js
     })
 
     $('#modal_choose_redis').modal({
