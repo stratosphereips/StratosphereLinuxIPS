@@ -724,8 +724,8 @@ class Database(ProfilingFlowsDatabase, object):
     def getProfileIdFromIP(self, daddr_as_obj):
         """Receive an IP and we want the profileid"""
         try:
-            profileid = f'{self.prefix}_profile{self.separator}{str(daddr_as_obj)}'
-            if self.r.sismember(self.prefix + self.separator + 'profiles', profileid):
+            profileid = f'profile{self.separator}{str(daddr_as_obj)}'
+            if data := self.r.sismember('profiles', profileid):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
