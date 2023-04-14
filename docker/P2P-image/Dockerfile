@@ -67,6 +67,10 @@ WORKDIR ${SLIPS_DIR}
 RUN pip3 install --upgrade pip
 RUN pip3 install -r requirements.txt
 
+# For zeek-irc
+git clone https://github.com/stratosphereips/zeek-package-IRC.git
+mv ./zeek-package-IRC/irc_feature_extractor.zeek ./zeek-scripts/
+rm -rf ./zeek-package-IRC
 
 # For Kalipso:
 RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs

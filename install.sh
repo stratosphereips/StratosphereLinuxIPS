@@ -55,6 +55,11 @@ pip3 install -r requirements.txt
 echo "[+] Executing pip3 install --ignore-installed six\n"
 pip3 install --ignore-installed six
 
+# For zeek-irc
+git clone https://github.com/stratosphereips/zeek-package-IRC.git
+mv ./zeek-package-IRC/irc_feature_extractor.zeek ./zeek-scripts/
+rm -rf ./zeek-package-IRC
+
 # For Kalipso
 echo "[+] Downloading nodejs v19 and npm dependencies"
 curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs

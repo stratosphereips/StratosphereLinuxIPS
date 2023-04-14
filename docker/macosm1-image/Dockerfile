@@ -58,6 +58,7 @@ RUN (cd ${SLIPS_DIR} && chmod 774 slips.py)
 RUN pip3 install --upgrade pip
 RUN pip3 install -r ${SLIPS_DIR}/docker/macosm1-image/requirements-macos-m1-docker.txt
 
+
 # For Kalipso:
 RUN curl -fsSL https://deb.nodesource.com/setup_19.x | bash - && apt install -y --no-install-recommends nodejs
 
@@ -67,6 +68,11 @@ RUN npm install
 
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
+
+# For zeek-irc
+git clone https://github.com/stratosphereips/zeek-package-IRC.git
+mv ./zeek-package-IRC/irc_feature_extractor.zeek ./zeek-scripts/
+rm -rf ./zeek-package-IRC
 
 #CMD redis-server --daemonize yes && /bin/bash
 CMD /bin/bash

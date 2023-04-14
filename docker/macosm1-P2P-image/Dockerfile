@@ -72,5 +72,10 @@ RUN npm install
 # Switch to Slips installation dir when login.
 WORKDIR ${SLIPS_DIR}
 
+# For zeek-irc
+git clone https://github.com/stratosphereips/zeek-package-IRC.git
+mv ./zeek-package-IRC/irc_feature_extractor.zeek ./zeek-scripts/
+rm -rf ./zeek-package-IRC
+
 #CMD redis-server --daemonize yes && /bin/bash
 CMD /bin/bash
