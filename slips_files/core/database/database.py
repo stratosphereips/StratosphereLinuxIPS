@@ -996,9 +996,9 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
-    def get_dhcp_flows(self, profileid, twid) -> dict:
+    def get_dhcp_flows(self, profileid, twid) -> list:
         """
-        returns a dict of dhcp flows that happaened in this profileid and twid
+        returns a dict of dhcp flows that happened in this profileid and twid
         """
         if flows := self.r.hget('DHCP_flows', f'{profileid}_{twid}'):
             return json.loads(flows)
@@ -1368,9 +1368,9 @@ class Database(ProfilingFlowsDatabase, object):
 
         if type(uid) == list:
             # some evidence are caused by several uids, use the last one only
-            # todo check we we have duplicates in the first place
+            # todo check why we have duplicates in the first place
             # remove duplicate uids
-            uids = list(dict.fromkeys(uid))
+            uids = list(set(uid))
         else:
             uids = [uid]
 
