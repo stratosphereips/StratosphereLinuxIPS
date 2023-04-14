@@ -668,18 +668,24 @@ class Helper:
             self, ssl_info: dict, ssl_info_from_db: dict
     ):
         """
+        This function only works on zeek files.log flows
         :param ssl_info: info about this ssl cert as found in zeek
         :param ssl_info_from_db: ti feed, tags, description of this malicious cert
         """
+        flow: dict = ssl_info['flow']
+        ts = flow.get('starttime', '')
+        daddr = flow.get('daddr', '')
+        uid = flow.get('uid', '')
+
         profileid = ssl_info.get('profileid', '')
         twid = ssl_info.get('twid', '')
-        ts = ssl_info.get('ts', '')
-        daddr = ssl_info.get('daddr', '')
-        uid = ssl_info.get('uid', '')
+
+
         ssl_info_from_db = json.loads(ssl_info_from_db)
         tags = ssl_info_from_db['tags']
         cert_description = ssl_info_from_db['description']
         threat_level = ssl_info_from_db['threat_level']
+
         description = f'Malicious SSL certificate to server {daddr}.'
         # append daddr identification to the description
         ip_identification = __database__.getIPIdentification(daddr)
@@ -694,6 +700,9 @@ class Helper:
 
         attacker = daddr
         confidence = 1
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid,
+        __database__.setEvidence(evidence_type, attacker_direction,
+                                 attacker, threat_level, confidence,
+                                 description, ts, category,
+                                 source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid,
                                  uid=uid)

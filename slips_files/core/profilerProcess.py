@@ -1375,24 +1375,20 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
+        # files slips sees can be of 2 types: suricata or zeek
         to_send = {
-            'uid': self.flow.uid,
-            'daddr': self.flow.daddr,
-            'saddr': self.flow.saddr,
-            'size': self.flow.size,
-            'md5': self.flow.md5,
-            'sha1': self.flow.sha1,
-            'analyzers': self.flow.analyzers,
-            'source': self.flow.source,
+            'flow': asdict(self.flow),
+            'type': 'suricata' if type(self.flow) == SuricataFile else 'zeek',
             'profileid': self.profileid,
             'twid': self.twid,
-            'ts': self.flow.starttime,
         }
+
         to_send = json.dumps(to_send)
         __database__.publish('new_downloaded_file', to_send)
 
     def handle_arp(self):
         # todo this fun shoud be moved to the db
+        # @@@@@@@@@@@@@@@@@@@@ TODO fix all the to_send
         to_send = {
             'uid': self.flow.uid,
             'daddr': self.flow.daddr,
