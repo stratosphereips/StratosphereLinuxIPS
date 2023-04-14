@@ -1509,9 +1509,16 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_malicious_ssl(self, ssl_info):
-        source = ssl_info.get('source', '')
-        analyzers = ssl_info.get('analyzers', '')
-        sha1 = ssl_info.get('sha1', '')
+        if ssl_info['type'] != 'zeek':
+            # this detection only supports zeek files.log flows
+            return False
+
+        flow: dict = ssl_info['flow']
+
+        source = flow.get('source', '')
+        analyzers = flow.get('analyzers', '')
+        sha1 = flow.get('sha1', '')
+
         if 'SSL' not in source or 'SHA1' not in analyzers:
             # not an ssl cert
             return False
@@ -1520,6 +1527,7 @@ class Module(Module, multiprocessing.Process):
         ssl_info_from_db = __database__.get_ssl_info(sha1)
         if not ssl_info_from_db:
             return False
+
         self.helper.set_evidence_malicious_ssl(
             ssl_info, ssl_info_from_db
         )
