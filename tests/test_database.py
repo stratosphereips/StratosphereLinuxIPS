@@ -4,18 +4,17 @@ import redis
 import os
 import json
 import time
-
+import uuid
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
-
+prefix = str(uuid.uuid4())
 
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
-
 
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
@@ -28,6 +27,7 @@ def create_db_instace(outputQueue):
     __database__.home_network = utils.home_network_ranges
     __database__.width = 3600
     __database__.connect_to_redis_server(6381)
+    __database__.setPrefix(prefix)
     __database__.r.flushdb()
     __database__.setSlipsInternalTime(0)
     return __database__
@@ -82,7 +82,7 @@ def test_add_flow(outputQueue):
                   "module_labels": {}}
     assert add_flow(database) is True
     assert (
-        json.loads(database.r.hget(f'{profileid}_{twid}_flows', uid))
+        json.loads(database.r.hget(f'{prefix}_{profileid}_{twid}_flows', uid))
         == added_flow
     )
 
@@ -95,7 +95,7 @@ def test_getProfileIdFromIP(outputQueue):
     os.system('./slips.py -c slips.conf -cc')
 
     # add a profile
-    database.addProfile('profile_192.168.1.1', '00:00', '1')
+    database.addProfile(f'{prefix}_profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) is not False
 
@@ -103,7 +103,7 @@ def test_getProfileIdFromIP(outputQueue):
 def test_timewindows(outputQueue):
     """unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile"""
     database = create_db_instace(outputQueue)
-    profileid = 'profile_192.168.1.1'
+    profileid = f'{prefix}_profile_192.168.1.1'
     # add a profile
     database.addProfile(profileid, '00:00', '1')
     # add a tw to that profile (first tw)
@@ -144,7 +144,7 @@ def test_add_ips(outputQueue):
     assert (
         database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server') is True
     )
-    hash_id = f'{profileid}_{twid}'
+    hash_id = f'{prefix}_{profileid}_{twid}'
     stored_dstips = database.r.hget(hash_id, 'SrcIPs')
     assert stored_dstips == '{"192.168.1.1": 1}'
 
@@ -167,7 +167,7 @@ def test_add_port(outputQueue):
         'starttime': '20.0',
     }
     database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
-    hash_key = f'{profileid}_{twid}'
+    hash_key = f'{prefix}_{profileid}_{twid}'
     added_ports = database.r.hgetall(hash_key)
     assert 'DstPortsServerTCPNot Established' in added_ports.keys()
     assert test_ip in added_ports['DstPortsServerTCPNot Established']
@@ -187,8 +187,8 @@ def test_setEvidence(outputQueue):
     database.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                          timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
-    added_evidence = database.r.hget(f'evidence{profileid}', twid)
-    added_evidence2 = database.r.hget(f'{profileid}_{twid}', 'Evidence')
+    added_evidence = database.r.hget(f'{prefix}_evidence{profileid}', twid)
+    added_evidence2 = database.r.hget(f'{prefix}_{profileid}_{twid}', 'Evidence')
     assert added_evidence2 == added_evidence
 
     added_evidence = json.loads(added_evidence)
@@ -204,9 +204,9 @@ def test_deleteEvidence(outputQueue):
     database = create_db_instace(outputQueue)
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     database.deleteEvidence(profileid, twid, description)
-    added_evidence = json.loads(database.r.hget(f'evidence{profileid}', twid))
+    added_evidence = json.loads(database.r.hget(f'{prefix}_evidence{profileid}', twid))
     added_evidence2 = json.loads(
-        database.r.hget(f'{profileid}_{twid}', 'Evidence')
+        database.r.hget(f'{prefix}_{profileid}_{twid}', 'Evidence')
     )
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
@@ -266,7 +266,7 @@ def test_add_mac_addr_to_profile(outputQueue):
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
     # first associate this ip with some mac
     assert database.add_mac_addr_to_profile(profileid_ipv4, MAC_info) is True
-    assert ipv4 in str(database.r.hget('MAC', MAC_info['MAC']))
+    assert ipv4 in str(database.r.hget(f'{prefix}_MAC', MAC_info['MAC']))
 
     # now claim that we found another profile
     # that has the same mac as this one
@@ -274,21 +274,21 @@ def test_add_mac_addr_to_profile(outputQueue):
     profileid = 'profile_192.168.1.6'
     assert database.add_mac_addr_to_profile(profileid, MAC_info) is False
     # this ip shouldnt be added to the profile as they're both ipv4
-    assert '192.168.1.6' not in database.r.hget('MAC', MAC_info['MAC'])
+    assert '192.168.1.6' not in database.r.hget(f'{prefix}_MAC', MAC_info['MAC'])
 
     # now claim that another ipv6 has this mac
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     profileid_ipv6 = f'profile_{ipv6}'
     database.add_mac_addr_to_profile(profileid_ipv6, MAC_info)
     # make sure the mac is associated with his ipv6
-    assert ipv6 in database.r.hget('MAC', MAC_info['MAC'])
+    assert ipv6 in database.r.hget(f'{prefix}_MAC', MAC_info['MAC'])
     # make sure the ipv4 is associated with this
     # ipv6 profile
-    assert ipv4 in str(database.r.hmget(profileid_ipv6, 'IPv4'))
+    assert ipv4 in str(database.r.hmget(prefix + '_' + profileid_ipv6, 'IPv4'))
 
     # make sure the ipv6 is associated with the
     # profile that has the same ipv4 as the mac
-    assert ipv6 in str(database.r.hmget(profileid_ipv4, 'IPv6'))
+    assert ipv6 in str(database.r.hmget(prefix + '_' + profileid_ipv4, 'IPv6'))
 
 
 def test_get_the_other_ip_version(outputQueue):
