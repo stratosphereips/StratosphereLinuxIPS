@@ -654,26 +654,40 @@ class Helper:
 
     def set_evidence_smtp_bruteforce(
             self,
-            saddr,
-            daddr,
-            stime,
+            flow:dict,
             profileid,
             twid,
             uid,
             smtp_bruteforce_threshold,
     ):
+        saddr = flow['saddr']
+        daddr = flow['daddr']
+        stime = flow['starttime']
+
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
         attacker_direction = 'srcip'
         evidence_type = 'SMTPLoginBruteforce'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'doing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
+        description = f'doing SMTP login bruteforce to {daddr}. ' \
+                      f'{smtp_bruteforce_threshold} logins in 10 seconds. ' \
+                      f'{ip_identification}'
         attacker = saddr
         conn_count = smtp_bruteforce_threshold
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 stime, category, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 stime,
+                                 category,
+                                 conn_count=conn_count,
+                                 profileid=profileid,
+                                 twid=twid,
+                                 uid=uid)
 
     def set_evidence_malicious_ssl(
             self, ssl_info: dict, ssl_info_from_db: dict

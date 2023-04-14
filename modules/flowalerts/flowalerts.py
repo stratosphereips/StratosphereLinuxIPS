@@ -1214,7 +1214,18 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
-    def check_smtp_bruteforce(self,last_reply, stime, saddr, daddr, profileid, twid, uid):
+    def check_smtp_bruteforce(
+            self,
+            profileid,
+            twid,
+            flow
+    ):
+        uid = flow['uid']
+        daddr = flow['daddr']
+        saddr = flow['saddr']
+        stime = flow.get('starttime', False)
+        last_reply = flow.get('last_reply', False)
+
         if 'bad smtp-auth user' not in last_reply:
             return False
 
@@ -1256,9 +1267,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         self.helper.set_evidence_smtp_bruteforce(
-            saddr,
-            daddr,
-            stime,
+            flow,
             profileid,
             twid,
             uids,
@@ -2094,24 +2103,16 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 if utils.is_msg_intended_for(message, 'new_smtp'):
-                    data = json.loads(message['data'])
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
-                    daddr = data['daddr']
-                    saddr = data['saddr']
-                    stime = data.get('ts', False)
-                    last_reply = data.get('last_reply', False)
+                    smtp_info = json.loads(message['data'])
+                    profileid = smtp_info['profileid']
+                    twid = smtp_info['twid']
+                    flow: dict = smtp_info['flow']
+
                     self.check_smtp_bruteforce(
-                        last_reply,
-                        stime,
-                        saddr,
-                        daddr,
                         profileid,
                         twid,
-                        uid
+                        flow
                     )
-
 
                 # --- Detect multiple used SSH versions ---
                 message = __database__.get_message(self.c9)
