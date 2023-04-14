@@ -1426,16 +1426,9 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_tunnel(self):
         to_send = {
-            'uid': self.flow.uid,
-            'ts': self.flow.starttime,
-            'daddr': self.flow.daddr,
             'profileid': self.profileid,
             'twid': self.twid,
-            'sport': self.flow.sport,
-            'dport': self.flow.dport,
-            'action': self.flow.action,
-            'tunnel_type': self.flow.tunnel_type,
-
+            'flow': asdict(self.flow)
         }
         to_send = json.dumps(to_send)
         __database__.publish('new_tunnel', to_send)

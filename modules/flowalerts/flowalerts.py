@@ -1591,19 +1591,20 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 uid
             )
-    def check_GRE_tunnel(self, tunnel_flow: dict):
+    def check_GRE_tunnel(self, tunnel_info: dict):
         """
         Detects GRE tunnels
         @param tunnel_flow: dict containing tunnel zeek flow
         @return: None
         """
+        tunnel_flow = tunnel_info['flow']
         tunnel_type = tunnel_flow['tunnel_type']
 
         if tunnel_type != 'Tunnel::GRE':
             return
 
         self.helper.set_evidence_GRE_tunnel(
-            tunnel_flow
+            tunnel_info
         )
 
     def check_non_ssl_port_443_conns(
