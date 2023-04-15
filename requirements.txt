@@ -38,3 +38,4 @@ flask
 tld
 tqdm
 termcolor
+PyQt5==5.15.9

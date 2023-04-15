@@ -135,4 +135,5 @@ dependencies:
     - simplejson==3.17.2
     - stix2==2.1.0
     - stix2-patterns==1.3.2
+    - PyQt5==5.15.9
 prefix: ~/miniconda3/envs/slips
