@@ -145,9 +145,9 @@ class PortScanProcess(Module, multiprocessing.Process):
                             if 'spkts' not in dstips[dip]:
                                 # In argus files there are no src pkts, only pkts.
                                 # So it is better to have the total pkts than to have no packets count
-                                pkts_sent += dstips[dip]["pkts"]
+                                pkts_sent += int(dstips[dip]["pkts"])
                             else:
-                                pkts_sent += dstips[dip]["spkts"]
+                                pkts_sent += int(dstips[dip]["spkts"])
 
                         uids: list = get_uids()
                         timestamp = next(iter(dstips.values()))['stime']
@@ -649,20 +649,22 @@ class PortScanProcess(Module, multiprocessing.Process):
             profileid, evidence_type, self.malicious_label
         )
 
-    def check_dhcp_scan(self, flow):
+    def check_dhcp_scan(self, flow_info):
         """
         Detects DHCP scans, when a client requests 4+ different IPs in the same tw
         """
-
+        # this is the actual zeek flow
+        flow = flow_info['flow']
         requested_addr = flow['requested_addr']
         if not requested_addr:
             # we are only interested in DHCPREQUEST flows, where a client is requesting an IP
             return
 
-        uid = flow['uid']
-        profileid = flow['profileid']
-        twid = flow['twid']
-        ts = flow['ts']
+        profileid = flow_info['profileid']
+        twid = flow_info['twid']
+        # this is a list of uids
+        uids = flow['uids']
+        ts = flow['starttime']
 
         # dhcp_flows format is
         #       { requested_addr: uid,
@@ -678,10 +680,10 @@ class PortScanProcess(Module, multiprocessing.Process):
                 return
 
             # it was requesting a different addr, keep track of it and its uid
-            __database__.set_dhcp_flow(profileid, twid, requested_addr, uid)
+            __database__.set_dhcp_flow(profileid, twid, requested_addr, uids)
         else:
             # first time for this client to make a dhcp request in this tw
-            __database__.set_dhcp_flow(profileid, twid, requested_addr, uid)
+            __database__.set_dhcp_flow(profileid, twid, requested_addr, uids)
             return
 
 
@@ -693,7 +695,10 @@ class PortScanProcess(Module, multiprocessing.Process):
         number_of_requested_addrs = len(dhcp_flows)
         if number_of_requested_addrs % self.minimum_requested_addrs == 0:
             # get the uids of all the flows where this client was requesting an addr in this tw
-            uids = list(dhcp_flows.values())
+
+            for uids_list in  dhcp_flows.values():
+                uids.append(uids_list[0])
+
             self.set_evidence_dhcp_scan(
                 ts,
                 profileid,

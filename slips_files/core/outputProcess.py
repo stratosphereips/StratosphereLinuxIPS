@@ -272,7 +272,7 @@ class OutputProcess(multiprocessing.Process):
             total=self.total_flows,
             leave=True,
             colour="green",
-            desc="Flows processed",
+            desc="Flows read",
             mininterval=0, # defines how long to wait between each refresh.
             unit=' flow',
             smoothing=1,

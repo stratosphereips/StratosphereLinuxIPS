@@ -338,7 +338,7 @@ class ProfilingFlowsDatabase(object):
             )
             self.outputqueue.put(f'01|database|[DB] Inst: {traceback.print_exc()}')
 
-    def add_ips(self, profileid, twid, ip_as_obj, columns, role: str):
+    def add_ips(self, profileid, twid, flow, role):
         """
         Function to add information about an IP address
         The flow can go out of the IP (we are acting as Client) or into the IP
@@ -356,22 +356,9 @@ class ProfilingFlowsDatabase(object):
             module. The information is added by the module directly in the DB.
         """
 
-        # Get the fields
-        dport = columns['dport']
-        totbytes = columns['bytes']
-        pkts = columns['pkts']
-        spkts = columns['spkts']
-        state = columns['state']
-        proto = columns['proto'].upper()
-        daddr = columns['daddr']
-        saddr = columns['saddr']
-        uid = columns['uid']
-        starttime = str(columns['starttime'])
-        ip = str(ip_as_obj)
-        # dpkts = columns.get('dpkts', 0)
-        # sport = columns['sport']
-        # sbytes = columns['sbytes']
-
+        uid = flow.uid
+        starttime = str(flow.starttime)
+        ip = flow.daddr if role=='Client' else flow.saddr
 
         """
         Depending if the traffic is going out or not, we are Client or Server
@@ -395,15 +382,28 @@ class ProfilingFlowsDatabase(object):
         #############
 
         # OTH means that we didnt see the true src ip and dst ip
-        if columns['state'] != 'OTH':
-            self.ask_for_ip_info(saddr, profileid, twid, proto, starttime, uid, 'srcip', daddr=daddr)
-            self.ask_for_ip_info(daddr, profileid, twid, proto, starttime, uid, 'dstip')
+        if flow.state != 'OTH':
+            self.ask_for_ip_info(flow.saddr,
+                                 profileid,
+                                 twid,
+                                 flow.proto.upper(),
+                                 flow.starttime,
+                                 flow.uid,
+                                 'srcip',
+                                 daddr=flow.daddr)
+            self.ask_for_ip_info(flow.daddr,
+                                 profileid,
+                                 twid,
+                                 flow.proto.upper(),
+                                 flow.starttime,
+                                 flow.uid,
+                                 'dstip')
 
 
         self.update_times_contacted(ip, direction, profileid, twid)
 
         # Get the state. Established, NotEstablished
-        summaryState = self.getFinalStateFromFlags(state, pkts)
+        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
 
         # Get the previous data about this key
         old_profileid_twid_data = self.getDataFromProfileTW(
@@ -411,25 +411,25 @@ class ProfilingFlowsDatabase(object):
             twid,
             direction,
             summaryState,
-            proto,
+            flow.proto,
             role,
             'IPs',
         )
 
         profileid_twid_data = self.update_ip_info(
             old_profileid_twid_data,
-            pkts,
-            dport,
-            spkts,
-            totbytes,
+            flow.pkts,
+            flow.dport,
+            flow.spkts,
+            flow.bytes,
             ip,
             starttime,
             uid
         )
 
-        proto = proto.upper()
+
         key_name = (
-            f'{direction}IPs{role}{proto}{summaryState}'
+            f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
         )
         # Store this data in the profile hash
         self.r.hset(
@@ -696,32 +696,27 @@ class ProfilingFlowsDatabase(object):
         self.check_TW_to_close()
 
     def add_port(
-        self,
-        profileid: str,
-        twid: str,
-        ip_address: str,
-        columns: dict,
-        role: str,
-        port_type: str,
+            self, profileid: str, twid: str, ip_address: str, flow: dict, role: str, port_type: str
     ):
         """
         Store info learned from ports for this flow
         The flow can go out of the IP (we are acting as Client) or into the IP (we are acting as Server)
         role: 'Client' or 'Server'. Client also defines that the flow is going out, Server that is going in
-        port_type: 'Dst' or 'Src'. Depending if this port was a destination port or a source port
+        port_type: 'Dst' or 'Src'.
+        Depending if this port was a destination port or a source port
         """
         # Extract variables from columns
-        dport = columns['dport']
-        sport = columns['sport']
-        totbytes = int(columns['bytes'])
-        pkts = int(columns['pkts'])
-        state = columns['state']
-        proto = columns['proto'].upper()
-        starttime = str(columns['starttime'])
-        uid = columns['uid']
+        dport = flow.dport
+        sport = flow.sport
+        totbytes = int(flow.bytes)
+        pkts = int(flow.pkts)
+        state = flow.state
+        proto = flow.proto.upper()
+        starttime = str(flow.starttime)
+        uid = flow.uid
         ip = str(ip_address)
-        spkts = columns['spkts']
-        state_hist = columns.get('state_hist','')
+        spkts = flow.spkts
+        state_hist = flow.state_hist if hasattr(flow, 'state_hist') else ''
         # dpkts = columns['dpkts']
         # daddr = columns['daddr']
         # saddr = columns['saddr']
@@ -804,62 +799,46 @@ class ProfilingFlowsDatabase(object):
 
     def add_flow(
         self,
+        flow,
         profileid='',
         twid='',
-        stime='',
-        dur='',
-        saddr='',
-        sport='',
-        daddr='',
-        dport='',
-        proto='',
-        state='',
-        pkts='',
-        allbytes='',
-        spkts='',
-        sbytes='',
-        appproto='',
-        smac='',
-        dmac='',
-        uid='',
         label='',
-        flow_type='',
     ):
         """
         Function to add a flow by interpreting the data. The flow is added to the correct TW for this profile.
         The profileid is the main profile that this flow is related too.
         : param new_profile_added : is set to True for everytime we see a new srcaddr
         """
-        summaryState = self.getFinalStateFromFlags(state, pkts)
-        flow = {
-            'ts': stime,
-            'dur': dur,
-            'saddr': saddr,
-            'sport': sport,
-            'daddr': daddr,
-            'dport': dport,
-            'proto': proto,
-            'origstate': state,
+        summaryState = self.getFinalStateFromFlags(flow.state, flow.pkts)
+        flow_dict = {
+            'ts': flow.starttime,
+            'dur': flow.dur,
+            'saddr': flow.saddr,
+            'sport': flow.sport,
+            'daddr': flow.daddr,
+            'dport': flow.dport,
+            'proto': flow.proto,
+            'origstate': flow.state,
             'state': summaryState,
-            'pkts': pkts,
-            'allbytes': allbytes,
-            'spkts': spkts,
-            'sbytes': sbytes,
-            'appproto': appproto,
-            'smac': smac,
-            'dmac': dmac,
+            'pkts': flow.pkts,
+            'allbytes': flow.bytes,
+            'spkts': flow.spkts,
+            'sbytes': flow.sbytes,
+            'appproto': flow.appproto,
+            'smac': flow.smac,
+            'dmac': flow.dmac,
             'label': label,
-            'flow_type': flow_type,
+            'flow_type': flow.type_,
             'module_labels': {},
         }
 
         # Convert to json string
-        flow = json.dumps(flow)
+        flow_dict = json.dumps(flow_dict)
         # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}flows',
-            uid,
-            flow,
+            flow.uid,
+            flow_dict,
         )
         if not value:
             # duplicate flow
@@ -870,28 +849,28 @@ class ProfilingFlowsDatabase(object):
         if label:
             self.r.zincrby('labels', 1, label)
 
-        flow = {uid: flow}
+        flow_dict = {flow.uid: flow_dict}
 
         # Get the dictionary and convert to json string
-        flow = json.dumps(flow)
+        flow_dict = json.dumps(flow_dict)
         # Prepare the data to publish.
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': flow,
-            'stime': stime,
+            'flow': flow_dict,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(to_send)
 
         # set the pcap/file stime in the analysis key
         if self.first_flow:
-            self.set_input_metadata({'file_start': stime})
+            self.set_input_metadata({'file_start': flow.starttime})
             self.first_flow = False
 
-        self.set_local_network(saddr)
+        self.set_local_network(flow.saddr)
 
         # dont send arp flows in this channel, they have their own new_arp channel
-        if flow_type != 'arp':
+        if flow.type_ != 'arp':
             self.publish('new_flow', to_send)
         return True
     def set_local_network(self, saddr):
@@ -974,86 +953,70 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        stime,
-        daddr_as_obj,
-        dport,
-        flowtype,
-        uid,
-        version,
-        cipher,
-        resumed,
-        established,
-        cert_chain_fuids,
-        client_cert_chain_fuids,
-        subject,
-        issuer,
-        validation_status,
-        curve,
-        server_name,
-        ja3,
-        ja3s,
-        is_DoH,
+        flow
     ):
         """
         Store in the DB an ssl request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'version': version,
-            'cipher': cipher,
-            'resumed': resumed,
-            'established': established,
-            'cert_chain_fuids': cert_chain_fuids,
-            'client_cert_chain_fuids': client_cert_chain_fuids,
-            'subject': subject,
-            'issuer': issuer,
-            'validation_status': validation_status,
-            'curve': curve,
-            'server_name': server_name,
-            'daddr': str(daddr_as_obj),
-            'dport': dport,
-            'stime': stime,
-            'ja3': ja3,
-            'ja3s': ja3s,
-            'is_DoH': is_DoH,
+        ssl_flow = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'version': flow.version,
+            'cipher': flow.cipher,
+            'resumed': flow.resumed,
+            'established': flow.established,
+            'cert_chain_fuids': flow.cert_chain_fuids,
+            'client_cert_chain_fuids': flow.client_cert_chain_fuids,
+            'subject': flow.subject,
+            'issuer': flow.issuer,
+            'validation_status': flow.validation_status,
+            'curve': flow.curve,
+            'server_name': flow.server_name,
+            'daddr': flow.daddr,
+            'dport': flow.dport,
+            'stime': flow.starttime,
+            'ja3': flow.ja3,
+            'ja3s': flow.ja3s,
+            'is_DoH': flow.is_DoH,
         }
         # TODO do something with is_doh
         # Convert to json string
-        data = json.dumps(data)
+        ssl_flow = json.dumps(ssl_flow)
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            ssl_flow,
         )
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
+            'flow': ssl_flow,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(to_send)
         self.publish('new_ssl', to_send)
-        self.print(f'Adding SSL flow to DB: {data}', 3, 0)
-        # Check if the server_name (SNI) is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
+        self.print(f'Adding SSL flow to DB: {ssl_flow}', 3, 0)
+        # Check if the server_name (SNI) is detected by the threat intelligence.
+        # Empty field in the end, cause we have extrafield for the IP.
         # If server_name is not empty, set in the IPsInfo and send to TI
-        if not server_name:
+        if not flow.server_name:
             return False
 
         # We are giving only new server_name to the threat_intelligence module.
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, str(daddr_as_obj), lookup=server_name)
+        self.give_threat_intelligence(profileid, twid, 'dstip', flow.starttime,
+                                      flow.uid, flow.daddr, lookup=flow.server_name)
 
         # Save new server name in the IPInfo. There might be several server_name per IP.
-        if ipdata := self.getIPData(str(daddr_as_obj)):
+        if ipdata := self.getIPData(flow.daddr):
             sni_ipdata = ipdata.get('SNI', [])
         else:
             sni_ipdata = []
 
         SNI_port = {
-            'server_name': server_name,
-            'dport': dport
+            'server_name': flow.server_name,
+            'dport': flow.dport
         }
         # We do not want any duplicates.
         if SNI_port not in sni_ipdata:
@@ -1067,7 +1030,7 @@ class ProfilingFlowsDatabase(object):
                         # add SNI to our db as it has a DNS resolution
                         sni_ipdata.append(SNI_port)
                         self.setInfoForIPs(
-                            str(daddr_as_obj), {'SNI': sni_ipdata}
+                            flow.daddr, {'SNI': sni_ipdata}
                         )
                         break
 
@@ -1149,99 +1112,89 @@ class ProfilingFlowsDatabase(object):
 
     def add_out_http(
         self,
-        daddr,
         profileid,
         twid,
-        stime,
-        flowtype,
-        uid,
-        method,
-        host,
-        uri,
-        version,
-        user_agent,
-        request_body_len,
-        response_body_len,
-        status_code,
-        status_msg,
-        resp_mime_types,
-        resp_fuids,
+        flow,
     ):
         """
         Store in the DB a http request
         All the type of flows that are not netflows are stored in a separate hash ordered by uid.
         The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'method': method,
-            'host': host,
-            'uri': uri,
-            'version': version,
-            'user_agent': user_agent,
-            'request_body_len': request_body_len,
-            'response_body_len': response_body_len,
-            'status_code': status_code,
-            'status_msg': status_msg,
-            'resp_mime_types': resp_mime_types,
-            'resp_fuids': resp_fuids,
-            'stime': stime,
-            'daddr': daddr,
+        http_flow_dict = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'method': flow.method,
+            'host': flow.host,
+            'uri': flow.uri,
+            'version': flow.version,
+            'user_agent': flow.user_agent,
+            'request_body_len': flow.request_body_len,
+            'response_body_len': flow.response_body_len,
+            'status_code': flow.status_code,
+            'status_msg': flow.status_msg,
+            'resp_mime_types': flow.resp_mime_types,
+            'resp_fuids': flow.resp_fuids,
+            'stime': flow.starttime,
+            'daddr': flow.daddr,
         }
         # Convert to json string
-        data = json.dumps(data)
+        http_flow_dict = json.dumps(http_flow_dict)
 
         self.r.hset(
             f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
-            uid,
-            data,
+            flow.uid,
+            http_flow_dict,
         )
 
         http_flow = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
+            'flow': http_flow_dict,
+            'stime': flow.starttime,
         }
         to_send = json.dumps(http_flow)
         self.publish('new_http', to_send)
         self.publish('new_url', to_send)
 
-        self.print(f'Adding HTTP flow to DB: {data}', 3, 0)
+        self.print(f'Adding HTTP flow to DB: {http_flow_dict}', 3, 0)
 
         http_flow.pop('flow', None)
-        http_flow['uid'] = uid
+        http_flow['uid'] = flow.uid
 
         # Check if the host domain AND the url is detected by the threat intelligence.
         # not all flows have a host value so don't send empty hosts to ti module.
-        if len(host) > 2:
-            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=host)
-            self.give_threat_intelligence(profileid, twid, 'dst', stime, uid, daddr, lookup=f'http://{host}{uri}')
+        if len(flow.host) > 2:
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dst',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=flow.host)
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dst',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=f'http://{flow.host}{flow.uri}')
         else:
             # use the daddr since there's no host
-            self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=f'http://{daddr}{uri}')
+            self.give_threat_intelligence(profileid,
+                                          twid,
+                                          'dstip',
+                                          flow.starttime,
+                                          flow.uid,
+                                          flow.daddr,
+                                          lookup=f'http://{flow.daddr}{flow.uri}')
 
 
     def add_out_ssh(
         self,
         profileid,
         twid,
-        stime,
-        flowtype,
-        uid,
-        ssh_version,
-        auth_attempts,
-        auth_success,
-        client,
-        server,
-        cipher_alg,
-        mac_alg,
-        compression_alg,
-        kex_alg,
-        host_key_alg,
-        host_key,
-        daddr,
+        flow,
     ):
         """
         Store in the DB a SSH request
@@ -1250,92 +1203,89 @@ class ProfilingFlowsDatabase(object):
         The idea is that from the uid of a netflow, you can access which
         other type of info is related to that uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'version': ssh_version,
-            'auth_attempts': auth_attempts,
-            'auth_success': auth_success,
-            'client': client,
-            'server': server,
-            'cipher_alg': cipher_alg,
-            'mac_alg': mac_alg,
-            'compression_alg': compression_alg,
-            'kex_alg': kex_alg,
-            'host_key_alg': host_key_alg,
-            'host_key': host_key,
-            'stime': stime,
-            'daddr': daddr
+        ssh_flow_dict = {
+            'uid': flow.uid,
+            'type': flow.type_,
+            'version': flow.version,
+            'auth_attempts': flow.auth_attempts,
+            'auth_success': flow.auth_success,
+            'client': flow.client,
+            'server': flow.server,
+            'cipher_alg': flow.cipher_alg,
+            'mac_alg': flow.mac_alg,
+            'compression_alg': flow.compression_alg,
+            'kex_alg': flow.kex_alg,
+            'host_key_alg': flow.host_key_alg,
+            'host_key': flow.host_key,
+            'stime': flow.starttime,
+            'daddr': flow.daddr
         }
         # Convert to json string
-        data = json.dumps(data)
+        ssh_flow_dict = json.dumps(ssh_flow_dict)
         # Set the dns as alternative flow
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            ssh_flow_dict,
         )
         # Publish the new dns received
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
+            'flow': ssh_flow_dict,
+            'stime': flow.starttime,
+            'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_ssh', to_send)
-        self.print(f'Adding SSH flow to DB: {data}', 3, 0)
+        self.print(f'Adding SSH flow to DB: {ssh_flow_dict}', 3, 0)
         # Check if the dns is detected by the threat intelligence. Empty field in the end, cause we have extrafield for the IP.
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
+        self.give_threat_intelligence(profileid, twid, 'dstip', flow.starttime,
+                                      flow.uid,
+                                      flow.daddr, lookup=flow.daddr)
 
 
     def add_out_notice(
         self,
         profileid,
         twid,
-        stime,
-        daddr,
-        sport,
-        dport,
-        note,
-        msg,
-        scanned_port,
-        scanning_ip,
-        uid,
+        flow,
     ):
         """ " Send notice.log data to new_notice channel to look for self-signed certificates"""
-        data = {
+        notice_flow = {
             'type': 'notice',
-            'daddr': daddr,
-            'sport': sport,
-            'dport': dport,
-            'note': note,
-            'msg': msg,
-            'scanned_port': scanned_port,
-            'scanning_ip': scanning_ip,
-            'stime': stime,
+            'daddr': flow.daddr,
+            'sport': flow.sport,
+            'dport': flow.dport,
+            'note': flow.note,
+            'msg': flow.msg,
+            'scanned_port': flow.scanned_port,
+            'scanning_ip': flow.scanning_ip,
+            'stime': flow.starttime,
         }
-        data = json.dumps(
-            data
+        notice_flow = json.dumps(
+            notice_flow
         )   # this is going to be sent insidethe to_send dict
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
+            'flow': notice_flow,
+            'stime': flow.starttime,
+            'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            notice_flow,
         )
         self.publish('new_notice', to_send)
-        self.print(f'Adding notice flow to DB: {data}', 3, 0)
-        self.give_threat_intelligence(profileid, twid, 'dstip', stime, uid, daddr, lookup=daddr)
+        self.print(f'Adding notice flow to DB: {notice_flow}', 3, 0)
+        self.give_threat_intelligence(profileid, twid,
+                                      'dstip', flow.starttime,
+                                      flow.uid, flow.daddr,
+                                      lookup=flow.daddr)
 
     def get_dns_resolution(self, ip):
         """
@@ -1595,93 +1545,84 @@ class ProfilingFlowsDatabase(object):
         self,
         profileid,
         twid,
-        daddr,
-        stime,
-        flowtype,
-        uid,
-        query,
-        qclass_name,
-        qtype_name,
-        rcode_name,
-        answers,
-        ttls,
+        flow
     ):
         """
         Store in the DB a DNS request
-        All the type of flows that are not netflows are stored in a separate hash ordered by uid.
-        The idea is that from the uid of a netflow, you can access which other type of info is related to that uid
+        All the type of flows that are not netflows are stored in a separate hash ordered by flow.uid.
+        The idea is that from the flow.uid of a netflow, you can access which other type of info is related to that flow.uid
         """
-        data = {
-            'uid': uid,
-            'type': flowtype,
-            'query': query,
-            'qclass_name': qclass_name,
-            'qtype_name': qtype_name,
-            'rcode_name': rcode_name,
-            'answers': answers,
-            'ttls': ttls,
-            'stime': stime,
+        dns_flow = {
+            'flow.uid': flow.uid,
+            'type': flow.type_,
+            'query': flow.query,
+            'qclass_name': flow.qclass_name,
+            'flow.qtype_name': flow.qtype_name,
+            'rcode_name': flow.rcode_name,
+            'answers': flow.answers,
+            'ttls': flow.TTLs,
+            'stime': flow.starttime,
         }
 
         # Convert to json string
-        data = json.dumps(data)
+        dns_flow = json.dumps(dns_flow)
         # Set the dns as alternative flow
         self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            uid,
-            data,
+            flow.uid,
+            dns_flow,
         )
         # Publish the new dns received
+        # TODO we should just send the DNS obj!
         to_send = {
             'profileid': profileid,
             'twid': twid,
-            'flow': data,
-            'stime': stime,
-            'uid': uid,
-            'rcode_name': rcode_name,
-            'daddr': daddr,
-            'answers': answers
+            'flow': dns_flow,
+            'stime': flow.starttime,
+            'uid': flow.uid,
+            'rcode_name': flow.rcode_name,
+            'daddr': flow.daddr,
+            'answers': flow.answers
         }
 
         to_send = json.dumps(to_send)
         # publish a dns with its flow
         self.publish('new_dns_flow', to_send)
-        self.print(f'Adding DNS flow to DB: {data}', 3, 0)
-        # Check if the dns is detected by the threat intelligence.
+        # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,
             twid,
             'dstip',
-            stime,
-            uid,
-            daddr,
-            lookup=query
+            flow.starttime,
+            flow.uid,
+            flow.daddr,
+            lookup=flow.query
         )
 
 
         # Add DNS resolution to the db if there are answers for the query
-        if answers and answers !=  ['-'] :
+        if flow.answers and flow.answers !=  ['-'] :
             srcip = profileid.split('_')[1]
             self.set_dns_resolution(
-                query, answers, stime, uid, qtype_name, srcip, twid
+                flow.query, flow.answers, flow.starttime, flow.uid, flow.qtype_name, srcip, twid
             )
             # send each dns answer to TI module
-            for answer in answers:
+            for answer in flow.answers:
                 if 'TXT' in answer:
                     continue
 
                 extra_info = {
                     'is_dns_response': True,
-                    'dns_query': query,
+                    'dns_query': flow.query,
                     'domain': answer,
                 }
                 self.give_threat_intelligence(
                     profileid,
                     twid,
                     'dstip',
-                    stime,
-                    uid,
-                    daddr,
+                    flow.starttime,
+                    flow.uid,
+                    flow.daddr,
                     lookup=answer,
                     extra_info=extra_info
                 )

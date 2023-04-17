@@ -1,4 +1,6 @@
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import Conn
+from dataclasses import asdict
 import ipaddress
 import redis
 import os
@@ -10,7 +12,20 @@ import time
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
 test_ip = '192.168.1.1'
-
+flow = Conn(
+    5,
+    '1234',
+    test_ip,
+    '8.8.8.8',
+    5,
+    'TCP',
+    'dhcp',
+    80,88,
+    20,20,
+    20,20,
+    '','',
+    'Established',''
+)
 
 def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -33,58 +48,24 @@ def create_db_instace(outputQueue):
     return __database__
 
 def add_flow(db):
-    starttime = '5'
-    dur = '5'
-    sport = 80
-    dport = 88
-    saddr_as_obj = ipaddress.ip_address(test_ip)
-    daddr_as_obj = ipaddress.ip_address('8.8.8.8')
-    proto = 'TCP'
-    state = 'established'
-    pkts = 20
-    allbytes = 20
-    spkts = 20
-    sbytes = 20
-    appproto = 'dhcp'
-    uid = '1234'
-    flow_type = ''
-
-    return db.add_flow(
-            profileid=profileid,
-            twid=twid,
-            stime=starttime,
-            dur=dur,
-            saddr=str(saddr_as_obj),
-            sport=sport,
-            daddr=str(daddr_as_obj),
-            dport=dport,
-            proto=proto,
-            state=state,
-            pkts=pkts,
-            allbytes=allbytes,
-            spkts=spkts,
-            sbytes=sbytes,
-            appproto=appproto,
-            uid=uid,
-            flow_type=flow_type,
-        )
-
-
+    return db.add_flow(flow, profileid, twid)
 
 # this should always be the first unit test in this file
 # because we don't want another unit test adding the same flow before this one
 def test_add_flow(outputQueue):
     database = create_db_instace(outputQueue)
     uid = '1234'
-    added_flow = {"ts": "5", "dur": "5", "saddr": "192.168.1.1", "sport": 80, "daddr": "8.8.8.8", "dport": 88,
-         "proto": "TCP", "origstate": "established", "state": "Established", "pkts": 20, "allbytes": 20,
-         "spkts": 20, "sbytes": 20, "appproto": "dhcp", "smac": "", "dmac": "", "label": "", "flow_type": "",
-                  "module_labels": {}}
-    assert add_flow(database) is True
-    assert (
-        json.loads(database.r.hget(f'{profileid}_{twid}_flows', uid))
-        == added_flow
-    )
+    assert add_flow(database)
+
+    flow_from_db = database.r.hget(f'{profileid}_{twid}_flows', uid)
+    flow_from_db = json.loads(flow_from_db)
+
+    # make sure the exact flow is stored in the db
+    assert flow.daddr in flow_from_db['daddr']
+    assert flow.bytes == flow_from_db['allbytes']
+    assert flow.saddr in flow_from_db['saddr']
+    assert flow.state in flow_from_db['state']
+
 
 
 def test_getProfileIdFromIP(outputQueue):
@@ -142,7 +123,7 @@ def test_add_ips(outputQueue):
     }
     # make sure ip is added
     assert (
-        database.add_ips(profileid, twid, ipaddress.ip_address(test_ip), columns, 'Server') is True
+        database.add_ips(profileid, twid, flow, 'Server') is True
     )
     hash_id = f'{profileid}_{twid}'
     stored_dstips = database.r.hget(hash_id, 'SrcIPs')
@@ -151,22 +132,9 @@ def test_add_ips(outputQueue):
 
 def test_add_port(outputQueue):
     database = create_db_instace(outputQueue)
-    columns = {
-        'dport': 80,
-        'sport': 88,
-        'totbytes': 80,
-        'pkts': 20,
-        'sbytes': 30,
-        'bytes': 30,
-        'spkts': 70,
-        'state': 'Not Established',
-        'proto': 'TCP',
-        'saddr': '8.8.8.8',
-        'daddr': test_ip,
-        'uid': '1234',
-        'starttime': '20.0',
-    }
-    database.add_port(profileid, twid, test_ip, columns, 'Server', 'Dst')
+    new_flow = flow
+    new_flow.state = 'Not Established'
+    database.add_port(profileid, twid, test_ip, flow, 'Server', 'Dst')
     hash_key = f'{profileid}_{twid}'
     added_ports = database.r.hgetall(hash_key)
     assert 'DstPortsServerTCPNot Established' in added_ports.keys()

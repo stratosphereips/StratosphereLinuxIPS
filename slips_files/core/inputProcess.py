@@ -19,6 +19,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 from pathlib import Path
+from re import split
 import sys
 import os
 from datetime import datetime
@@ -237,7 +238,8 @@ class InputProcess(multiprocessing.Process):
         if self.is_zeek_tabs:
             # It is not JSON format. It is tab format line.
             nline = zeek_line
-            timestamp = nline.split('\t')[0]
+            nline_list = nline.split('\t') if '\t' in nline else split(r'\s{2,}', nline)
+            timestamp = nline_list[0]
         else:
             try:
                 nline = json.loads(zeek_line)
@@ -246,7 +248,6 @@ class InputProcess(multiprocessing.Process):
             # In some Zeek files there may not be a ts field
             # Like in some weird smb files
             timestamp = nline.get('ts', 0)
-
         try:
             timestamp = float(timestamp)
         except ValueError:
