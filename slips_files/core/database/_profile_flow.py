@@ -11,11 +11,14 @@ class ProfilingFlowsDatabase(object):
         # The name is used to print in the outputprocess
         self.name = 'DB'
         self.separator = '_'
+        self.prefix = ''
 
+    def set_prefix(self, prefix):
+        self.prefix = prefix
 
     def publish(self, channel, data):
         """Publish something"""
-        self.r.publish(channel, data)
+        self.r.publish(self.prefix + self.separator + str(channel), data)
 
     def getIPData(self, ip: str) -> dict:
         """
@@ -131,7 +134,7 @@ class ProfilingFlowsDatabase(object):
 
         # Get the DstIPs data for this tw in this profile
         # The format is {'1.1.1.1' :  3}
-        ips_contacted = self.r.hget(profileid_twid, f'{direction}IPs')
+        ips_contacted = self.r.hget(self.prefix + self.separator + profileid_twid, f'{direction}IPs')
         if not ips_contacted:
             ips_contacted = {}
 
@@ -144,7 +147,7 @@ class ProfilingFlowsDatabase(object):
             ips_contacted[ip] = 1
 
         ips_contacted = json.dumps(ips_contacted)
-        self.r.hset(profileid_twid, f'{direction}IPs', str(ips_contacted))
+        self.r.hset(self.prefix + self.separator + profileid_twid, f'{direction}IPs', str(ips_contacted))
 
     def getFinalStateFromFlags(self, state, pkts):
         """
@@ -319,7 +322,7 @@ class ProfilingFlowsDatabase(object):
         try:
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
-            data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
+            data = self.r.hget(self.prefix + self.separator + f'{profileid}{self.separator}{twid}', key)
             value = {}
             if data:
                 portdata = json.loads(data)
@@ -433,7 +436,7 @@ class ProfilingFlowsDatabase(object):
         )
         # Store this data in the profile hash
         self.r.hset(
-            f'{profileid}{self.separator}{twid}',
+            self.prefix + self.separator + f'{profileid}{self.separator}{twid}',
             key_name,
             json.dumps(profileid_twid_data)
         )
@@ -534,7 +537,7 @@ class ProfilingFlowsDatabase(object):
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
-            tuples = self.r.hget(profileid_twid, direction)
+            tuples = self.r.hget(self.prefix + self.separator + profileid_twid, direction)
             # Separate the symbold to add and the previous data
             (symbol_to_add, previous_two_timestamps) = data_tuple
             if not tuples:
@@ -585,7 +588,7 @@ class ProfilingFlowsDatabase(object):
                 # Convet the dictionary to json
                 tuples = json.dumps(tuples)
             # Store the new data on the db
-            self.r.hset(profileid_twid, direction, str(tuples))
+            self.r.hset(self.prefix + self.separator + profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, starttime)
 
@@ -597,7 +600,7 @@ class ProfilingFlowsDatabase(object):
             self.outputqueue.put(f'01|database|[DB] {traceback.format_exc()}')
 
     def getSlipsInternalTime(self):
-        return self.r.get('slips_internal_time')
+        return self.r.get(self.prefix + self.separator + 'slips_internal_time')
 
     def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
         """
@@ -648,7 +651,7 @@ class ProfilingFlowsDatabase(object):
             modification_time = float('inf')
 
         profiles_tws_to_close = self.r.zrangebyscore(
-            'ModifiedTW', 0, modification_time, withscores=True
+            self.prefix + self.separator + 'ModifiedTW', 0, modification_time, withscores=True
         )
 
         for profile_tw_to_close in profiles_tws_to_close:
@@ -669,8 +672,8 @@ class ProfilingFlowsDatabase(object):
         """
         Mark the TW as closed so tools can work on its data
         """
-        self.r.sadd('ClosedTW', profileid_tw)
-        self.r.zrem('ModifiedTW', profileid_tw)
+        self.r.sadd(self.prefix + self.separator + 'ClosedTW', profileid_tw)
+        self.r.zrem(self.prefix + self.separator + 'ModifiedTW', profileid_tw)
         self.publish('tw_closed', profileid_tw)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
@@ -687,7 +690,7 @@ class ProfilingFlowsDatabase(object):
         data = {
             f'{profileid}{self.separator}{twid}': float(timestamp)
         }
-        self.r.zadd('ModifiedTW', data)
+        self.r.zadd(self.prefix + self.separator + 'ModifiedTW', data)
         self.publish(
             'tw_modified',
             f'{profileid}:{twid}'
@@ -794,7 +797,7 @@ class ProfilingFlowsDatabase(object):
         data = json.dumps(old_profileid_twid_data)
         hash_key = f'{profileid}{self.separator}{twid}'
         key_name = f'{port_type}Ports{role}{proto}{summaryState}'
-        self.r.hset(hash_key, key_name, str(data))
+        self.r.hset(self.prefix + self.separator + hash_key, key_name, str(data))
         self.markProfileTWAsModified(profileid, twid, starttime)
 
     def add_flow(
@@ -836,7 +839,7 @@ class ProfilingFlowsDatabase(object):
         flow_dict = json.dumps(flow_dict)
         # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}flows',
+            self.prefix + self.separator + f'{profileid}{self.separator}{twid}{self.separator}flows',
             flow.uid,
             flow_dict,
         )
@@ -847,7 +850,7 @@ class ProfilingFlowsDatabase(object):
         # The key was not there before. So this flow is not repeated
         # Store the label in our uniq set, and increment it by 1
         if label:
-            self.r.zincrby('labels', 1, label)
+            self.r.zincrby(self.prefix + self.separator + 'labels', 1, label)
 
         flow_dict = {flow.uid: flow_dict}
 
@@ -888,51 +891,51 @@ class ProfilingFlowsDatabase(object):
             return
         # get the local network of this saddr
         if network_range := utils.get_cidr_of_ip(saddr):
-            self.r.set("local_network", network_range)
+            self.r.set(self.prefix + self.separator + "local_network", network_range)
             self.is_localnet_set = True
     def get_local_network(self):
-         return self.r.get("local_network")
+         return self.r.get(self.prefix + self.separator + "local_network")
 
     def get_label_count(self, label):
         """
         :param label: malicious or normal
         """
-        return self.r.zscore('labels', label)
+        return self.r.zscore(self.prefix + self.separator + 'labels', label)
 
     def get_disabled_modules(self) -> list:
-        return json.loads(self.r.hget('analysis', 'disabled_modules'))
+        return json.loads(self.r.hget(self.prefix + self.separator + 'analysis', 'disabled_modules'))
 
     def set_input_metadata(self, info:dict):
         """
         sets name, size, analysis dates, and zeek_dir in the db
         """
         for info, val in info.items():
-            self.r.hset('analysis', info, val)
+            self.r.hset(self.prefix + self.separator + 'analysis', info, val)
 
     def get_zeek_output_dir(self):
         """
         gets zeek output dir from the db
         """
-        return self.r.hget('analysis', 'zeek_dir')
+        return self.r.hget(self.prefix + self.separator + 'analysis', 'zeek_dir')
 
 
     def get_total_flows(self):
         """
         gets total flows to process from the db
         """
-        return self.r.hget('analysis', 'total_flows')
+        return self.r.hget(self.prefix + self.separator + 'analysis', 'total_flows')
 
     def get_input_type(self):
         """
         gets input type from the db
         """
-        return self.r.hget('analysis', 'input_type')
+        return self.r.hget(self.prefix + self.separator + 'analysis', 'input_type')
 
     def get_output_dir(self, info:dict):
         """
         returns the currently used output dir
         """
-        return self.r.hget('analysis', 'output_dir')
+        return self.r.hget(self.prefix + self.separator + 'analysis', 'output_dir')
 
 
     def get_flow(self, profileid, twid, uid):
@@ -945,7 +948,7 @@ class ProfilingFlowsDatabase(object):
             # outside of home_network when this param is given
             return {}
         temp = self.r.hget(
-            f'{profileid}{self.separator}{twid}{self.separator}flows', uid
+            self.prefix + self.separator +  f'{profileid}{self.separator}{twid}{self.separator}flows', uid
         )
         return {uid: temp}
 
@@ -985,7 +988,7 @@ class ProfilingFlowsDatabase(object):
         # Convert to json string
         ssl_flow = json.dumps(ssl_flow)
         self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
+            self.prefix + self.separator +  f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             ssl_flow,
         )
@@ -1022,7 +1025,7 @@ class ProfilingFlowsDatabase(object):
         if SNI_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS resolution
             # only add this SNI to our db if it has a DNS resolution
-            if dns_resolutions := self.r.hgetall('DNSresolution'):
+            if dns_resolutions := self.r.hgetall(self.prefix + self.separator +  'DNSresolution'):
                 # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
@@ -1060,7 +1063,7 @@ class ProfilingFlowsDatabase(object):
 
         self.rcache.hset('IPsInfo', ip, json.dumps(data))
         if new_key:
-            self.r.publish('ip_info_change', ip)
+            self.r.publish(self.prefix + self.separator + 'ip_info_change', ip)
 
     def get_p2p_reports_about_ip(self, ip) -> dict:
         """
@@ -1142,7 +1145,7 @@ class ProfilingFlowsDatabase(object):
         http_flow_dict = json.dumps(http_flow_dict)
 
         self.r.hset(
-            f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
+            self.prefix + self.separator + f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
             flow.uid,
             http_flow_dict,
         )
@@ -1224,7 +1227,7 @@ class ProfilingFlowsDatabase(object):
         ssh_flow_dict = json.dumps(ssh_flow_dict)
         # Set the dns as alternative flow
         self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
+            self.prefix + self.separator + f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             ssh_flow_dict,
         )
@@ -1276,7 +1279,7 @@ class ProfilingFlowsDatabase(object):
         }
         to_send = json.dumps(to_send)
         self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
+            self.prefix + self.separator + f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             notice_flow,
         )
@@ -1297,7 +1300,7 @@ class ProfilingFlowsDatabase(object):
         If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
         """
-        if ip_info := self.r.hget('DNSresolution', ip):
+        if ip_info := self.r.hget(self.prefix + self.separator + 'DNSresolution', ip):
             ip_info = json.loads(ip_info)
             # return a dict with 'ts' 'uid' 'domains' about this IP
             return ip_info
@@ -1408,9 +1411,9 @@ class ProfilingFlowsDatabase(object):
             ip_info = json.dumps(ip_info)
             # we store ALL dns resolutions seen since starting slips
             # store with the IP as the key
-            self.r.hset('DNSresolution', answer, ip_info)
+            self.r.hset(self.prefix + self.separator + 'DNSresolution', answer, ip_info)
             # store with the domain as the key:
-            self.r.hset('ResolvedDomains', domains[0], answer)
+            self.r.hset(self.prefix + self.separator + 'ResolvedDomains', domains[0], answer)
             # these ips will be associated with the query in our db
             ips_to_add.append(answer)
 
@@ -1434,7 +1437,7 @@ class ProfilingFlowsDatabase(object):
         """
         stores all the resolved domains with their ips in the db
         """
-        self.r.hset("DomainsResolved", domain, json.dumps(ips))
+        self.r.hset(self.prefix + self.separator + "DomainsResolved", domain, json.dumps(ips))
 
     def getDomainData(self, domain):
         """
@@ -1539,7 +1542,7 @@ class ProfilingFlowsDatabase(object):
             domain_data = json.dumps(domain_data)
             self.rcache.hset('DomainsInfo', domain, domain_data)
             # Publish the changes
-            self.r.publish('dns_info_change', domain)
+            self.r.publish(self.prefix + self.separator + 'dns_info_change', domain)
 
     def add_out_dns(
         self,
@@ -1568,7 +1571,7 @@ class ProfilingFlowsDatabase(object):
         dns_flow = json.dumps(dns_flow)
         # Set the dns as alternative flow
         self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
+            self.prefix + self.separator + f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             dns_flow,
         )

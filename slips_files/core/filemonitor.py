@@ -27,10 +27,10 @@ from slips_files.common.slips_utils import utils
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, redis_port, dir_to_monitor, input_type):
+    def __init__(self, redis_port, prefix, dir_to_monitor, input_type):
         super().__init__(self.REGEX)
         self.dir_to_monitor = dir_to_monitor
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
         utils.drop_root_privs()
         self.input_type = input_type
 

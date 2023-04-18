@@ -131,13 +131,13 @@ class ProcessManager:
             if 'P2P Trust' == module_name:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port,
+                    self.main.prefix,
                     output_dir=self.main.args.output
                 )
             else:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port
+                    self.main.prefix
                 )
             module.start()
             __database__.store_process_PID(
@@ -293,7 +293,7 @@ class ProcessManager:
                         if message and message['data'] in ('stop_process', 'stop_slips'):
                             continue
 
-                        if utils.is_msg_intended_for(message, 'finished_modules'):
+                        if __database__.is_msg_intended_for(message, 'finished_modules'):
                             # all modules must reply with their names in this channel after
                             # receiving the stop_process msg
                             # to confirm that all processing is done and we can safely exit now

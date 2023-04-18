@@ -486,7 +486,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_MAC'):
+                if __database__.is_msg_intended_for(message, 'new_MAC'):
                     data = json.loads(message['data'])
                     mac_addr = data['MAC']
                     host_name = data.get('host_name', False)
@@ -509,7 +509,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']
@@ -528,7 +528,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_ip'):
+                if __database__.is_msg_intended_for(message, 'new_ip'):
                     # Get the IP from the message
                     ip = message['data']
                     try:

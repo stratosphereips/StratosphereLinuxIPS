@@ -97,7 +97,7 @@ class Checker:
 
         # kill all open unused redis servers if the parameter was included
         if self.main.args.killall:
-            self.main.redis_man.close_open_redis_servers()
+            self.main.redis_man.close_open_redis_id()
             self.main.terminate_slips()
 
         if self.main.args.version:
@@ -147,7 +147,7 @@ class Checker:
         self.main.redis_man.clear_redis_cache_database()
         self.main.input_information = ''
         self.main.zeek_folder = ''
-        self.main.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
+        # self.main.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
         self.main.terminate_slips()
     
     def check_output_redirection(self) -> tuple:

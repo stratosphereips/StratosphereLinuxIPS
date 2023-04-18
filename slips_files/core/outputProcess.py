@@ -40,6 +40,7 @@ class OutputProcess(multiprocessing.Process):
         verbose,
         debug,
         redis_port,
+        prefix,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
@@ -66,7 +67,7 @@ class OutputProcess(multiprocessing.Process):
             )
         self.done_reading_flows = False
         # Start the DB
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
         # are we in daemon of interactive mode
         self.slips_mode = __database__.get_slips_mode()
         # we update the stats printed by slips every 5seconds

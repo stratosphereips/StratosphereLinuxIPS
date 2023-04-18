@@ -186,7 +186,7 @@ class Main:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
+                update_manager = UpdateFileManager(self.outputqueue, self.prefix)
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -288,7 +288,7 @@ class Main:
         # print(f'[Main] Storing Slips logs in {self.args.output}')
 
 
-    def log_redis_server_PID(self, redis_port, redis_pid):
+    def log_redis_server_prefix(self, redis_port, prefix):
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         try:
             # used in case we need to remove the line using 6379 from running logfile
@@ -298,13 +298,13 @@ class Main:
                     f.write(
                         '# This file contains a list of used redis ports.\n'
                         '# Once a server is killed, it will be removed from this file.\n'
-                        'Date, File or interface, Used port, Server PID,'
+                        'Date, File or interface, Used port, Unique ID (prefix),'
                         ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
                     )
 
                 f.write(
                     f'{now},{self.input_information},{redis_port},'
-                    f'{redis_pid},{self.zeek_folder},{self.args.output},'
+                    f'{prefix},{self.zeek_folder},{self.args.output},'
                     f'{os.getpid()},'
                     f'{bool(self.args.daemon)},{self.args.save}\n'
                 )
@@ -312,11 +312,11 @@ class Main:
             # last run was by root, change the file ownership to non-root
             os.remove(self.redis_man.running_logfile)
             open(self.redis_man.running_logfile, 'w').close()
-            self.log_redis_server_PID(redis_port, redis_pid)
+            self.log_redis_server_prefix(redis_port, prefix)
 
-        if redis_port == 6379:
-            # remove the old logline using this port
-            self.redis_man.remove_old_logline(6379)
+        # if redis_port == 6379:
+        #     # remove the old logline using this port
+        #     self.redis_man.remove_old_logline(6379)
 
     def set_mode(self, mode, daemon=''):
         """
@@ -412,7 +412,7 @@ class Main:
         self.input_information = os.path.basename(self.args.db)
         redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
         self.zeek_folder = '""'
-        self.log_redis_server_PID(redis_port, redis_pid)
+        self.log_redis_server_prefix(redis_port, redis_pid)
         self.redis_man.remove_old_logline(redis_port)
 
         print(
@@ -541,22 +541,35 @@ class Main:
             ##########################
 
             # get the port that is going to be used for this instance of slips
+            # if self.args.port:
+            #     self.redis_port = int(self.args.port)
+            #     # close slips if port is in use
+            #     self.metadata_man.check_if_port_is_in_use(self.redis_port)
+            # elif self.args.multiinstance:
+            #     self.redis_port = self.redis_man.get_random_redis_port()
+            #     if not self.redis_port:
+            #         # all ports are unavailable
+            #         inp = input("Press Enter to close all ports.\n")
+            #         if inp == '':
+            #             self.redis_man.close_all_ports()
+            #         self.terminate_slips()
+            # else:
+            #     # even if this port is in use, it will be overwritten by slips
+            #     self.redis_port = 6379
+            #     # self.check_if_port_is_in_use(self.redis_port)
+
             if self.args.port:
+                # set port to specified if explicitly specified
                 self.redis_port = int(self.args.port)
-                # close slips if port is in use
                 self.metadata_man.check_if_port_is_in_use(self.redis_port)
-            elif self.args.multiinstance:
-                self.redis_port = self.redis_man.get_random_redis_port()
-                if not self.redis_port:
-                    # all ports are unavailable
-                    inp = input("Press Enter to close all ports.\n")
-                    if inp == '':
-                        self.redis_man.close_all_ports()
-                    self.terminate_slips()
             else:
-                # even if this port is in use, it will be overwritten by slips
+                # default port 6379
                 self.redis_port = 6379
-                # self.check_if_port_is_in_use(self.redis_port)
+            
+            if self.args.prefix:
+                self.prefix = self.args.prefix
+            else:
+                self.prefix = self.redis_man.get_random_prefix()
 
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
@@ -570,6 +583,7 @@ class Main:
                 self.args.verbose,
                 self.args.debug,
                 self.redis_port,
+                self.prefix,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
@@ -587,8 +601,8 @@ class Main:
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
-            redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
+            # redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
+            self.log_redis_server_prefix(self.redis_port, self.prefix)
 
             __database__.set_slips_mode(self.mode)
 
@@ -608,7 +622,7 @@ class Main:
 
             __database__.store_std_file(**std_files)
 
-            self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
+            self.print(f'Using redis server on port: {green(self.redis_port)} with id: {green(self.prefix)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
             self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
@@ -638,6 +652,7 @@ class Main:
                 self.args.output,
                 logs_dir,
                 self.redis_port,
+                self.prefix,
             )
             evidence_process.start()
             self.print(
@@ -660,6 +675,7 @@ class Main:
                 self.args.verbose,
                 self.args.debug,
                 self.redis_port,
+                self.prefix,
             )
             profiler_process.start()
             self.print(
@@ -684,6 +700,7 @@ class Main:
                 self.zeek_folder,
                 self.line_type,
                 self.redis_port,
+                self.prefix,
             )
             inputProcess.start()
             self.print(
@@ -701,7 +718,7 @@ class Main:
                 self.print('Warning: P2P is only supported using an interface. Disabled P2P.')
 
             # warn about unused open redis servers
-            open_servers = len(self.redis_man.get_open_redis_servers())
+            open_servers = len(self.redis_man.get_open_redis_servers_ID())
             if open_servers > 1:
                 self.print(
                     f'Warning: You have {open_servers} '
@@ -727,7 +744,7 @@ class Main:
                 message = self.c1.get_message(timeout=0.01)
                 if (
                     message
-                    and utils.is_msg_intended_for(message, 'finished_modules')
+                    and __database__.is_msg_intended_for(message, 'finished_modules')
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()

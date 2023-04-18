@@ -315,7 +315,7 @@ class Module(Module, multiprocessing.Process):
 
                 # in case of an interface or a file, push every time we get an alert
                 if (
-                    utils.is_msg_intended_for(message, 'export_evidence')
+                    __database__.is_msg_intended_for(message, 'export_evidence')
                     and self.send_to_warden
                 ):
                     evidence = json.loads(message['data'])

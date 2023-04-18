@@ -253,6 +253,14 @@ class ArgumentParser(argparse.ArgumentParser):
             help='The redis-server port to use',
         )
         self.add_argument(
+            '-uid',
+            '--prefix',
+            metavar='<prefix>',
+            action='store',
+            required=False,
+            help='Sets the prefix of process in the database.',
+        )
+        self.add_argument(
             '-t',
             '--testing',
             action='store_true',

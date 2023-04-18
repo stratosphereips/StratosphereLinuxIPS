@@ -17,13 +17,13 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect arp attacks'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, prefix:str, redis_port='6379'):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         # Start the DB
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
         self.read_configuration()
@@ -397,17 +397,20 @@ class Module(Module, multiprocessing.Process):
                     self.arp_ts = time.time()
 
                 message = __database__.get_message(self.c1)
+
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_arp'):
+
+                if __database__.is_msg_intended_for(message, 'new_arp'):
                     flow_details = json.loads(message['data'])
                     profileid = flow_details['profileid']
                     twid = flow_details['twid']
                     # this is the actual arp flow
                     flow: dict = flow_details['flow']
                     ts = flow['starttime']
+
                     daddr = flow['daddr']
                     saddr = flow['saddr']
                     dst_mac = flow['dmac']
@@ -456,7 +459,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'tw_closed'):
+                if __database__.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
                     # range anymore

@@ -5,7 +5,9 @@ from ..modules.blocking.blocking import Module
 import platform
 import pytest
 import os
+import uuid
 
+prefix = str(uuid.uuid4())
 
 
 def has_netadmin_cap():
@@ -44,10 +46,10 @@ def do_nothing(*args):
     pass
 
 
-def create_blocking_instance(outputQueue):
+def create_blocking_instance(outputQueue, _prefix:str):
     """Create an instance of blocking.py
     needed by every other test in this file"""
-    blocking = Module(outputQueue, 6380)
+    blocking = Module(outputQueue, _prefix)
     # override the print function to avoid broken pipes
     blocking.print = do_nothing
     return blocking
@@ -56,7 +58,7 @@ def create_blocking_instance(outputQueue):
 @isroot
 @has_net_admin_cap
 def is_slipschain_initialized(outputQueue) -> bool:
-    blocking = create_blocking_instance(outputQueue)
+    blocking = create_blocking_instance(outputQueue, prefix)
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = [
         '-A INPUT -j slipsBlocking',
@@ -69,7 +71,7 @@ def is_slipschain_initialized(outputQueue) -> bool:
 @isroot
 @has_net_admin_cap
 def test_initialize_chains_in_firewall(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+    blocking = create_blocking_instance(outputQueue, prefix)
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
@@ -89,7 +91,7 @@ def test_initialize_chains_in_firewall(outputQueue, database):
 @isroot
 @has_net_admin_cap
 def test_block_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+    blocking = create_blocking_instance(outputQueue, prefix)
     blocking.initialize_chains_in_firewall()
     if not blocking.is_ip_blocked('2.2.0.0'):
         ip = '2.2.0.0'
@@ -101,7 +103,7 @@ def test_block_ip(outputQueue, database):
 @isroot
 @has_net_admin_cap
 def test_unblock_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+    blocking = create_blocking_instance(outputQueue, prefix)
     ip = '2.2.0.0'
     from_ = True
     to = True

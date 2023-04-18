@@ -44,7 +44,13 @@ class ProfilerProcess(multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, redis_port
+        self,
+        inputqueue,
+        outputqueue,
+        verbose,
+        debug,
+        redis_port,
+        prefix
     ):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
@@ -52,10 +58,10 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
-        self.whitelist = Whitelist(outputqueue, redis_port)
+        self.whitelist = Whitelist(outputqueue, prefix, redis_port)
         # Read the configuration
         self.read_configuration()
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
         # Set the database output queue
         __database__.setOutputQueue(self.outputqueue)
         self.verbose = verbose
@@ -1841,7 +1847,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'reload_whitelist'):
+                if __database__.is_msg_intended_for(message, 'reload_whitelist'):
                     # if whitelist.conf is edited using pycharm
                     # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk

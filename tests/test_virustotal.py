@@ -7,6 +7,7 @@ from ..modules.virustotal.virustotal import Module
 import pytest
 import requests
 import json
+import uuid
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -69,6 +70,7 @@ valid_api_key = pytest.mark.skipif(
     reason=f'API KEY not found or you do not have quota. error: {error_msg}',
 )
 
+prefix = str(uuid.uuid4())
 
 @pytest.fixture
 def read_configuration():
@@ -78,7 +80,7 @@ def read_configuration():
 def create_virustotal_instance(outputQueue):
     """Create an instance of virustotal.py
     needed by every other test in this file"""
-    virustotal = Module(outputQueue, 6380)
+    virustotal = Module(outputQueue, prefix)
     # override the self.print function to avoid broken pipes
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration

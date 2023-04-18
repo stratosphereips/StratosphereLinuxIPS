@@ -78,18 +78,18 @@ def check_for_text(txt, output_dir):
     return False
 
 @pytest.mark.parametrize(
-    'pcap_path, expected_profiles, output_dir, redis_port',
+    'pcap_path, expected_profiles, output_dir, prefix',
     [
         (
             'dataset/test7-malicious.pcap',
             290,
             'test_configuration_file/',
-            6667,
+            '2f168df6-c2a9-4a0a-935a-b04fe92e43b7',
         )
     ],
 )
 def test_conf_file(
-    pcap_path, expected_profiles, output_dir, redis_port
+    pcap_path, expected_profiles, output_dir, prefix
 ):
     """
     In this test we're using tests/test.conf
@@ -101,14 +101,16 @@ def test_conf_file(
               f'-f {pcap_path} ' \
               f'-o {output_dir} ' \
               f'-c tests/integration_tests/test.conf  ' \
-              f'-P {redis_port} ' \
+              f'-uid {prefix} ' \
               f'> {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = connect_to_redis(6379)
+    database.setPrefix(prefix)
+
     profiles = int(database.getProfilesLen())
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
@@ -146,18 +148,18 @@ def test_conf_file(
 
 
 @pytest.mark.parametrize(
-    'pcap_path, expected_profiles, output_dir, redis_port',
+    'pcap_path, expected_profiles, output_dir, prefix',
     [
         (
             'dataset/test8-malicious.pcap',
             1,
             'pcap_test_conf2/',
-            6668,
+            '5eade174-9e34-431b-86c7-4569e55a723d',
         )
     ],
 )
 def test_conf_file2(
-    pcap_path, expected_profiles, output_dir, redis_port
+    pcap_path, expected_profiles, output_dir, prefix
 ):
     """
     In this test we're using tests/test2.conf
@@ -170,15 +172,15 @@ def test_conf_file2(
               f'-f {pcap_path} ' \
               f'-o {output_dir} ' \
               f'-c tests/integration_tests/test2.conf ' \
-              f'-P {redis_port} ' \
+              f'-uid {prefix} ' \
               f'> {output_file} 2>&1'
     # this function returns when slips is done
     os.system(command)
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
-
+    database = connect_to_redis(6379)
+    database.setPrefix(prefix)
     # test 1 homenet ip
     # the only profile we should have is the one in home_network parameter
     profiles = int(database.getProfilesLen())

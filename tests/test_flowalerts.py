@@ -7,6 +7,7 @@ import base64
 import os
 import json
 from numpy import arange
+import uuid
 
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
@@ -16,6 +17,7 @@ timestamp = 1635765895.037696
 saddr = '192.168.1.1'
 daddr = '192.168.1.2'
 dst_profileid = f'profile_{daddr}'
+prefix = str(uuid.uuid4())
 
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
@@ -25,10 +27,10 @@ def do_nothing(*args):
     pass
 
 
-def create_flowalerts_instance(outputQueue):
+def create_flowalerts_instance(outputQueue, _prefix:str):
     """Create an instance of flowalerts.py
     needed by every other test in this file"""
-    flowalerts = Module(outputQueue, 6380)
+    flowalerts = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     flowalerts.print = do_nothing
     return flowalerts
@@ -39,7 +41,8 @@ def create_flowalerts_instance(outputQueue):
 ])
 def test_check_long_connection(database, outputQueue, dur, expected_label):
     uid = get_random_uid()
-    flowalerts = create_flowalerts_instance(outputQueue)
+
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
 
     flow = Conn(
         timestamp,
@@ -54,6 +57,7 @@ def test_check_long_connection(database, outputQueue, dur, expected_label):
         1,2,5,6,7,'','','',
     )
     assert database.add_flow(flow, profileid, twid) is True
+
     # sets the label to normal or malicious based on the flow durd
     flowalerts.check_long_connection(
         dur, daddr, saddr, profileid, twid, uid, timestamp
@@ -65,7 +69,7 @@ def test_check_long_connection(database, outputQueue, dur, expected_label):
 
 
 def test_port_belongs_to_an_org(database, outputQueue):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     # store in the db that both ips have apple as a vendor
     MAC_info = {'MAC': '123', 'Vendor': 'Apple, Inc'}
     database.add_mac_addr_to_profile(profileid, MAC_info)
@@ -85,7 +89,7 @@ def test_port_belongs_to_an_org(database, outputQueue):
 
 
 def test_check_unknown_port(outputQueue, database):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     database.set_port_info('23/udp', 'telnet')
     # now we have info 23 udp
     assert (
@@ -96,7 +100,7 @@ def test_check_unknown_port(outputQueue, database):
 def test_check_if_resolution_was_made_by_different_version(
     outputQueue, database
 ):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     # tell the db that this ipv6 belongs to the same profileid
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)
@@ -112,7 +116,7 @@ def test_check_if_resolution_was_made_by_different_version(
 
 
 def test_check_dns_arpa_scan(outputQueue, database):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     # make 10 different arpa scans
     for ts in arange(0, 1, 1 / 10):
         is_arpa_scan = flowalerts.check_dns_arpa_scan(
@@ -124,7 +128,7 @@ def test_check_dns_arpa_scan(outputQueue, database):
 
 # check_multiple_ssh_clients is tested in test_dataset
 def test_detect_DGA(outputQueue, database):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     rcode_name = 'NXDOMAIN'
     # arbitrary ip to be able to call detect_DGA
     daddr = '10.0.0.1'
@@ -136,7 +140,7 @@ def test_detect_DGA(outputQueue, database):
 
 
 def test_detect_young_domains(outputQueue, database):
-    flowalerts = create_flowalerts_instance(outputQueue)
+    flowalerts = create_flowalerts_instance(outputQueue, prefix)
     domain = 'example.com'
     # age in days
     age = 50

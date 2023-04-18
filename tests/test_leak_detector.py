@@ -2,7 +2,7 @@
 import os
 
 from ..modules.leak_detector.leak_detector import Module
-
+import uuid
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
@@ -15,12 +15,12 @@ test_pcap = 'dataset/test7-malicious.pcap'
 yara_rules_path = 'tests/yara_rules_for_testing/rules/'
 compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
 compiled_test_rule = f'{compiled_yara_rules_path}test_rule.yara_compiled'
+prefix = str(uuid.uuid4())
 
-
-def create_leak_detector_instance(outputQueue):
+def create_leak_detector_instance(outputQueue, _prefix:str):
     """Create an instance of leak_detector.py
     needed by every other test in this file"""
-    leak_detector = Module(outputQueue, 6380)
+    leak_detector = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     leak_detector.print = do_nothing
     # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -31,7 +31,7 @@ def create_leak_detector_instance(outputQueue):
 
 
 def test_compile_and_save_rules(outputQueue):
-    leak_detector = create_leak_detector_instance(outputQueue)
+    leak_detector = create_leak_detector_instance(outputQueue, prefix)
     leak_detector.compile_and_save_rules()
     compiled_rules = os.listdir(compiled_yara_rules_path)
     assert 'test_rule.yara_compiled' in compiled_rules
