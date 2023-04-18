@@ -342,7 +342,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
                 # There's an IP that needs to be blocked
-                if utils.is_msg_intended_for(message, 'new_blocking'):
+                if __database__.is_msg_intended_for(message, 'new_blocking'):
                     # message['data'] in the new_blocking channel is a dictionary that contains
                     # the ip and the blocking options
                     # Example of the data dictionary to block or unblock an ip:

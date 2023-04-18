@@ -1725,7 +1725,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_flow'):
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     new_flow = json.loads(message['data'])
                     profileid = new_flow['profileid']
                     twid = new_flow['twid']
@@ -1877,7 +1877,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_ssh'):
+                if __database__.is_msg_intended_for(message, 'new_ssh'):
                     data = message['data']
                     data = json.loads(data)
                     profileid = data['profileid']
@@ -1914,7 +1914,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_notice'):
+                if __database__.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     # Convert from json to dict
                     data = json.loads(data)
@@ -1970,7 +1970,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_ssl'):
+                if __database__.is_msg_intended_for(message, 'new_ssl'):
                     # Check for self signed certificates in new_ssl channel (ssl.log)
                     data = message['data']
                     # Convert from json to dict
@@ -2029,11 +2029,17 @@ class Module(Module, multiprocessing.Process):
 
 
                 message = __database__.get_message(self.c5)
+                # if message and 'stop_process' in message['data']:
+
                 if message and message['data'] == 'stop_process':
+                    with open('/home/ac/Desktop/workspace/message.txt', 'w') as file:
+                        file.write(message['data'])
+                        file.close()
+                        
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'tw_closed'):
+                if __database__.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data'].split('_')
                     profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
                     self.detect_data_upload_in_twid(profileid, twid)
@@ -2043,7 +2049,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = json.loads(message['data'])
                     profileid = data['profileid']
                     twid = data['twid']
@@ -2086,7 +2092,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
                     ssl_info = json.loads(message['data'])
                     self.check_malicious_ssl(ssl_info)
 
@@ -2095,7 +2101,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_smtp'):
+                if __database__.is_msg_intended_for(message, 'new_smtp'):
                     data = json.loads(message['data'])
                     profileid = data['profileid']
                     twid = data['twid']
@@ -2120,7 +2126,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_software'):
+                if __database__.is_msg_intended_for(message, 'new_software'):
                     flow = json.loads(message['data'])
                     starttime = flow.get('starttime', '')
                     saddr = flow.get('saddr', '')
@@ -2156,7 +2162,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_weird'):
+                if __database__.is_msg_intended_for(message, 'new_weird'):
                     msg = json.loads(message['data'])
                     self.check_weird_http_method(msg)
 
@@ -2165,7 +2171,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_tunnel'):
+                if __database__.is_msg_intended_for(message, 'new_tunnel'):
                     msg = json.loads(message['data'])
                     self.check_GRE_tunnel(msg)
             except KeyboardInterrupt:

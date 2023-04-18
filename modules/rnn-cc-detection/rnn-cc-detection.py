@@ -140,7 +140,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_letters'):
+                if __database__.is_msg_intended_for(message, 'new_letters'):
                     data = message['data']
                     data = json.loads(data)
                     pre_behavioral_model = data['new_symbol']

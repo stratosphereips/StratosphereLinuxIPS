@@ -471,7 +471,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_http'):
+                if __database__.is_msg_intended_for(message, 'new_http'):
                     message = json.loads(message['data'])
                     profileid = message['profileid']
                     twid = message['twid']

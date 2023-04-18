@@ -717,7 +717,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'tw_modified'):
+                if __database__.is_msg_intended_for(message, 'tw_modified'):
                     # Get the profileid and twid
                     profileid = message['data'].split(':')[0]
                     twid = message['data'].split(':')[1]
@@ -751,7 +751,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_notice'):
+                if __database__.is_msg_intended_for(message, 'new_notice'):
                     data = message['data']
                     if type(data) != str:
                         continue
@@ -776,7 +776,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_dhcp'):
+                if __database__.is_msg_intended_for(message, 'new_dhcp'):
                     flow = json.loads(message['data'])
                     self.check_dhcp_scan(flow)
 

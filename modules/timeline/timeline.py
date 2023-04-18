@@ -383,7 +383,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_flow'):
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     mdata = message['data']
                     # Convert from json to dict
                     mdata = json.loads(mdata)

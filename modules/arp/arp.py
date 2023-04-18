@@ -397,11 +397,17 @@ class Module(Module, multiprocessing.Process):
                     self.arp_ts = time.time()
 
                 message = __database__.get_message(self.c1)
+                # if message and 'stop_process' in message['data']:
+                #     print(f"ARP message for {message['data']}")
                 if message and message['data'] == 'stop_process':
+                    with open('/home/ac/Desktop/workspace/message.txt', 'w') as file:
+                        file.write(message['data'])
+                        file.close()
+                        
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_arp'):
+                if __database__.is_msg_intended_for(message, 'new_arp'):
                     flow = json.loads(message['data'])
                     ts = flow['ts']
                     profileid = flow['profileid']
@@ -454,7 +460,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'tw_closed'):
+                if __database__.is_msg_intended_for(message, 'tw_closed'):
                     profileid_tw = message['data']
                     # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
                     # range anymore

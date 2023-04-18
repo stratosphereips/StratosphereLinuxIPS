@@ -106,7 +106,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_ip'):
+                if __database__.is_msg_intended_for(message, 'new_ip'):
                     ip = message['data']
                     if utils.is_ignored_ip(ip):
                         continue

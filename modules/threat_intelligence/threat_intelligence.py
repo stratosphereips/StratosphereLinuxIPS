@@ -946,7 +946,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     self.should_shutdown = True
 
                 # The channel now can receive an IP address or a domain name
-                if utils.is_msg_intended_for(
+                if __database__.is_msg_intended_for(
                     message, 'give_threat_intelligence'
                 ):
                     # Data is sent in the channel as a json dict so we need to deserialize it first
@@ -1005,7 +1005,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 if message and message['data'] == 'stop_process':
                     self.should_shutdown = True
 
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+                if __database__.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
                     self.is_malicious_hash(file_info)
 

@@ -120,7 +120,7 @@ class UpdateManager(Module, multiprocessing.Process):
             try:
                 message = __database__.get_message(self.c1)
                 # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
+                if message and ('stop_process' in message['data']):
                     self.shutdown_gracefully()
                     return True
 

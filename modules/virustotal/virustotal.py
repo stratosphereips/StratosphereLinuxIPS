@@ -535,7 +535,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_flow'):
+                if __database__.is_msg_intended_for(message, 'new_flow'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']
@@ -576,7 +576,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if __database__.is_msg_intended_for(message, 'new_dns_flow'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']
@@ -610,7 +610,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_url'):
+                if __database__.is_msg_intended_for(message, 'new_url'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']
