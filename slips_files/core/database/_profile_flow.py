@@ -839,9 +839,6 @@ class ProfilingFlowsDatabase(object):
         flow_dict = json.dumps(flow_dict)
         # Store in the hash x.x.x.x_timewindowx_flows
         value = self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}flows',
-            uid,
-            flow,
             self.prefix + self.separator + f'{profileid}{self.separator}{twid}{self.separator}flows',
             flow.uid,
             flow_dict,
