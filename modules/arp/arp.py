@@ -17,13 +17,13 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect arp attacks'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, prefix:str, redis_port='6379'):
         multiprocessing.Process.__init__(self)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         # Start the DB
-        __database__.start(redis_port)
+        __database__.start(prefix, redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
         self.read_configuration()
@@ -397,13 +397,8 @@ class Module(Module, multiprocessing.Process):
                     self.arp_ts = time.time()
 
                 message = __database__.get_message(self.c1)
-                # if message and 'stop_process' in message['data']:
-                #     print(f"ARP message for {message['data']}")
+
                 if message and message['data'] == 'stop_process':
-                    with open('/home/ac/Desktop/workspace/message.txt', 'w') as file:
-                        file.write(message['data'])
-                        file.close()
-                        
                     self.shutdown_gracefully()
                     return True
 
