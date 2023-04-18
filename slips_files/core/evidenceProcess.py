@@ -240,8 +240,6 @@ class EvidenceProcess(multiprocessing.Process):
         domains_to_check_src = []
         domains_to_check_dst = []
         try:
-            # self.print(f"IPData of src IP {self.column_values['saddr']}:
-            # {__database__.getIPData(self.column_values['saddr'])}")
             domains_to_check_src.append(
                 __database__.getIPData(flow['saddr'])
                 .get('SNI', [{}])[0]

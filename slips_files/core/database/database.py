@@ -427,22 +427,21 @@ class Database(ProfilingFlowsDatabase, object):
                 self.r.hset(self.prefix + self.separator + str(profileid), 'past_user_agents', json.dumps(user_agents))
                 
     def add_software_to_profile(
-        self, profileid, software, version_major, version_minor, uid
+        self, profileid, flow
     ):
         """
         Used to associate this profile with it's used software and version
-        :param uid:  uid of the flow using the given versions
         """
         sw_dict = {
-            software:{
-                    'version-major': version_major,
-                    'version-minor': version_minor,
-                    'uid': uid
+            flow.software: {
+                    'version-major': flow.version_major,
+                    'version-minor': flow.version_minor,
+                    'uid': flow.uid
                 }
         }
         # cached_sw is {software: {'version-major':x, 'version-minor':y, 'uid':...}}
         if cached_sw := self.get_software_from_profile(profileid):
-            if software in cached_sw:
+            if flow.software in cached_sw:
                 # we already have this same software for this proileid.
                 # dont store this one
                 return
@@ -1003,9 +1002,9 @@ class Database(ProfilingFlowsDatabase, object):
         return self.separator
 
 
-    def get_dhcp_flows(self, profileid, twid) -> dict:
+    def get_dhcp_flows(self, profileid, twid) -> list:
         """
-        returns a dict of dhcp flows that happaened in this profileid and twid
+        returns a dict of dhcp flows that happened in this profileid and twid
         """
         if flows := self.r.hget(self.prefix + self.separator + 'DHCP_flows', f'{profileid}_{twid}'):
             return json.loads(flows)
@@ -1375,9 +1374,9 @@ class Database(ProfilingFlowsDatabase, object):
 
         if type(uid) == list:
             # some evidence are caused by several uids, use the last one only
-            # todo check we we have duplicates in the first place
+            # todo check why we have duplicates in the first place
             # remove duplicate uids
-            uids = list(dict.fromkeys(uid))
+            uids = list(set(uid))
         else:
             uids = [uid]
 

@@ -179,7 +179,7 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     added_to_prof = profilerProcess.add_flow_to_profile()
     assert added_to_prof is True
 
-    uid = profilerProcess.uid
+    uid = profilerProcess.flow.uid
     profileid =  profilerProcess.profileid
     twid =  profilerProcess.twid
 

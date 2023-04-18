@@ -956,13 +956,8 @@ class Module(Module, multiprocessing.Process):
 
     def check_multiple_ssh_versions(
         self,
-        starttime,
-        saddr,
-        used_software,
-        major_v,
-        minor_v,
+        flow: dict,
         twid,
-        uid,
         role='SSH::CLIENT'
     ):
         """
@@ -970,10 +965,10 @@ class Module(Module, multiprocessing.Process):
          ssh client or server versions before
         :param role: can be 'SSH::CLIENT' or 'SSH::SERVER' as seen in zeek software.log flows
         """
-        if role not in used_software:
+        if role not in flow['software']:
             return
 
-        profileid = f'profile_{saddr}'
+        profileid = f'profile_{flow["saddr"]}'
         # what software was used before for this profile?
         # returns a dict with
         # software:
@@ -986,18 +981,20 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # these are the versions that this profile once used
-        cached_ssh_versions = cached_used_sw[used_software]
-        cached_versions = f"{cached_ssh_versions['version-major']}_{cached_ssh_versions['version-minor']}"
+        cached_ssh_versions = cached_used_sw[flow['software']]
+        cached_versions = f"{cached_ssh_versions['version-major']}_" \
+                          f"{cached_ssh_versions['version-minor']}"
 
-        current_versions = f'{major_v}_{minor_v}'
+        current_versions = f"{flow['version_major']}_{flow['version_minor']}"
         if cached_versions == current_versions:
             # they're using the same ssh client version
             return False
 
         # get the uid of the cached versions, and the uid of the current used versions
-        uids = [cached_ssh_versions['uid'], uid]
+        uids = [cached_ssh_versions['uid'], flow['uid']]
         self.helper.set_evidence_multiple_ssh_versions(
-            saddr, cached_versions, current_versions, starttime, twid, uids, role=role
+            flow['saddr'], cached_versions, current_versions,
+            flow['starttime'], twid, uids, role=role
         )
         return True
 
@@ -1217,7 +1214,18 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
-    def check_smtp_bruteforce(self,last_reply, stime, saddr, daddr, profileid, twid, uid):
+    def check_smtp_bruteforce(
+            self,
+            profileid,
+            twid,
+            flow
+    ):
+        uid = flow['uid']
+        daddr = flow['daddr']
+        saddr = flow['saddr']
+        stime = flow.get('starttime', False)
+        last_reply = flow.get('last_reply', False)
+
         if 'bad smtp-auth user' not in last_reply:
             return False
 
@@ -1259,9 +1267,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         self.helper.set_evidence_smtp_bruteforce(
-            saddr,
-            daddr,
-            stime,
+            flow,
             profileid,
             twid,
             uids,
@@ -1491,9 +1497,16 @@ class Module(Module, multiprocessing.Process):
 
 
     def check_malicious_ssl(self, ssl_info):
-        source = ssl_info.get('source', '')
-        analyzers = ssl_info.get('analyzers', '')
-        sha1 = ssl_info.get('sha1', '')
+        if ssl_info['type'] != 'zeek':
+            # this detection only supports zeek files.log flows
+            return False
+
+        flow: dict = ssl_info['flow']
+
+        source = flow.get('source', '')
+        analyzers = flow.get('analyzers', '')
+        sha1 = flow.get('sha1', '')
+
         if 'SSL' not in source or 'SHA1' not in analyzers:
             # not an ssl cert
             return False
@@ -1502,6 +1515,7 @@ class Module(Module, multiprocessing.Process):
         ssl_info_from_db = __database__.get_ssl_info(sha1)
         if not ssl_info_from_db:
             return False
+
         self.helper.set_evidence_malicious_ssl(
             ssl_info, ssl_info_from_db
         )
@@ -1510,27 +1524,20 @@ class Module(Module, multiprocessing.Process):
         """
         detect weird http methods in zeek's weird.log
         """
+        flow = msg['flow']
+        profileid = msg['profileid']
+        twid = msg['twid']
 
         # what's the weird.log about
-        name = msg['name']
+        name = flow['name']
 
         if 'unknown_HTTP_method' not in name:
             return False
 
-        addl = msg['addl']
-        uid = msg['uid']
-        profileid = msg['profileid']
-        twid = msg['twid']
-        daddr = msg['daddr']
-        ts = msg['ts']
-
         self.helper.set_evidence_weird_http_method(
             profileid,
             twid,
-            daddr,
-            addl,
-            uid,
-            ts
+            flow
         )
 
     def check_non_http_port_80_conns(
@@ -1563,19 +1570,20 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 uid
             )
-    def check_GRE_tunnel(self, tunnel_flow: dict):
+    def check_GRE_tunnel(self, tunnel_info: dict):
         """
         Detects GRE tunnels
         @param tunnel_flow: dict containing tunnel zeek flow
         @return: None
         """
+        tunnel_flow = tunnel_info['flow']
         tunnel_type = tunnel_flow['tunnel_type']
 
         if tunnel_type != 'Tunnel::GRE':
             return
 
         self.helper.set_evidence_GRE_tunnel(
-            tunnel_flow
+            tunnel_info
         )
 
     def check_non_ssl_port_443_conns(
@@ -2101,59 +2109,38 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
+
                 if __database__.is_msg_intended_for(message, 'new_smtp'):
-                    data = json.loads(message['data'])
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    uid = data['uid']
-                    daddr = data['daddr']
-                    saddr = data['saddr']
-                    stime = data.get('ts', False)
-                    last_reply = data.get('last_reply', False)
+                    smtp_info = json.loads(message['data'])
+                    profileid = smtp_info['profileid']
+                    twid = smtp_info['twid']
+                    flow: dict = smtp_info['flow']
+
+
                     self.check_smtp_bruteforce(
-                        last_reply,
-                        stime,
-                        saddr,
-                        daddr,
                         profileid,
                         twid,
-                        uid
+                        flow
                     )
-
 
                 # --- Detect multiple used SSH versions ---
                 message = __database__.get_message(self.c9)
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
+
                 if __database__.is_msg_intended_for(message, 'new_software'):
-                    flow = json.loads(message['data'])
-                    starttime = flow.get('starttime', '')
-                    saddr = flow.get('saddr', '')
-                    uid = flow.get('uid', '')
-                    twid = flow.get('twid', '')
-                    # can be 'SSH::SERVER' or 'SSH::CLIENT'
-                    software_type = flow.get('software_type', '')
-                    major_v = flow.get('version.major', '')
-                    minor_v = flow.get('version.minor', '')
+                    msg = json.loads(message['data'])
+                    flow:dict = msg['sw_flow']
+                    twid = msg['twid']
                     self.check_multiple_ssh_versions(
-                        starttime,
-                        saddr,
-                        software_type,
-                        major_v,
-                        minor_v,
+                        flow,
                         twid,
-                        uid,
                         role='SSH::CLIENT'
                     )
                     self.check_multiple_ssh_versions(
-                        starttime,
-                        saddr,
-                        software_type,
-                        major_v,
-                        minor_v,
+                        flow,
                         twid,
-                        uid,
                         role='SSH::SERVER'
                     )
 

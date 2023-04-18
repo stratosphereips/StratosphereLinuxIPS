@@ -154,11 +154,13 @@ class Helper:
             self,
             profileid,
             twid,
-            daddr,
-            weird_method,
-            uid,
-            timestamp,
+            flow: dict
     ):
+        daddr = flow['daddr']
+        weird_method = flow['addl']
+        uid = flow['uid']
+        timestamp = flow['starttime']
+
         confidence = 0.9
         threat_level = 'medium'
         category = 'Anomaly.Traffic'
@@ -167,8 +169,17 @@ class Helper:
         attacker = profileid.split("_")[-1]
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 timestamp,
+                                 category,
+                                 profileid=profileid,
+                                 twid=twid,
+                                 uid=uid)
 
     def set_evidence_incompatible_CN(
             self, org, timestamp, daddr, profileid, twid, uid
@@ -359,14 +370,17 @@ class Helper:
 
     def set_evidence_GRE_tunnel(
             self,
-            tunnel_flow
+            tunnel_info: dict
     ):
+        tunnel_flow = tunnel_info['flow']
+        profileid = tunnel_info['profileid']
+        twid = tunnel_info['twid']
+
         action = tunnel_flow['action']
-        profileid = tunnel_flow['profileid']
         daddr = tunnel_flow['daddr']
-        twid = tunnel_flow['twid']
-        ts = tunnel_flow['ts']
+        ts = tunnel_flow['starttime']
         uid = tunnel_flow['uid']
+
         ip_identification = __database__.getIPIdentification(daddr)
         saddr = profileid.split('_')[-1]
         description = f'GRE tunnel from {saddr} ' \
@@ -643,43 +657,63 @@ class Helper:
 
     def set_evidence_smtp_bruteforce(
             self,
-            saddr,
-            daddr,
-            stime,
+            flow:dict,
             profileid,
             twid,
             uid,
             smtp_bruteforce_threshold,
     ):
+        saddr = flow['saddr']
+        daddr = flow['daddr']
+        stime = flow['starttime']
+
         confidence = 1
         threat_level = 'high'
         category = 'Attempt.Login'
         attacker_direction = 'srcip'
         evidence_type = 'SMTPLoginBruteforce'
         ip_identification = __database__.getIPIdentification(daddr)
-        description = f'doing SMTP login bruteforce to {daddr}. {smtp_bruteforce_threshold} logins in 10 seconds. {ip_identification}'
+        description = f'doing SMTP login bruteforce to {daddr}. ' \
+                      f'{smtp_bruteforce_threshold} logins in 10 seconds. ' \
+                      f'{ip_identification}'
         attacker = saddr
         conn_count = smtp_bruteforce_threshold
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 stime, category, conn_count=conn_count, profileid=profileid, twid=twid, uid=uid)
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 stime,
+                                 category,
+                                 conn_count=conn_count,
+                                 profileid=profileid,
+                                 twid=twid,
+                                 uid=uid)
 
     def set_evidence_malicious_ssl(
             self, ssl_info: dict, ssl_info_from_db: dict
     ):
         """
+        This function only works on zeek files.log flows
         :param ssl_info: info about this ssl cert as found in zeek
         :param ssl_info_from_db: ti feed, tags, description of this malicious cert
         """
+        flow: dict = ssl_info['flow']
+        ts = flow.get('starttime', '')
+        daddr = flow.get('daddr', '')
+        uid = flow.get('uid', '')
+
         profileid = ssl_info.get('profileid', '')
         twid = ssl_info.get('twid', '')
-        ts = ssl_info.get('ts', '')
-        daddr = ssl_info.get('daddr', '')
-        uid = ssl_info.get('uid', '')
+
+
         ssl_info_from_db = json.loads(ssl_info_from_db)
         tags = ssl_info_from_db['tags']
         cert_description = ssl_info_from_db['description']
         threat_level = ssl_info_from_db['threat_level']
+
         description = f'Malicious SSL certificate to server {daddr}.'
         # append daddr identification to the description
         ip_identification = __database__.getIPIdentification(daddr)
@@ -694,6 +728,9 @@ class Helper:
 
         attacker = daddr
         confidence = 1
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 ts, category, source_target_tag=source_target_tag, profileid=profileid, twid=twid,
+        __database__.setEvidence(evidence_type, attacker_direction,
+                                 attacker, threat_level, confidence,
+                                 description, ts, category,
+                                 source_target_tag=source_target_tag,
+                                 profileid=profileid, twid=twid,
                                  uid=uid)

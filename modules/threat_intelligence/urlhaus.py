@@ -137,15 +137,18 @@ class URLhaus():
         attacker_direction = 'md5'
         category = 'Malware'
         evidence_type = 'MaliciousDownloadedFile'
-        attacker = file_info["md5"]
+
         threat_level = file_info["threat_level"]
-        daddr = file_info["daddr"]
+        flow = file_info['flow']
+        attacker = flow["md5"]
+        daddr = flow["daddr"]
+
         ip_identification = __database__.getIPIdentification(daddr)
         # we have more info about the downloaded file
         # so we need a more detailed description
-        description = f"Malicious downloaded file: {file_info['md5']}. " \
-                      f"size: {file_info['size']}" \
-                      f"from IP: {file_info['daddr']} {ip_identification}." \
+        description = f"Malicious downloaded file: {flow['md5']}. " \
+                      f"size: {flow['size']}" \
+                      f"from IP: {flow['daddr']} {ip_identification}." \
                       f"file name: {file_info['file_name']} " \
                       f"file type: {file_info['file_type']} " \
                       f"tags: {file_info['tags']}. by URLhaus." \
@@ -159,9 +162,17 @@ class URLhaus():
 
         confidence = 0.7
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
-                                 uid=file_info["uid"])
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 flow["starttime"],
+                                 category,
+                                 profileid=file_info["profileid"],
+                                 twid=file_info["twid"],
+                                 uid=flow["uid"])
 
     def set_evidence_malicious_url(
             self,

@@ -149,29 +149,32 @@ class Whitelist:
         return False
 
 
-    def is_whitelisted_flow(self, column_values, flow_type) -> bool:
+    def is_whitelisted_flow(self, flow) -> bool:
         """
         Checks if the src IP or dst IP or domain or organization of this flow is whitelisted.
         """
-        saddr = column_values.get('saddr', '')
-        daddr = column_values.get('daddr', '')
+        saddr = flow.saddr
+        daddr = flow.daddr
+        flow_type = flow.type_
         # get the domains of the IPs this flow
         (
             domains_to_check_dst,
             domains_to_check_src,
         ) = self.get_domains_of_flow(saddr, daddr)
-
         # check if we have whitelisted domains
 
         # first get the domains of the flows we ewnt to check if whitelisted
         # Domain names are stored in different zeek files using different names.
         # Try to get the domain from each file.
-        ssl_domain = column_values.get('server_name', '')  # ssl.log
-        http_domain = column_values.get('host', '')  # http.log
-        notice_domain = column_values.get('sub', '').replace(
-            'CN=', ''
-        )  # in notice.log
-        domains_to_check = [ssl_domain, http_domain, notice_domain]
+        domains_to_check = []
+        if flow_type == 'ssl':
+            domains_to_check.append(flow.server_name)
+        elif flow_type == 'http':
+            domains_to_check.append(flow.host)
+        elif flow_type == 'ssl':
+            domains_to_check.append(flow.subject.replace(
+                'CN=', ''
+            ))
 
         for domain in domains_to_check:
             if self.is_whitelisted_domain(domain, saddr, daddr, 'flows'):
@@ -205,15 +208,12 @@ class Whitelist:
 
         if whitelisted_macs := __database__.get_whitelist('mac'):
             # try to get the mac address of the current flow
-            src_mac = column_values.get('src_mac', False)
-            if not src_mac:
-                src_mac = column_values.get('mac', False)
+            src_mac = flow.smac if hasattr(flow, 'smac') else False
 
             if not src_mac:
-                src_mac = __database__.get_mac_addr_from_profile(
+                if src_mac := __database__.get_mac_addr_from_profile(
                     f'profile_{saddr}'
-                )
-                if src_mac:
+                ):
                     src_mac = src_mac[0]
 
             if src_mac and src_mac in list(whitelisted_macs.keys()):
@@ -224,12 +224,12 @@ class Whitelist:
                 if (
                     ('src' in from_ or 'both' in from_)
                     and
-                    (self.should_ignore_flows(what_to_ignore))
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"The source MAC of this flow {src_mac} is whitelisted")
                     return True
 
-            dst_mac = column_values.get('dst_mac', False)
+            dst_mac = flow.dmac if hasattr(flow, 'smac') else False
             if dst_mac and dst_mac in list(whitelisted_macs.keys()):
                 # the dst mac of this flow is whitelisted, but which direction?
                 from_ = whitelisted_macs[dst_mac]['from']
@@ -238,7 +238,7 @@ class Whitelist:
                 if (
                     ('dst' in from_ or 'both' in from_)
                     and
-                    (self.should_ignore_flows(what_to_ignore))
+                    self.should_ignore_flows(what_to_ignore)
                 ):
                     # self.print(f"The dst MAC of this flow {dst_mac} is whitelisted")
                     return True
@@ -288,7 +288,7 @@ class Whitelist:
                     if 'dst' in from_ or 'both' in from_:
                         # Method 1 Check if dst IP belongs to a whitelisted organization range
                         try:
-                            if self.is_ip_in_org(column_values['daddr'], org):
+                            if self.is_ip_in_org(flow.daddr, org):
                                 # self.print(f"The dst IP {column_values['daddr']} "
                                 #            f"is in the network range of org {org}. Whitelisted.")
                                 return True

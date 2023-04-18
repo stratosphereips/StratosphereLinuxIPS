@@ -1,4 +1,5 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
+from slips_files.core.flows.zeek import Conn
 from ..modules.flowalerts.flowalerts import Module
 import pytest
 import binascii
@@ -40,8 +41,23 @@ def create_flowalerts_instance(outputQueue, _prefix:str):
 ])
 def test_check_long_connection(database, outputQueue, dur, expected_label):
     uid = get_random_uid()
+
     flowalerts = create_flowalerts_instance(outputQueue, prefix)
-    assert database.add_flow(profileid=profileid, twid=twid, stime=timestamp, dur=dur, saddr=saddr, daddr=daddr, uid=uid, flow_type='conn') is True
+
+    flow = Conn(
+        timestamp,
+        uid,
+        saddr,
+        daddr,
+        dur,
+        'tcp',
+        '',
+        '80',
+        '80',
+        1,2,5,6,7,'','','',
+    )
+    assert database.add_flow(flow, profileid, twid) is True
+
     # sets the label to normal or malicious based on the flow durd
     flowalerts.check_long_connection(
         dur, daddr, saddr, profileid, twid, uid, timestamp
