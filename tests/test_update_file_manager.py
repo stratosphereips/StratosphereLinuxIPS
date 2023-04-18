@@ -1,7 +1,9 @@
 """Unit test for modules/update_manager/update_file_manager.py"""
 from ..modules.update_manager.update_file_manager import UpdateFileManager
 import json
+import uuid
 
+prefix = str(uuid.uuid4())
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
@@ -10,7 +12,7 @@ def do_nothing(*args):
 def create_update_manager_instance(outputQueue):
     """Create an instance of update_manager.py
     needed by every other test in this file"""
-    update_manager = UpdateFileManager(outputQueue, 6380)
+    update_manager = UpdateFileManager(outputQueue, prefix)
     # override the self.print function to avoid broken pipes
     update_manager.print = do_nothing
     return update_manager

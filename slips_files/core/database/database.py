@@ -358,14 +358,14 @@ class Database(ProfilingFlowsDatabase, object):
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if self.r.sismember(self.prefix + self.separator + 'profiles', str(profileid)):
+            if self.r.sismember(self.prefix + self.separator + 'profiles', self.prefix + self.separator + str(profileid)):
                 # we already have this profile
                 return False
             # execlude ips outside of local network is it's set in slips.conf
             if not self.should_add(profileid):
                 return False
             # Add the profile to the index. The index is called prefix + separator + 'profiles'
-            self.r.sadd(self.prefix + self.separator + 'profiles', str(profileid))
+            self.r.sadd(self.prefix + self.separator + 'profiles', self.prefix + self.separator + str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
             # Add the start time of profile
             self.r.hset(self.prefix + self.separator + str(profileid), 'starttime', starttime)
@@ -725,7 +725,7 @@ class Database(ProfilingFlowsDatabase, object):
         """Receive an IP and we want the profileid"""
         try:
             profileid = f'profile{self.separator}{str(daddr_as_obj)}'
-            if data := self.r.sismember('profiles', profileid):
+            if data := self.r.sismember(self.prefix + self.separator + 'profiles', self.prefix + self.separator + str(profileid)):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -799,7 +799,7 @@ class Database(ProfilingFlowsDatabase, object):
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        return self.r.sismember(self.prefix + self.separator + 'profiles', profileid) if profileid else False
+        return self.r.sismember(self.prefix + self.separator + 'profiles', self.prefix + self.separator + str(profileid)) if profileid else False
 
     def getProfilesLen(self):
         """Return the amount of profiles. Redis should be faster than python to do this count"""
@@ -2607,4 +2607,17 @@ class Database(ProfilingFlowsDatabase, object):
     def get_stdfile(self, file_type):
         return self.r.get(self.prefix + self.separator + str(file_type))
 
+    def is_msg_intended_for(self, message, channel):
+        """
+        Function to check
+            1. If the given message is intended for this channel
+            2. The msg has valid data
+        """
+
+        return (
+            message
+            and type(message['data']) == str
+            and message['data'] != 'stop_process'
+            and message['channel'] == self.prefix + self.separator + str(channel)
+        )
 __database__ = Database()

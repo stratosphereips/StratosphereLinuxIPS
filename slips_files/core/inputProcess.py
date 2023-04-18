@@ -711,7 +711,7 @@ class InputProcess(multiprocessing.Process):
             msg = __database__.get_message(self.c1)
             if msg and msg['data'] == 'stop_process':
                 return True
-            if utils.is_msg_intended_for(msg, 'remove_old_files'):
+            if __database__.is_msg_intended_for(msg, 'remove_old_files'):
                 # this channel receives renamed zeek log files, we can safely delete them and close their handle
                 changed_files = json.loads(msg['data'])
 

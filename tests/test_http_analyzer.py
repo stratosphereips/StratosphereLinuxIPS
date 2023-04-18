@@ -1,6 +1,7 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 from ..modules.http_analyzer.http_analyzer import Module
 import random
+import uuid
 
 # dummy params used for testing
 profileid = 'profile_192.168.1.1'
@@ -12,6 +13,7 @@ SAFARI_UA = (
         'AppleWebKit/605.1.15 (KHTML, like Gecko) '
         'Version/15.3 Safari/605.1.15'
     )
+prefix = str(uuid.uuid4())
 
 def get_random_MAC():
     return "02:00:00:%02x:%02x:%02x" % (random.randint(0, 255),
@@ -23,17 +25,17 @@ def do_nothing(*args):
     pass
 
 
-def create_http_analyzer_instance(outputQueue):
+def create_http_analyzer_instance(outputQueue, _prefix:str):
     """Create an instance of http_analyzer.py
     needed by every other test in this file"""
-    http_analyzer = Module(outputQueue, 6380)
+    http_analyzer = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     http_analyzer.print = do_nothing
     return http_analyzer
 
 
 def test_check_suspicious_user_agents(outputQueue, database):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     # create a flow with suspicious user agent
     host = '147.32.80.7'
     uri = '/wpad.dat'
@@ -44,7 +46,7 @@ def test_check_suspicious_user_agents(outputQueue, database):
 
 
 def test_check_multiple_google_connections(outputQueue, database):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
     # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
     # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
@@ -64,7 +66,7 @@ def test_parsing_online_ua_info(outputQueue, database, mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db
     profileid = 'profile_192.168.99.99'
@@ -85,7 +87,7 @@ def test_parsing_online_ua_info(outputQueue, database, mocker):
 
 def test_check_incompatible_user_agent(outputQueue, database, mocker):
 
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
     profileid = 'profile_192.168.77.254'
@@ -117,7 +119,7 @@ def test_check_incompatible_user_agent(outputQueue, database, mocker):
 
 
 def test_extract_info_from_UA(outputQueue):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     # use another profile, because the default
     # one already has a ua in the db
     profileid = 'profile_192.168.1.2'
@@ -129,7 +131,7 @@ def test_extract_info_from_UA(outputQueue):
 
 
 def test_check_multiple_UAs(outputQueue):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(outputQueue, prefix)
     mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}

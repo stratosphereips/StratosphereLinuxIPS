@@ -2,10 +2,10 @@ import pytest
 from slips_files.core.inputProcess import InputProcess
 import shutil
 import os
-
+import uuid
 
 zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
-redis_port = 6531
+redis_port = 6379
 
 def do_nothing(*arg):
     """Used to override the print function because using the print causes broken pipes"""
@@ -31,7 +31,8 @@ def create_inputProcess_instance(
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
     global redis_port
-    redis_port +=1
+    # redis_port +=1
+    prefix = str(uuid.uuid4())
     inputProcess = InputProcess(
         outputQueue,
         profilerQueue,
@@ -41,7 +42,8 @@ def create_inputProcess_instance(
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        redis_port
+        redis_port,
+        prefix,
     )
 
     inputProcess.bro_timeout = 1

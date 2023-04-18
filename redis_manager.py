@@ -108,15 +108,28 @@ class RedisManager:
         unique_ports = set()
         # close all ports in logfile
         for _id in self.open_servers_IDs:
-            self.flush_redis_id(_id=_id, port = self.open_servers_IDs[_id])
+            # self.flush_redis_id(_id=_id, port = self.open_servers_IDs[_id])
             unique_ports.add(self.open_servers_IDs[_id])
 
         # Kill default port
-
+        
         for port in unique_ports:
             # Skip cache db which is in port 6379
+            r = redis.StrictRedis(
+                host='localhost',
+                port=self.open_servers_IDs[_id],
+                db=0,
+                charset='utf-8',
+                socket_keepalive=True,
+                decode_responses=True,
+                retry_on_timeout=True,
+                health_check_interval=20,
+                )
+            r.flushdb()
+            
             if str(port) == '6379':
                 continue
+            
             pid = self.get_pid_of_redis_server(port = port)
             self.kill_redis_server(pid)
 

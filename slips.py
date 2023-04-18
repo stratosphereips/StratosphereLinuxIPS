@@ -744,7 +744,7 @@ class Main:
                 message = self.c1.get_message(timeout=0.01)
                 if (
                     message
-                    and utils.is_msg_intended_for(message, 'finished_modules')
+                    and __database__.is_msg_intended_for(message, 'finished_modules')
                     and message['data'] == 'stop_slips'
                 ):
                     self.proc_man.shutdown_gracefully()

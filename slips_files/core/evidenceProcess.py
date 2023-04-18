@@ -576,7 +576,7 @@ class EvidenceProcess(multiprocessing.Process):
         while True:
             try:
                 message = __database__.get_message(self.c1)
-                if utils.is_msg_intended_for(message, 'evidence_added'):
+                if __database__.is_msg_intended_for(message, 'evidence_added'):
                     # Data sent in the channel as a json dict, it needs to be deserialized first
                     data = json.loads(message['data'])
                     profileid = data.get('profileid')
@@ -742,7 +742,7 @@ class EvidenceProcess(multiprocessing.Process):
                             )
 
                 message = __database__.get_message(self.c2)
-                if utils.is_msg_intended_for(message, 'new_blame'):
+                if __database__.is_msg_intended_for(message, 'new_blame'):
                     data = message['data']
                     try:
                         data = json.loads(data)

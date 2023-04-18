@@ -293,7 +293,7 @@ class ProcessManager:
                         if message and message['data'] in ('stop_process', 'stop_slips'):
                             continue
 
-                        if utils.is_msg_intended_for(message, 'finished_modules'):
+                        if __database__.is_msg_intended_for(message, 'finished_modules'):
                             # all modules must reply with their names in this channel after
                             # receiving the stop_process msg
                             # to confirm that all processing is done and we can safely exit now

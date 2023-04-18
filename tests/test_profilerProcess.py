@@ -3,14 +3,17 @@ from slips_files.core.profilerProcess import ProfilerProcess
 import subprocess
 import pytest
 import json
+import uuid
 
+
+prefix = str(uuid.uuid4())
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
 
-def create_profilerProcess_instance(outputQueue, inputQueue):
+def create_profilerProcess_instance(outputQueue, inputQueue, _prefix:str):
     """Create an instance of profilerProcess.py
     needed by every other test in this file"""
     profilerProcess = ProfilerProcess(
@@ -18,7 +21,8 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
         outputQueue,
         1,
         0,
-        6380
+        6379,
+        _prefix
     )
 
     # override the self.print function to avoid broken pipes
@@ -31,7 +35,7 @@ def create_profilerProcess_instance(outputQueue, inputQueue):
     'file,expected_value', [('dataset/test6-malicious.suricata.json', 'suricata')]
 )
 def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -50,7 +54,7 @@ def test_define_type_suricata(outputQueue, inputQueue, file, expected_value):
     [('dataset/test10-mixed-zeek-dir/conn.log', 'zeek-tabs')],
 )
 def test_define_type_zeek_tab(outputQueue, inputQueue, file, expected_value):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     with open(file) as f:
         while True:
             sample_flow = f.readline().replace('\n', '')
@@ -65,7 +69,7 @@ def test_define_type_zeek_tab(outputQueue, inputQueue, file, expected_value):
     'file,expected_value', [('dataset/test9-mixed-zeek-dir/conn.log', 'zeek')]
 )
 def test_define_type_zeek_dict(outputQueue, inputQueue, file, expected_value):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     with open(file) as f:
         sample_flow = f.readline().replace('\n', '')
 
@@ -94,7 +98,7 @@ def test_define_type_nfdump(outputQueue, inputQueue, nfdump_file):
             continue
         line['data'] = nfdump_line
         break
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     assert profilerProcess.define_type(line) == 'nfdump'
 
 
@@ -123,7 +127,7 @@ def test_define_columns(
             line = f.readline()
             if line.startswith('#fields'):
                 break
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     line = {'data': line}
     profilerProcess.separator = separator
     assert profilerProcess.define_columns(line) == expected_value
@@ -157,7 +161,7 @@ def test_define_columns(
     ],
 )
 def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
-    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue)
+    profilerProcess = create_profilerProcess_instance(outputQueue, inputQueue, prefix)
     # we're testing another functionality here
     profilerProcess.whitelist.is_whitelisted_flow = do_nothing
     # get zeek flow

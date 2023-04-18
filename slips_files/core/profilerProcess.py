@@ -2461,7 +2461,7 @@ class ProfilerProcess(multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'reload_whitelist'):
+                if __database__.is_msg_intended_for(message, 'reload_whitelist'):
                     # if whitelist.conf is edited using pycharm
                     # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
                     # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk

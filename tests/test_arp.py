@@ -1,20 +1,21 @@
 """Unit test for ../arp.py"""
 from ..modules.arp.arp import Module
+import uuid
 
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
-
+prefix = 'f385579b-1c82-429e-bf61-a799adccab54'
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
 
-def create_ARP_instance(outputQueue):
+def create_ARP_instance(outputQueue, _prefix:str):
     """Create an instance of arp.py
     needed by every other test in this file"""
-    ARP = Module(outputQueue, 6380)
+    ARP = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     ARP.print = do_nothing
     return ARP
@@ -22,7 +23,7 @@ def create_ARP_instance(outputQueue):
 
 # check_arp_scan is tested in test_dataset.py, check arp-only unit test
 def test_check_dstip_outside_localnet(outputQueue, database):
-    ARP = create_ARP_instance(outputQueue)
+    ARP = create_ARP_instance(outputQueue, prefix)
     daddr = '1.1.1.1'
     uid = '1234'
     saddr = '192.168.1.1'
@@ -33,7 +34,7 @@ def test_check_dstip_outside_localnet(outputQueue, database):
 
 
 def test_detect_unsolicited_arp(outputQueue, database):
-    ARP = create_ARP_instance(outputQueue)
+    ARP = create_ARP_instance(outputQueue, prefix)
     uid = '1234'
     ts = '1632214645.783595'
     dst_mac = 'ff:ff:ff:ff:ff:ff'
@@ -46,7 +47,7 @@ def test_detect_unsolicited_arp(outputQueue, database):
 
 
 def test_detect_MITM_ARP_attack(outputQueue, database):
-    ARP = create_ARP_instance(outputQueue)
+    ARP = create_ARP_instance(outputQueue, prefix)
     # add this profile to the database
     stime = ts = '1636305825.755100'
     dur = '3600.0'
@@ -63,3 +64,4 @@ def test_detect_MITM_ARP_attack(outputQueue, database):
     assert (
         ARP.detect_MITM_ARP_attack(profileid, twid, uid, saddr, ts, src_mac) is True
     )
+    

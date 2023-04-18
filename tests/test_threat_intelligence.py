@@ -2,24 +2,26 @@
 from ..modules.threat_intelligence.threat_intelligence import Module
 import os
 import pytest
+import uuid
 
+prefix = str(uuid.uuid4())
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
 
-def create_threatintel_instance(outputQueue):
+def create_threatintel_instance(outputQueue, _prefix:str):
     """Create an instance of threatintel.py
     needed by every other test in this file"""
-    threatintel = Module(outputQueue, 1234)
+    threatintel = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     threatintel.print = do_nothing
     return threatintel
 
 
 def test_parse_ti_file(database, outputQueue):
-    threatintel = create_threatintel_instance(outputQueue)
+    threatintel = create_threatintel_instance(outputQueue, prefix)
     local_ti_files_dir = threatintel.path_to_local_ti_files
     local_ti_file = os.path.join(local_ti_files_dir, 'own_malicious_iocs.csv')
     # this is an ip we know we have in own_maicious_iocs.csv
@@ -44,7 +46,7 @@ def test_check_local_ti_files_for_update(
     third, cur hash is false meaning we cant get the file hash
     """
     # since this is a clear db, then we should update the local ti file
-    threatintel = create_threatintel_instance(outputQueue)
+    threatintel = create_threatintel_instance(outputQueue, prefix)
     own_malicious_iocs = os.path.join(threatintel.path_to_local_ti_files, 'own_malicious_iocs.csv')
 
     mock_hash = mocker.patch("slips_files.common.slips_utils.Utils.get_hash_from_file")

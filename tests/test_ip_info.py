@@ -3,25 +3,28 @@ from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
 from ..modules.update_manager.update_file_manager import UpdateFileManager
 import maxminddb
+import uuid
+
+prefix = str(uuid.uuid4())
 
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
 
-def create_ip_info_instance(outputQueue):
+def create_ip_info_instance(outputQueue, _prefix:str):
     """Create an instance of ip_info.py
     needed by every other test in this file"""
-    ip_info = Module(outputQueue, 6380)
+    ip_info = Module(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     ip_info.print = do_nothing
     return ip_info
 
 # needed to make sure the macdb is downloaded before running the unit tests
-def create_update_manager_instance(outputQueue):
+def create_update_manager_instance(outputQueue, _prefix:str):
     """Create an instance of update_manager.py
     needed by every other test in this file"""
-    update_manager = UpdateFileManager(outputQueue, 6380)
+    update_manager = UpdateFileManager(outputQueue, _prefix)
     # override the self.print function to avoid broken pipes
     update_manager.print = do_nothing
     return update_manager
@@ -50,7 +53,7 @@ def test_cache_ip_range(database):
 
 # GEOIP unit tests
 def test_get_geocountry(outputQueue, database):
-    ip_info = create_ip_info_instance(outputQueue)
+    ip_info = create_ip_info_instance(outputQueue, prefix)
 
     #open the db we'll be using for this test
     # ip_info.wait_for_dbs()
@@ -67,7 +70,7 @@ def test_get_geocountry(outputQueue, database):
 
 def test_get_vendor(outputQueue, database, mocker):
     # make sure the mac db is download so that wai_for_dbs doesn't wait forever :'D
-    ip_info = create_ip_info_instance(outputQueue)
+    ip_info = create_ip_info_instance(outputQueue, prefix)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'

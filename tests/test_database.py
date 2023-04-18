@@ -26,7 +26,7 @@ def create_db_instace(outputQueue):
     __database__.disabled_detections = []
     __database__.home_network = utils.home_network_ranges
     __database__.width = 3600
-    __database__.connect_to_redis_server(6381)
+    __database__.connect_to_redis_server(6379)
     __database__.setPrefix(prefix)
     __database__.r.flushdb()
     __database__.setSlipsInternalTime(0)
@@ -92,10 +92,10 @@ def test_getProfileIdFromIP(outputQueue):
 
     database = create_db_instace(outputQueue)
     # clear the database before running this test
-    os.system('./slips.py -c slips.conf -cc')
+    os.system('./slips.py -c config/slips.conf -cc')
 
     # add a profile
-    database.addProfile(f'{prefix}_profile_192.168.1.1', '00:00', '1')
+    database.addProfile(f'profile_192.168.1.1', '00:00', '1')
     # try to retrieve it
     assert database.getProfileIdFromIP(test_ip) is not False
 

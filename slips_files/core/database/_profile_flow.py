@@ -1350,7 +1350,7 @@ class ProfilingFlowsDatabase(object):
         If not resolved, returns {}
         this function is called for every IP in the timeline of kalipso
         """
-        if ip_info := self.r.hget('DNSresolution', ip):
+        if ip_info := self.r.hget(self.prefix + self.separator + 'DNSresolution', ip):
             ip_info = json.loads(ip_info)
             # return a dict with 'ts' 'uid' 'domains' about this IP
             return ip_info
