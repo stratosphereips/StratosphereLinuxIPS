@@ -26,11 +26,9 @@ class ProfilingFlowsDatabase(object):
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-        if type(ip) in [ipaddress.IPv4Address, ipaddress.IPv6Address]:
-            ip = ip
+
         data = self.rcache.hget('IPsInfo', ip)
-        data = json.loads(data) if data else False
-        return data
+        return json.loads(data) if data else False
 
     def setNewIP(self, ip: str):
         """
@@ -1034,7 +1032,7 @@ class ProfilingFlowsDatabase(object):
                         )
                         break
 
-    def setInfoForIPs(self, ip: str, ipdata: dict):
+    def setInfoForIPs(self, ip: str, to_store: dict):
         """
         Store information for this IP
         We receive a dictionary, such as {'geocountry': 'rumania'} that we are
@@ -1043,23 +1041,25 @@ class ProfilingFlowsDatabase(object):
         overwrite it
         """
         # Get the previous info already stored
-        data = self.getIPData(ip)
-        if data is False:
+        cached_ip_info = self.getIPData(ip)
+        if cached_ip_info is False:
             # This IP is not in the dictionary, add it first:
             self.setNewIP(ip)
-            # Now get the data, which should be empty, but just in case
-            data = self.getIPData(ip)
+            cached_ip_info = {}
 
-        new_key = False
-        for key, val in ipdata.items():
-            # If the key is new, we will notify publish notification about that
-            if key not in data:
-                new_key = True
+        # make sure we don't already have the same info about this IP in our db
+        is_new_info = False
+        for info_type, info_val in to_store.items():
+            if (
+                    info_type not in cached_ip_info
+                    and not is_new_info
+            ):
+                is_new_info = True
 
-            data[key] = val
+            cached_ip_info[info_type] = info_val
 
-        self.rcache.hset('IPsInfo', ip, json.dumps(data))
-        if new_key:
+        self.rcache.hset('IPsInfo', ip, json.dumps(cached_ip_info))
+        if is_new_info:
             self.r.publish('ip_info_change', ip)
 
     def get_p2p_reports_about_ip(self, ip) -> dict:
