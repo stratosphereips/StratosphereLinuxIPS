@@ -56,11 +56,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.whitelist = Whitelist(outputqueue, redis_port)
         __database__.start(redis_port)
         self.separator = __database__.separator
-        # Read the configuration
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
         # If logs enabled using -l, write alerts to the log folder as well
         self.clear_logs_dir(logs_dir)
+
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
@@ -71,31 +71,20 @@ class EvidenceProcess(multiprocessing.Process):
 
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
+
         # clear output/alerts.log
         self.logfile = self.clean_file(output_dir, 'alerts.log')
+        utils.adjust_logfiles_permissions(self.logfile, self.UID, self.GID)
+
         self.is_interface = self.is_running_on_interface()
+
         # clear output/alerts.json
         self.jsonfile = self.clean_file(output_dir, 'alerts.json')
-        self.adjust_logfiles_permissions()
+        utils.adjust_logfiles_permissions(self.jsonfile, self.UID, self.GID)
 
         self.print(f'Storing Slips logs in {output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-
-    def adjust_logfiles_permissions(self):
-        """
-        if slips is running in docker, the owner of the alerts log files is always root
-        this function changes it to the user ID and GID in slips.conf to be able to
-        rwx the files from outside of docker
-        @return:
-        """
-        if not (IS_IN_A_DOCKER_CONTAINER and self.UID and self.GID):
-            # they should be anything other than 0
-            return
-
-        for file in [self.jsonfile, self.logfile]:
-            print(f"@@@@@@@@@@@@@@@@@@  executing chown {self.UID}:{self.GID} {file")
-            os.system(f"chown {self.UID}:{self.GID} {file} > /dev/null")
 
     def clear_logs_dir(self, logs_dir):
         self.logs_logfile = False
