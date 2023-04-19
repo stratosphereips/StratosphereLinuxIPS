@@ -197,14 +197,10 @@ class Module(Module, multiprocessing.Process):
                                 twid,
                             )
                             attacker = tupleid.split('-')[0]
-                            # port = int(tupleid.split('-')[1])
                             to_send = {
                                 'attacker': attacker,
                                 'attacker_type': utils.detect_data_type(attacker),
-                                'profileid' : profileid,
-                                'twid' : twid,
-                                'flow': flow,
-                                'uid': uid,
+                                'port': tupleid.split('-')[1],
                             }
                             __database__.publish('check_jarm_hash', json.dumps(to_send))
                     """
