@@ -41,6 +41,7 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns_flow')
+        self.c4 = __database__.subscribe('check_jarm_hash')
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -566,6 +567,22 @@ class Module(Module, multiprocessing.Process):
                         ):
                             self.asn.get_asn(ip, cached_ip_info)
                         self.get_rdns(ip)
+
+                message = __database__.get_message(self.c4)
+                if message and message['data'] == 'stop_process':
+                    self.shutdown_gracefully()
+                    return True
+
+                if utils.is_msg_intended_for(message, 'check_jarm_hash'):
+                    msg = json.loads(message['data'])
+                    # can be 'ip' or 'domain'
+                    attacker_type: str = msg['attacker_type']
+                    # the actual ip or domain
+                    attacker = msg['attacker']
+                    port = msg['port']
+                    jarm_hash = self.jarm.hash(attacker, destination_port=port)
+                    print(f"@@@@@@@@@@@@@@@@@@ jarm_hash of {attacker}:{port} of"
+                          f" type {attacker_type} is {jarm_hash}")
 
 
             except KeyboardInterrupt:
