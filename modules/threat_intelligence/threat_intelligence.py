@@ -476,6 +476,59 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.add_ja3_to_IoC(ja3_dict)
         return True
 
+    def parse_jarm_file(self, path):
+        """
+        Reads the file holding JA3 hashes and store in the db.
+        Returns nothing, but the dictionary should be filled
+        :param path: full path_to local threat intel file
+        """
+        filename = os.path.basename(path)
+        jarm_dict = {}
+        # used for debugging
+        line_number = 0
+
+        with open(path) as local_ja3_file:
+            self.print(f'Reading local file {path}', 2, 0)
+
+            # skip comments
+            while True:
+                line_number += 1
+                line = local_ja3_file.readline()
+                if not line.startswith('#'):
+                    break
+
+            for line in local_ja3_file:
+                line_number += 1
+                # The format of the file should be
+                # "JARM hash", "Threat level", "Description"
+                data = line.replace('\n', '').replace('"', '').split(',')
+                if len(data) < 3:
+                    # invalid line
+                    continue
+                # the column order is hardcoded because it's owr own ti file and we know the format,
+                # we shouldn't be trying to find it
+                jarm, threat_level, description = (
+                    data[0].strip(),
+                    data[1].lower().strip(),
+                    data[2],
+                )
+
+                # validate the threat level taken from the user
+                if utils.is_valid_threat_level(threat_level):
+                    # default value
+                    threat_level = 'medium'
+
+                jarm_dict[jarm] = json.dumps(
+                    {
+                        'description': description,
+                        'source': filename,
+                        'threat_level': threat_level,
+                    }
+                )
+        # Add all loaded JARM to the database
+        __database__.add_jarm_to_IoC(jarm_dict)
+        return True
+
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
         """
         Checks if a local TI file was changed based on it's hash.
@@ -914,6 +967,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
             if 'JA3' in filename:
                 # Load updated data to the database
                 self.parse_ja3_file(fullpath)
+            elif 'JARM' in filename:
+                # Load updated data to the database
+                self.parse_jarm_file(fullpath)
             else:
                 # Load updated data to the database
                 self.parse_local_ti_file(fullpath)
@@ -921,6 +977,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             malicious_file_info = {'hash': filehash}
             __database__.set_TI_file_info(filename, malicious_file_info)
             return True
+
 
     def have_pending_ips_in_queue(self):
         """ check if this module has pending ips/domains to analyse """
@@ -939,6 +996,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             # The remote files are being loaded by the update_manager
             self.update_local_file('own_malicious_iocs.csv')
             self.update_local_file('own_malicious_JA3.csv')
+            self.update_local_file('own_malicious_JARM.csv')
             self.circllu_calls_thread.start()
             __database__.init_ti_queue()
         except Exception:
