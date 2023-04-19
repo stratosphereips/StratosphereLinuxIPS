@@ -2062,14 +2062,22 @@ class Database(ProfilingFlowsDatabase, object):
         return self.rcache.hget('IoC_ASNs', ASN)
 
 
-    def add_ja3_to_IoC(self, ja3_dict) -> None:
+    def add_ja3_to_IoC(self, ja3: dict) -> None:
         """
-        Store a group of ja3 in the db
-        :param ja3_dict:  {ja3: {'source':..,'tags':..,
+        Store the malicious ja3 iocs in the db
+        :param ja3:  {ja3: {'source':..,'tags':..,
                             'threat_level':... ,'description'}}
 
         """
-        self.rcache.hmset('IoC_JA3', ja3_dict)
+        self.rcache.hmset('IoC_JA3', ja3)
+
+    def add_jarm_to_IoC(self, jarm: dict) -> None:
+        """
+        Store the malicious jarm iocs in the db
+        :param jarm:  {jarm: {'source':..,'tags':..,
+                            'threat_level':... ,'description'}}
+        """
+        self.rcache.hmset('IoC_JARM', jarm)
 
     def add_ssl_sha1_to_IoC(self, malicious_ssl_certs):
         """
