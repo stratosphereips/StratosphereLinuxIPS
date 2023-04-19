@@ -59,6 +59,7 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_gopy',
         'report_to_peers',
         'new_tunnel',
+        'check_jarm_hash'
     }
 
     """ Database object management """
