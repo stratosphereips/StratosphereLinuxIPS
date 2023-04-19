@@ -66,6 +66,8 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
+
+
     def convert_input_for_module(self, pre_behavioral_model):
         """
         Takes the input from the letters and converts them
@@ -165,7 +167,8 @@ class Module(Module, multiprocessing.Process):
                         )
                         score = tcpmodel.predict(behavioral_model)
                         self.print(
-                            f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
+                            f' >> sequence: {pre_behavioral_model}. final '
+                            f'prediction score: {score[0][0]:.20f}',
                             3,
                             0,
                         )
@@ -192,6 +195,13 @@ class Module(Module, multiprocessing.Process):
                                 profileid,
                                 twid,
                             )
+                            attacker = tupleid.split('-')[0]
+                            to_send = {
+                                'attacker': attacker,
+                                'attacker_type': utils.detect_data_type(attacker),
+                                'port': tupleid.split('-')[1],
+                            }
+                            __database__.publish('check_jarm_hash', json.dumps(to_send))
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold
