@@ -74,13 +74,13 @@ class EvidenceProcess(multiprocessing.Process):
 
         # clear output/alerts.log
         self.logfile = self.clean_file(output_dir, 'alerts.log')
-        utils.adjust_logfiles_permissions(self.logfile, self.UID, self.GID)
+        utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
 
         self.is_interface = self.is_running_on_interface()
 
         # clear output/alerts.json
         self.jsonfile = self.clean_file(output_dir, 'alerts.json')
-        utils.adjust_logfiles_permissions(self.jsonfile, self.UID, self.GID)
+        utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
 
         self.print(f'Storing Slips logs in {output_dir}')
         # this list will have our local and public ips when using -i

@@ -358,7 +358,7 @@ class Utils(object):
             and message['channel'] == channel
         )
 
-    def adjust_logfiles_permissions(self, file, UID, GID):
+    def change_logfiles_ownership(self, file: str, UID, GID):
         """
         if slips is running in docker, the owner of the alerts log files is always root
         this function changes it to the user ID and GID in slips.conf to be able to
