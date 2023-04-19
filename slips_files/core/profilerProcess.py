@@ -1381,8 +1381,6 @@ class ProfilerProcess(multiprocessing.Process):
 
     def handle_arp(self):
         # todo this fun shoud be moved to the db
-        # @@@@@@@@@@@@@@@@@@@@ TODO fix all the to_send
-        # @@@@@@@@@@@@@@@@@@@@ TODO fix ts
         to_send = {
             'flow': asdict(self.flow),
             'profileid': self.profileid,
