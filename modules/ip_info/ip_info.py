@@ -472,6 +472,39 @@ class Module(Module, multiprocessing.Process):
         # to wait for update manager to finish updating the mac db to start this module
         loop.run_until_complete(self.open_dbs())
 
+    def set_evidence_malicious_jarm_hash(
+            self,
+            flow,
+            uid,
+            profileid,
+            twid,
+    ):
+        print(f"@@@@@@@@@@@@@@@@@@  set_evidence_malicious_jarm_hash is called ")
+        dport = flow['dport']
+        dstip = flow['daddr']
+        timestamp = flow['starttime']
+        protocol = flow['protocol']
+
+        evidence_type = 'MaliciousJARM'
+        attacker_direction = 'dstip'
+        source_target_tag = 'Malware'
+        attacker = dstip
+        threat_level = 'medium'
+        confidence = 0.7
+        category = 'Anomaly.Traffic'
+        portproto = f'{dport}/{protocol}'
+        port_info = __database__.get_port_info(portproto)
+        port_info = port_info or ""
+        dstip_id = __database__.getIPIdentification(dstip)
+        description = (
+           f"Malicious JARM hash while connecting to destination IP: {dstip} {dstip_id}"
+           f" on port: {portproto} {port_info}"
+        )
+
+        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+                                 timestamp, category, source_target_tag=source_target_tag,
+                                 port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
+
     def run(self):
         utils.drop_root_privs()
 
@@ -575,10 +608,26 @@ class Module(Module, multiprocessing.Process):
                     msg = json.loads(message['data'])
                     # can be 'ip' or 'domain'
                     attacker_type: str = msg['attacker_type']
+                    profileid = msg['profileid']
+                    twid = msg['twid']
+                    uid = msg['uid']
                     # the actual ip or domain
                     attacker = msg['attacker']
-                    port = msg['port']
-                    jarm_hash = JARM_hash(attacker, port)
+                    flow = msg['flow']
+                    dport = flow['dport']
+                    # @@@@@@@@@@@@2 DLETE THIS
+                    dport = 443
+
+                    jarm_hash = JARM_hash(attacker, dport)
+                    if jarm_hash != '00000000000000000000000000000000000000000000000000000000000000':
+                        print(f"@@@@@@@@@@@@@@@@@@  checking if {jarm_hash} is malicious!")
+                        if __database__.is_malicious_jarm(jarm_hash):
+                            self.set_evidence_malicious_jarm_hash(
+                                flow,
+                                uid,
+                                profileid,
+                                twid,
+                            )
 
 
             except KeyboardInterrupt:

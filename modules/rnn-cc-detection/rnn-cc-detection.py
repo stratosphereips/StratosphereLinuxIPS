@@ -143,14 +143,13 @@ class Module(Module, multiprocessing.Process):
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_letters'):
-                    data = message['data']
-                    data = json.loads(data)
-                    pre_behavioral_model = data['new_symbol']
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    tupleid = data['tupleid']
-                    uid = data['uid']
-                    stime = data['stime']
+                    msg = message['data']
+                    msg = json.loads(msg)
+                    pre_behavioral_model = msg['new_symbol']
+                    profileid = msg['profileid']
+                    twid = msg['twid']
+                    tupleid = msg['tupleid']
+                    flow = msg['flow']
 
                     if 'tcp' in tupleid.lower():
                         # to reduce false positives
@@ -186,6 +185,8 @@ class Module(Module, multiprocessing.Process):
                                     len(pre_behavioral_model)
                                     / threshold_confidence
                                 )
+                            uid = msg['uid']
+                            stime = flow['starttime']
                             self.set_evidence(
                                 score,
                                 confidence,
@@ -196,11 +197,14 @@ class Module(Module, multiprocessing.Process):
                                 twid,
                             )
                             attacker = tupleid.split('-')[0]
-                            port = int(tupleid.split('-')[1])
+                            # port = int(tupleid.split('-')[1])
                             to_send = {
                                 'attacker': attacker,
                                 'attacker_type': utils.detect_data_type(attacker),
-                                'port': port
+                                'profileid' : profileid,
+                                'twid' : twid,
+                                'flow': flow,
+                                'uid': uid,
                             }
                             __database__.publish('check_jarm_hash', json.dumps(to_send))
                     """
