@@ -2217,6 +2217,12 @@ class Database(ProfilingFlowsDatabase, object):
         """
         return self.rcache.hgetall('IoC_JA3')
 
+    def is_malicious_jarm(self, jarm_hash: str):
+        """
+        search for the given hash in the malicious hashes stored in the db
+        """
+        return self.rcache.hget('IoC_JARM', jarm_hash)
+
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
