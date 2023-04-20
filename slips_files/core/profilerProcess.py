@@ -1261,7 +1261,7 @@ class ProfilerProcess(multiprocessing.Process):
         # Change symbol for its internal data. Symbol is a tuple and is confusing if we ever change the API
         # Add the out tuple
         __database__.add_tuple(
-            self.profileid, self.twid, tupleid, symbol, role, self.flow.starttime, self.flow.uid
+            self.profileid, self.twid, tupleid, symbol, role, self.flow
         )
         # Add the dstip
         __database__.add_ips(self.profileid, self.twid, self.flow, role)
@@ -1484,7 +1484,7 @@ class ProfilerProcess(multiprocessing.Process):
         role = 'Server'
         # create the intuple
         __database__.add_tuple(
-            profileid, twid, tupleid, symbol, role, self.flow.starttime, self.flow.uid
+            profileid, twid, tupleid, symbol, role, self.flow
         )
 
         # Add the srcip and srcport
