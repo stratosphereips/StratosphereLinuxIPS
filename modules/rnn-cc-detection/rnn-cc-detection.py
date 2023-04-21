@@ -2,6 +2,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import warnings
 import json
@@ -11,7 +12,9 @@ import traceback
 import numpy as np
 import sys
 from tensorflow.python.keras.models import load_model
-
+import os
+import csv
+import time
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -28,19 +31,48 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue. The
         # outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
+        self.read_configuration()
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_letters')
 
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.info_file = conf.get_rnn_file()
+
+    def add_info(self, tupleid, pre_behavioral_model, profileid, model_score):
+        """
+        Store the flow details in a file
+        default file is rnn_info.csv
+        """
+        symbol = str(pre_behavioral_model)
+        tupleid = tupleid.split('-')
+        destinationaddr, port, protocol = tupleid[0], tupleid[1], tupleid[2]
+        senderaddr = profileid.split('_')[1]
+        timenow = time.ctime()
+        current_path = os.path.dirname(os.path.abspath(__file__))
+        file = self.info_file.split('/')[-1]
+        filepath = current_path + '/' + file
+
+        if os.path.exists(filepath):
+            with open(filepath, 'a') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow([symbol, senderaddr, destinationaddr, port, protocol, timenow, model_score])
+        else:
+            with open(filepath, 'w') as csvfile:
+                csvwriter = csv.writer(csvfile)
+                csvwriter.writerow(
+                    ['symbol', 'senderaddr', 'destinationaddr', 'port', 'protocol', 'time', 'model_score'])
+                csvwriter.writerow([symbol, senderaddr, destinationaddr, port, protocol, timenow, model_score])
 
     def set_evidence(
-        self,
-        score,
-        confidence,
-        uid,
-        timestamp,
-        tupleid='',
-        profileid='',
-        twid='',
+            self,
+            score,
+            confidence,
+            uid,
+            timestamp,
+            tupleid='',
+            profileid='',
+            twid='',
     ):
         """
         Set an evidence for malicious Tuple
@@ -128,7 +160,7 @@ class Module(Module, multiprocessing.Process):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_exc(), 0, 1)
             return True
 
         # Main loop function
@@ -169,19 +201,21 @@ class Module(Module, multiprocessing.Process):
                             3,
                             0,
                         )
+                        # store the details of flow
+                        self.add_info(tupleid, pre_behavioral_model, profileid, score[0][0])
                         # get a float instead of numpy array
                         score = score[0][0]
                         if score > threshold:
                             threshold_confidence = 100
                             if (
-                                len(pre_behavioral_model)
-                                >= threshold_confidence
+                                    len(pre_behavioral_model)
+                                    >= threshold_confidence
                             ):
                                 confidence = 1
                             else:
                                 confidence = (
-                                    len(pre_behavioral_model)
-                                    / threshold_confidence
+                                        len(pre_behavioral_model)
+                                        / threshold_confidence
                                 )
                             self.set_evidence(
                                 score,

@@ -508,6 +508,11 @@ class ConfigParser(object):
             'flowmldetection', 'mode', 'test'
         )
 
+    def get_rnn_file(self):
+        return self.read_configuration(
+            'rnn-cc-detection', 'export_strato_letters', 'modules/rnn-cc-detection/rnn_info.csv'
+        )
+
     def RiskIQ_credentials_path(self):
         return self.read_configuration(
             'threatintelligence', 'RiskIQ_credentials_path', ''
@@ -718,7 +723,6 @@ class ConfigParser(object):
             to_ignore.append('leak_detector')
 
         return to_ignore
-
 
 
 
