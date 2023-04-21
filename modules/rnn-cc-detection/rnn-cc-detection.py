@@ -53,16 +53,25 @@ class Module(Module, multiprocessing.Process):
         file = self.info_file.split('/')[-1]
         filepath = current_path + '/' + file
 
+        if symbol[0] in '123456789': periodicity = -1
+        if symbol[0] in 'abcdefghi': periodicity = 1
+        if symbol[0] in 'ABCDEFGHI': periodicity = 2
+        if symbol[0] in 'rstuvwxyz': periodicity = 3
+        if symbol[0] in 'RSTUVWXYZ': periodicity = 4
+
         if os.path.exists(filepath):
             with open(filepath, 'a') as csvfile:
                 csvwriter = csv.writer(csvfile)
-                csvwriter.writerow([symbol, senderaddr, destinationaddr, port, protocol, timenow, model_score])
+                csvwriter.writerow(
+                    [symbol, periodicity, senderaddr, destinationaddr, port, protocol, timenow, model_score])
         else:
             with open(filepath, 'w') as csvfile:
                 csvwriter = csv.writer(csvfile)
                 csvwriter.writerow(
-                    ['symbol', 'senderaddr', 'destinationaddr', 'port', 'protocol', 'time', 'model_score'])
-                csvwriter.writerow([symbol, senderaddr, destinationaddr, port, protocol, timenow, model_score])
+                    ['symbol', 'periodicity', 'senderaddr', 'destinationaddr', 'port', 'protocol', 'time',
+                     'model_score'])
+                csvwriter.writerow(
+                    [symbol, periodicity, senderaddr, destinationaddr, port, protocol, timenow, model_score])
 
     def set_evidence(
             self,
