@@ -179,6 +179,7 @@ and choose the letter from the block based on the duration(number of row) and si
 
 ![stratoletters letter mapping matrix](https://github.com/haleelsada/StratosphereLinuxIPS/blob/haleel_stratoletters/docs/images/stratoletters.png?raw=true)
 
+
 Example:
 ```commandline
 # Slips computed value of the flow
