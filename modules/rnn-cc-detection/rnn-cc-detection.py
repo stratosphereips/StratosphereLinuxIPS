@@ -163,7 +163,7 @@ class Module(Module, multiprocessing.Process):
                             3,
                             0,
                         )
-                        score = tcpmodel.predict(behavioral_model)
+                        score = tcpmodel(behavioral_model,training=False)
                         self.print(
                             f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
                             3,
