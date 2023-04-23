@@ -119,7 +119,8 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
     Get score and confidence from the data that is saved in Redis.
 
     :param ip_info: The redis data for one IP address
-    :return: Tuple with score and confidence. If data is not there, (None, None) is returned instead.
+    :return: Tuple with score and confidence. If data is not there,
+    (None, None) is returned instead.
     """
     # the higher the score, the more malicious this ip
     try:
@@ -129,7 +130,15 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
             score = ip_info['score']
 
         confidence = ip_info['confidence']
-        return float(score), float(confidence)
+        try:
+            confidence  = float(confidence)
+        except ValueError:
+            # sometimes the confidence is stored as a float,
+            # and sometimes it's stored like this 'confidence: 0.6'
+            # #TODO see what stores it in the second format instead of this try except
+            confidence = float(confidence.split()[-1])
+
+        return float(score), confidence
     except KeyError:
         return None, None
 

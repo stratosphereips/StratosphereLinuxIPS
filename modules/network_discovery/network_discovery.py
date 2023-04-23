@@ -184,7 +184,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def wait_for_vertical_scans(self):
         while True:
-            # wait 10s for new evidence to arrive so we can combine them
+            # wait 25s for new evidence to arrive so we can combine them
             time.sleep(self.time_to_wait_before_generating_new_alert)
             # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
             # calling set_evidence

@@ -168,7 +168,8 @@ class ASN:
 
     def update_ip_info(self, ip, cached_ip_info, asn):
         """
-        if an asn is found using this module, we update the IP's info in the db in 'IPsinfo' key with
+        if an asn is found using this module, we update the IP's
+        info in the db in 'IPsinfo' key with
         the ASN info we found
         asn is a dict with 2 keys 'number' and 'org'
         cached_ip_info: info from 'IPsInfo' key passed from ip_info.py module
