@@ -168,3 +168,4 @@ modules/flowmldetection/scaler.bin
 modules/flowmldetection/model.bin
 databases/macaddress-db.json
 modules/flowmldetection/model.bin
+output/
