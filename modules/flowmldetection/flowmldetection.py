@@ -63,13 +63,13 @@ class Module(Module, multiprocessing.Process):
         try:
             # Process the labels to have only Normal and Malware
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*ormal.*$)', 'Normal'
+                r'(^.*ormal.*$)', 'Normal', regex=True
             )
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*alware.*$)', 'Malware'
+                r'(^.*alware.*$)', 'Malware', regex=True
             )
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*alicious.*$)', 'Malware'
+                r'(^.*alicious.*$)', 'Malware', regex=True
             )
 
             # Separate
@@ -140,10 +140,10 @@ class Module(Module, multiprocessing.Process):
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(
-                r'(^.*NotEstablished.*$)', '0'
+                r'(^.*NotEstablished.*$)', '0', regex=True
             )
             dataset.state = dataset.state.str.replace(
-                r'(^.*Established.*$)', '1'
+                r'(^.*Established.*$)', '1', regex=True
             )
             dataset.state = dataset.state.astype('float64')
 
@@ -153,13 +153,21 @@ class Module(Module, multiprocessing.Process):
             # Also we dont store the Categorizer because the user can retrain
             # with its own data.
             dataset.proto = dataset.proto.str.lower()
-            dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
-            dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
-            dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
             dataset.proto = dataset.proto.str.replace(
-                r'(^.*icmp-ipv6.*$)', '3'
-            )
-            dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
+                r'(^.*tcp.*$)', '0', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*udp.*$)', '1', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*icmp.*$)', '2', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*icmp-ipv6.*$)', '3', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*arp.*$)', '4', regex=True
+                )
             dataset.proto = dataset.proto.astype('float64')
             try:
                 # Convert dport to float
