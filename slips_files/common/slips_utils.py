@@ -10,6 +10,7 @@ import os
 import sys
 import ipaddress
 
+IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 class Utils(object):
     name = 'utils'
@@ -356,6 +357,18 @@ class Utils(object):
             and message['data'] != 'stop_process'
             and message['channel'] == channel
         )
+
+    def change_logfiles_ownership(self, file: str, UID, GID):
+        """
+        if slips is running in docker, the owner of the alerts log files is always root
+        this function changes it to the user ID and GID in slips.conf to be able to
+        rwx the files from outside of docker
+        """
+        if not (IS_IN_A_DOCKER_CONTAINER and UID and GID):
+            # they should be anything other than 0
+            return
+
+        os.system(f"chown {UID}:{GID} {file}")
 
     def get_branch_info(self):
         """

@@ -205,7 +205,7 @@ class ProcessManager:
         """
         now = datetime.now()
         diff = utils.get_time_diff(function_start_time, now, return_type='minutes')
-        return True if diff >= wait_for_modules_to_finish else False
+        return  diff >= wait_for_modules_to_finish
 
     def get_modules_to_be_killed_last(self) -> list:
         """
@@ -249,8 +249,6 @@ class ProcessManager:
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
 
-            finished_modules = []
-
             # get dict of PIDs spawned by slips
             self.main.PIDs = __database__.get_PIDs()
 
@@ -267,11 +265,6 @@ class ProcessManager:
             # only print that modules are still running once
             warning_printed = False
 
-            # timeout variable so we don't loop forever
-            # give slips enough time to close all modules - make sure
-            # all modules aren't considered 'busy' when slips stops
-            max_loops = 430
-
             # loop until all loaded modules are finished
             # in the case of -S, slips doesn't even start the modules,
             # so they don't publish in finished_modules. we don't need to wait for them we have to kill them
@@ -281,6 +274,11 @@ class ProcessManager:
                 slips_processes = len(list(self.main.PIDs.keys())) - len(modules_to_be_killed_last)
 
                 try:
+                    finished_modules = []
+                    # timeout variable so we don't loop forever
+                    # give slips enough time to close all modules - make sure
+                    # all modules aren't considered 'busy' when slips stops
+                    max_loops = 430
                     while (
                         len(finished_modules) < slips_processes and max_loops != 0
                     ):
@@ -302,7 +300,6 @@ class ProcessManager:
                                 # we should kill these modules the very last, or else we'll miss evidence generated
                                 # right before slips stops
                                 continue
-
 
                             if module_name not in finished_modules:
                                 finished_modules.append(module_name)
@@ -335,10 +332,10 @@ class ProcessManager:
                             # -t flag is only used in integration tests,
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
-                            # if self.main.args.testing:
-                            #     # maybe not immediately? give them all extra 10s to stop
-                            #     time.sleep(10)
-                            #     break
+                            if self.main.args.testing:
+                                # maybe not immediately? give them all extra time to stop
+                                time.sleep(120)
+                                break
 
                             # delay killing unstopped modules until all of them
                             # are done processing

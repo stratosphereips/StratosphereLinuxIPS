@@ -18,7 +18,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-from slips_files.common.abstracts import Module
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
@@ -30,26 +29,26 @@ from ui_manager import UIManager
 from checker import Checker
 from style import green
 
-import threading
+
+from multiprocessing import Queue
+from slips_files.core.inputProcess import InputProcess
+from slips_files.core.outputProcess import OutputProcess
+from slips_files.core.profilerProcess import ProfilerProcess
+from slips_files.core.guiProcess import GuiProcess
+from slips_files.core.logsProcess import LogsProcess
+from slips_files.core.evidenceProcess import EvidenceProcess
+
 import signal
 import sys
-import redis
 import os
 import time
 import shutil
-import psutil
-import socket
 import warnings
 import json
-import pkgutil
-import inspect
-import modules
-import importlib
 import errno
 import subprocess
 import re
 from datetime import datetime
-from collections import OrderedDict
 from distutils.dir_util import copy_tree
 from daemon import Daemon
 from multiprocessing import Queue
@@ -95,6 +94,7 @@ class Main:
         with open(version_file, 'r') as f:
             version = f.read()
         return version
+
     def check_zeek_or_bro(self):
         """
         Check if we have zeek or bro
@@ -246,7 +246,9 @@ class Main:
 
     def prepare_output_dir(self):
         """
-        :param self.input_information: either an interface or a filename (wlp3s0, sample.pcap, zeek_dir/ etc.)
+        Clears the output dir if it already exists , or creates a new one if it doesn't exist
+        Log dirs are stored in output/<input>_%Y-%m-%d_%H:%M:%S
+        @return: None
         """
         # default output/
         if '-o' in sys.argv:
@@ -285,7 +287,9 @@ class Main:
 
         os.makedirs(self.args.output)
 
-        # print(f'[Main] Storing Slips logs in {self.args.output}')
+        print(f'[Main] Storing Slips logs in {self.args.output}')
+
+
 
 
     def log_redis_server_PID(self, redis_port, redis_pid):
@@ -524,16 +528,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-            """
-            Import modules here because if user wants to run "./slips.py --help" it should never throw error. 
-            """
-            from multiprocessing import Queue
-            from slips_files.core.inputProcess import InputProcess
-            from slips_files.core.outputProcess import OutputProcess
-            from slips_files.core.profilerProcess import ProfilerProcess
-            from slips_files.core.guiProcess import GuiProcess
-            from slips_files.core.logsProcess import LogsProcess
-            from slips_files.core.evidenceProcess import EvidenceProcess
+
 
             self.setup_print_levels()
             ##########################

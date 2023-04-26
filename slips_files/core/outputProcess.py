@@ -55,7 +55,9 @@ class OutputProcess(multiprocessing.Process):
         self.queue = inputqueue
         self.create_logfile(self.errors_logfile)
         self.create_logfile(self.slips_logfile)
-        self.stdout= stdout
+        utils.change_logfiles_ownership(self.errors_logfile, self.UID, self.GID)
+        utils.change_logfiles_ownership(self.slips_logfile, self.UID, self.GID)
+        self.stdout = stdout
         # self.quiet manages if we should really print stuff or not
         self.quiet = False
         if stdout != '':
@@ -77,6 +79,8 @@ class OutputProcess(multiprocessing.Process):
     def read_configuration(self):
         conf = ConfigParser()
         self.printable_twid_width = conf.get_tw_width()
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
 
     def log_branch_info(self, logfile):
         if branch_info := utils.get_branch_info():
