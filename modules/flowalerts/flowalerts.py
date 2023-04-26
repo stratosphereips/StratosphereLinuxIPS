@@ -19,7 +19,6 @@ import math
 import time
 
 
-
 class Module(Module, multiprocessing.Process):
     name = 'Flow Alerts'
     description = (
@@ -121,9 +120,13 @@ class Module(Module, multiprocessing.Process):
         Alerts when there's a connection from a private IP to another private IP
         except for DNS connections to the gateway
         """
+        def is_dns_conn():
+            return dport == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip()
+
         with contextlib.suppress(ValueError):
             dport = int(dport)
-        if dport == 53 and proto.lower() == 'udp' and daddr == __database__.get_gateway_ip():
+
+        if is_dns_conn():
             # skip DNS conns to the gw to avoid having tons of this evidence
             return
 
@@ -135,6 +138,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         self.helper.set_evidence_conn_to_private_ip(
+            proto,
             daddr,
             dport,
             saddr,

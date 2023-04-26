@@ -1960,6 +1960,7 @@ class Database(ProfilingFlowsDatabase, object):
     def get_gateway_MAC_Vendor(self):
         return self.r.hget('default_gateway', 'Vendor')
 
+
     def set_default_gateway(self, address_type:str, address:str):
         """
         :param address_type: can either be 'IP' or 'MAC'
@@ -1967,9 +1968,9 @@ class Database(ProfilingFlowsDatabase, object):
         """
         # make sure the IP or mac aren't already set before re-setting
         if (
-                address_type == 'IP' and not self.get_gateway_ip()
-                or address_type == 'MAC' and not self.get_gateway_MAC()
-                or address_type == 'Vendor' and not self.get_gateway_MAC_Vendor()
+                (address_type == 'IP' and not self.get_gateway_ip())
+                or (address_type == 'MAC' and not self.get_gateway_MAC())
+                or (address_type == 'Vendor' and not self.get_gateway_MAC_Vendor())
         ):
             self.r.hset('default_gateway', address_type, address)
 

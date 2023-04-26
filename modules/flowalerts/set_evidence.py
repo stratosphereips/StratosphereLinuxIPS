@@ -345,9 +345,9 @@ class Helper:
                                  profileid=profileid, twid=twid, uid=uid)
 
     def set_evidence_conn_to_private_ip(
-            self, daddr, dport, saddr, profileid, twid, uid, timestamp
+            self, proto, daddr, dport, saddr, profileid, twid, uid, timestamp
     ):
-        
+
         if daddr in ['0.0.0.0', '255.255.255.255']:
             return
         if saddr in ['0.0.0.0', '255.255.255.255']:
@@ -356,9 +356,13 @@ class Helper:
         confidence = 1
         threat_level = 'info'
         description = f'Connecting to private IP: {daddr} '
-        if dport != '':
-            # arp flows dont have dport
+        if proto.lower() == 'arp' or dport == '':
+            pass
+        elif proto.lower() == 'icmp':
+            description += 'protocol: ICMP'
+        else:
             description += f'on destination port: {dport}'
+
 
         evidence_type = 'ConnectionToPrivateIP'
         category = 'Recon'
