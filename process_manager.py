@@ -249,8 +249,6 @@ class ProcessManager:
             # Stop the modules that are subscribed to channels
             __database__.publish_stop()
 
-
-
             # get dict of PIDs spawned by slips
             self.main.PIDs = __database__.get_PIDs()
 
