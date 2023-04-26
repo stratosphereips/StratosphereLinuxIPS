@@ -31,6 +31,7 @@ import time
 import platform
 import traceback
 
+IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 # Evidence Process
 class EvidenceProcess(multiprocessing.Process):
@@ -44,8 +45,8 @@ class EvidenceProcess(multiprocessing.Process):
         self,
         inputqueue,
         outputqueue,
-        output_folder,
-        logs_folder,
+        output_dir,
+        logs_dir,
         redis_port,
     ):
         self.name = 'Evidence'
@@ -55,11 +56,11 @@ class EvidenceProcess(multiprocessing.Process):
         self.whitelist = Whitelist(outputqueue, redis_port)
         __database__.start(redis_port)
         self.separator = __database__.separator
-        # Read the configuration
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-        # If logs enabled, write alerts to the log folder as well
-        self.clear_logs_dir(logs_folder)
+        # If logs enabled using -l, write alerts to the log folder as well
+        self.clear_logs_dir(logs_dir)
+
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
@@ -70,25 +71,31 @@ class EvidenceProcess(multiprocessing.Process):
 
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
-        # clear alerts.log
-        self.logfile = self.clean_file(output_folder, 'alerts.log')
+
+        # clear output/alerts.log
+        self.logfile = self.clean_file(output_dir, 'alerts.log')
+        utils.change_logfiles_ownership(self.logfile.name, self.UID, self.GID)
+
         self.is_interface = self.is_running_on_interface()
-        # clear alerts.json
-        self.jsonfile = self.clean_file(output_folder, 'alerts.json')
-        self.print(f'Storing Slips logs in {output_folder}')
+
+        # clear output/alerts.json
+        self.jsonfile = self.clean_file(output_dir, 'alerts.json')
+        utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
+
+        self.print(f'Storing Slips logs in {output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
 
-    def clear_logs_dir(self, logs_folder):
+    def clear_logs_dir(self, logs_dir):
         self.logs_logfile = False
         self.logs_jsonfile = False
-        if logs_folder:
+        if logs_dir:
             # these json files are inside the logs dir, not the output/ dir
             self.logs_jsonfile = self.clean_file(
-                logs_folder, 'alerts.json'
+                logs_dir, 'alerts.json'
                 )
             self.logs_logfile = self.clean_file(
-                logs_folder, 'alerts.log'
+                logs_dir, 'alerts.log'
                 )
 
     def print(self, text, verbose=1, debug=0):
@@ -120,10 +127,12 @@ class EvidenceProcess(multiprocessing.Process):
             f'attacks per minute ({self.detection_threshold * int(self.width) / 60} '
             f'in the current time window width)',2,0,
         )
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
         # In docker, disable alerts no matter what slips.conf says
-        if os.environ.get('IS_IN_A_DOCKER_CONTAINER', False):
+        if IS_IN_A_DOCKER_CONTAINER:
             self.popup_alerts = False
 
 
@@ -180,11 +189,11 @@ class EvidenceProcess(multiprocessing.Process):
         return wrapped_txt
         
     
-    def clean_file(self, output_folder, file_to_clean):
+    def clean_file(self, output_dir, file_to_clean):
         """
         Clear the file if exists and return an open handle to it
         """
-        logfile_path = os.path.join(output_folder, file_to_clean)
+        logfile_path = os.path.join(output_dir, file_to_clean)
         if path.exists(logfile_path):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')

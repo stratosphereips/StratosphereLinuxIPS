@@ -667,6 +667,16 @@ class ConfigParser(object):
              'parameters', 'label', 'unknown'
         )
 
+    def get_UID(self):
+        return int(self.read_configuration(
+             'Docker', 'UID', 0
+        ))
+
+    def get_GID(self):
+        return int(self.read_configuration(
+             'Docker', 'GID', 0
+        ))
+
     def get_disabled_modules(self, input_type) -> list:
         """
         Uses input type to enable leak detector only on pcaps
