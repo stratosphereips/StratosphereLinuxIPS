@@ -177,7 +177,7 @@ In this image, each block represents the possible values of the letter,
 We choose the block based on the periodicity
 and choose the letter from the block based on the duration(number of row) and size (number of column).
 
-![stratoletters letter mapping matrix](https://github.com/stratosphereips/StratosphereLinuxIPS/blob/develop/docs/images/stratoletters.png)
+![stratoletters letter mapping matrix](https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/stratoletters.png)
 
 
 Example:
