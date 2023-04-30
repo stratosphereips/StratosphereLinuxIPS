@@ -562,7 +562,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('id.orig_h', ''),
                 line.get('id.resp_h', ''),
                 line.get('duration', 0),
-                line['proto'],
+                line.get('proto',''),
                 line.get('service', ''),
                 line.get('id.orig_p', ''),
                 line.get('id.resp_p', ''),
