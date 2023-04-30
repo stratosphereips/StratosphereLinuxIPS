@@ -694,7 +694,7 @@ class ProfilingFlowsDatabase(object):
         self.check_TW_to_close()
 
     def add_port(
-            self, profileid: str, twid: str, ip_address: str, flow: dict, role: str, port_type: str
+            self, profileid: str, twid: str, flow: dict, role: str, port_type: str
     ):
         """
         Store info learned from ports for this flow
@@ -712,7 +712,7 @@ class ProfilingFlowsDatabase(object):
         proto = flow.proto.upper()
         starttime = str(flow.starttime)
         uid = flow.uid
-        ip = str(ip_address)
+        ip = str(flow.daddr)
         spkts = flow.spkts
         state_hist = flow.state_hist if hasattr(flow, 'state_hist') else ''
         # dpkts = columns['dpkts']

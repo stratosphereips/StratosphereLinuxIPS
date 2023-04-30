@@ -1495,7 +1495,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(profileid, twid,self.flow, role, port_type)
+        __database__.add_port(profileid, twid, self.flow, role, port_type)
 
         # Add the flow with all the fields interpreted
         __database__.add_flow(
