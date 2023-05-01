@@ -1,7 +1,7 @@
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+import multiprocessing
 import sys
 import base64
 import time
