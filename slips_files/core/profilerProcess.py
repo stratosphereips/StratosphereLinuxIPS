@@ -562,7 +562,7 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('id.orig_h', ''),
                 line.get('id.resp_h', ''),
                 line.get('duration', 0),
-                line['proto'],
+                line.get('proto',''),
                 line.get('service', ''),
                 line.get('id.orig_p', ''),
                 line.get('id.resp_p', ''),
@@ -1194,6 +1194,10 @@ class ProfilerProcess(multiprocessing.Process):
         """
 
         try:
+            if not hasattr(self, 'flow'):
+                #TODO this is a quick fix
+                return False
+
             if not self.is_supported_flow():
                 return False
 
@@ -1268,10 +1272,10 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.add_ips(self.profileid, self.twid, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
+        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
         # Add the srcport
         port_type = 'Src'
-        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
+        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
         # Add the flow with all the fields interpreted
         __database__.add_flow(
             self.flow,
@@ -1495,7 +1499,7 @@ class ProfilerProcess(multiprocessing.Process):
 
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(profileid, twid,self.flow, role, port_type)
+        __database__.add_port(profileid, twid, self.flow, role, port_type)
 
         # Add the flow with all the fields interpreted
         __database__.add_flow(

@@ -134,11 +134,11 @@ def test_add_port(outputQueue):
     database = create_db_instace(outputQueue)
     new_flow = flow
     new_flow.state = 'Not Established'
-    database.add_port(profileid, twid, test_ip, flow, 'Server', 'Dst')
+    database.add_port(profileid, twid, flow, 'Server', 'Dst')
     hash_key = f'{profileid}_{twid}'
     added_ports = database.r.hgetall(hash_key)
     assert 'DstPortsServerTCPNot Established' in added_ports.keys()
-    assert test_ip in added_ports['DstPortsServerTCPNot Established']
+    assert flow.daddr in added_ports['DstPortsServerTCPNot Established']
 
 
 def test_setEvidence(outputQueue):

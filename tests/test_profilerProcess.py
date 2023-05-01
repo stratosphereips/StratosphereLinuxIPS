@@ -170,7 +170,7 @@ def test_add_flow_to_profile(outputQueue, inputQueue, file, type_, database):
     }
 
     # process it
-    assert profilerProcess.process_zeek_input(sample_flow) is True
+    assert profilerProcess.process_zeek_input(sample_flow)
     # add to profile
     added_to_prof = profilerProcess.add_flow_to_profile()
     assert added_to_prof is True
