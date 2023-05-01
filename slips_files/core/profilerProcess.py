@@ -1268,10 +1268,10 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.add_ips(self.profileid, self.twid, self.flow, role)
         # Add the dstport
         port_type = 'Dst'
-        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
+        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
         # Add the srcport
         port_type = 'Src'
-        __database__.add_port(self.profileid, self.twid, self.daddr_as_obj, self.flow, role, port_type)
+        __database__.add_port(self.profileid, self.twid, self.flow, role, port_type)
         # Add the flow with all the fields interpreted
         __database__.add_flow(
             self.flow,
