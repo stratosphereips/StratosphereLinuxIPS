@@ -1194,6 +1194,10 @@ class ProfilerProcess(multiprocessing.Process):
         """
 
         try:
+            if not hasattr(self, 'flow'):
+                #TODO this is a quick fix
+                return False
+
             if not self.is_supported_flow():
                 return False
 
