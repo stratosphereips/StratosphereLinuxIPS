@@ -799,7 +799,8 @@ class ProfilerProcess(multiprocessing.Process):
         """
         line = new_line['data']
         nline = line.strip().split(self.separator)
-        def get_value_at(field_name, default_=False):
+
+        def get_value_of(field_name, default_=False):
             """field_name is used to get the index of
              the field from the column_idx dict"""
             try:
@@ -809,25 +810,24 @@ class ProfilerProcess(multiprocessing.Process):
                 return default_
 
         self.flow: ArgusConn = ArgusConn(
-            utils.convert_to_datetime(get_value_at('starttime')),
-            get_value_at('endtime'),
-            get_value_at('dur'),
-            get_value_at('proto'),
-            get_value_at('appproto'),
-            get_value_at('saddr'),
-            get_value_at('sport'),
-            get_value_at('dir'),
-            get_value_at('daddr'),
-            get_value_at('dport'),
-            get_value_at('state'),
-            int(get_value_at('pkts')),
-            int(get_value_at('spkts')),
-            int(get_value_at('dpkts')),
-            int(get_value_at('bytes')),
-            int(get_value_at('sbytes')),
-            int(get_value_at('dbytes')),
+            utils.convert_to_datetime(get_value_of('starttime')),
+            get_value_of('endtime'),
+            get_value_of('dur'),
+            get_value_of('proto'),
+            get_value_of('appproto'),
+            get_value_of('saddr'),
+            get_value_of('sport'),
+            get_value_of('dir'),
+            get_value_of('daddr'),
+            get_value_of('dport'),
+            get_value_of('state'),
+            int(get_value_of('pkts')),
+            int(get_value_of('spkts')),
+            int(get_value_of('dpkts')),
+            int(get_value_of('bytes')),
+            int(get_value_of('sbytes')),
+            int(get_value_of('dbytes')),
         )
-
 
     def process_nfdump_input(self, new_line):
         """
@@ -1806,7 +1806,6 @@ class ProfilerProcess(multiprocessing.Process):
                                             "TotBytes,SrcBytes,SrcPkts,Label"
                                 }
                             )
-
                         _ = self.column_idx['starttime']
                         self.process_argus_input(line)
                         # Add the flow to the profile
