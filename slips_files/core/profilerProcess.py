@@ -531,6 +531,9 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at(6),
                 get_value_at(7),
             )
+        else:
+            return False
+        return True
 
     def process_zeek_input(self, new_line: dict):
         """
@@ -774,9 +777,6 @@ class ProfilerProcess(multiprocessing.Process):
                 line.get('version.major', ''),
                 line.get('version.minor', ''),
             )
-            if self.flow.http_browser:
-                return True
-
 
         elif 'weird' in file_type:
             self.flow: Weird =  Weird(
@@ -827,6 +827,7 @@ class ProfilerProcess(multiprocessing.Process):
             int(get_value_at('sbytes')),
             int(get_value_at('dbytes')),
         )
+        return True
 
 
     def process_nfdump_input(self, new_line):
@@ -866,6 +867,7 @@ class ProfilerProcess(multiprocessing.Process):
             get_value_at(12),
             get_value_at(14),
         )
+        return True
 
     def get_suricata_answers(self, line: dict) -> list:
         """
@@ -945,7 +947,6 @@ class ProfilerProcess(multiprocessing.Process):
 
                 get_value_at('flow', 'state', ''),
             )
-            return True
 
         elif event_type == 'http':
             self.flow: SuricataHTTP = SuricataHTTP(
@@ -969,7 +970,6 @@ class ProfilerProcess(multiprocessing.Process):
                 int(get_value_at('http', 'request_body_len', 0)),
                 int(get_value_at('http', 'length', 0)),
             )
-            return True
 
         elif event_type == 'dns':
             answers: list = self.get_suricata_answers(line)
@@ -988,7 +988,6 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('qtype_name', 'rrtype', ''),
                 answers
             )
-            return True
 
         elif event_type == 'tls':
             self.flow: SuricataTLS = SuricataTLS(
@@ -1011,7 +1010,6 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('tls', 'notafter', ''),
                 get_value_at('tls', 'sni', ''),
             )
-            return True
 
         elif event_type == 'fileinfo':
             self.flow: SuricataFile = SuricataFile(
@@ -1026,9 +1024,6 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('fileinfo', 'size', ''),
 
             )
-            return True
-
-
         elif event_type == 'ssh':
             self.flow: SuricataSSH = SuricataSSH(
                 timestamp,
@@ -1043,9 +1038,9 @@ class ProfilerProcess(multiprocessing.Process):
                 get_value_at('ssh', 'client', {}).get('proto_version', ''),
                 get_value_at('ssh', 'server', {}).get('software_version', ''),
             )
-            return True
         else:
             return False
+        return True
 
     def publish_to_new_MAC(self, mac, ip, host_name=False):
         """
@@ -1785,9 +1780,9 @@ class ProfilerProcess(multiprocessing.Process):
 
                 elif self.input_type == 'zeek':
                     # self.print('Zeek line')
-                    self.process_zeek_input(line)
-                    # Add the flow to the profile
-                    self.add_flow_to_profile()
+                    if self.process_zeek_input(line):
+                        # Add the flow to the profile
+                        self.add_flow_to_profile()
 
                     self.outputqueue.put("update progress bar")
 
@@ -1808,9 +1803,9 @@ class ProfilerProcess(multiprocessing.Process):
                             )
 
                         _ = self.column_idx['starttime']
-                        self.process_argus_input(line)
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
+                        if self.process_argus_input(line):
+                            # Add the flow to the profile
+                            self.add_flow_to_profile()
                         self.outputqueue.put("update progress bar")
                     except (AttributeError, KeyError):
                         # Define columns. Do not add this line to profile, its only headers
@@ -1824,18 +1819,17 @@ class ProfilerProcess(multiprocessing.Process):
                     self.outputqueue.put("update progress bar")
                 elif self.input_type == 'zeek-tabs':
                     # self.print('Zeek-tabs line')
-                    self.process_zeek_tabs_input(line)
-                    # Add the flow to the profile
-                    self.add_flow_to_profile()
+                    if self.process_zeek_tabs_input(line):
+                        # Add the flow to the profile
+                        self.add_flow_to_profile()
                     self.outputqueue.put("update progress bar")
                 elif self.input_type == 'nfdump':
-                    self.process_nfdump_input(line)
-                    self.add_flow_to_profile()
+                    if self.process_nfdump_input(line):
+                        self.add_flow_to_profile()
                     self.outputqueue.put("update progress bar")
                 else:
                     self.print("Can't recognize input file type.")
                     return False
-
 
 
                 # listen on this channel in case whitelist.conf is changed, we need to process the new changes
