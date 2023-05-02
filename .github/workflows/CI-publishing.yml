@@ -165,30 +165,3 @@ jobs:
         file: ./docker/dependency-image/Dockerfile
         tags: stratosphereips/slips_dependencies:latest
         push: true
-
-
-  tweet_about_the_new_release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get slips version
-        run: |
-          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-          VER2=$(echo $VER | sed 's/\.//g')
-          DATE=$(date +'%Y/%m/%d')
-          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-          echo "VER2=$VER2" >> $GITHUB_ENV
-          echo "DATE=$DATE" >> $GITHUB_ENV
-
-      - name: Tweet
-        uses: snow-actions/tweet@v1.4.0
-        with:
-          status: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: ${{ env.BLOG_URL }}'
-        env:
-          CONSUMER_API_KEY: ${{ secrets.CONSUMER_KEY }}
-          CONSUMER_API_SECRET_KEY: ${{ secrets.CONSUMER_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_KEY }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_SECRET }}
-          # same as SLIPS_VERSION without the v and the dots
-          BLOG_URL: 'www.stratosphereips.org/blog/${{ env.DATE }}/new-slips-version-${{ env.VER2 }}-is-here'
-
-
