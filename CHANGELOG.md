@@ -7,6 +7,7 @@
 - Fix error getting IP confidence in P2P.
 - Fix false positive alerts about "connection to private IP" thanks to @Onyx2406.
 - Fix problem killing all modules before the TI module stops.
+- Fix problem detecting vertical and horizontal port scans.
 - Improved CLI progress bar and status updates.
 - Keep a history of the past user-agents by @haleelsada.
 - More descriptive evidence.
