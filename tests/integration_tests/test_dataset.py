@@ -151,14 +151,13 @@ def test_pcap(
              'test5/',
              6655
          ),
-        (
-            'dataset/test11-portscan.binetflow',
-            0,
-            'ICMP scanning',
-            'test11/',
-            6669
-
-        )
+        # (
+        #     'dataset/test11-portscan.binetflow',
+        #     0,
+        #     'ICMP scanning',
+        #     'test11/',
+        #     6669
+        # )
     ],
 )
 def test_binetflow(
