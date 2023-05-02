@@ -535,8 +535,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # And then we 'reset' the counter
                     # until we see again X more.
                     if (
-                            number_of_flows > self.pingscan_minimum_flows
-                            and prev_flows +5 <= number_of_flows
+                            number_of_flows % self.pingscan_minimum_flows == 0
+                            and prev_flows < number_of_flows
                     ):
                         self.cache_det_thresholds[cache_key] = number_of_flows
                         pkts_sent = scan_info['spkts']
@@ -560,8 +560,8 @@ class PortScanProcess(Module, multiprocessing.Process):
                 prev_scanned_ips = self.cache_det_thresholds.get(cache_key, 0)
                 # detect every 5, 10, 15 scanned IPs
                 if (
-                        amount_of_scanned_ips >= self.pingscan_minimum_scanned_ips
-                        and prev_scanned_ips + 5 <= amount_of_scanned_ips
+                        amount_of_scanned_ips % self.pingscan_minimum_scanned_ips == 0
+                        and prev_scanned_ips < amount_of_scanned_ips
                 ):
 
                     pkts_sent = 0
