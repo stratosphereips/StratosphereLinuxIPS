@@ -759,7 +759,7 @@ class ProfilingFlowsDatabase(object):
             port_data['totalpkt'] += pkts
             port_data['totalbytes'] += totbytes
 
-            # if there's a conn from this ip on this port, add the pkts
+            # if there's a conn from this ip on this port, update the pkts of this conn
             if ip in port_data[ip_key]:
                 port_data[ip_key][ip]['pkts'] += pkts
                 port_data[ip_key][ip]['spkts'] += spkts
@@ -787,7 +787,6 @@ class ProfilingFlowsDatabase(object):
                     }
                 }
             }
-
         old_profileid_twid_data[port] = port_data
         data = json.dumps(old_profileid_twid_data)
         hash_key = f'{profileid}{self.separator}{twid}'
