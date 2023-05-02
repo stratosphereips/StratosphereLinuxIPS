@@ -4,7 +4,7 @@
 - Add the detection of GRE tunnels.
 - Auto publish our MacOS Docker image when there's a new release, thanks to @pjflux2001
 - Detect malicious JARM hashes when there's a C&C alert and add our own malicious JARM hashes TI file.
-- Fix error getting IP confidence in P2P.
+- Fix error getting IP confidence in P2P module.
 - Fix false positive alerts about "connection to private IP" thanks to @Onyx2406.
 - Fix problem killing all modules before the TI module stops.
 - Fix problem detecting vertical and horizontal port scans.

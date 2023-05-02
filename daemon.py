@@ -196,7 +196,7 @@ class Daemon():
         get information about the last opened slips daemon from running_slips_info.txt
         """
         try:
-            with open(self.slips.running_logfile, 'r') as f:
+            with open(self.slips.redis_man.running_logfile, 'r') as f:
                 # read the lines in reverse order to get the last opened daemon
                 for line in f.read().splitlines()[::-1]:
                     # skip comments
@@ -214,7 +214,7 @@ class Daemon():
                     return (port, output_dir, slips_pid)
         except FileNotFoundError:
             # file removed after daemon started
-            self.print(f"Warning: {self.slips.running_logfile} is not found. Can't get daemon info."
+            self.print(f"Warning: {self.slips.redis_man.running_logfile} is not found. Can't get daemon info."
                        f" Slips won't be completely killed.")
             return False
 
@@ -244,4 +244,4 @@ class Daemon():
         self.prepare_std_streams(output_dir)
         __database__.start(port)
         self.slips.c1 = __database__.subscribe('finished_modules')
-        self.slips.shutdown_gracefully()
+        self.slips.proc_man.shutdown_gracefully()
