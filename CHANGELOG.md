@@ -1,12 +1,19 @@
 -1.0.4 (April 2023)
-- keep a history of the past user agents  by @haleelsada
-- Add the detection of GRE tunnels 
-- Fix connection to private IP false positives
-- Refactor code thanks to @danieltherealyang
-- add more descriptive titles to vt scores in the web UI thanks to @shubhangi
-- Auto publish our MacOS docker image when there's a new release thanks to @pjflux2001
-- 
-- 
+- Add more descriptive titles to VT scores in the web UI thanks to @shubhangi.
+- Add stratoletters documentation, thanks to @haleelsada.
+- Add the detection of GRE tunnels.
+- Auto publish our MacOS Docker image when there's a new release, thanks to @pjflux2001
+- Detect malicious JARM hashes when there's a C&C alert and add our own malicious JARM hashes TI file.
+- Fix error getting IP confidence in P2P.
+- Fix false positive alerts about "connection to private IP" thanks to @Onyx2406.
+- Fix problem killing all modules before the TI module stops.
+- Improved CLI progress bar and status updates.
+- Keep a history of the past user-agents by @haleelsada.
+- More descriptive evidence.
+- Refactor code thanks to @danieltherealyang.
+- Update Slips default whitelist.
+- Web UI highlighting, new icons, and bug fixes.
+
 -1.0.3 (March 2023)
 - Add HTTP unencrypted traffic detection by @haleelsada
 - use termcolor by @haleelsada
