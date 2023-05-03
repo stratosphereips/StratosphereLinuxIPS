@@ -14,8 +14,6 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
 
-    env:
-      SLIPS_VERSION: v1.0.2
 
     steps:
     - uses: actions/checkout@v3
@@ -80,8 +78,6 @@ jobs:
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
-    env:
-      SLIPS_VERSION: v1.0.2 #TODO update this
 
     strategy:
       matrix:
@@ -98,6 +94,10 @@ jobs:
 #            path: ./docker/macosm1-image/Dockerfile
 
     steps:
+    - name: Get slips version from the VERSION file
+      run: |
+        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
+        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
 
     # clone slips and checkout branch
     # By default it checks out only one commit
