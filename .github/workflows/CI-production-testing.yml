@@ -94,11 +94,6 @@ jobs:
 #            path: ./docker/macosm1-image/Dockerfile
 
     steps:
-    - name: Get slips version from the VERSION file
-      run: |
-        VER=$(curl -s  https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-        echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-
     # clone slips and checkout branch
     # By default it checks out only one commit
     - uses: actions/checkout@v3
@@ -112,7 +107,7 @@ jobs:
       with:
         context: ./
         file: ${{ matrix.path }}
-        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
+        tags: stratosphereips/${{ matrix.image_name }}:latest
         push: false
 
 
