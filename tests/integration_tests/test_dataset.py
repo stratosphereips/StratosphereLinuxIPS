@@ -76,6 +76,19 @@ def check_for_text(txt, output_dir):
                 return True
     return False
 
+def run_slips(cmd):
+    """runs slips and waits for it to end"""
+    slips = subprocess.Popen(
+        cmd,
+        # stdout=handle_,
+        # stderr=handle_,
+        stdin=subprocess.PIPE,
+        shell=True
+    )
+    return_code = slips.wait()
+    return return_code
+
+
 def create_Main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
     main = Main(testing=True)
@@ -104,8 +117,7 @@ def test_pcap(
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {pcap_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
-
+    run_slips(command)
     assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
@@ -173,7 +185,7 @@ def test_binetflow(
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -o {output_dir}  -P {redis_port} -f {binetflow_path}  >  {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
 
     assert has_errors(output_dir) is False
 
@@ -261,7 +273,7 @@ def test_zeek_dir(
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {zeek_dir_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
     assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
@@ -310,7 +322,7 @@ def test_zeek_conn_log(
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {conn_log_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
     assert has_errors(output_dir) is False
 
     database = connect_to_redis(redis_port)
@@ -352,7 +364,7 @@ def test_suricata(database, suricata_path, output_dir, redis_port, expected_evid
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {suricata_path} -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
 
     assert has_errors(output_dir) is False
 
@@ -385,7 +397,7 @@ def test_nfdump(database, nfdump_path, output_dir, redis_port):
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py -t -f {nfdump_path}  -o {output_dir}  -P {redis_port} > {output_file} 2>&1'
     # this function returns when slips is done
-    os.system(command)
+    run_slips(command)
 
     database = connect_to_redis(redis_port)
     profiles = int(database.getProfilesLen())
