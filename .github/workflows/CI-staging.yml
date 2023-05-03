@@ -47,3 +47,10 @@ jobs:
 
             - name: Config file tests
               run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+
+            - name: Upload Artifacts
+              uses: actions/upload-artifact@v3
+              with:
+                name: integration-tests-output
+                path: |
+                  output/integration_tests
