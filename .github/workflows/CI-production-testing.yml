@@ -155,8 +155,7 @@ jobs:
           git reset --hard
           git pull & git checkout origin/develop
           redis-server --daemonize yes
-          python3 -m pytest -s tests/integration_tests/test_dataset.py -p no:warnings -vv
-#            python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
 
     - name: Run config file integration tests inside docker
       uses: addnab/docker-run-action@v3
@@ -169,8 +168,7 @@ jobs:
           git reset --hard
           git pull & git checkout origin/develop
           redis-server --daemonize yes
-          python3 -m pytest -s tests/integration_tests/test_config_files.py -p no:warnings -vv
-#          python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+          python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
     - name: Upload Artifact
       # run this job whether the above jobs failed or passed
