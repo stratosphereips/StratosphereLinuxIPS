@@ -50,6 +50,7 @@ class Module(Module, multiprocessing.Process):
         self.c10 = __database__.subscribe('new_weird')
         self.c11 = __database__.subscribe('new_tunnel')
         self.whitelist = Whitelist(outputqueue, redis_port)
+        self.conn_counter = 0
         # helper contains all functions used to set evidence
         self.helper = Helper()
         self.p2p_daddrs = {}
@@ -1216,6 +1217,7 @@ class Module(Module, multiprocessing.Process):
         return True
 
     def shutdown_gracefully(self):
+        self.print(f"Number of connections processed by flowalerts: {self.conn_counter}")
         __database__.publish('finished_modules', self.name)
 
     def check_smtp_bruteforce(
@@ -1883,6 +1885,8 @@ class Module(Module, multiprocessing.Process):
                     self.check_device_changing_ips(
                         flow_type, smac, profileid, twid, uid, timestamp
                     )
+                    self.conn_counter += 1
+
 
                 # --- Detect successful SSH connections ---
                 message = __database__.get_message(self.c2)
