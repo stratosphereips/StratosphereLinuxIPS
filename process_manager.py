@@ -333,9 +333,8 @@ class ProcessManager:
                             # so we don't care about the modules finishing their job when testing
                             # instead, kill them
                             if self.main.args.testing:
-                                # maybe not immediately? give them all extra time to stop
-                                time.sleep(120)
-                                break
+                                pass
+                                # break
 
                             # delay killing unstopped modules until all of them
                             # are done processing
