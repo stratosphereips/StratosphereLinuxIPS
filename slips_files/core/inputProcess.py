@@ -685,6 +685,9 @@ class InputProcess(multiprocessing.Process):
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
             )
+            connlog_path = os.path.join(self.zeek_folder, 'conn.log')
+
+            self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}")
 
             self.stop_observer()
             return True

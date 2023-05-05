@@ -52,6 +52,7 @@ class ProfilerProcess(multiprocessing.Process):
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
+        self.whitelisted_flows_ctr = 0
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -1210,6 +1211,8 @@ class ProfilerProcess(multiprocessing.Process):
 
             # Check if the flow is whitelisted and we should not process
             if self.whitelist.is_whitelisted_flow(self.flow):
+                if 'conn' in self.flow.type_:
+                    self.whitelisted_flows_ctr +=1
                 return True
 
             # 5th. Store the data according to the paremeters
@@ -1741,6 +1744,7 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
+        self.print(f"Stopping profiler process. Number of whitelisted conn flows: {self.whitelisted_flows_ctr}")
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
 
@@ -1752,6 +1756,8 @@ class ProfilerProcess(multiprocessing.Process):
             try:
                 line = self.inputqueue.get()
                 if 'stop' in line:
+                    self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+                               f"{self.whitelisted_flows_ctr}")
                     # if timewindows are not updated for a long time (see at logsProcess.py),
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     self.shutdown_gracefully()
