@@ -32,7 +32,6 @@ https://raw.githubusercontent.com/bigdargon/hostsVN/master/option/domain.txt,med
 https://raw.githubusercontent.com/SweetSophia/mifitxiaomipiholelist/master/mifitblocklist.txt,medium, ['xiaomi-trackers']
 https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/abuse-ch-ipblocklist.intel,medium, ['honeypot']
 https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/alienvault.intel,medium, ['honeypot']
-https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/binarydefense.intel,medium, ['honeypot']
 https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cobaltstrike_ips.intel,medium, ['honeypot']
 https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/compromised-ips.intel,medium, ['hacked']
 https://raw.githubusercontent.com/CriticalPathSecurity/Zeek-Intelligence-Feeds/master/cps-collected-iocs.intel,medium, ['honeypot']
