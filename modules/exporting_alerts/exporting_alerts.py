@@ -15,14 +15,6 @@ import sys
 import traceback
 import datetime
 
-
-
-
-
-
-
-
-
 class Module(Module, multiprocessing.Process):
     """
     Module to export alerts to slack and/or STIX
