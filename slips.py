@@ -28,13 +28,11 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
+import socket
 
-
-from multiprocessing import Queue
 from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.guiProcess import GuiProcess
 from slips_files.core.logsProcess import LogsProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
 
@@ -553,7 +551,7 @@ class Main:
             )
         return modified_ips_in_the_last_tw, modified_profiles
 
-    def should_run_non_stop(self) -> bool:
+    def should_run_non_stop(self, is_interface) -> bool:
         """
         determines if slips shouldn't terminate because by defualt,
         it terminates when there's no moreincoming flows
@@ -805,7 +803,7 @@ class Main:
                     if hostIP := self.metadata_man.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
-                if self.should_run_non_stop():
+                if self.should_run_non_stop(is_interface):
                     continue
 
                 # Reaches this point if we're running Slips on a file.

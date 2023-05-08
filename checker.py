@@ -29,6 +29,12 @@ class Checker:
             self.main.load_db()
             return
 
+        if self.args.CYST:
+            input_information = 'cyst'
+            input_type = 'cyst'
+            line_type = 'zeek'
+            return input_type, input_information, line_type
+
         if not self.main.args.filepath:
             print('[Main] You need to define an input source.')
             sys.exit(-1)

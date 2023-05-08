@@ -1071,9 +1071,6 @@ class ProfilerProcess(multiprocessing.Process):
         __database__.publish('new_MAC', json.dumps(to_send))
 
     def is_supported_flow(self):
-        # print(f"@@@@@@@@@@@@@@@@@@  self.column_values['type']")
-        import pprint
-        pprint.pp(self.column_values)
 
         supported_types = (
             'ssh',

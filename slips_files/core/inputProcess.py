@@ -17,7 +17,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-from modules.CYST.cyst import cyst
 import multiprocessing
 from pathlib import Path
 from re import split
@@ -872,6 +871,14 @@ class InputProcess(multiprocessing.Process):
                 time.sleep(2)
                 continue
 
+            msg = __database__.get_message(cyst_channel)
+            if msg and msg['data'] == 'stop_process':
+                self.shutdown_gracefully()
+                return True
+
+            if utils.is_msg_intended_for(msg, 'new_cyst_flow'):
+                flow:str = msg["data"]
+                flow = json.loads(flow)
 
             line_info = {
                 'type': 'cyst',
@@ -883,7 +890,7 @@ class InputProcess(multiprocessing.Process):
             self.lines += 1
             self.print('Done reading 1 CYST flow.\n ', 0, 3)
 
-            time.sleep(2)
+                time.sleep(2)
 
 
 
