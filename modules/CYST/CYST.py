@@ -99,6 +99,7 @@ class Module(Module, multiprocessing.Process):
         """
         :param evidence: json serialized dict
         """
+        self.print(f"Sending evidence back to CYST.", 0, 1)
         # todo test how long will it take slips to respond to cyst
         # todo explicitly sending message length before the message itself.
         self.cyst_conn.sendall(evidence.encode())
@@ -115,8 +116,6 @@ class Module(Module, multiprocessing.Process):
 
 
     def run(self):
-        # utils.drop_root_privs()
-
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
 
