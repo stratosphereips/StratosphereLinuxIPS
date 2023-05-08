@@ -551,7 +551,7 @@ class Main:
             )
         return modified_ips_in_the_last_tw, modified_profiles
 
-    def should_run_non_stop(self, is_interface) -> bool:
+    def should_run_non_stop(self) -> bool:
         """
         determines if slips shouldn't terminate because by default,
         it terminates when there's no more incoming flows
@@ -804,7 +804,7 @@ class Main:
                     if hostIP := self.metadata_man.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
-                if self.should_run_non_stop(is_interface):
+                if self.should_run_non_stop():
                     continue
 
                 # Reaches this point if we're running Slips on a file.
