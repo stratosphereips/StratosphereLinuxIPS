@@ -22,9 +22,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
-        self.cyst_UDS = '/tmp/slips'
+        self.cyst_UDS = '/tmp/slips.sock'
         # connect to cyst
-        self.connect()
+        self.sock, self.cyst_conn = self.initialize_unix_socket()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -47,25 +47,32 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-    def connect(self) -> tuple:
-        """
-        Connects to CYST's UDS
-        returns True, '' if the connection was successfull
-        and Tuple(False, error_msg) if there was an error
 
+
+    def initialize_unix_socket(self):
         """
+        Slips will be the server, so it has to run before cyst to create the socket
+        """
+        unix_socket = '/tmp/slips.sock'
+
+        # Make sure the socket does not already exist
+        if os.path.exists(unix_socket):
+            os.unlink(unix_socket)
+
         # Create a UDS socket
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(unix_socket)
 
-        #todo cyst has to start before slips to init the socket
-        try:
-            sock.connect(self.cyst_UDS)
-        except (socket.error) as msg:
-            error = f"Problem connecting to CYST socket: {msg}"
-            return False, error
 
-        self.sock = sock
-        return True ,''
+        failure = sock.listen(2)
+        if not failure:
+            self.print(f"Slips is now listening. waiting for CYST to connect.")
+        else:
+            self.print(f" failed to initialize sips socket. Error code: {failure}")
+
+        connection, client_address = sock.accept()
+        return sock, connection
+
 
     def get_flow(self):
         """
@@ -75,7 +82,7 @@ class Module(Module, multiprocessing.Process):
         try:
             self.sock.settimeout(5)
             #todo handle multiple flows received at once i.e. split by \n
-            flow: str = self.sock.recv(10000).decode()
+            flow: str = self.cyst_conn.recv(10000).decode()
         except ConnectionResetError:
             self.print( 'Connection reset by CYST.', 0, 1)
             return False,
@@ -96,8 +103,8 @@ class Module(Module, multiprocessing.Process):
         :param evidence: json serialized dict
         """
         # todo test how long will it take slips to respond to cyst
-        self.sock.sendall(evidence.encode())
-
+        # todo explicitly sending message length before the message itself.
+        self.cyst_conn.sendall(evidence.encode())
 
 
     def close_connection(self):
@@ -107,6 +114,8 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return
+
+
 
     def run(self):
         utils.drop_root_privs()
