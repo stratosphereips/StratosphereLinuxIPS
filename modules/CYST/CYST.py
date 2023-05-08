@@ -22,6 +22,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
         self.cyst_UDS = '/tmp/slips.sock'
+        self.conn_closed = False
 
 
 
@@ -72,28 +73,37 @@ class Module(Module, multiprocessing.Process):
         return sock, connection
 
 
-    def get_flow(self) -> tuple:
+    def get_flow(self):
         """
         reads 1 flow from the CYST socket and converts it to dict
-        returns True, flow_dict if the flow was received
-        and Tuple(False, Error_msg) if there was an error
+        returns a dict if the flow was received or False if there was an error
         """
         try:
             self.cyst_conn.settimeout(5)
             #todo handle multiple flows received at once i.e. split by \n
-            flow: str = self.cyst_conn.recv(10000).decode()
+            flow: bytes = self.cyst_conn.recv(10000)
+            # When a recv returns 0 bytes, it means the other side has closed
+            # (or is in the process of closing) the connection.
+            if flow == 0:
+                self.print( 'Connection closed by CYST.', 0, 1)
+                self.conn_closed = True
+                return False
+            flow = flow.decode()
+
         except ConnectionResetError:
-            return False, 'Connection reset by CYST.'
+            self.print( 'Connection reset by CYST.', 0, 1)
+            return False
         except socket.timeout:
-            # no flows yet
-            return False, 'CYST didnt send flows yet.'
+            self.print('CYST didnt send flows yet.', 0, 1)
+            return False
 
         try:
             flow = json.loads(flow)
         except json.decoder.JSONDecodeError:
-            return False, 'Invalid json line received from CYST.'
+            self.print(f'Invalid json line received from CYST. {flow}', 0, 1)
+            return False
 
-        return flow, ''
+        return flow
 
     def send_evidence(self, evidence: str):
         """
@@ -111,6 +121,7 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
+
         return
 
 
@@ -125,18 +136,14 @@ class Module(Module, multiprocessing.Process):
         while True:
             try:
                 # RECEIVE FLOWS FROM CYST
-                flow, error = self.get_flow()
-                if not flow:
-                    self.print(error, 0, 1)
-                else:
+                if flow := self.get_flow():
                     # send the flow to inputprocess so slips can process it normally
-                    __database__.publish('new_cyst_flow', flow)
-
+                    __database__.publish('new_cyst_flow', json.dumps(flow))
 
                 # SEND EVIDENCE TO CYST
                 print(f"@@@@@@@@@@@@@@@@@@  tryoing to get msg")
                 msg = __database__.get_message(self.c1)
-                if msg and msg['data'] == 'stop_process':
+                if (msg and msg['data'] == 'stop_process') or self.conn_closed:
                     self.shutdown_gracefully()
                     return True
 
