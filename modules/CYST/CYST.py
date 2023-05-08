@@ -22,10 +22,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_json_evidence')
-        self.c2 = __database__.subscribe('new_alert')
-        self.cyst_UDS = '/tmp/slips.sock'
-        self.conn_closed = False
-
+        self.cyst_UDS = '/tmp/slips'
+        # connect to cyst
+        self.connect()
 
 
     def print(self, text, verbose=1, debug=0):
@@ -48,133 +47,55 @@ class Module(Module, multiprocessing.Process):
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-
-    def initialize_unix_socket(self):
+    def connect(self) -> tuple:
         """
-        Slips will be the server, so it has to run before cyst to create the socket
+        Connects to CYST's UDS
+        returns True, '' if the connection was successfull
+        and Tuple(False, error_msg) if there was an error
+
         """
-        unix_socket = '/tmp/slips.sock'
-
-        # Make sure the socket does not already exist
-        if os.path.exists(unix_socket):
-            os.unlink(unix_socket)
-
         # Create a UDS socket
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.bind(unix_socket)
 
+        #todo cyst has to start before slips to init the socket
+        try:
+            sock.connect(self.cyst_UDS)
+        except (socket.error) as msg:
+            error = f"Problem connecting to CYST socket: {msg}"
+            return False, error
 
-        failure = sock.listen(2)
-        if not failure:
-            self.print(f"Slips is now listening. waiting for CYST to connect.")
-        else:
-            self.print(f" failed to initialize sips socket. Error code: {failure}")
+        self.sock = sock
+        return True ,''
 
-        connection, client_address = sock.accept()
-        return sock, connection
-
-
-    def get_flow(self):
+    def get_flow(self) -> tuple:
         """
         reads 1 flow from the CYST socket and converts it to dict
-        returns a dict if the flow was received or False if there was an error
+        returns True, flow_dict if the flow was received
+        and Tuple(False, Error_msg) if there was an error
         """
         try:
-            self.cyst_conn.settimeout(5)
-            # get the number of bytes cyst is going to send, it is exactly 5 bytes
-            flow_len = self.cyst_conn.recv(5).decode()
-            try:
-                flow_len: int = int(flow_len)
-            except ValueError:
-                self.print(f"Received invalid flow length from cyst: {flow_len}")
-                return False
-
-            flow: bytes = self.cyst_conn.recv(flow_len).decode()
-
+            self.sock.settimeout(5)
+            #todo handle multiple flows received at once i.e. split by \n
+            flow: str = self.sock.recv(10000).decode()
+        except ConnectionResetError:
+            return False, 'Connection reset by CYST.'
         except socket.timeout:
-            self.print("timeout but still listening for flows.")
-            return False
-        except socket.error as e:
-            err = e.args[0]
-            if err == errno.EAGAIN or err == errno.EWOULDBLOCK:
-                # cyst didn't send anything
-                return False
-            else:
-                self.print(f"An error occurred: {e}")
-                self.conn_closed = True
-                return False
+            # no flows yet
+            return False, 'CYST didnt send flows yet.'
 
-        # When a recv returns 0 bytes, it means the other side has closed
-        # (or is in the process of closing) the connection.
-        if not flow:
-            self.print(f"CYST closed the connection.")
-            return False
         try:
             flow = json.loads(flow)
-            return flow
         except json.decoder.JSONDecodeError:
-            self.print(f'Invalid json line received from CYST. {flow}', 0, 1)
-            return False
+            return False, 'Invalid json line received from CYST.'
 
-    def send_length(self, msg: bytes):
-        """
-        takes care of sending the msg length with padding before the actual msg
-        """
-        # self.print("Sending evidence length to cyst.")
-
-        # send the length of the msg to cyst first
-        msg_len = str(len(msg)).encode()
-        # pad the length so it takes exactly 5 bytes, this is what cyst expects
-        msg_len += (5- len(msg_len) ) *b' '
-
-        self.cyst_conn.sendall(msg_len)
-
+        return flow, ''
 
     def send_evidence(self, evidence: str):
         """
         :param evidence: json serialized dict
         """
-        self.print(f"Sending evidence back to CYST.", 0, 1)
-        # add the slips_msg_type
-        evidence: dict = json.loads(evidence)
-
-
-        # this field helps cyst see what slips is sending, an evidence or a blocking request
-        evidence.update(
-            {'slips_msg_type': 'evidence'}
-        )
-        evidence = json.dumps(evidence)
-
-        # slips takes around 8s from the second it receives the flow to respond to cyst
-        evidence: bytes = evidence.encode()
-        self.send_length(evidence)
-        try:
-            self.cyst_conn.sendall(evidence)
-        except BrokenPipeError:
-            self.conn_closed = True
-            return
-
-    def send_blocking_request(self, ip):
-        """
-        for now when slips generates a blocking request, it blocks everything from and to this srcip
-        -p doesn't have to be present for slips to send blocking requests to cyst
-        the blocking module won't start and it's ok. the goal is to have cyst take care of the blocking not slips
-
-        """
-        #todo handle this slips_msg_type in cyst
-        blocking_request = {
-            'slips_msg_type': 'blocking',
-            'to_block_type': 'ip', # can be anything in the future i.e domain url etc
-            'value': ip
-        }
-        blocking_request: bytes = json.dumps(blocking_request).encode()
-        self.send_length(blocking_request)
-
-        try:
-            self.cyst_conn.sendall(blocking_request)
-        except BrokenPipeError:
-            self.conn_closed = True
-            return
+        # todo test how long will it take slips to respond to cyst
+        self.sock.sendall(evidence.encode())
 
 
 
@@ -184,65 +105,38 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-        # if slips is done, slips shouldn't expect more flows or send evidence
-        # it should terminate
-        __database__.publish('finished_modules', 'stop_slips')
         return
 
     def run(self):
+        utils.drop_root_privs()
+
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
 
-        # connect to cyst
-        self.sock, self.cyst_conn = self.initialize_unix_socket()
+        if not hasattr(self, 'sock'):
+            # can't connect to cyst. exit module
+            return
 
         while True:
             try:
-                #check for connection before sending
-                if self.conn_closed :
-                    self.print( 'Connection closed by CYST.', 0, 1)
-                    self.shutdown_gracefully()
-                    return True
-
                 # RECEIVE FLOWS FROM CYST
-                if flow := self.get_flow():
+                flow, error = self.get_flow()
+                if not flow:
+                    self.print(error, 0, 1)
+                else:
                     # send the flow to inputprocess so slips can process it normally
-                    __database__.publish('new_cyst_flow', json.dumps(flow))
+                    __database__.publish('new_cyst_flow', new_flow)
 
-                #check for connection before receiving
-                if self.conn_closed:
-                    self.print( 'Connection closed by CYST.', 0, 1)
-                    self.shutdown_gracefully()
-                    return True
 
                 # SEND EVIDENCE TO CYST
                 msg = __database__.get_message(self.c1)
-                if (msg and msg['data'] == 'stop_process'):
+                if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(msg, 'new_json_evidence'):
-                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new evidence . sending ... ")
                     evidence: str = msg['data']
                     self.send_evidence(evidence)
-
-                msg = __database__.get_message(self.c2)
-                if (msg and msg['data'] == 'stop_process'):
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(msg, 'new_alert'):
-                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
-                    alert_info: dict = json.loads(msg['data'])
-                    profileid = alert_info['profileid']
-                    twid = alert_info['twid']
-                    # alert_ID is {profileid}_{twid}_{ID}
-                    alert_ID = alert_info['alert_ID']
-                    evidence: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
-                    if evidence:
-                        self.send_alert(alert_ID, evidence)
-
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
