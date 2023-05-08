@@ -117,6 +117,14 @@ class ProcessManager:
             # last=False to move to the beginning of the dict
             plugins.move_to_end('Blocking', last=False)
 
+        # when cyst starts first, as soon as slips connects to cyst, cyst sends slips the flows,
+        # but the inputprocess didn't even start yet so the flows are lost
+        # to fix this, change the order of the CYST module(load it last)
+        if 'CYST' in plugins:
+            plugins = OrderedDict(plugins)
+            # last=False to move to the beginning of the dict
+            plugins.move_to_end('CYST', last=True)
+
         return plugins, failed_to_load_modules
 
     def load_modules(self):
