@@ -17,7 +17,6 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-from modules.CYST.cyst import cyst
 import multiprocessing
 from pathlib import Path
 from re import split
@@ -765,9 +764,6 @@ class InputProcess(multiprocessing.Process):
         if hasattr(self, 'zeek_pid'):
             __database__.publish('finished_modules', 'Zeek')
 
-        if hasattr(self, 'CYST'):
-            cyst.close_connection()
-
         __database__.publish('finished_modules', self.name)
 
     def run_zeek(self):
@@ -852,38 +848,37 @@ class InputProcess(multiprocessing.Process):
         Read flows sent by the CYST simulation framework from the unix socket
         Supported flows are of type zeek conn log
         """
-        # slips supports reading zeek  json conn.log only using CYST
+        # slips supports reading zeek json conn.log only using CYST
+        # this type is passed here by slips.py, so in the future
+        # to support more types, modify slips.py
         if self.line_type != 'zeek':
             return
 
-        connected, error = cyst.connect()
-        if not connected:
-            self.print(error)
-            return
-
-        # so we can close the connection later in shutdown_gracefully
-        self.CYST = True
-
+        cyst_channel =  __database__.subscribe('new_cyst_flow')
         while True:
-            # todo when to break?
-            flow, error = cyst.get_flow()
-            if not flow:
-                print(error)
+            # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
+            # todo when to break? cyst should send something like stop?
+
+            msg = __database__.get_message(cyst_channel)
+            if msg and msg['data'] == 'stop_process':
+                self.shutdown_gracefully()
+                return True
+
+            if utils.is_msg_intended_for(msg, 'new_cyst_flow'):
+                flow:str = msg["data"]
+                flow = json.loads(flow)
+
+                line_info = {
+                    'type': 'cyst',
+                    'line_type': self.line_type,
+                    'data' : flow
+                }
+                self.print(f'	> Sent Line: {line_info}', 0, 3)
+                self.profilerqueue.put(line_info)
+                self.lines += 1
+                self.print('Done reading 1 CYST flow.\n ', 0, 3)
+
                 time.sleep(2)
-                continue
-
-
-            line_info = {
-                'type': 'cyst',
-                'line_type': self.line_type,
-                'data' : flow
-            }
-            self.print(f'	> Sent Line: {line_info}', 0, 3)
-            self.profilerqueue.put(line_info)
-            self.lines += 1
-            self.print('Done reading 1 CYST flow.\n ', 0, 3)
-
-            time.sleep(2)
 
 
 
