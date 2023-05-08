@@ -1,0 +1,21 @@
+.w-20 {
+    width: 20%;
+}
+
+#slips_custom_navbar {
+    padding-top: 20px;
+    list-style-type: none;
+    font-size: 21px;
+}
+
+#slips_custom_navbar li a {
+    display: inline-block;
+    width: 100%;
+    padding: 10px;
+    text-decoration: none;
+    color: grey;
+}
+
+#slips_custom_navbar .nav-link.active {
+    color: #0d6efd !important;
+}

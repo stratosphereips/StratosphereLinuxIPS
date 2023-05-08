@@ -66,8 +66,8 @@ RUN apt update && apt install -y --no-install-recommends \
 COPY requirements.txt ${SLIPS_DIR}/
 
 # Upgrade pip3 and install slips requirements
-RUN pip3 install --upgrade pip
-RUN pip3 install -r ${SLIPS_DIR}/requirements.txt
+RUN pip3 install --no-cache-dir --upgrade pip
+RUN pip3 install --no-cache-dir -r ${SLIPS_DIR}/requirements.txt
 
 
 CMD redis-server --daemonize yes && /bin/bash

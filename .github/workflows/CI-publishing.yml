@@ -23,9 +23,22 @@ jobs:
           tag: ${{ env.SLIPS_VERSION }}
           message: ""
 
-  publish_ubuntu_image:
+  publish_image:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
+
+    strategy:
+      matrix:
+        include:
+          - type: ubuntu-image
+            name: ubuntu-image
+            image_name: slips
+            path: ./docker/ubuntu-image/Dockerfile
+
+          - type: macosm1-image
+            name: macosm1-image
+            image_name: slips_macos_m1
+            path: ./docker/macosm1-image/Dockerfile
 
     steps:
     - name: Get slips version
@@ -48,14 +61,14 @@ jobs:
         password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
 
 
-    # build slips from ubuntu dockerfile, but don't push
-    - name: Build our ubuntu image from dockerfile
+    # build slips from target dockerfile, but don't push
+    - name: Build our ${{ matrix.name }} from dockerfile
       id: docker_build_slips
       uses: docker/build-push-action@v2
       with:
         context: ./
-        file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        file: ${{ matrix.path }}
+        tags: stratosphereips/${{ matrix.image_name }}:latest, stratosphereips/${{ matrix.image_name }}:${{ env.SLIPS_VERSION }}
         push: true
 
   publish_P2P_docker_image:
@@ -113,7 +126,7 @@ jobs:
 
       - name: install doxygen and python
         run: |
-          sudo apt update 
+          sudo apt update
           sudo apt install python3 doxygen
 
       # deletes old docs, generates new ones, and adds all new files to git
@@ -152,30 +165,3 @@ jobs:
         file: ./docker/dependency-image/Dockerfile
         tags: stratosphereips/slips_dependencies:latest
         push: true
-
-
-  tweet_about_the_new_release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get slips version
-        run: |
-          VER=$(curl -s https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION)
-          VER2=$(echo $VER | sed 's/\.//g')
-          DATE=$(date +'%Y/%m/%d')
-          echo "SLIPS_VERSION=$VER" >> $GITHUB_ENV
-          echo "VER2=$VER2" >> $GITHUB_ENV
-          echo "DATE=$DATE" >> $GITHUB_ENV
-
-      - name: Tweet
-        uses: snow-actions/tweet@v1.4.0
-        with:
-          status: 'Today we published Slips ${{ env.SLIPS_VERSION }}! https://github.com/stratosphereips/StratosphereLinuxIPS Check out the new features: ${{ env.BLOG_URL }}'
-        env:
-          CONSUMER_API_KEY: ${{ secrets.CONSUMER_KEY }}
-          CONSUMER_API_SECRET_KEY: ${{ secrets.CONSUMER_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_KEY }}
-          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_SECRET }}
-          # same as SLIPS_VERSION without the v and the dots
-          BLOG_URL: 'www.stratosphereips.org/blog/${{ env.DATE }}/new-slips-version-${{ env.VER2 }}-is-here'
-
-

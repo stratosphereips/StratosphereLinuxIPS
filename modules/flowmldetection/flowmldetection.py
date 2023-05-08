@@ -54,25 +54,7 @@ class Module(Module, multiprocessing.Process):
         conf = ConfigParser()
         self.mode = conf.get_ml_mode()
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def train(self):
         """
@@ -81,13 +63,13 @@ class Module(Module, multiprocessing.Process):
         try:
             # Process the labels to have only Normal and Malware
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*ormal.*$)', 'Normal'
+                r'(^.*ormal.*$)', 'Normal', regex=True
             )
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*alware.*$)', 'Malware'
+                r'(^.*alware.*$)', 'Malware', regex=True
             )
             self.flows.label = self.flows.label.str.replace(
-                r'(^.*alicious.*$)', 'Malware'
+                r'(^.*alicious.*$)', 'Malware', regex=True
             )
 
             # Separate
@@ -103,7 +85,7 @@ class Module(Module, multiprocessing.Process):
                 self.clf.partial_fit(
                     X_flow, y_flow, classes=['Malware', 'Normal']
                 )
-            except Exception as ex:
+            except Exception:
                 self.print('Error while calling clf.train()')
                 self.print(traceback.print_exc())
 
@@ -123,7 +105,7 @@ class Module(Module, multiprocessing.Process):
             # Store the models on disk
             self.store_model()
 
-        except Exception as inst:
+        except Exception:
             self.print('Error in train()', 0 , 1)
             self.print(traceback.print_exc(), 0, 1)
 
@@ -158,10 +140,10 @@ class Module(Module, multiprocessing.Process):
 
             # Convert state to categorical
             dataset.state = dataset.state.str.replace(
-                r'(^.*NotEstablished.*$)', '0'
+                r'(^.*NotEstablished.*$)', '0', regex=True
             )
             dataset.state = dataset.state.str.replace(
-                r'(^.*Established.*$)', '1'
+                r'(^.*Established.*$)', '1', regex=True
             )
             dataset.state = dataset.state.astype('float64')
 
@@ -171,13 +153,21 @@ class Module(Module, multiprocessing.Process):
             # Also we dont store the Categorizer because the user can retrain
             # with its own data.
             dataset.proto = dataset.proto.str.lower()
-            dataset.proto = dataset.proto.str.replace(r'(^.*tcp.*$)', '0')
-            dataset.proto = dataset.proto.str.replace(r'(^.*udp.*$)', '1')
-            dataset.proto = dataset.proto.str.replace(r'(^.*icmp.*$)', '2')
             dataset.proto = dataset.proto.str.replace(
-                r'(^.*icmp-ipv6.*$)', '3'
-            )
-            dataset.proto = dataset.proto.str.replace(r'(^.*arp.*$)', '4')
+                r'(^.*tcp.*$)', '0', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*udp.*$)', '1', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*icmp.*$)', '2', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*icmp-ipv6.*$)', '3', regex=True
+                )
+            dataset.proto = dataset.proto.str.replace(
+                r'(^.*arp.*$)', '4', regex=True
+                )
             dataset.proto = dataset.proto.astype('float64')
             try:
                 # Convert dport to float
@@ -215,7 +205,7 @@ class Module(Module, multiprocessing.Process):
             except ValueError:
                 pass
             return dataset
-        except Exception as ex:
+        except Exception:
             # Stop the timer
             self.print('Error in process_features()')
             self.print(traceback.print_exc(),0,1)
@@ -294,7 +284,7 @@ class Module(Module, multiprocessing.Process):
 
             # Update the flow to the processed version
             self.flows = df_flows
-        except Exception as ex:
+        except Exception:
             # Stop the timer
             self.print('Error in process_flows()')
             self.print(traceback.print_exc(),0,1)
@@ -311,7 +301,7 @@ class Module(Module, multiprocessing.Process):
             dflow = self.process_features(raw_flow)
             # Update the flow to the processed version
             self.flow = dflow
-        except Exception as inst:
+        except Exception:
             # Stop the timer
             self.print('Error in process_flow()')
             self.print(traceback.print_exc(),0,1)
@@ -331,7 +321,7 @@ class Module(Module, multiprocessing.Process):
             X_flow = self.scaler.transform(X_flow)
             pred = self.clf.predict(X_flow)
             return pred
-        except Exception as inst:
+        except Exception:
             # Stop the timer
             self.print('Error in detect() X_flow:')
             self.print(X_flow)
@@ -341,29 +331,25 @@ class Module(Module, multiprocessing.Process):
         """
         Store the trained model on disk
         """
-        self.print(f'Storing the trained model and scaler on disk.', 0, 2)
-        f = open('./modules/flowmldetection/model.bin', 'wb')
-        data = pickle.dumps(self.clf)
-        f.write(data)
-        f.close()
-        g = open('./modules/flowmldetection/scaler.bin', 'wb')
-        data = pickle.dumps(self.scaler)
-        g.write(data)
-        g.close()
+        self.print('Storing the trained model and scaler on disk.', 0, 2)
+        with open('./modules/flowmldetection/model.bin', 'wb') as f:
+            data = pickle.dumps(self.clf)
+            f.write(data)
+        with open('./modules/flowmldetection/scaler.bin', 'wb') as g:
+            data = pickle.dumps(self.scaler)
+            g.write(data)
 
     def read_model(self):
         """
         Read the trained model from disk
         """
         try:
-            self.print(f'Reading the trained model from disk.', 0, 2)
-            f = open('./modules/flowmldetection/model.bin', 'rb')
-            self.clf = pickle.load(f)
-            f.close()
-            self.print(f'Reading the trained scaler from disk.', 0, 2)
-            g = open('./modules/flowmldetection/scaler.bin', 'rb')
-            self.scaler = pickle.load(g)
-            g.close()
+            self.print('Reading the trained model from disk.', 0, 2)
+            with open('./modules/flowmldetection/model.bin', 'rb') as f:
+                self.clf = pickle.load(f)
+            self.print('Reading the trained scaler from disk.', 0, 2)
+            with open('./modules/flowmldetection/scaler.bin', 'rb') as g:
+                self.scaler = pickle.load(g)
         except FileNotFoundError:
             # If there is no model, create one empty
             self.print('There was no model. Creating a new empty model.', 0, 2)
@@ -390,9 +376,7 @@ class Module(Module, multiprocessing.Process):
         threat_level = 'low'
         attacker_direction = 'flow'
         category = 'Anomaly.Traffic'
-        attacker = (
-            str(saddr) + ':' + str(sport) + '-' + str(daddr) + ':' + str(dport)
-        )
+        attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
         evidence_type = 'MaliciousFlow'
         ip_identification = __database__.getIPIdentification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
@@ -439,7 +423,7 @@ class Module(Module, multiprocessing.Process):
                         # Is the amount in the DB of labels enough to retrain?
                         # Use labeled flows
                         labels = __database__.get_labels()
-                        sum_labeled_flows = sum([i[1] for i in labels])
+                        sum_labeled_flows = sum(i[1] for i in labels)
                         if (
                             sum_labeled_flows >= self.minimum_lables_to_retrain
                             and sum_labeled_flows
@@ -503,7 +487,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 self.print('Error in run()')
                 self.print(traceback.format_exc(), 0, 1)
                 return True

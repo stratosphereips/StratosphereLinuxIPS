@@ -1,10 +1,10 @@
 <div class="row top-buffer flex-nowrap">
-  <div class="col-2" id="col_profiles">
+<div class="col-2 card" id="col_profiles">
     <div id="profiles">
       <div class="filter-wrapper" id="filter_profiles" style="margin: 10px">
         <input type="radio" class="filter-checkbox" name="filter" data-filter="" value="all" checked="checked" />
         All
-        <input type="radio" class="filter-checkbox" name="filter" data-filter="true" value="blocked" />
+        <input type="radio" class="filter-checkbox ms-3" name="filter" data-filter="true" value="blocked" />
         Blocked
       </div>
 
@@ -22,7 +22,9 @@
 
     <div class="row">
       <div class="col-auto">
-        <button type="button" class="btn btn-outline-primary btn-sm pull-right" id="profile-tw-hide-btn">&lt;</button>
+        <button type="button" class="btn btn-outline-primary btn-sm pull-right" id="profile-tw-hide-btn">
+          <i class="fa-solid fa-bars"></i>
+        </button>
       </div>
       <div class="col-auto px-2">
         <p class="fw-bold" id="active_profile_tw"></p>
@@ -33,15 +35,15 @@
       <table id="table_ipinfo" class="table">
         <thead>
           <tr>
-            <th>IP</th>
-            <th>Country</th>
-            <th>Reverse DNS</th>
-            <th>ASN</th>
-            <th>Threat Intel</th>
-            <th>URL score</th>
-            <th>Download score</th>
-            <th>Reference score</th>
-            <th>Communication score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Internet Protocol address">IP</th>
+            <th data-toggle="tooltip" data-placement="top" title="Country by Geolocation">Country</th>
+            <th data-toggle="tooltip" data-placement="top" title="Reverse Domain Name System">Reverse DNS</th>
+            <th data-toggle="tooltip" data-placement="top" title="Autonomous System Numbers">ASN</th>
+            <th data-toggle="tooltip" data-placement="top" title="Threat Intelligence">Threat Intel</th>
+            <th data-toggle="tooltip" data-placement="top" title="The higher the score the more malicious this IP is">URL score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of samples downloaded from this ip  by virustotal">Download score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of malicious files obtained from the same referrer as this ip by virustotal">Reference score</th>
+            <th data-toggle="tooltip" data-placement="top" title="Ratio of malicious files communicating with this IP by virustotal">Communication score</th>
           </tr>
         </thead>
       </table>
@@ -49,19 +51,19 @@
 
 
     <div class="row">
-      <nav class="navbar mt navbar-light bg-light">
+      <nav class="navbar mt navbar-light">
         <form class="form-inline">
           <div id="buttons">
-            <button class="btn btn-outline-primary active" type="button" id="button_timeline"
+            <button class="btn btn-outline-primary active" type="button" id="button_timeline" data-mdb-ripple-color="dark"
               data-tableid="timeline">Timeline</button>
-            <button class="btn btn-outline-warning" type="button" id="button_timeline_flows"
+            <button class="btn btn-outline-secondary" type="button" id="button_timeline_flows" data-mdb-ripple-color="dark"
               data-tableid="timeline_flows">Flows</button>
-            <button class="btn btn-outline-danger" type="button" id="button_outtuples"
+            <button class="btn btn-outline-success" type="button" id="button_outtuples" data-mdb-ripple-color="dark"
               data-tableid="outtuples">Outgoing</button>
-            <button class="btn btn-outline-success" type="button" id="button_intuples"
+            <button class="btn btn-outline-danger" type="button" id="button_intuples" data-mdb-ripple-color="dark"
               data-tableid="intuples">Incoming</button>
-            <button class="btn btn-outline-info" type="button" id="button_alerts" data-tableid="alerts">Alerts</button>
-            <button class="btn btn-outline-info" type="button" id="button_evidence"
+            <button class="btn btn-outline-warning" type="button" id="button_alerts" data-mdb-ripple-color="dark" data-tableid="alerts">Alerts</button>
+            <button class="btn btn-outline-info" type="button" id="button_evidence" data-mdb-ripple-color="dark"
               data-tableid="evidence">Evidence</button>
           </div>
         </form>

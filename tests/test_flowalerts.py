@@ -1,4 +1,5 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
+from slips_files.core.flows.zeek import Conn
 from ..modules.flowalerts.flowalerts import Module
 import pytest
 import binascii
@@ -39,16 +40,20 @@ def create_flowalerts_instance(outputQueue):
 def test_check_long_connection(database, outputQueue, dur, expected_label):
     uid = get_random_uid()
     flowalerts = create_flowalerts_instance(outputQueue)
-    assert database.add_flow(
-        profileid=profileid,
-        twid=twid,
-        stime=timestamp,
-        dur=dur,
-        saddr=saddr,
-        daddr=daddr,
-        uid=uid,
-        flow_type='conn',
-    ) == True
+
+    flow = Conn(
+        timestamp,
+        uid,
+        saddr,
+        daddr,
+        dur,
+        'tcp',
+        '',
+        '80',
+        '80',
+        1,2,5,6,7,'','','',
+    )
+    assert database.add_flow(flow, profileid, twid) is True
     # sets the label to normal or malicious based on the flow durd
     flowalerts.check_long_connection(
         dur, daddr, saddr, profileid, twid, uid, timestamp
@@ -70,16 +75,12 @@ def test_port_belongs_to_an_org(database, outputQueue):
     portproto = '65509/tcp'
     database.set_organization_of_port('apple', '', portproto)
     assert (
-            flowalerts.port_belongs_to_an_org(
-                daddr, portproto, profileid
-            ) == True
+            flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is True
     )
     # doesn't belong to any org
     portproto = '78965/tcp'
     assert (
-            flowalerts.port_belongs_to_an_org(
-                daddr, portproto, profileid
-            ) == False
+            flowalerts.port_belongs_to_an_org(daddr, portproto, profileid) is False
     )
 
 
@@ -88,10 +89,7 @@ def test_check_unknown_port(outputQueue, database):
     database.set_port_info('23/udp', 'telnet')
     # now we have info 23 udp
     assert (
-        flowalerts.check_unknown_port(
-            '23', 'udp', daddr, profileid, twid, uid, timestamp, 'Established'
-        )
-        == False
+        flowalerts.check_unknown_port('23', 'udp', daddr, profileid, twid, uid, timestamp, 'Established') is False
     )
 
 
@@ -110,7 +108,7 @@ def test_check_if_resolution_was_made_by_different_version(
     res = flowalerts.check_if_resolution_was_made_by_different_version(
         profileid, daddr
     )
-    assert res == True
+    assert res is True
 
 
 def test_check_dns_arpa_scan(outputQueue, database):
@@ -121,7 +119,7 @@ def test_check_dns_arpa_scan(outputQueue, database):
             f'{ts}example.in-addr.arpa', timestamp + ts, profileid, twid, uid
         )
 
-    assert is_arpa_scan == True
+    assert is_arpa_scan is True
 
 
 # check_multiple_ssh_clients is tested in test_dataset
@@ -134,7 +132,7 @@ def test_detect_DGA(outputQueue, database):
         dga_detected = flowalerts.detect_DGA(
             rcode_name, f'example{i}.com', timestamp, daddr, profileid, twid, uid
         )
-    assert dga_detected == True
+    assert dga_detected is True
 
 
 def test_detect_young_domains(outputQueue, database):
@@ -144,8 +142,5 @@ def test_detect_young_domains(outputQueue, database):
     age = 50
     database.setInfoForDomains(domain, {'Age': age})
     assert (
-        flowalerts.detect_young_domains(
-            domain, timestamp, profileid, twid, uid
-        )
-        == True
+        flowalerts.detect_young_domains(domain, timestamp, profileid, twid, uid) is True
     )

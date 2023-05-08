@@ -14,8 +14,6 @@ jobs:
     # 2 hours timeout
     timeout-minutes: 7200
 
-    env:
-      SLIPS_VERSION: v1.0.2
 
     steps:
     - uses: actions/checkout@v3
@@ -66,32 +64,50 @@ jobs:
     - name: Config file tests
       run: python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
 
-     #Reaching this step means all unit tests passed out side of docker
+    - name: Upload Artifact
+      # run this job whether the above jobs failed or passed
+      if: success() || failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test_slips_locally-integration-tests-output
+        path: |
+          output/integration_tests
 
   test_slips_in_docker:
     # runs the tests in a docker(built by this job) on stop of a GH VM
     runs-on: ubuntu-20.04
     # 2 hours timeout
     timeout-minutes: 7200
-    env:
-      SLIPS_VERSION: v1.0.2
+
+    strategy:
+      matrix:
+        include:
+          - type: ubuntu-image
+            name: ubuntu-image
+            image_name: slips
+            path: ./docker/ubuntu-image/Dockerfile
+#
+#         #TODO our unit tests dont support macos yet
+#          - type: macosm1-image
+#            name: macosm1-image
+#            image_name: slips_macos_m1
+#            path: ./docker/macosm1-image/Dockerfile
 
     steps:
-
     # clone slips and checkout branch
     # By default it checks out only one commit
     - uses: actions/checkout@v3
       with:
         ref: 'develop'
 
-    # build slips from ubuntu dockerfile, but don't push
-    - name: Build our ubuntu image from dockerfile
+    # build slips from target dockerfile, but don't push
+    - name: Build our ${{ matrix.name }} from dockerfile
       id: docker_build_slips
       uses: docker/build-push-action@v2
       with:
         context: ./
-        file: ./docker/ubuntu-image/Dockerfile
-        tags: stratosphereips/slips:latest, stratosphereips/slips:${{ env.SLIPS_VERSION }}
+        file: ${{ matrix.path }}
+        tags: stratosphereips/${{ matrix.image_name }}:latest
         push: false
 
 
@@ -105,13 +121,61 @@ jobs:
         run: |
           git reset --hard
           git pull & git checkout origin/develop
-          python3 -m pip install -r requirements.txt 
           redis-server --daemonize yes
-          git show-branch --no-name HEAD
           python3  -m pytest tests/ --ignore="tests/test_daemon.py" --ignore="tests/test_database.py" --ignore="tests/integration_tests" -n 7 -p no:warnings -vv -s
+
+    - name: Run database tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
           python3  -m pytest tests/test_database.py -p no:warnings -vv
+
+    - name: Run daemon tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
           python3  -m pytest tests/test_daemon.py -p no:warnings -vv
-          printf "0" | ./slips.py -k
+
+    - name: Run integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
           python3 -m pytest -s tests/integration_tests/test_dataset.py -n 4 -p no:warnings -vv
+
+    - name: Run config file integration tests inside docker
+      uses: addnab/docker-run-action@v3
+      with:
+        image: stratosphereips/slips:latest
+        # mount the host's output/ dir to docker's output/ dir, the goal is to access integration
+        # tests output in docker from the host to upload it later
+        options: -v ${{ github.workspace }}/output:/StratosphereLinuxIPS/output
+        run: |
+          git reset --hard
+          git pull & git checkout origin/develop
+          redis-server --daemonize yes
           python3 -m pytest -s tests/integration_tests/test_config_files.py -n 2 -p no:warnings -vv
+
+    - name: Upload Artifact
+      # run this job whether the above jobs failed or passed
+      if: success() || failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test_slips_in_docker-integration-tests-output
+        path: |
+          ${{ github.workspace }}/output/integration_tests
 

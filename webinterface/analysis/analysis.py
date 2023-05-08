@@ -1,10 +1,9 @@
 from flask import Blueprint
-from flask import Flask, render_template, request
+from flask import render_template
 import json
 from collections import defaultdict
 from datetime import datetime
 from database.database import __database__
-from database.signals import message_sent
 
 analysis = Blueprint('analysis', __name__, static_folder='static', static_url_path='/analysis/static',
                      template_folder='templates')
@@ -20,7 +19,7 @@ def ts_to_date(ts, seconds=False):
 
 
 def get_all_tw_with_ts(profileid):
-    tws = __database__.db.zrange("tws" + profileid, 0, -1, withscores=True)
+    tws = __database__.db.zrange(f"tws{profileid}", 0, -1, withscores=True)
     dict_tws = defaultdict(dict)
 
     for tw_tuple in tws:
@@ -42,9 +41,7 @@ def get_ip_info(ip):
     data = {'geocountry': "-", 'asnorg': "-", 'reverse_dns': "-", "threat_intel": "-", "url": "-", "down_file": "-",
             "ref_file": "-",
             "com_file": "-"}
-    ip_info = __database__.cachedb.hget('IPsInfo', ip)
-
-    if ip_info:
+    if ip_info := __database__.cachedb.hget('IPsInfo', ip):
         ip_info = json.loads(ip_info)
         # Hardcoded decapsulation due to the complexity of data in side. Ex: {"asn":{"asnorg": "CESNET", "timestamp": 0.001}}
 
@@ -100,26 +97,22 @@ def set_profile_tws():
     :return: (profile, [tw, blocked], blocked)
     '''
 
-    profiles_dict = dict()
-    data = []
-
+    profiles_dict = {}
     # Fetch profiles
     profiles = __database__.db.smembers('profiles')
     for profileid in profiles:
         profile_word, profile_ip = profileid.split("_")
         profiles_dict[profile_ip] = False
 
-    # Fetch blocked profiles
-    blockedProfileTWs = __database__.db.hgetall('alerts')
-    if blockedProfileTWs:
+    if blockedProfileTWs := __database__.db.hgetall('alerts'):
         for blocked in blockedProfileTWs.keys():
             profile_word, blocked_ip = blocked.split("_")
             profiles_dict[blocked_ip] = True
 
-    # Set all profiles
-    for profile_ip, blocked_state in profiles_dict.items():
-        data.append({"profile": profile_ip, "blocked": blocked_state})
-
+    data = [
+        {"profile": profile_ip, "blocked": blocked_state}
+        for profile_ip, blocked_state in profiles_dict.items()
+    ]
     return {
         'data': data
     }
@@ -148,22 +141,23 @@ def set_tws(profileid):
     :return:
     '''
 
-    data = []
-
     # Fetch all profile TWs
-    tws = get_all_tw_with_ts("profile_" + profileid)
+    tws = get_all_tw_with_ts(f"profile_{profileid}")
 
-    # Fetch blocked tws
-    blockedTWs = __database__.db.hget('alerts', "profile_" + profileid)
-    if blockedTWs:
+    if blockedTWs := __database__.db.hget('alerts', f"profile_{profileid}"):
         blockedTWs = json.loads(blockedTWs)
 
         for tw in blockedTWs.keys():
             tws[tw]['blocked'] = True
 
-    for tw_key, tw_value in tws.items():
-        data.append({"tw": tw_value["tw"], "name": tw_value["name"], "blocked": tw_value["blocked"]})
-
+    data = [
+        {
+            "tw": tw_value["tw"],
+            "name": tw_value["name"],
+            "blocked": tw_value["blocked"],
+        }
+        for tw_key, tw_value in tws.items()
+    ]
     return {
         "data": data
     }
@@ -178,15 +172,15 @@ def set_intuples(profile, timewindow):
     :return: (tuple, string, ip_info)
     """
     data = []
-    intuples = __database__.db.hget("profile_" + profile + '_' + timewindow, 'InTuples')
-    if intuples:
+    if intuples := __database__.db.hget(
+        f"profile_{profile}_{timewindow}", 'InTuples'
+    ):
         intuples = json.loads(intuples)
         for key, value in intuples.items():
             ip, port, protocol = key.split("-")
             ip_info = get_ip_info(ip)
 
-            outtuple_dict = dict()
-            outtuple_dict.update({'tuple': key, 'string': value[0]})
+            outtuple_dict = dict({'tuple': key, 'string': value[0]})
             outtuple_dict.update(ip_info)
             data.append(outtuple_dict)
 
@@ -204,15 +198,15 @@ def set_outtuples(profile, timewindow):
     """
 
     data = []
-    outtuples = __database__.db.hget("profile_" + profile + '_' + timewindow, 'OutTuples')
-    if outtuples:
+    if outtuples := __database__.db.hget(
+        f"profile_{profile}_{timewindow}", 'OutTuples'
+    ):
         outtuples = json.loads(outtuples)
 
         for key, value in outtuples.items():
             ip, port, protocol = key.split("-")
             ip_info = get_ip_info(ip)
-            outtuple_dict = dict()
-            outtuple_dict.update({'tuple': key, 'string': value[0]})
+            outtuple_dict = dict({'tuple': key, 'string': value[0]})
             outtuple_dict.update(ip_info)
             data.append(outtuple_dict)
 
@@ -228,8 +222,9 @@ def set_timeline_flows(profile, timewindow):
     :return: list of timeline flows as set initially in database
     """
     data = []
-    timeline_flows = __database__.db.hgetall("profile_" + profile + "_" + timewindow + "_flows")
-    if timeline_flows:
+    if timeline_flows := __database__.db.hgetall(
+        f"profile_{profile}_{timewindow}_flows"
+    ):
         for key, value in timeline_flows.items():
             value = json.loads(value)
 
@@ -250,7 +245,6 @@ def set_timeline_flows(profile, timewindow):
 
 
 @analysis.route("/timeline/<profile>/<timewindow>")
-# @analysis.route("/timeline/<profile>/<timewindow>/<search_filter>")
 def set_timeline(profile, timewindow,):
     """
     Set timeline data of a chosen profile and timewindow
@@ -258,8 +252,9 @@ def set_timeline(profile, timewindow,):
     """
     data = []
 
-    timeline = __database__.db.zrange("profile_" + profile + "_" + timewindow + "_timeline", 0, -1)
-    if timeline:
+    if timeline := __database__.db.zrange(
+        f"profile_{profile}_{timewindow}_timeline", 0, -1
+    ):
         for flow in timeline:
             flow = json.loads(flow)
 
@@ -292,14 +287,12 @@ def set_alerts(profile, timewindow):
     Set alerts for chosen profile and timewindow
     """
     data = []
-    profile = "profile_" + profile
-    alerts = __database__.db.hget("alerts", profile)
-
-    if alerts:
+    profile = f"profile_{profile}"
+    if alerts := __database__.db.hget("alerts", profile):
         alerts = json.loads(alerts)
-        alerts_tw = alerts.get(timewindow, dict())
+        alerts_tw = alerts.get(timewindow, {})
         tws = get_all_tw_with_ts(profile)
-        evidences = __database__.db.hget("evidence" + profile, timewindow)
+        evidences = __database__.db.hget(f"evidence{profile}", timewindow)
         if evidences:
             evidences = json.loads(evidences)
 
@@ -325,9 +318,7 @@ def set_evidence(profile, timewindow, alert_id):
     """
 
     data = []
-    alerts = __database__.db.hget("alerts", "profile_" + profile)
-
-    if alerts:
+    if alerts := __database__.db.hget("alerts", f"profile_{profile}"):
         alerts = json.loads(alerts)
         alerts_tw = alerts[timewindow]
         evidence_ID_list = alerts_tw[alert_id]
@@ -351,8 +342,9 @@ def set_evidence_general(profile, timewindow):
     :return: {"data": data} where data is a list of evidences
     """
     data = []
-    evidence = __database__.db.hget("evidence"+"profile_" + profile, timewindow)
-    if evidence:
+    if evidence := __database__.db.hget(
+        "evidence" + "profile_" + profile, timewindow
+    ):
         evidence = json.loads(evidence)
         for id, content in evidence.items():
             content = json.loads(content)

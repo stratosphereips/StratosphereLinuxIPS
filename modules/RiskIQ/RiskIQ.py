@@ -7,7 +7,6 @@ from slips_files.common.slips_utils import utils
 import traceback
 
 # Your imports
-import os
 import json
 import sys
 import requests
@@ -43,25 +42,7 @@ class Module(Module, multiprocessing.Process):
             self.riskiq_email = None
             self.riskiq_key = None
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
 
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def get_passive_dns(self, ip) -> list:
         """
@@ -72,7 +53,7 @@ class Module(Module, multiprocessing.Process):
                 'query': ip
             }
             response = requests.get(
-                f'https://api.riskiq.net/pt/v2/dns/passive',
+                'https://api.riskiq.net/pt/v2/dns/passive',
                 params=params,
                 timeout=20,
                 verify=False,
@@ -140,7 +121,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

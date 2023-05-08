@@ -30,25 +30,6 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('export_evidence')
         self.stop_module = False
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
         """Read importing/exporting preferences from slips.conf"""
@@ -172,7 +153,7 @@ class Module(Module, multiprocessing.Process):
 
         # [2] Upload to warden server
         self.print(
-            f'Uploading 1 event to warden server.', 2, 0
+            'Uploading 1 event to warden server.', 2, 0
         )
         # create a thread for sending alerts to warden server
         # and don't stop this module until the thread is done
@@ -229,7 +210,7 @@ class Module(Module, multiprocessing.Process):
         )
 
         if len(events) == 0:
-            self.print(f'Error getting event from warden server.')
+            self.print('Error getting event from warden server.')
             return False
 
         # now that we received from warden server,
@@ -345,7 +326,7 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

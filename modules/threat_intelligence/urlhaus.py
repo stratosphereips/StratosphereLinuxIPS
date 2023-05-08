@@ -30,12 +30,11 @@ class URLhaus():
         ioc_type = next(iter(to_lookup))
         uri = 'url' if ioc_type=='url' else 'payload'
         try:
-            urlhaus_api_response = self.urlhaus_session.post(
+            return self.urlhaus_session.post(
                 f'{URLHAUS_BASE_URL}/{uri}/',
                 to_lookup,
-                headers=self.urlhaus_session.headers
+                headers=self.urlhaus_session.headers,
             )
-            return urlhaus_api_response
         except requests.exceptions.ConnectionError:
             self.create_urlhaus_session()
 
@@ -44,9 +43,9 @@ class URLhaus():
         threat = response['threat']
         url_status = response['url_status']
         description = f"Connecting to a malicious URL {url}. Detected by: URLhaus " \
-                      f"threat: {threat}, URL status: {url_status}"
+                          f"threat: {threat}, URL status: {url_status}"
         try:
-            tags = " ".join(tag for tag in response['tags'])
+            tags = " ".join(response['tags'])
             description += f', tags: {tags}'
         except TypeError:
             # no tags available
@@ -60,13 +59,12 @@ class URLhaus():
             signature = payloads.get("signature", "")
 
             description += f', the file hosted in this url is of type: {file_type},' \
-                           f' filename: {file_name} md5: {md5} signature: {signature}. '
+                               f' filename: {file_name} md5: {md5} signature: {signature}. '
 
             # if we dont have a percentage repprted by vt, we will set out own
             # tl in set_evidence_malicious_url() function
             threat_level = False
-            virustotal_info = payloads.get("virustotal", "")
-            if virustotal_info:
+            if virustotal_info := payloads.get("virustotal", ""):
                 virustotal_percent = virustotal_info.get("percent", "")
                 threat_level = virustotal_percent
                 # virustotal_result = virustotal_info.get("result", "")
@@ -78,7 +76,7 @@ class URLhaus():
             pass
 
 
-        info = {
+        return {
             # get all the blacklists where this ioc is listed
             'source': 'URLhaus',
             'url': url,
@@ -86,35 +84,24 @@ class URLhaus():
             'threat_level': threat_level,
             'tags': tags,
         }
-        return info
 
     def parse_urlhaus_md5_response(self, response, md5):
         file_type = response.get("file_type", "")
         file_name = response.get("filename", "")
         # file_size = response.get("file_size", "")
         tags = response.get("signature", "")
-        # urls is a list of urls hosting this file
-        # urls: list= response.get("urls")
-        virustotal_info: dict = response.get("virustotal", "")
-
-        threat_level = False
-        if virustotal_info:
-            virustotal_percent = virustotal_info.get("percent", "")
-            threat_level = virustotal_percent
-            # virustotal_result = virustotal_info.get("result", "")
-            # virustotal_result.replace('\',''')
-
-
-        info = {
+        if virustotal_info := response.get("virustotal", ""):
+            threat_level = virustotal_info.get("percent", "")
+        else:
+            threat_level = False
+        return {
             # get all the blacklists where this ioc is listed
             'blacklist': 'URLhaus',
             'threat_level': threat_level,
             'tags': tags,
             'file_type': file_type,
             'file_name': file_name,
-
         }
-        return info
 
     def urlhaus_lookup(self, ioc, type_of_ioc: str):
         """
@@ -137,34 +124,31 @@ class URLhaus():
 
         response: dict = json.loads(urlhaus_api_response.text)
 
-        if(
-            response['query_status'] == 'no_results'
-            or response['query_status'] == 'invalid_url'
-        ):
+        if response['query_status'] in ['no_results', 'invalid_url']:
             # no response or empty response
             return
 
-        if type_of_ioc == 'url':
-            info = self.parse_urlhaus_url_response(response, ioc)
-            return info
-
-        elif type_of_ioc == 'md5_hash':
-            info = self.parse_urlhaus_md5_response(response, ioc)
-            return info
+        if type_of_ioc == 'md5_hash':
+            return self.parse_urlhaus_md5_response(response, ioc)
+        elif type_of_ioc == 'url':
+            return self.parse_urlhaus_url_response(response, ioc)
 
     def set_evidence_malicious_hash(self, file_info: dict):
         attacker_direction = 'md5'
         category = 'Malware'
         evidence_type = 'MaliciousDownloadedFile'
-        attacker = file_info["md5"]
+
         threat_level = file_info["threat_level"]
-        daddr = file_info["daddr"]
+        flow = file_info['flow']
+        attacker = flow["md5"]
+        daddr = flow["daddr"]
+
         ip_identification = __database__.getIPIdentification(daddr)
         # we have more info about the downloaded file
         # so we need a more detailed description
-        description = f"Malicious downloaded file: {file_info['md5']}. " \
-                      f"size: {file_info['size']}" \
-                      f"from IP: {file_info['daddr']} {ip_identification}." \
+        description = f"Malicious downloaded file: {flow['md5']}. " \
+                      f"size: {flow['size']}" \
+                      f"from IP: {flow['daddr']} {ip_identification}." \
                       f"file name: {file_info['file_name']} " \
                       f"file type: {file_info['file_type']} " \
                       f"tags: {file_info['tags']}. by URLhaus." \
@@ -178,9 +162,17 @@ class URLhaus():
 
         confidence = 0.7
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
-                                 uid=file_info["uid"])
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 flow["starttime"],
+                                 category,
+                                 profileid=file_info["profileid"],
+                                 twid=file_info["twid"],
+                                 uid=flow["uid"])
 
     def set_evidence_malicious_url(
             self,

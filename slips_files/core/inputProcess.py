@@ -19,6 +19,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 import multiprocessing
 from pathlib import Path
+from re import split
 import sys
 import os
 from datetime import datetime
@@ -65,7 +66,7 @@ class InputProcess(multiprocessing.Process):
 
         self.packet_filter = False
         if cli_packet_filter:
-            self.packet_filter = "'" + cli_packet_filter + "'"
+            self.packet_filter = f"'{cli_packet_filter}'"
 
         self.read_configuration()
         self.event_observer = None
@@ -133,9 +134,7 @@ class InputProcess(multiprocessing.Process):
         self.profilerqueue.put('stop')
         now = utils.convert_format(datetime.now(), utils.alerts_format)
         self.outputqueue.put(
-            '02|input|[In] No more input. Stopping input process. Sent {} lines ({}).\n'.format(
-                self.lines, now
-            )
+            f'02|input|[In] No more input. Stopping input process. Sent {self.lines} lines ({now}).\n'
         )
         self.outputqueue.close()
         self.profilerqueue.close()
@@ -239,13 +238,16 @@ class InputProcess(multiprocessing.Process):
         if self.is_zeek_tabs:
             # It is not JSON format. It is tab format line.
             nline = zeek_line
-            timestamp = nline.split('\t')[0]
+            nline_list = nline.split('\t') if '\t' in nline else split(r'\s{2,}', nline)
+            timestamp = nline_list[0]
         else:
-            nline = json.loads(zeek_line)
+            try:
+                nline = json.loads(zeek_line)
+            except json.decoder.JSONDecodeError:
+                return False, False
             # In some Zeek files there may not be a ts field
             # Like in some weird smb files
             timestamp = nline.get('ts', 0)
-
         try:
             timestamp = float(timestamp)
         except ValueError:
@@ -493,7 +495,7 @@ class InputProcess(multiprocessing.Process):
                 try:
                     line = json.loads(line)
                 except json.decoder.JSONDecodeError:
-                    self.print(f'Invalid json line')
+                    self.print('Invalid json line')
                     continue
             line_info = {
                 'type': 'stdin',
@@ -518,12 +520,7 @@ class InputProcess(multiprocessing.Process):
             with open(self.given_path) as file_stream:
                 # read first line to determine the type of line, tab or comma separated
                 t_line = file_stream.readline()
-                if '\t' in t_line:
-                    # this is the header line
-                    type_ = 'argus-tabs'
-                else:
-                    type_ = 'argus'
-
+                type_ = 'argus-tabs' if '\t' in t_line else 'argus'
                 line = {
                     'type': type_,
                     'data': t_line
@@ -688,6 +685,9 @@ class InputProcess(multiprocessing.Process):
             self.print(
                 f'We read everything. No more input. Stopping input process. Sent {lines} lines'
             )
+            connlog_path = os.path.join(self.zeek_folder, 'conn.log')
+
+            self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)
 
             self.stop_observer()
             return True
@@ -838,11 +838,13 @@ class InputProcess(multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        # this thread should be started from run() to get the PID of inputprocess and have shared variables
-        # if it started from __init__() it will have the PID of slips.py therefore,
-        # any changes made to the shared variables in inputprocess will not appear in the thread
-        running_on_interface = '-i' in sys.argv or __database__.is_growing_zeek_dir()
-        if running_on_interface:
+        if (
+            running_on_interface := '-i' in sys.argv
+            or __database__.is_growing_zeek_dir()
+        ):
+            # this thread should be started from run() to get the PID of inputprocess and have shared variables
+            # if it started from __init__() it will have the PID of slips.py therefore,
+            # any changes made to the shared variables in inputprocess will not appear in the thread
             # delete old zeek-date.log files
             self.remover_thread.start()
 

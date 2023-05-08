@@ -2,7 +2,6 @@ import pytest
 from slips_files.core.inputProcess import InputProcess
 import shutil
 import os
-import random
 
 
 zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
@@ -67,7 +66,7 @@ def test_handle_pcap_and_interface(
     )
     inputProcess.zeek_pid = 'False'
     inputProcess.is_zeek_tabs = True
-    assert inputProcess.handle_pcap_and_interface() == True
+    assert inputProcess.handle_pcap_and_interface() is True
 
 
 @pytest.mark.parametrize(
@@ -83,7 +82,7 @@ def test_read_zeek_folder(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.read_zeek_folder() == True
+    assert inputProcess.read_zeek_folder() is True
 
 @pytest.mark.parametrize(
     'input_type,input_information,expected_output',
@@ -112,7 +111,7 @@ def test_handle_nfdump(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_nfdump() == True
+    assert inputProcess.handle_nfdump() is True
 
 
 @pytest.mark.skipif(
@@ -133,7 +132,7 @@ def test_handle_binetflow(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_binetflow() == True
+    assert inputProcess.handle_binetflow() is True
 
 
 @pytest.mark.parametrize(
@@ -146,4 +145,4 @@ def test_handle_suricata(
     inputProcess = create_inputProcess_instance(
         outputQueue, profilerQueue, input_information, input_type
     )
-    assert inputProcess.handle_suricata() == True
+    assert inputProcess.handle_suricata() is True

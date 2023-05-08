@@ -186,25 +186,6 @@ class Module(Module, multiprocessing.Process):
                 except KeyboardInterrupt:
                     return False
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     # GeoInfo functions
     def get_geocountry(self, ip) -> dict:
@@ -308,8 +289,7 @@ class Module(Module, multiprocessing.Process):
 
             if oui in line:
                 line = json.loads(line)
-                vendor = line['vendorName']
-                return vendor
+                return line['vendorName']
 
     def get_vendor(self, mac_addr: str, host_name: str, profileid: str):
         """
@@ -376,7 +356,7 @@ class Module(Module, multiprocessing.Process):
                 # get registration date
                 try:
                     creation_date = whois.query(domain).creation_date
-                except Exception as ex:
+                except Exception:
                     return False
 
         if not creation_date:
@@ -444,8 +424,7 @@ class Module(Module, multiprocessing.Process):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        gw_MAC = __database__.get_mac_addr_from_profile(f'profile_{gw_ip}')
-        if gw_MAC:
+        if gw_MAC := __database__.get_mac_addr_from_profile(f'profile_{gw_ip}'):
             __database__.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
 
@@ -477,7 +456,7 @@ class Module(Module, multiprocessing.Process):
                     mac, host_name, profileid = self.pending_mac_queries.get(timeout=0.5)
                     self.get_vendor(mac, host_name, profileid)
 
-                except Exception as ex:
+                except Exception:
                     # queue is empty
                     return
 
@@ -590,7 +569,7 @@ class Module(Module, multiprocessing.Process):
                 self.shutdown_gracefully()
                 return True
 
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

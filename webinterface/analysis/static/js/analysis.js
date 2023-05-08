@@ -8,7 +8,7 @@ let active_tw_id = "";
 let active_analysisTable = 'timeline';
 let last_analysisTable = 'timeline';
 
-// Global var to track shown child rows
+// Global vars to track shown child rows
 let childRowsProfile = null;
 let childRowsAnalysis = null;
 let profilesScrollingContainer;
@@ -138,7 +138,7 @@ function initHideProfileTWButtonListener() {
         if (document.getElementById('profiles').style.display === "none") {
             document.getElementById('profiles').style.display = "block";
             document.getElementById('filter_profiles').style.display = "block";
-            document.getElementById('profile-tw-hide-btn').innerHTML = "<";
+            // document.getElementById('profile-tw-hide-btn').innerHTML = "<";
 
             $('#col_profiles').removeClass('col-0');
             $('#col_profiles').addClass('col-2');
@@ -148,7 +148,7 @@ function initHideProfileTWButtonListener() {
         } else {
             document.getElementById('profiles').style.display = "none";
             document.getElementById('filter_profiles').style.display = "none";
-            document.getElementById('profile-tw-hide-btn').innerHTML = ">";
+            // document.getElementById('profile-tw-hide-btn').innerHTML = ">";
             
             $('#col_profiles').removeClass('col-2');
             $('#col_profiles').addClass('col-0');
@@ -348,12 +348,13 @@ function initAllAnalysisTables() {
         });
         // init datatables
         $("#table_" + key).DataTable(value);
-
         // custom search
         $('[type=search]').each(function () {
-
             $(this).attr("placeholder", "Search...");
-            $(this).before('<span class="fa fa-search"></span>');
+            // $(this).attr("size", 30); // hardcoded 
+
+            // to display search icon
+            // $(this).before('<span class="fa fa-search"></span>');
         });
     }
 
@@ -397,4 +398,7 @@ $(document).ready(function () {
     initAnalysisPage();
     document.onkeydown = hotkeyPress;
 });
+
+export { update };
+
 

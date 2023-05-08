@@ -53,7 +53,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             time.sleep(120)
             try:
                 flow_info = self.circllu_queue.get(timeout=0.5)
-            except Exception as ex:
+            except Exception:
                 # queue is empty wait extra 2 min
                 continue
 
@@ -270,30 +270,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
     def is_valid_threat_level(self, threat_level):
-        if threat_level in utils.threat_levels:
-            return True
-        return False
+        return threat_level in utils.threat_levels
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """
@@ -587,7 +565,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         try:
             spamhaus_result = dns.resolver.resolve(spamhaus_dns_hostname, 'A')
-        except Exception as ex:
+        except Exception:
             spamhaus_result = 0
 
         if not spamhaus_result:
@@ -611,13 +589,12 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         source_dataset += 'spamhaus'
 
-        ip_info = {
+        return {
             'source': source_dataset,
             'description': description,
             'therat_level': 'medium',
-            'tags': 'spam'
+            'tags': 'spam',
         }
-        return ip_info
 
     def is_ignored_domain(self, domain):
         if not domain:
@@ -635,30 +612,38 @@ class Module(Module, multiprocessing.Process, URLhaus):
                                     file_info: dict
                                     ):
         """
-        :param file_info: dict with uid, ts, profileid, twid, md5 and confidence of file
+        :param file_info: dict with flow, profileid, twid, and confidence of file
         """
         attacker_direction = 'md5'
         category = 'Malware'
         evidence_type = 'MaliciousDownloadedFile'
-        attacker = file_info["md5"]
+        attacker = file_info['flow']["md5"]
         threat_level = file_info["threat_level"]
-        daddr = file_info["daddr"]
+        daddr = file_info['flow']["daddr"]
         ip_identification = __database__.getIPIdentification(daddr)
         confidence = file_info["confidence"]
         threat_level = utils.threat_level_to_string(threat_level)
 
         description = (
             f'Malicious downloaded file {attacker}. '
-            f'size: {file_info["size"]} '
+            f'size: {file_info["flow"]["size"]} '
             f'from IP: {daddr}. Detected by: {file_info["blacklist"]}. '
             f'Score: {confidence}. {ip_identification}'
         )
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 file_info["ts"], category, profileid=file_info["profileid"], twid=file_info["twid"],
-                                 uid=file_info["uid"])
+        __database__.setEvidence(evidence_type,
+                                 attacker_direction,
+                                 attacker,
+                                 threat_level,
+                                 confidence,
+                                 description,
+                                 file_info['flow']["starttime"],
+                                 category,
+                                 profileid=file_info["profileid"],
+                                 twid=file_info["twid"],
+                                 uid=file_info['flow']["uid"])
 
-    def circl_lu(self, flow_info):
+    def circl_lu(self, flow_info: dict):
         """
         Supports lookup of MD5 hashes on Circl.lu
         """
@@ -687,14 +672,14 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 confidence = 1
             return confidence
 
-        md5 = flow_info['md5']
+        md5 = flow_info['flow']['md5']
         circl_base_url = 'https://hashlookup.circl.lu/lookup/'
         try:
             circl_api_response = self.circl_session.get(
                 f"{circl_base_url}/md5/{md5}",
                headers=self.circl_session.headers
             )
-        except Exception as ex:
+        except Exception:
             # add the hash to the cirllu queue and ask for it later
             self.circllu_queue.put(flow_info)
             return
@@ -715,30 +700,26 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
     def search_online_for_hash(self, flow_info: dict):
         """
-        :param flow_info: dict with 'uid','daddr', 'saddr','size','md5','profileid','twid','ts', etc
+        :param flow_info: dict with 'type', 'flow', 'profileid','twid',
         returns a dict containing confidence, threat level and blacklist or the
         reporting website
         """
-        circllu_info = self.circl_lu(flow_info)
-        if circllu_info:
+        if circllu_info := self.circl_lu(flow_info):
             return circllu_info
 
-        urlhaus_info = self.urlhaus.urlhaus_lookup(flow_info['md5'], 'md5_hash')
-        if urlhaus_info:
+        if urlhaus_info := self.urlhaus.urlhaus_lookup(
+            flow_info['flow']['md5'], 'md5_hash'
+        ):
             return urlhaus_info
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
         ip_info = __database__.search_IP_in_IoC(ip)
         # check if it's a blacklisted ip
-        if not ip_info:
-            return False
-
-        return json.loads(ip_info)
+        return json.loads(ip_info) if ip_info else False
 
     def search_online_for_ip(self, ip):
-        spamhaus_res = self.spamhaus(ip)
-        if spamhaus_res:
+        if spamhaus_res := self.spamhaus(ip):
             return spamhaus_res
 
     def ip_has_blacklisted_ASN(
@@ -812,7 +793,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             is_subdomain,
         ) = __database__.is_domain_malicious(domain)
         if (
-            domain_info != False
+            domain_info is not False
         ):   # Dont change this condition. This is the only way it works
             # If the domain is in the blacklist of IoC. Set an evidence
             domain_info = json.loads(domain_info)
@@ -827,9 +808,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
         ip_info = self.search_offline_for_ip(ip)
         if not ip_info:
             ip_info = self.search_online_for_ip(ip)
-            if not ip_info:
-                # not malicious
-                return False
+        if not ip_info:
+            # not malicious
+            return False
         __database__.add_ips_to_IoC({
                 ip: json.dumps(ip_info)
         })
@@ -849,17 +830,18 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         :param flow_info: dict with uid, twid, ts, md5 etc.
         """
-
-        file_info:dict = self.search_online_for_hash(flow_info)
-        if file_info:
-            # is malicious.
-            # update the file_info dict with uid, twid, ts etc.
-            file_info.update(flow_info)
+        if blacklist_details := self.search_online_for_hash(flow_info):
+            # the md5 appeared in a blacklist
+            # update the blacklist_details dict with uid,
+            # twid, ts etc. of the detected file/flow
+            blacklist_details.update(flow_info)
             # is the detection done by urlhaus or circllu?
-            if 'URLhaus' in file_info['blacklist']:
-                self.urlhaus.set_evidence_malicious_hash(file_info)
+            if 'URLhaus' in blacklist_details['blacklist']:
+                self.urlhaus.set_evidence_malicious_hash(blacklist_details)
             else:
-                self.set_evidence_malicious_hash(file_info)
+                self.set_evidence_malicious_hash(blacklist_details)
+        __database__.mark_as_analyzed_by_ti_module()
+
 
     def is_malicious_url(
             self,
@@ -921,6 +903,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             domain, profileid, twid
         )
 
+
     def update_local_file(self, filename):
         """
         Updates the given local ti file if the hash of it has changed
@@ -939,6 +922,15 @@ class Module(Module, multiprocessing.Process, URLhaus):
             __database__.set_TI_file_info(filename, malicious_file_info)
             return True
 
+    def have_pending_ips_in_queue(self):
+        """ check if this module has pending ips/domains to analyse """
+        q_size = __database__.get_ti_queue_size()
+        if q_size is None:
+            return False
+        if int(q_size) > 0:
+            return True
+        return False
+
     def run(self):
         try:
             utils.drop_root_privs()
@@ -948,10 +940,11 @@ class Module(Module, multiprocessing.Process, URLhaus):
             self.update_local_file('own_malicious_iocs.csv')
             self.update_local_file('own_malicious_JA3.csv')
             self.circllu_calls_thread.start()
-        except Exception as ex:
+            __database__.init_ti_queue()
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(),0,1)
+            self.print(traceback.print_exc(), 0, 1)
             return True
 
         while True:
@@ -1013,6 +1006,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                             profileid,
                             twid
                         )
+                    __database__.mark_as_analyzed_by_ti_module()
+
 
                 message = __database__.get_message(self.c2)
                 if message and message['data'] == 'stop_process':
@@ -1020,15 +1015,16 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
                 if utils.is_msg_intended_for(message, 'new_downloaded_file'):
                     file_info = json.loads(message['data'])
-                    self.is_malicious_hash(file_info)
-                    continue
+                    if file_info['type'] == 'zeek':
+                        self.is_malicious_hash(file_info)
+
 
                 if self.should_shutdown:
                      self.shutdown_gracefully()
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc())

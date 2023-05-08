@@ -16,7 +16,7 @@ let analysisSubTableDefs = {
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){
                 case true:
-                    $('td', nRow).css('background-color', '#FF8989')
+                    $('td', nRow).css('background-color', '#FFC0CB')
                     break;
             }
         }
@@ -66,7 +66,7 @@ let analysisTableDefs = {
         ],
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             if(aData['info']){
-                $('td', nRow).css('background-color', '#ECFEE8')
+                $('td', nRow).css('background-color', '#c2e2fa')
             }
         }
     },
@@ -176,9 +176,10 @@ let analysisTableDefs = {
         dom: '<"top"f>rt',
         scrollX: false,
         scrollY: "78vh", // hardcoded height to fit the page
+        scrollCollapse: true,
+        paging: false,
         info: false,
         ajax: '/analysis/profiles_tws',
-        scroller:true, 
         columns: [
             {
                 data: 'profile',
@@ -195,7 +196,7 @@ let analysisTableDefs = {
         fnRowCallback: function( nRow, aData, iDisplayIndex, iDisplayIndexFull ) {
             switch(aData['blocked']){
                 case true:
-                    $('td', nRow).css('background-color', '#FF8989')
+                    $('td', nRow).css('background-color', '#FFC0CB ')
                     break;
             }
         }

@@ -17,8 +17,7 @@ class ArgumentParser(argparse.ArgumentParser):
 
     def add_argument(self, *args, **kwargs):
         super(ArgumentParser, self).add_argument(*args, **kwargs)
-        option = {}
-        option['flags'] = [item for item in args]
+        option = {'flags': list(args)}
         for key in kwargs:
             option[key] = kwargs[key]
         self.options.append(option)
@@ -33,16 +32,16 @@ class ArgumentParser(argparse.ArgumentParser):
 
         # Print usage
         if 'usage' in self.program:
-            print('Usage: %s' % self.program['usage'])
+            print(f"Usage: {self.program['usage']}")
         else:
             usage = []
             for option in self.options:
                 usage += [
-                    '[%s|%s]' % (item, option['metavar'])
+                    f"[{item}|{option['metavar']}]"
                     if 'metavar' in option
-                    else '[%s|%s]' % (item, option['dest'].upper())
+                    else f"[{item}|{option['dest'].upper()}]"
                     if 'dest' in option
-                    else '[%s]' % item
+                    else f'[{item}]'
                     for item in option['flags']
                 ]
             wrapper.initial_indent = 'Usage: %s ' % os.path.basename(
@@ -60,7 +59,7 @@ class ArgumentParser(argparse.ArgumentParser):
         for option in self.options:
             option['flags2'] = ' '.join(
                 [
-                    '|'.join([item for item in option['flags']]),
+                    '|'.join(list(option['flags'])),
                     option['metavar'] if 'metavar' in option else '',
                 ]
             )
@@ -68,7 +67,7 @@ class ArgumentParser(argparse.ArgumentParser):
             if len(option['flags2']) > maxlen:
                 maxlen = len(option['flags2'])
         for option in self.options:
-            template = ' %-' + str(maxlen) + 's  | '
+            template = f' %-{str(maxlen)}s  | '
             wrapper.initial_indent = template % option['flags2']
             wrapper.subsequent_indent = len(wrapper.initial_indent) * ' '
             if 'help' in option and 'default' in option:
@@ -84,9 +83,9 @@ class ArgumentParser(argparse.ArgumentParser):
                 output = wrapper.fill(output)
             elif 'default' in option:
                 output = (
-                    "Default: '%s'" % option['default']
+                    f"Default: '{option['default']}'"
                     if isinstance(option['default'], str)
-                    else 'Default: %s' % str(option['default'])
+                    else f"Default: {str(option['default'])}"
                 )
                 output = wrapper.fill(output)
             else:

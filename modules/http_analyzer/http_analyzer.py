@@ -40,25 +40,6 @@ class Module(Module, multiprocessing.Process):
             'application/x-dosexec'
         ]
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -116,11 +97,7 @@ class Module(Module, multiprocessing.Process):
         # 1 to google.com and another one to www.google.com
 
         for host in self.hosts:
-            if (
-                (contacted_host == host
-                 or contacted_host == f'www.{host}')
-                and request_body_len == 0
-            ):
+            if contacted_host in [host, f'www.{host}'] and request_body_len == 0:
                 try:
                     # this host has past connections, add to counter
                     uids, connections = self.connections_counter[host]
@@ -143,7 +120,7 @@ class Module(Module, multiprocessing.Process):
             attacker_direction = 'srcip'
             attacker = profileid.split('_')[0]
             threat_level = 'medium'
-            category = 'Anomaly.Connection'
+            category = 'Anomaly.Connection' 
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
             __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
@@ -271,7 +248,7 @@ class Module(Module, multiprocessing.Process):
         """
         Get OS and browser info about a use agent from an online database http://useragentstring.com
         """
-        url = f'http://useragentstring.com/'
+        url = 'http://useragentstring.com/'
         params = {
             'uas': user_agent,
             'getJSON':'all'
@@ -305,8 +282,11 @@ class Module(Module, multiprocessing.Process):
         if not user_agent:
             return False
 
+        # keep a history of the past user agents
+        __database__.add_all_user_agent_to_profile(profileid, user_agent)
+
         # don't make a request again if we already have a user agent associated with this profile
-        if __database__.get_user_agent_from_profile(profileid) != None:
+        if __database__.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
 
@@ -316,8 +296,7 @@ class Module(Module, multiprocessing.Process):
             'os_name': ''
         }
 
-        ua_info = self.get_ua_info_online(user_agent)
-        if ua_info:
+        if ua_info := self.get_ua_info_online(user_agent):
             # the above website returns unknown if it has no info about this UA,
             # remove the 'unknown' from the string before storing in the db
             os_type = (
@@ -352,7 +331,7 @@ class Module(Module, multiprocessing.Process):
         Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
-        if __database__.get_user_agent_from_profile(profileid) != None:
+        if __database__.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
@@ -591,7 +570,7 @@ class Module(Module, multiprocessing.Process):
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
                 return True
-            except Exception as inst:
+            except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
                 self.print(f'Problem on the run() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)

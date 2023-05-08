@@ -1,7 +1,7 @@
 from slips_files.common.abstracts import Module
-import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
+import multiprocessing
 import sys
 import base64
 import time
@@ -44,36 +44,17 @@ class Module(Module, multiprocessing.Process):
         """
         cmd = 'yara -h > /dev/null 2>&1'
         returncode = os.system(cmd)
-        if returncode == 256 or returncode == 0:
+        if returncode in [256, 0]:
             # it is installed
             return True
         # elif returncode == 32512:
-        self.print(f"yara is not installed. install it using:\nsudo apt-get install yara")
+        self.print("yara is not installed. install it using:\nsudo apt-get install yara")
         return False
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
     def fix_json_packet(self, json_packet):
         """
@@ -212,20 +193,14 @@ class Module(Module, multiprocessing.Process):
                 profileid = src_profileid
                 attacker = dstip
                 ip_identification = __database__.getIPIdentification(dstip)
-                description = (
-                    f'{rule} to destination address: {dstip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             elif __database__.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
                 ip_identification = __database__.getIPIdentification(srcip)
-                description = (
-                    f'{rule} to destination address: {srcip} {ip_identification} '
-                    f"port: {portproto} {port_info if port_info else ''}. Leaked location: {strings_matched}"
-                )
+                description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             else:
                 # no profiles in slips for either IPs
@@ -325,7 +300,7 @@ class Module(Module, multiprocessing.Process):
                 var = line[1].replace('$', '')
                 # strings_matched is exactly the string that was found that triggered this detection
                 # starts from the var until the end of the line
-                strings_matched = ' '.join([s for s in line[2:]])
+                strings_matched = ' '.join(list(line[2:]))
                 self.set_evidence_yara_match({
                     'rule': matching_rule,
                     'vars_matched': var,
@@ -346,7 +321,7 @@ class Module(Module, multiprocessing.Process):
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
-        except Exception as inst:
+        except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(f'Problem on the run() line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)

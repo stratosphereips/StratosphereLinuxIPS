@@ -1,5 +1,4 @@
 from slips_files.core.whitelist import Whitelist
-import configparser
 import pytest
 
 
@@ -35,14 +34,14 @@ def test_read_whitelist(outputQueue, inputQueue, database):
 @pytest.mark.parametrize('org,asn', [('google', 'AS6432')])
 def test_load_org_asn(org, outputQueue, inputQueue, asn):
     whitelist = create_whitelist_instance(outputQueue)
-    assert whitelist.load_org_asn(org) != False
+    assert whitelist.load_org_asn(org) is not False
     assert asn in whitelist.load_org_asn(org)
 
 
 @pytest.mark.parametrize('org,subnet', [('google', '216.73.80.0/20')])
 def test_load_org_IPs(org, outputQueue, inputQueue, subnet):
     whitelist = create_whitelist_instance(outputQueue)
-    assert whitelist.load_org_IPs(org) != False
+    assert whitelist.load_org_IPs(org) is not False
     # we now store subnets in a dict sorted by the first octet
     first_octet = subnet.split('.')[0]
     assert first_octet in whitelist.load_org_IPs(org)

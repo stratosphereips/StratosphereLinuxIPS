@@ -150,6 +150,103 @@ The hash should be your 64 character API Key.
   
 The path of the file can be modified by changing the ```RiskIQ_credentials_path``` parameter in ```config/slips.conf```
 
+## RNN C&C Detection Module
+
+This module is used to detect command and control channels in a network by analyzing the features of the network flows and representing them as Stratosphere Behavioral Letters(Stratoletters). This is achieved through the use of a recurrent neural network, which is trained on these letters to identify and classify potential C&C traffic.
+
+### Stratoletters
+
+Stratoletters is a method used to represent network flows in a concise and standardized manner.
+Stratoletters encodes information about the periodicity, duration, and size of network flows into a string of letter(s) and character(s).
+
+The **letter** is the key part in a Stratoletter string. It is derived from a dictionary and defined based on the features of the flow such as periodicity, size and duration.
+
+*periodicity* : A number that denotes how frequent the flow is, calculated based on time of past flows
+
+-1 = No previous data
+
+1-4 = 1 strongly periodic to 4 strongly not periodic
+
+*size* : Number denotes the size of flow, range from 1 to 3
+
+*duration* : Number that denotes the duration of flow, range from 1 to 3
+
+A visual representation of the dictionary from which letter is derived
+
+In this image, each block represents the possible values of the letter, 
+We choose the block based on the periodicity
+and choose the letter from the block based on the duration(number of row) and size (number of column).
+
+![stratoletters letter mapping matrix](https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/stratoletters.png)
+
+
+Example:
+```commandline
+# Slips computed value of the flow
+periodicity = 1     # Strongly periodic
+duration = 1
+size = 3
+letter = g          # lowercase letter for periodicity 1(Strongly periodic) and 3(Weakly not periodic)
+```
+```commandline
+periodicity = -1    # no previous flow data
+duration = 2
+size = 3
+letter = 8          # the letter will be an integer if there is no previous data
+```
+```commandline
+periodicity = 4     # Weakly not periodic
+duration = 3
+size = 3
+letter = Z          # uppercase letter for periodicity 2(Weakly periodicity) and 4(Strongly not periodicity)
+```
+
+Stratoletters represent details of current flow and past available flow with latest on left. The current flow symbol is concise of three parts.
+
+each symbol consists of hrs passed since last flow + a letter that represents the periodicity,size and dur of the 
+flow + a char showing the time passed since last flow
+
+```
+symbol = zeros + letter + timechar
+ ```
+
+*zero* : hours passed since last flow, each hour is represented by 1 zero. foe xample, 2 hours = ```00```
+
+*letter* : chosen based on the periodicity, size, and dur of the flow eg: `1`,`w`,`H`
+
+*timechar* : character to denote the time eloped since last flow, can be: `.`, `,`, `+`, `*` or null
+
+Ultimately this is how a Stratoletter is formed
+```commandline
+No of hours passed since last flow = 2
+periodicity = 2     # Weakly not periodicity
+duration = 1
+size = 1
+timechar = 
+stratoletter of last flow = 9*z*
+letter = A
+symbol = 00A9*z*
+
+No of hours passed since last flow = 0
+periodicity = 3     # Weakly not periodic
+duration = 1
+size = 2
+timechar = *
+stratoletter of last flow = e.
+letter = u
+symbol = u*e.
+```
+Then the model will predict how secure each flow is based on the Stratoletter
+```commandline
+symbol = 99*z*i.i* 
+model_score = 0.9573354
+symbol = 99. 
+model_score = 0.9063127
+symbol = 77*g.g*g*g.g.g.g*x*x*x*g.g.
+model_score = 0.96772265
+```
+In first example **9** is Stratoletter of current flow. **9*** is previous one, **z*** is before that and so on.
+
 ## Leak Detection Module
 
 This module on runs on pcaps, it uses YARA rules to detect leaks.
