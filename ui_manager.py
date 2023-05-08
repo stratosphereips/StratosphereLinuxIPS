@@ -54,7 +54,7 @@ class UIManager:
             )
             # self.webinterface_pid = webinterface.pid
             __database__.store_process_PID('Web Interface', webinterface.pid)
-            # we'll assume that it started, and if not, the return value will immidiately change and this thread will
+            # we'll assume that it started, and if not, the return value will immediately change and this thread will
             # print an error
             self.webinterface_return_value.put(True)
 
@@ -67,7 +67,8 @@ class UIManager:
                 # set false as the return value of this thread
                 self.webinterface_return_value.put(False)
 
-                pid = self.get_pid_using_port(55000)
+                pid = self.main.metadata_man.get_pid_using_port(55000)
+                # pid = self.get_pid_using_port(55000)
                 self.main.print (f"Web interface error:\n"
                             f"{error.strip().decode()}\n"
                             f"Port 55000 is used by PID {pid}")
