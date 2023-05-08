@@ -846,6 +846,57 @@ class InputProcess(multiprocessing.Process):
         if error:
             self.print (f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
 
+    def handle_cyst(self):
+        """
+        Read flows sent by the CYST simulation framework from the unix socket
+        Supported flows are of type zeek conn log
+        """
+        print(f"@@@@@@@@@@@@@@@@@@  handle_cyst is called")
+        # slips supports reading zeek  json conn.log only using CYST
+        if self.line_type != 'zeek':
+            return
+
+        cyst_UDS = '/tmp/slips'
+
+        # Create a UDS socket
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+
+        #todo cyst has to start before slips to init teh socket
+        try:
+            sock.connect(cyst_UDS)
+        except (socket.error) as msg:
+            self.print (f"Problem connecting to cyst socket: {msg}", 0, 1)
+            return
+
+        while True:
+            # todo when to break?
+
+            # json serialized flow
+            flow: str = sock.recv(10000).decode()
+
+            try:
+                flow = json.loads(flow)
+            except json.decoder.JSONDecodeError:
+                self.print(f'Invalid json line received from CYST.')
+                continue
+
+            line_info = {
+                'type': 'cyst',
+                'line_type': self.line_type,
+                'data' : flow
+            }
+            self.print(f'	> Sent Line: {line_info}', 0, 3)
+            self.profilerqueue.put(line_info)
+            self.lines += 1
+            self.print('Done reading 1 CYST flow.\n ', 0, 3)
+
+            time.sleep(2)
+
+        sock.close()
+
+
+
+
 
     def run(self):
         utils.drop_root_privs()
