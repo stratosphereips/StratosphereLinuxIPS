@@ -687,7 +687,7 @@ class InputProcess(multiprocessing.Process):
             )
             connlog_path = os.path.join(self.zeek_folder, 'conn.log')
 
-            self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}")
+            self.print(f"Number of zeek generated flows in conn.log: {self.get_flows_number(connlog_path)}", 2, 0)
 
             self.stop_observer()
             return True

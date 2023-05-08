@@ -1744,7 +1744,7 @@ class ProfilerProcess(multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
-        self.print(f"Stopping profiler process. Number of whitelisted conn flows: {self.whitelisted_flows_ctr}")
+        self.print(f"Stopping profiler process. Number of whitelisted conn flows: {self.whitelisted_flows_ctr}", 2, 0)
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
 
@@ -1757,7 +1757,8 @@ class ProfilerProcess(multiprocessing.Process):
                 line = self.inputqueue.get()
                 if 'stop' in line:
                     self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
-                               f"{self.whitelisted_flows_ctr}")
+                               f"{self.whitelisted_flows_ctr}", 2, 0)
+
                     # if timewindows are not updated for a long time (see at logsProcess.py),
                     # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
                     self.shutdown_gracefully()

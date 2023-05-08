@@ -1217,7 +1217,7 @@ class Module(Module, multiprocessing.Process):
         return True
 
     def shutdown_gracefully(self):
-        self.print(f"Number of connections processed by flowalerts: {self.conn_counter}")
+        self.print(f"Number of connections processed by flowalerts: {self.conn_counter}", 2, 0)
         __database__.publish('finished_modules', self.name)
 
     def check_smtp_bruteforce(
