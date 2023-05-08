@@ -144,6 +144,104 @@ class Main:
             self.daemon.stop()
         sys.exit(0)
 
+
+    def get_modules(self, to_ignore):
+        """
+        Get modules from the 'modules' folder.
+        """
+        # This plugins import will automatically load the modules and put them in
+        # the __modules__ variable
+
+        plugins = {}
+        failed_to_load_modules = 0
+        # Walk recursively through all modules and packages found on the . folder.
+        # __path__ is the current path of this python program
+        for loader, module_name, ispkg in pkgutil.walk_packages(
+                modules.__path__, f'{modules.__name__}.'
+        ):
+            if any(module_name.__contains__(mod) for mod in to_ignore):
+                continue
+            # If current item is a package, skip.
+            if ispkg:
+                continue
+            # to avoid loading everything in the dir,
+            # only load modules that have the same name as the dir name
+            dir_name = module_name.split('.')[1]
+            file_name = module_name.split('.')[2]
+            if dir_name != file_name:
+                continue
+
+            # Try to import the module, otherwise skip.
+            try:
+                # "level specifies whether to use absolute or relative imports. The default is -1 which
+                # indicates both absolute and relative imports will be attempted. 0 means only perform
+                # absolute imports. Positive values for level indicate the number of parent
+                # directories to search relative to the directory of the module calling __import__()."
+                module = importlib.import_module(module_name)
+            except ImportError as e:
+                print(
+                    'Something wrong happened while importing the module {0}: {1}'.format(
+                        module_name, e
+                    )
+                )
+                failed_to_load_modules += 1
+                continue
+
+            # Walk through all members of currently imported modules.
+            for member_name, member_object in inspect.getmembers(module):
+                # Check if current member is a class.
+                if inspect.isclass(member_object) and (issubclass(
+                        member_object, Module
+                ) and member_object is not Module):
+                    plugins[member_object.name] = dict(
+                        obj=member_object,
+                        description=member_object.description,
+                    )
+
+        # Change the order of the blocking module(load it first)
+        # so it can receive msgs sent from other modules
+        if 'Blocking' in plugins:
+            plugins = OrderedDict(plugins)
+            # last=False to move to the beginning of the dict
+            plugins.move_to_end('Blocking', last=False)
+
+        return plugins, failed_to_load_modules
+
+    def load_modules(self):
+        to_ignore = self.conf.get_disabled_modules(self.input_type)
+        # Import all the modules
+        modules_to_call = self.get_modules(to_ignore)[0]
+        for module_name in modules_to_call:
+            if module_name in to_ignore:
+                continue
+
+            module_class = modules_to_call[module_name]['obj']
+            if 'P2P Trust' == module_name:
+                module = module_class(
+                    self.outputqueue,
+                    self.redis_port,
+                    output_dir=self.args.output
+                )
+            else:
+                module = module_class(
+                    self.outputqueue,
+                    self.redis_port
+                )
+            module.start()
+            __database__.store_process_PID(
+                module_name, int(module.pid)
+            )
+            description = modules_to_call[module_name]['description']
+            self.print(
+                f'\t\tStarting the module {self.green(module_name)} '
+                f'({description}) '
+                f'[PID {self.green(module.pid)}]', 1, 0
+                )
+        # give outputprocess time to print all the started modules
+        time.sleep(0.5)
+        print('-' * 27)
+        self.print(f"Disabled Modules: {to_ignore}", 1, 0)
+
     def setup_detailed_logs(self, LogsProcess):
         """
         Detailed logs are the ones created by logsProcess
