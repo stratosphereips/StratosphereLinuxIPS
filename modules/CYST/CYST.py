@@ -130,16 +130,18 @@ class Module(Module, multiprocessing.Process):
                     self.print(error, 0, 1)
                 else:
                     # send the flow to inputprocess so slips can process it normally
-                    __database__.publish('new_cyst_flow', new_flow)
+                    __database__.publish('new_cyst_flow', flow)
 
 
                 # SEND EVIDENCE TO CYST
+                print(f"@@@@@@@@@@@@@@@@@@  tryoing to get msg")
                 msg = __database__.get_message(self.c1)
                 if msg and msg['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
 
                 if utils.is_msg_intended_for(msg, 'new_json_evidence'):
+                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new evidence . sending ... ")
                     evidence: str = msg['data']
                     self.send_evidence(evidence)
 
