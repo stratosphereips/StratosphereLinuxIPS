@@ -34,7 +34,6 @@ from multiprocessing import Queue
 from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.guiProcess import GuiProcess
 from slips_files.core.logsProcess import LogsProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
 
