@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_dns_flow')
+        self.c2 = __database__.subscribe('new_dns')
         self.c3 = __database__.subscribe('new_url')
         # Read the conf file
         self.__read_configuration()
@@ -576,7 +576,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']
