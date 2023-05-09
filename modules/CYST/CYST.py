@@ -103,7 +103,6 @@ class Module(Module, multiprocessing.Process):
         self.cyst_conn.sendall(msg_len)
 
 
-
     def send_blocking_request(self, ip):
         """
         for now when slips generates a blocking request, it blocks everything from and to this srcip
@@ -126,14 +125,13 @@ class Module(Module, multiprocessing.Process):
             self.conn_closed = True
             return
 
-    def send_alert(self, alert_ID: str, evidence: list, ip_to_block: str):
+    def send_alert(self, alert_ID: str, ip_to_block: str):
         """
         Sends the alert ID and the IDs of the evidence causing this alert to cyst
         """
         alert_to_send = {
             'slips_msg_type': 'alert',
             'alert_ID': alert_ID,
-            'evidence': evidence,
             'ip_to_block': ip_to_block
         }
         alert_to_send: bytes = json.dumps(alert_to_send).encode()
@@ -144,8 +142,6 @@ class Module(Module, multiprocessing.Process):
         except BrokenPipeError:
             self.conn_closed = True
             return
-
-
 
     def close_connection(self):
         print(f"@@@@@@@@@@@@@@@@@@  close conn is called!! ")
@@ -203,11 +199,6 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                msg = __database__.get_message(self.c1)
-                if (msg and msg['data'] == 'stop_process'):
-                    self.shutdown_gracefully()
-                    return True
-
                 if utils.is_msg_intended_for(msg, 'new_alert'):
                     print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
                     alert_info: dict = json.loads(msg['data'])
@@ -215,11 +206,7 @@ class Module(Module, multiprocessing.Process):
                     twid = alert_info['twid']
                     # alert_ID is {profileid}_{twid}_{ID}
                     alert_ID = alert_info['alert_ID']
-                    evidence: list = __database__.get_evidence_causing_alert(profileid, twid, alert_ID)
-                    if evidence:
-                        self.send_alert(alert_ID, evidence, profileid.split('_')[-1])
-
-
+                    self.send_alert(alert_ID, profileid.split('_')[-1])
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
