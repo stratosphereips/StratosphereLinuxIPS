@@ -21,33 +21,9 @@ class Module(Module, multiprocessing.Process):
         self.port = None
         self.outputqueue = outputqueue
         __database__.start(redis_port)
-        self.c1 = __database__.subscribe('new_json_evidence')
-        self.c2 = __database__.subscribe('new_alert')
+        self.c1 = __database__.subscribe('new_alert')
         self.cyst_UDS = '/run/slips.sock'
         self.conn_closed = False
-
-
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
 
     def initialize_unix_socket(self):
         """
@@ -127,29 +103,6 @@ class Module(Module, multiprocessing.Process):
         self.cyst_conn.sendall(msg_len)
 
 
-    def send_evidence(self, evidence: str):
-        """
-        :param evidence: json serialized dict
-        """
-        self.print(f"Sending evidence back to CYST.", 0, 1)
-        # add the slips_msg_type
-        evidence: dict = json.loads(evidence)
-
-
-        # this field helps cyst see what slips is sending, an evidence or a blocking request
-        evidence.update(
-            {'slips_msg_type': 'evidence'}
-        )
-        evidence = json.dumps(evidence)
-
-        # slips takes around 8s from the second it receives the flow to respond to cyst
-        evidence: bytes = evidence.encode()
-        self.send_length(evidence)
-        try:
-            self.cyst_conn.sendall(evidence)
-        except BrokenPipeError:
-            self.conn_closed = True
-            return
 
     def send_blocking_request(self, ip):
         """
@@ -245,18 +198,12 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                # SEND EVIDENCE TO CYST
                 msg = __database__.get_message(self.c1)
                 if (msg and msg['data'] == 'stop_process'):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(msg, 'new_json_evidence'):
-                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new evidence . sending ... ")
-                    evidence: str = msg['data']
-                    self.send_evidence(evidence)
-
-                msg = __database__.get_message(self.c2)
+                msg = __database__.get_message(self.c1)
                 if (msg and msg['data'] == 'stop_process'):
                     self.shutdown_gracefully()
                     return True

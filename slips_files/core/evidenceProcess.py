@@ -686,9 +686,6 @@ class EvidenceProcess(multiprocessing.Process):
 
                     __database__.set_evidence_for_profileid(IDEA_dict)
                     __database__.publish('report_to_peers', json.dumps(data))
-                    # export to cyst if it's running
-                    __database__.publish('new_json_evidence', json.dumps(IDEA_dict))
-
 
                     if tw_evidence := self.get_evidence_for_tw(profileid, twid):
                         # self.print(f'Evidence: {tw_evidence}. Profileid {profileid}, twid {twid}')
