@@ -2,7 +2,7 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-from modules.ip_info.jarm import JARM_hash
+from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
@@ -34,6 +34,7 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN()
+        self.JARM = JARM()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
@@ -479,11 +480,10 @@ class Module(Module, multiprocessing.Process):
             profileid,
             twid,
     ):
-        print(f"@@@@@@@@@@@@@@@@@@  set_evidence_malicious_jarm_hash is called ")
         dport = flow['dport']
         dstip = flow['daddr']
         timestamp = flow['starttime']
-        protocol = flow['protocol']
+        protocol = flow['proto']
 
         evidence_type = 'MaliciousJARM'
         attacker_direction = 'dstip'
@@ -495,10 +495,11 @@ class Module(Module, multiprocessing.Process):
         portproto = f'{dport}/{protocol}'
         port_info = __database__.get_port_info(portproto)
         port_info = port_info or ""
+        port_info = f'({port_info.upper()})' if port_info else ""
         dstip_id = __database__.getIPIdentification(dstip)
         description = (
-           f"Malicious JARM hash while connecting to destination IP: {dstip} {dstip_id}"
-           f" on port: {portproto} {port_info}"
+           f"Malicious JARM hash detected for destination IP: {dstip}"
+           f" on port: {portproto} {port_info}.  {dstip_id}"
         )
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
@@ -615,12 +616,10 @@ class Module(Module, multiprocessing.Process):
                     attacker = msg['attacker']
                     flow = msg['flow']
                     dport = flow['dport']
-                    # @@@@@@@@@@@@2 DLETE THIS
-                    dport = 443
 
-                    jarm_hash = JARM_hash(attacker, dport)
+
+                    jarm_hash = self.JARM.JARM_hash(attacker, dport)
                     if jarm_hash != '00000000000000000000000000000000000000000000000000000000000000':
-                        print(f"@@@@@@@@@@@@@@@@@@  checking if {jarm_hash} is malicious!")
                         if __database__.is_malicious_jarm(jarm_hash):
                             self.set_evidence_malicious_jarm_hash(
                                 flow,
@@ -628,7 +627,6 @@ class Module(Module, multiprocessing.Process):
                                 profileid,
                                 twid,
                             )
-
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
