@@ -1198,6 +1198,7 @@ class ProfilerProcess(multiprocessing.Process):
                 print(f"@@@@@@@@@@@@@@@@@@  not a supported flow")
                 return False
             print(f"@@@@@@@@@@@@@@@@@@  is a supported flow")
+            print(f"@@@@@@@@@@@@@@@@ {self.flow}")
             self.make_sure_theres_a_uid()
             self.profileid = f'profile_{self.flow.saddr}'
 

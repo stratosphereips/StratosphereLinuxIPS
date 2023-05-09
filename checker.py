@@ -29,7 +29,7 @@ class Checker:
             self.main.load_db()
             return
 
-        if self.args.CYST:
+        if self.main.args.CYST:
             input_information = 'cyst'
             input_type = 'cyst'
             line_type = 'zeek'
