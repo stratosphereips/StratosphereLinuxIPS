@@ -52,6 +52,9 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.minimum_requested_addrs = 4
 
     def shutdown_gracefully(self):
+        # alert about all the pending evidence before this module stops
+        self.horizontal_ps.combine_evidence()
+        # self.vertical_ps.combine_evidence()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -347,9 +350,6 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        self.vertical_portscan.timer_thread_vertical_ps.start()
-        self.horizontal_ps.timer_thread_horizontal_ps.start()
-
         while True:
             try:
                 # Wait for a message from the channel that a TW was modified

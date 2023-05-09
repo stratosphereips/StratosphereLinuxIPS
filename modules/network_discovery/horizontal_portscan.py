@@ -28,12 +28,6 @@ class HorizontalPortscan():
         # we should alert once we find 1 horizontal ps evidence then combine the rest of evidence every x seconds
         # format is { scanned_port: True/False , ...}
         self.alerted_once_horizontal_ps = {}
-        # the threads are responsible for combining all evidence each 10 seconds to
-        self.timer_thread_horizontal_ps = threading.Thread(
-                target=self.wait_for_horizontal_scans,
-                daemon=True
-        )
-        self.lock = threading.Lock()
 
     def calculate_confidence(self, pkts_sent):
         if pkts_sent > 10:
@@ -45,46 +39,39 @@ class HorizontalPortscan():
             confidence = pkts_sent / 10.0
         return confidence
 
-    def wait_for_horizontal_scans(self):
+    def combine_evidence(self):
         """
-        This thread waits for 10s then checks if more horizontal scans happened
-         to combine evidence
+        Combines all the evidence in pending_horizontal_ps_evidence into 1 evidence and calls set_evidence
+        this function is called every 3 pending ev
         """
-        while True:
-            # wait 10s for new evidence to arrive so we can combine them
-            time.sleep(self.time_to_wait_before_generating_new_alert)
-            # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
-            # calling set_evidence
-            self.lock.acquire()
-            for key, evidence_list in self.pending_horizontal_ps_evidence.items():
-                # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
-                # each value here is a list of evidence that should be combined
-                profileid, twid, state, protocol, dport = key.split('-')
-                final_evidence_uids = []
-                final_pkts_sent = 0
-                # combine all evidence that share the above key
-                for evidence in evidence_list:
-                    # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
-                    # in the final evidence, we'll be using the ts of the last evidence
-                    timestamp, pkts_sent, evidence_uids, amount_of_dips = evidence
-                    # since we're combining evidence, we want the uids of the final evidence
-                    # to be the sum of all the evidence we combined
-                    final_evidence_uids += evidence_uids
-                    final_pkts_sent += pkts_sent
+        for key, evidence_list in self.pending_horizontal_ps_evidence.items():
+            # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
+            # each value here is a list of evidence that should be combined
+            profileid, twid, state, protocol, dport = key.split('-')
+            final_evidence_uids = []
+            final_pkts_sent = 0
+            # combine all evidence that share the above key
+            for evidence in evidence_list:
+                # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
+                # in the final evidence, we'll be using the ts of the last evidence
+                timestamp, pkts_sent, evidence_uids, amount_of_dips = evidence
+                # since we're combining evidence, we want the uids of the final evidence
+                # to be the sum of all the evidence we combined
+                final_evidence_uids += evidence_uids
+                final_pkts_sent += pkts_sent
 
-                self.set_evidence_horizontal_portscan(
-                    timestamp,
-                    final_pkts_sent,
-                    protocol,
-                    profileid,
-                    twid,
-                    final_evidence_uids,
-                    dport,
-                    amount_of_dips
-                )
-            # reset the dict since we already combined the evidence
-            self.pending_horizontal_ps_evidence = {}
-            self.lock.release()
+            self.set_evidence_horizontal_portscan(
+                timestamp,
+                final_pkts_sent,
+                protocol,
+                profileid,
+                twid,
+                final_evidence_uids,
+                dport,
+                amount_of_dips
+            )
+        # reset the dict since we already combined the evidence
+        self.pending_horizontal_ps_evidence = {}
 
     def get_resolved_ips(self, dstips: dict) -> list:
         """
@@ -171,11 +158,13 @@ class HorizontalPortscan():
                         timestamp = next(iter(dstips.values()))['stime']
 
                         self.cache_det_thresholds[cache_key] = amount_of_dips
+                        # for all the combined alerts, the following params should be equal
+                        key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
-                        if not self.alerted_once_horizontal_ps.get(dport, False):
+                        if not self.alerted_once_horizontal_ps.get(key, False):
                             #  from now on, we will be combining the next horizontal ps evidence targeting this
                             # dport
-                            self.alerted_once_horizontal_ps[dport] = True
+                            self.alerted_once_horizontal_ps[key] = True
                             self.set_evidence_horizontal_portscan(
                                 timestamp,
                                 pkts_sent,
@@ -188,19 +177,15 @@ class HorizontalPortscan():
                             )
                         else:
                             # we will be combining further alerts to avoid alerting many times every portscan
-                            # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
-
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
-                            # to make sure this function isn't adding evidence of another ps while the
-                            # wait thread is calling set_evidence
-                            self.lock.acquire()
                             try:
                                 self.pending_horizontal_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_horizontal_ps_evidence[key] = [evidence_details]
-                            self.lock.release()
+                            # wake up the thread to combine evidence every 5 new portscans to the same dport
+                            if len(self.pending_horizontal_ps_evidence[key]) == 3:
+                                self.combine_evidence()
 
     def set_evidence_horizontal_portscan(
             self,
