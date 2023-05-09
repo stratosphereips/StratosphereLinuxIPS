@@ -7,8 +7,8 @@ import traceback
 import time
 import ipaddress
 import json
-import threading
-from modules.network_discovery.horizontal_prtscan import HorizontalPortscan
+from modules.network_discovery.horizontal_portscan import HorizontalPortscan
+from modules.network_discovery.vertical_portscan import VerticalPortscan
 
 class PortScanProcess(Module, multiprocessing.Process):
     """
@@ -22,6 +22,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.horizontal_ps = HorizontalPortscan()
+        self.vertical_portscan = VerticalPortscan()
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         # Set the output queue of our database instance
@@ -46,17 +47,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.pingscan_minimum_scanned_ips = 5
         # time in seconds to wait before alerting port scan
         self.time_to_wait_before_generating_new_alert = 25
-        # list of tuples, each tuple is the args to setevidence
-        self.pending_vertical_ps_evidence = {}
-        # we should alert once we find 1 vertical ps evidence then combine the rest of evidence every x seconds
-        # the value of this dict will be true after the first portscan alert to th ekey ip
-        # format is {ip: True/False , ...}
-        self.alerted_once_vertical_ps = {}
-        # avoid many alerts
-        self.timer_thread_vertical_ps = threading.Thread(
-                                target=self.wait_for_vertical_scans,
-                                daemon=True
-        )
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
         self.minimum_requested_addrs = 4
@@ -64,158 +54,6 @@ class PortScanProcess(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
-    def wait_for_vertical_scans(self):
-        while True:
-            # wait 25s for new evidence to arrive so we can combine them
-            time.sleep(self.time_to_wait_before_generating_new_alert)
-            # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
-            # calling set_evidence
-            lock = threading.Lock()
-            lock.acquire()
-            for key, evidence_list in self.pending_vertical_ps_evidence.items():
-                # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
-                # each value here is a list of evidence that should be combined
-                profileid, twid, state, protocol, dstip = key.split('-')
-                final_evidence_uids = []
-                final_pkts_sent = 0
-
-                # combine all evidence that share the above key
-                for evidence in evidence_list:
-                    # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
-                    # in the final evidence, we'll be using the ts of the last evidence
-                    timestamp, pkts_sent, evidence_uids, amount_of_dports = evidence
-                    # since we're combining evidence, we want the uids of the final evidence
-                    # to be the sum of all the evidence we combined
-                    final_evidence_uids += evidence_uids
-                    final_pkts_sent += pkts_sent
-
-                self.set_evidence_vertical_portscan(
-                    timestamp,
-                    final_pkts_sent,
-                    protocol,
-                    profileid,
-                    twid,
-                    final_evidence_uids,
-                    amount_of_dports,
-                    dstip
-                )
-            # reset the dict sinse we already combiner
-            self.pending_vertical_ps_evidence = {}
-            lock.release()
-
-    def set_evidence_vertical_portscan(
-            self,
-            timestamp,
-            pkts_sent,
-            protocol,
-            profileid,
-            twid,
-            uid,
-            amount_of_dports,
-            dstip
-    ):
-        attacker_direction = 'srcip'
-        evidence_type = 'VerticalPortscan'
-        source_target_tag = 'Recon'
-        threat_level = 'medium'
-        category = 'Recon.Scanning'
-        srcip = profileid.split('_')[-1]
-        attacker = srcip
-        confidence = self.calculate_confidence(pkts_sent)
-        description = (
-                        f'new vertical port scan to IP {dstip} from {srcip}. '
-                        f'Total {amount_of_dports} dst {protocol} ports were scanned. '
-                        f'Total packets sent to all ports: {pkts_sent}. '
-                        f'Confidence: {confidence}. by Slips'
-                    )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
-                                 timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
-                                 proto=protocol, profileid=profileid, twid=twid, uid=uid)
-        # Set 'malicious' label in the detected profile
-        __database__.set_profile_module_label(
-            profileid, evidence_type, self.malicious_label
-        )
-
-
-    def calculate_confidence(self, pkts_sent):
-        if pkts_sent > 10:
-            confidence = 1
-        elif pkts_sent == 0:
-            return 0.3
-        else:
-            # Between threshold and 10 pkts compute a kind of linear grow
-            confidence = pkts_sent / 10.0
-        return confidence
-
-    def check_vertical_portscan(self, profileid, twid):
-        # Get the list of dstips that we connected as client using TCP not
-        # established, and their ports
-        direction = 'Dst'
-        role = 'Client'
-        type_data = 'IPs'
-        # self.print('Vertical Portscan check. Amount of dports: {}.
-        # Threshold=3'.format(amount_of_dports), 3, 0)
-        evidence_type = 'VerticalPortscan'
-        for state in ('Not Established', 'Established'):
-            for protocol in ('TCP', 'UDP'):
-                dstips = __database__.getDataFromProfileTW(
-                    profileid, twid, direction, state, protocol, role, type_data
-                )
-                # For each dstip, see if the amount of ports connections is over the threshold
-                for dstip in dstips.keys():
-                    ### PortScan Type 1. Direction OUT
-                    dstports: dict = dstips[dstip]['dstports']
-                    amount_of_dports = len(dstports)
-                    cache_key = f'{profileid}:{twid}:dstip:{dstip}:{evidence_type}'
-                    prev_amount_dports = self.cache_det_thresholds.get(cache_key, 0)
-
-                    # we make sure the amount of dports reported each evidence is higher than the previous one +5
-                    # so the first alert will always report 5 dport, and then 10+,15+,20+ etc
-                    # the goal is to never get an evidence that's 1 or 2 ports more than the previous one so we dont
-                    # have so many portscan evidence
-                    if (
-                            amount_of_dports >= self.port_scan_minimum_dports
-                            and prev_amount_dports+5 <= amount_of_dports
-                    ):
-                        # Get the total amount of pkts sent different ports on the same host
-                        pkts_sent = sum(dstports[dport] for dport in dstports)
-                        uid = dstips[dstip]['uid']
-                        timestamp = dstips[dstip]['stime']
-
-                        # Store in our local cache how many dips were there:
-                        self.cache_det_thresholds[cache_key] = amount_of_dports
-                        if not self.alerted_once_vertical_ps.get(dstip, False):
-                            # now from now on, we will be combining the next vertical ps evidence targetting this dport
-                            self.alerted_once_vertical_ps[dstip] = True
-                            self.set_evidence_vertical_portscan(
-                                timestamp,
-                                pkts_sent,
-                                protocol,
-                                profileid,
-                                twid,
-                                uid,
-                                amount_of_dports,
-                                dstip
-                            )
-                        else:
-                             # we will be combining further alerts to avoid alerting
-                             # many times every portscan
-                            # for all the combined alerts, the following params should be equal
-                            key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
-
-                            evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
-
-                            # to make sure the pending dict isn't being accessed by the thread while
-                             # we're modifying it here
-                            lock = threading.Lock()
-                            lock.acquire()
-                            try:
-                                self.pending_vertical_ps_evidence[key].append(evidence_details)
-                            except KeyError:
-                                # first time seeing this key
-                                self.pending_vertical_ps_evidence[key] = [evidence_details]
-                            lock.release()
 
     def check_icmp_sweep(self, msg, note, profileid, uid, twid, timestamp):
         """
@@ -509,7 +347,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def run(self):
         utils.drop_root_privs()
-        self.timer_thread_vertical_ps.start()
+        self.vertical_portscan.timer_thread_vertical_ps.start()
         self.horizontal_ps.timer_thread_horizontal_ps.start()
 
         while True:
@@ -545,8 +383,8 @@ class PortScanProcess(Module, multiprocessing.Process):
 
                     # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
 
-                    self.horizontal_ps.check_horizontal_portscan(profileid, twid)
-                    self.check_vertical_portscan(profileid, twid)
+                    self.horizontal_ps.check(profileid, twid)
+                    self.vertical_portscan.check(profileid, twid)
                     self.check_icmp_scan(profileid, twid)
 
                 message = __database__.get_message(self.c2)

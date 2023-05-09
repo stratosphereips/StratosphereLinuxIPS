@@ -100,7 +100,7 @@ class HorizontalPortscan():
                 dstips_to_discard.append(dip)
         return dstips_to_discard
 
-    def check_horizontal_portscan(self, profileid, twid):
+    def check(self, profileid, twid):
         def get_uids():
             """
             returns all the uids of flows to this port
