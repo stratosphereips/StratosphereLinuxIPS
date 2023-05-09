@@ -22,59 +22,44 @@ class VerticalPortscan():
         self.fieldseparator = __database__.getFieldSeparator()
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
-        # time in seconds to wait before alerting port scan
-        self.time_to_wait_before_generating_new_alert = 25
         # list of tuples, each tuple is the args to setevidence
         self.pending_vertical_ps_evidence = {}
         # we should alert once we find 1 vertical ps evidence then combine the rest of evidence every x seconds
         # the value of this dict will be true after the first portscan alert to th ekey ip
         # format is {ip: True/False , ...}
         self.alerted_once_vertical_ps = {}
-        # avoid many alerts
-        self.timer_thread_vertical_ps = threading.Thread(
-                                target=self.wait_for_vertical_scans,
-                                daemon=True
-        )
-        self.lock = threading.Lock()
 
 
-    def wait_for_vertical_scans(self):
-        while True:
-            # wait 25s for new evidence to arrive so we can combine them
-            time.sleep(self.time_to_wait_before_generating_new_alert)
-            # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
-            # calling set_evidence
-            self.lock.acquire()
-            for key, evidence_list in self.pending_vertical_ps_evidence.items():
-                # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
-                # each value here is a list of evidence that should be combined
-                profileid, twid, state, protocol, dstip = key.split('-')
-                final_evidence_uids = []
-                final_pkts_sent = 0
+    def combine_evidence(self):
+        for key, evidence_list in self.pending_vertical_ps_evidence.items():
+            # each key here is  {profileid}-{twid}-{state}-{protocol}-{dport}
+            # each value here is a list of evidence that should be combined
+            profileid, twid, state, protocol, dstip = key.split('-')
+            final_evidence_uids = []
+            final_pkts_sent = 0
 
-                # combine all evidence that share the above key
-                for evidence in evidence_list:
-                    # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
-                    # in the final evidence, we'll be using the ts of the last evidence
-                    timestamp, pkts_sent, evidence_uids, amount_of_dports = evidence
-                    # since we're combining evidence, we want the uids of the final evidence
-                    # to be the sum of all the evidence we combined
-                    final_evidence_uids += evidence_uids
-                    final_pkts_sent += pkts_sent
+            # combine all evidence that share the above key
+            for evidence in evidence_list:
+                # each evidence is a tuple of (timestamp, pkts_sent, uids, amount_of_dips)
+                # in the final evidence, we'll be using the ts of the last evidence
+                timestamp, pkts_sent, evidence_uids, amount_of_dports = evidence
+                # since we're combining evidence, we want the uids of the final evidence
+                # to be the sum of all the evidence we combined
+                final_evidence_uids += evidence_uids
+                final_pkts_sent += pkts_sent
 
-                self.set_evidence_vertical_portscan(
-                    timestamp,
-                    final_pkts_sent,
-                    protocol,
-                    profileid,
-                    twid,
-                    final_evidence_uids,
-                    amount_of_dports,
-                    dstip
-                )
-            # reset the dict sinse we already combiner
-            self.pending_vertical_ps_evidence = {}
-            self.lock.release()
+            self.set_evidence_vertical_portscan(
+                timestamp,
+                final_pkts_sent,
+                protocol,
+                profileid,
+                twid,
+                final_evidence_uids,
+                amount_of_dports,
+                dstip
+            )
+        # reset the dict since we already combined
+        self.pending_vertical_ps_evidence = {}
 
     def set_evidence_vertical_portscan(
             self,
@@ -157,9 +142,9 @@ class VerticalPortscan():
 
                         # Store in our local cache how many dips were there:
                         self.cache_det_thresholds[cache_key] = amount_of_dports
-                        if not self.alerted_once_vertical_ps.get(dstip, False):
+                        if not self.alerted_once_vertical_ps.get(cache_key, False):
                             # now from now on, we will be combining the next vertical ps evidence targetting this dport
-                            self.alerted_once_vertical_ps[dstip] = True
+                            self.alerted_once_vertical_ps[cache_key] = True
                             self.set_evidence_vertical_portscan(
                                 timestamp,
                                 pkts_sent,
@@ -173,17 +158,15 @@ class VerticalPortscan():
                         else:
                              # we will be combining further alerts to avoid alerting
                              # many times every portscan
+                            evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
                             # for all the combined alerts, the following params should be equal
                             key = f'{profileid}-{twid}-{state}-{protocol}-{dstip}'
-
-                            evidence_details = (timestamp, pkts_sent, uid, amount_of_dports)
-
-                            # to make sure the pending dict isn't being accessed by the thread while
-                             # we're modifying it here
-                            self.lock.acquire()
                             try:
                                 self.pending_vertical_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_vertical_ps_evidence[key] = [evidence_details]
-                            self.lock.release()
+
+                            # combine evidence every x new portscans to the same ip
+                            if len(self.pending_vertical_ps_evidence[key]) == 3:
+                                self.combine_evidence()

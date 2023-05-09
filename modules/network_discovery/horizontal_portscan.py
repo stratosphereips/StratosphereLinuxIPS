@@ -19,8 +19,6 @@ class HorizontalPortscan():
 
         # the separator used to separate the IP and the word profile
         self.fieldseparator = __database__.getFieldSeparator()
-        # time in seconds to wait before alerting port scan
-        self.time_to_wait_before_generating_new_alert = 25
 
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips = 5
@@ -158,13 +156,11 @@ class HorizontalPortscan():
                         timestamp = next(iter(dstips.values()))['stime']
 
                         self.cache_det_thresholds[cache_key] = amount_of_dips
-                        # for all the combined alerts, the following params should be equal
-                        key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
 
-                        if not self.alerted_once_horizontal_ps.get(key, False):
+                        if not self.alerted_once_horizontal_ps.get(cache_key, False):
                             #  from now on, we will be combining the next horizontal ps evidence targeting this
                             # dport
-                            self.alerted_once_horizontal_ps[key] = True
+                            self.alerted_once_horizontal_ps[cache_key] = True
                             self.set_evidence_horizontal_portscan(
                                 timestamp,
                                 pkts_sent,
@@ -178,12 +174,16 @@ class HorizontalPortscan():
                         else:
                             # we will be combining further alerts to avoid alerting many times every portscan
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
+                            # for all the combined alerts, the following params should be equal
+                            key = f'{profileid}-{twid}-{state}-{protocol}-{dport}'
+
                             try:
                                 self.pending_horizontal_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_horizontal_ps_evidence[key] = [evidence_details]
-                            # wake up the thread to combine evidence every 5 new portscans to the same dport
+
+                            # combine evidence every 3 new portscans to the same dport
                             if len(self.pending_horizontal_ps_evidence[key]) == 3:
                                 self.combine_evidence()
 

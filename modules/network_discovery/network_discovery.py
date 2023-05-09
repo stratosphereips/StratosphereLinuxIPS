@@ -22,7 +22,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
         self.horizontal_ps = HorizontalPortscan()
-        self.vertical_portscan = VerticalPortscan()
+        self.vertical_ps = VerticalPortscan()
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         # Set the output queue of our database instance
@@ -54,7 +54,7 @@ class PortScanProcess(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # alert about all the pending evidence before this module stops
         self.horizontal_ps.combine_evidence()
-        # self.vertical_ps.combine_evidence()
+        self.vertical_ps.combine_evidence()
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
@@ -384,7 +384,7 @@ class PortScanProcess(Module, multiprocessing.Process):
                     # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
 
                     self.horizontal_ps.check(profileid, twid)
-                    self.vertical_portscan.check(profileid, twid)
+                    self.vertical_ps.check(profileid, twid)
                     self.check_icmp_scan(profileid, twid)
 
                 message = __database__.get_message(self.c2)
