@@ -33,6 +33,7 @@ class HorizontalPortscan():
                 target=self.wait_for_horizontal_scans,
                 daemon=True
         )
+        self.lock = threading.Lock()
 
     def calculate_confidence(self, pkts_sent):
         if pkts_sent > 10:
@@ -54,8 +55,7 @@ class HorizontalPortscan():
             time.sleep(self.time_to_wait_before_generating_new_alert)
             # to make sure the network_discovery process isn't adding evidence of another ps while this thread is
             # calling set_evidence
-            lock = threading.Lock()
-            lock.acquire()
+            self.lock.acquire()
             for key, evidence_list in self.pending_horizontal_ps_evidence.items():
                 # each key here is {profileid}-{twid}-{state}-{protocol}-{dport}
                 # each value here is a list of evidence that should be combined
@@ -84,7 +84,7 @@ class HorizontalPortscan():
                 )
             # reset the dict since we already combined the evidence
             self.pending_horizontal_ps_evidence = {}
-            lock.release()
+            self.lock.release()
 
     def get_resolved_ips(self, dstips: dict) -> list:
         """
@@ -194,14 +194,13 @@ class HorizontalPortscan():
                             evidence_details = (timestamp, pkts_sent, uids, amount_of_dips)
                             # to make sure this function isn't adding evidence of another ps while the
                             # wait thread is calling set_evidence
-                            lock = threading.Lock()
-                            lock.acquire()
+                            self.lock.acquire()
                             try:
                                 self.pending_horizontal_ps_evidence[key].append(evidence_details)
                             except KeyError:
                                 # first time seeing this key
                                 self.pending_horizontal_ps_evidence[key] = [evidence_details]
-                            lock.release()
+                            self.lock.release()
 
     def set_evidence_horizontal_portscan(
             self,
