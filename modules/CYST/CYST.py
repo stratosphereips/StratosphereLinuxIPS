@@ -102,29 +102,6 @@ class Module(Module, multiprocessing.Process):
 
         self.cyst_conn.sendall(msg_len)
 
-
-    def send_blocking_request(self, ip):
-        """
-        for now when slips generates a blocking request, it blocks everything from and to this srcip
-        -p doesn't have to be present for slips to send blocking requests to cyst
-        the blocking module won't start and it's ok. the goal is to have cyst take care of the blocking not slips
-
-        """
-        #todo handle this slips_msg_type in cyst
-        blocking_request = {
-            'slips_msg_type': 'blocking',
-            'to_block_type': 'ip', # can be anything in the future i.e domain url etc
-            'value': ip
-        }
-        blocking_request: bytes = json.dumps(blocking_request).encode()
-        self.send_length(blocking_request)
-
-        try:
-            self.cyst_conn.sendall(blocking_request)
-        except BrokenPipeError:
-            self.conn_closed = True
-            return
-
     def send_alert(self, alert_ID: str, ip_to_block: str):
         """
         Sends the alert ID and the IDs of the evidence causing this alert to cyst
