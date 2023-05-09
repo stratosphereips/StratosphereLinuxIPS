@@ -43,7 +43,7 @@ class Module(Module, multiprocessing.Process):
         self.c3 = __database__.subscribe('new_notice')
         self.c4 = __database__.subscribe('new_ssl')
         self.c5 = __database__.subscribe('tw_closed')
-        self.c6 = __database__.subscribe('new_dns_flow')
+        self.c6 = __database__.subscribe('new_dns')
         self.c7 = __database__.subscribe('new_downloaded_file')
         self.c8 = __database__.subscribe('new_smtp')
         self.c9 = __database__.subscribe('new_software')
@@ -2059,7 +2059,7 @@ class Module(Module, multiprocessing.Process):
                 if message and message['data'] == 'stop_process':
                     self.shutdown_gracefully()
                     return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns'):
                     data = json.loads(message['data'])
                     profileid = data['profileid']
                     twid = data['twid']

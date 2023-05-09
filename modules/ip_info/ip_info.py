@@ -38,7 +38,7 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
-        self.c3 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_dns')
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -509,7 +509,7 @@ class Module(Module, multiprocessing.Process):
                     self.shutdown_gracefully()
                     return True
 
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
+                if utils.is_msg_intended_for(message, 'new_dns'):
                     data = message['data']
                     data = json.loads(data)
                     # profileid = data['profileid']

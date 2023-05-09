@@ -25,7 +25,6 @@ class Database(ProfilingFlowsDatabase, object):
         'new_ip',
         'new_flow',
         'new_dns',
-        'new_dns_flow',
         'new_http',
         'new_ssl',
         'new_profile',
