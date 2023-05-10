@@ -27,6 +27,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.port = None
         self.outputqueue = outputqueue
         __database__.start(redis_port)
@@ -298,9 +299,7 @@ class Module(Module, multiprocessing.Process):
 
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-        return
-
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
         if (
             self.is_running_on_interface
@@ -316,39 +315,26 @@ class Module(Module, multiprocessing.Process):
             date_time = utils.convert_format(date_time, utils.alerts_format)
             self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
 
-        while True:
-            try:
-                msg = __database__.get_message(self.c1)
+    def main(self):
+        msg = __database__.get_message(self.c1)
+        if utils.is_msg_intended_for(msg, 'export_evidence'):
+            self.msg_received = True
+            evidence = json.loads(msg['data'])
+            description = evidence['description']
+            if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
+                srcip = evidence['profileid'].split("_")[-1]
+                msg_to_send = f'Src IP {srcip} Detected {description}'
+                self.send_to_slack(msg_to_send)
 
-                if msg and msg['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(msg, 'export_evidence'):
-                    evidence = json.loads(msg['data'])
-                    description = evidence['description']
-                    if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
-                        srcip = evidence['profileid'].split("_")[-1]
-                        msg_to_send = f'Src IP {srcip} Detected {description}'
-                        self.send_to_slack(msg_to_send)
-
-                    if 'stix' in self.export_to:
-                        msg_to_send = (
-                            evidence['evidence_type'],
-                            evidence['attacker_direction'],
-                            evidence['attacker'],
-                            description,
-                        )
-                        exported_to_stix = self.export_to_STIX(msg_to_send)
-                        if not exported_to_stix:
-                            self.print('Problem in export_to_STIX()', 0, 3)
-
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+            if 'stix' in self.export_to:
+                msg_to_send = (
+                    evidence['evidence_type'],
+                    evidence['attacker_direction'],
+                    evidence['attacker'],
+                    description,
+                )
+                exported_to_stix = self.export_to_STIX(msg_to_send)
+                if not exported_to_stix:
+                    self.print('Problem in export_to_STIX()', 0, 3)
+        else:
+            self.msg_received = False
