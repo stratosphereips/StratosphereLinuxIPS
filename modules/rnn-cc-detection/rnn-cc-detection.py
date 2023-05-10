@@ -66,6 +66,8 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
+
+
     def convert_input_for_module(self, pre_behavioral_model):
         """
         Takes the input from the letters and converts them
@@ -141,14 +143,13 @@ class Module(Module, multiprocessing.Process):
                     return True
 
                 if utils.is_msg_intended_for(message, 'new_letters'):
-                    data = message['data']
-                    data = json.loads(data)
-                    pre_behavioral_model = data['new_symbol']
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    tupleid = data['tupleid']
-                    uid = data['uid']
-                    stime = data['stime']
+                    msg = message['data']
+                    msg = json.loads(msg)
+                    pre_behavioral_model = msg['new_symbol']
+                    profileid = msg['profileid']
+                    twid = msg['twid']
+                    tupleid = msg['tupleid']
+                    flow = msg['flow']
 
                     if 'tcp' in tupleid.lower():
                         # to reduce false positives
@@ -165,7 +166,8 @@ class Module(Module, multiprocessing.Process):
                         )
                         score = tcpmodel.predict(behavioral_model)
                         self.print(
-                            f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
+                            f' >> sequence: {pre_behavioral_model}. final '
+                            f'prediction score: {score[0][0]:.20f}',
                             3,
                             0,
                         )
@@ -183,6 +185,8 @@ class Module(Module, multiprocessing.Process):
                                     len(pre_behavioral_model)
                                     / threshold_confidence
                                 )
+                            uid = msg['uid']
+                            stime = flow['starttime']
                             self.set_evidence(
                                 score,
                                 confidence,
@@ -192,6 +196,17 @@ class Module(Module, multiprocessing.Process):
                                 profileid,
                                 twid,
                             )
+                            attacker = tupleid.split('-')[0]
+                            # port = int(tupleid.split('-')[1])
+                            to_send = {
+                                'attacker': attacker,
+                                'attacker_type': utils.detect_data_type(attacker),
+                                'profileid' : profileid,
+                                'twid' : twid,
+                                'flow': flow,
+                                'uid': uid,
+                            }
+                            __database__.publish('check_jarm_hash', json.dumps(to_send))
                     """
                     elif 'udp' in tupleid.lower():
                         # Define why this threshold
