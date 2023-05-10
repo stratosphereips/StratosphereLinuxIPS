@@ -208,8 +208,3 @@ class ASN:
                 # found it online
                 self.update_ip_info(ip, cached_ip_info, asn)
                 return
-
-
-
-
-

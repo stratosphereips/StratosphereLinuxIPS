@@ -85,6 +85,7 @@ class Module(Module, multiprocessing.Process):
 
     def pre_main(self):
         utils.drop_root_privs()
+
     def main(self):
         message = __database__.get_message(self.c1)
         if utils.is_msg_intended_for(message, 'tw_closed'):
