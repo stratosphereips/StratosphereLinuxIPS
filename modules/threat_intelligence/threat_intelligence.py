@@ -941,7 +941,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.circllu_calls_thread.start()
         __database__.init_ti_queue()
 
-    def run(self):
+    def main(self):
         message = __database__.get_message(self.c1)
         # The channel now can receive an IP address or a domain name
         if utils.is_msg_intended_for(
