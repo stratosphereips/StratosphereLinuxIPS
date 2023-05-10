@@ -8,13 +8,13 @@ class Module(ABC):
 
     def __init__(self, outputqueue):
         self.outputqueue = outputqueue
-        self.control_flow_channel = __database__.subscribe('control_flow')
+        self.control_channel = __database__.subscribe('control_module')
         self.msg_received = True
 
     def should_stop(self) -> bool:
         """
         The module should stop on the following 2 conditions
-        1. slips.py publishes the stop_process msg in the control_flow channel
+        1. slips.py publishes the stop_process msg in the control_module channel
         2. no msgs left to process in the module
         This function calls the shutdown_gracefully pf the module when the 2 conditions are true
         """
@@ -22,7 +22,7 @@ class Module(ABC):
             # this module is still receiving msgs, don't stop
             return False
 
-        message = __database__.get_message(self.control_flow_channel)
+        message = __database__.get_message(self.control_channel)
         if message and message['data'] == 'stop_process':
             self.shutdown_gracefully()
             return True
