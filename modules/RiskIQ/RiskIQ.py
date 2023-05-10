@@ -20,6 +20,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_ip')
@@ -93,36 +94,26 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
-    def run(self):
+    def pre_run(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
             return False
+    def main(self):
         # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+        message = __database__.get_message(self.c1)
+        if utils.is_msg_intended_for(message, 'new_ip'):
+            self.msg_received = True
+            ip = message['data']
+            if utils.is_ignored_ip(ip):
+                # return here means keep looping
+                return
+            # Only get passive total dns data if we don't have it in the db
+            if __database__.get_passive_dns(ip):
+                return
+            # we don't have it in the db , get it from passive total
+            if passive_dns := self.get_passive_dns(ip):
+                # we found data from passive total, store it in the db
+                __database__.set_passive_dns(ip, passive_dns)
+        else:
+            self.msg_received = False
 
-                if utils.is_msg_intended_for(message, 'new_ip'):
-                    ip = message['data']
-                    if utils.is_ignored_ip(ip):
-                        continue
-                    # Only get passive total dns data if we don't have it in the db
-                    if __database__.get_passive_dns(ip):
-                        continue
-                    # we don't have it in the db , get it from passive total
-                    if passive_dns := self.get_passive_dns(ip):
-                        # we found data from passive total, store it in the db
-                        __database__.set_passive_dns(ip, passive_dns)
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
