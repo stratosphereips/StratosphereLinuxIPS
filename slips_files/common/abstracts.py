@@ -71,23 +71,31 @@ class Module(ABC):
     def run(self):
         """ This is the loop function, it runs non-stop as long as the module is online """
         try:
-            self.pre_main()
+            error: bool = self.pre_main()
+            if error:
+                self.shutdown_gracefully()
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem in pre_main() of module: {self.name}.'
-                       f' line {exception_line}', 0, 1)
+            self.print(f'Problem in pre_main() line {exception_line}', 0, 1)
             self.print(traceback.format_exc(), 0, 1)
             return True
 
-        while True:
+        online = True
+        while online:
             try:
-                self.main()
-
-                if self.should_stop():
+                # keep running main() in a loop as long as the module is online
+                # if a module's main() returns 1, it means there's an error and it needs to stop immediately
+                error: bool = self.main()
+                if error:
+                    # finished with some error
+                    self.shutdown_gracefully()
+                elif self.should_stop():
+                    # finished because no more msgs in queue
                     return True
+
             except KeyboardInterrupt:
                 if self.should_stop():
                     return True
