@@ -95,7 +95,6 @@ class Module(ABC):
                     continue
             except Exception:
                 exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem in main() of module: {self.name}.'
-                           f' line {exception_line}', 0, 1)
+                self.print(f'Problem in main() line {exception_line}', 0, 1)
                 self.print(traceback.format_exc(), 0, 1)
                 return True
