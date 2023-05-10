@@ -18,6 +18,7 @@
 from slips_files.core.database.database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.common.abstracts import Module
 
 from slips_files.core.flows.zeek import Conn, DNS, HTTP, SSL, SSH, DHCP, FTP
 from slips_files.core.flows.zeek import Files, ARP, Weird, SMTP, Tunnel, Notice, Software
@@ -40,7 +41,7 @@ import base64
 from re import split
 
 # Profiler Process
-class ProfilerProcess(multiprocessing.Process):
+class ProfilerProcess(Module, multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
@@ -48,11 +49,13 @@ class ProfilerProcess(multiprocessing.Process):
     ):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0
+        self.rec_lines = 0
         self.whitelist = Whitelist(outputqueue, redis_port)
         # Read the configuration
         self.read_configuration()
@@ -1748,119 +1751,102 @@ class ProfilerProcess(multiprocessing.Process):
         # can't use self.name because multiprocessing library adds the child number to the name so it's not const
         __database__.publish('finished_modules', 'Profiler')
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        rec_lines = 0
-        # Main loop function
-        while True:
+
+    def main(self):
+        line = self.inputqueue.get()
+        if 'stop' in line:
+            self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
+                       f"{self.whitelisted_flows_ctr}", 2, 0)
+
+            # if timewindows are not updated for a long time (see at logsProcess.py),
+            # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
+            self.shutdown_gracefully()
+            self.print(
+                f'Stopping Profiler Process. Received {self.rec_lines} lines '
+                f'({utils.convert_format(datetime.now(), utils.alerts_format)})',
+                2,
+                0,
+            )
+            return 1
+
+        # Received new input data
+        # Extract the columns smartly
+        self.print(f'< Received Line: {line}', 2, 0)
+        self.rec_lines += 1
+
+        if not self.input_type:
+            # Find the type of input received
+            self.define_type(line)
+            # Find the number of flows we're going to receive of input received
+            self.outputqueue.put("initialize progress bar")
+
+        # What type of input do we have?
+        if not self.input_type:
+            # the above define_type can't define the type of input
+            self.print("Can't determine input type.", 5, 6)
+
+        elif self.input_type == 'zeek':
+            # self.print('Zeek line')
+            if self.process_zeek_input(line):
+                # Add the flow to the profile
+                self.add_flow_to_profile()
+
+            self.outputqueue.put("update progress bar")
+
+        elif self.input_type in ['argus', 'argus-tabs']:
+            # self.print('Argus line')
+            # Argus puts the definition of the columns on the first line only
+            # So read the first line and define the columns
             try:
-                line = self.inputqueue.get()
-                if 'stop' in line:
-                    self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
-                               f"{self.whitelisted_flows_ctr}", 2, 0)
-
-                    # if timewindows are not updated for a long time (see at logsProcess.py),
-                    # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                    self.shutdown_gracefully()
-                    self.print(
-                        f'Stopping Profiler Process. Received {rec_lines} lines ({utils.convert_format(datetime.now(), utils.alerts_format)})',
-                        2,
-                        0,
+                if '-f' in sys.argv and 'argus' in sys.argv:
+                    # argus from stdin
+                    self.define_columns(
+                        {
+                            'data': "StartTime,Dur,Proto,SrcAddr,Sport,"
+                                    "Dir,"
+                                    "DstAddr,Dport,State,sTos,dTos,TotPkts,"
+                                    "TotBytes,SrcBytes,SrcPkts,Label"
+                        }
                     )
-                    return True
-
-                # Received new input data
-                # Extract the columns smartly
-                self.print(f'< Received Line: {line}', 2, 0)
-                rec_lines += 1
-
-                if not self.input_type:
-                    # Find the type of input received
-                    self.define_type(line)
-                    # Find the number of flows we're going to receive of input received
-                    self.outputqueue.put("initialize progress bar")
-
-                # What type of input do we have?
-                if not self.input_type:
-                    # the above define_type can't define the type of input
-                    self.print("Can't determine input type.", 5, 6)
-
-                elif self.input_type == 'zeek':
-                    # self.print('Zeek line')
-                    if self.process_zeek_input(line):
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-
-                    self.outputqueue.put("update progress bar")
-
-                elif self.input_type in ['argus', 'argus-tabs']:
-                    # self.print('Argus line')
-                    # Argus puts the definition of the columns on the first line only
-                    # So read the first line and define the columns
-                    try:
-                        if '-f' in sys.argv and 'argus' in sys.argv:
-                            # argus from stdin
-                            self.define_columns(
-                                {
-                                    'data': "StartTime,Dur,Proto,SrcAddr,Sport,"
-                                            "Dir,"
-                                            "DstAddr,Dport,State,sTos,dTos,TotPkts,"
-                                            "TotBytes,SrcBytes,SrcPkts,Label"
-                                }
-                            )
-                        _ = self.column_idx['starttime']
-                        if self.process_argus_input(line):
-                            # Add the flow to the profile
-                            self.add_flow_to_profile()
-                        self.outputqueue.put("update progress bar")
-                    except (AttributeError, KeyError):
-                        # Define columns. Do not add this line to profile, its only headers
-                        self.define_columns(line)
-                elif self.input_type == 'suricata':
-                    if self.process_suricata_input(line):
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-                    # update progress bar anyway because 1 flow was processed even
-                    # if slips didn't use it
-                    self.outputqueue.put("update progress bar")
-                elif self.input_type == 'zeek-tabs':
-                    # self.print('Zeek-tabs line')
-                    if self.process_zeek_tabs_input(line):
-                        # Add the flow to the profile
-                        self.add_flow_to_profile()
-                    self.outputqueue.put("update progress bar")
-                elif self.input_type == 'nfdump':
-                    if self.process_nfdump_input(line):
-                        self.add_flow_to_profile()
-                    self.outputqueue.put("update progress bar")
-                else:
-                    self.print("Can't recognize input file type.")
-                    return False
+                _ = self.column_idx['starttime']
+                if self.process_argus_input(line):
+                    # Add the flow to the profile
+                    self.add_flow_to_profile()
+                self.outputqueue.put("update progress bar")
+            except (AttributeError, KeyError):
+                # Define columns. Do not add this line to profile, its only headers
+                self.define_columns(line)
+        elif self.input_type == 'suricata':
+            if self.process_suricata_input(line):
+                # Add the flow to the profile
+                self.add_flow_to_profile()
+            # update progress bar anyway because 1 flow was processed even
+            # if slips didn't use it
+            self.outputqueue.put("update progress bar")
+        elif self.input_type == 'zeek-tabs':
+            # self.print('Zeek-tabs line')
+            if self.process_zeek_tabs_input(line):
+                # Add the flow to the profile
+                self.add_flow_to_profile()
+            self.outputqueue.put("update progress bar")
+        elif self.input_type == 'nfdump':
+            if self.process_nfdump_input(line):
+                self.add_flow_to_profile()
+            self.outputqueue.put("update progress bar")
+        else:
+            self.print("Can't recognize input file type.")
+            return False
 
 
-                # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'reload_whitelist'):
-                    # if whitelist.conf is edited using pycharm
-                    # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
-                    # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
-                    self.whitelist.read_whitelist()
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(
-                    f'Error. Stopped Profiler Process. Received {rec_lines} '
-                    f'lines', 0, 1,
-                )
-                self.print(
-                    f'\tProblem with Profiler Process. line '
-                    f'{exception_line}', 0, 1,
-                )
-                self.print(traceback.format_exc())
-                return True
+        # listen on this channel in case whitelist.conf is changed, we need to process the new changes
+        message = __database__.get_message(self.c1)
+        if utils.is_msg_intended_for(message, 'reload_whitelist'):
+            self.msg_received = True
+            # if whitelist.conf is edited using pycharm
+            # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
+            # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
+            self.whitelist.read_whitelist()
+        else:
+            self.msg_received = False
