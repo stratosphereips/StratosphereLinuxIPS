@@ -313,7 +313,8 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
 
         if not self.bin_found:
-            return True
+            # yara is not installed
+            return 1
 
         # if we we don't have compiled rules, compile them
         if self.compile_and_save_rules():
@@ -322,4 +323,5 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         # nothing runs in a loop in this module
-        pass
+        # exit module
+        return 1

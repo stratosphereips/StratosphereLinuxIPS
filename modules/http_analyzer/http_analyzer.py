@@ -463,6 +463,7 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
+
     def main(self):
         message = __database__.get_message(self.c1)
         if utils.is_msg_intended_for(message, 'new_http'):

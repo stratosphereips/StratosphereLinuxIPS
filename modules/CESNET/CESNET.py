@@ -278,7 +278,7 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
         # Stop module if the configuration file is invalid or not found
         if self.stop_module:
-            return False
+            return 1
 
         # create the warden client
         self.wclient = Client(**read_cfg(self.configuration_file))
