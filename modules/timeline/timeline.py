@@ -20,7 +20,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.separator = __database__.getFieldSeparator()
@@ -370,36 +370,24 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                # Check that the message is for you. Probably unnecessary...
-                # if timewindows are not updated for a long time (see at logsProcess.py),
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
 
-                if utils.is_msg_intended_for(message, 'new_flow'):
-                    mdata = message['data']
-                    # Convert from json to dict
-                    mdata = json.loads(mdata)
-                    profileid = mdata['profileid']
-                    twid = mdata['twid']
-                    flow = mdata['flow']
-                    timestamp = mdata['stime']
-                    flow = json.loads(flow)
-                    return_value = self.process_flow(
-                        profileid, twid, flow, timestamp
-                    )
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+    def main(self):
+        # Main loop function
+        message = __database__.get_message(self.c1)
+        if utils.is_msg_intended_for(message, 'new_flow'):
+            self.msg_received = True
+            mdata = message['data']
+            # Convert from json to dict
+            mdata = json.loads(mdata)
+            profileid = mdata['profileid']
+            twid = mdata['twid']
+            flow = mdata['flow']
+            timestamp = mdata['stime']
+            flow = json.loads(flow)
+            self.process_flow(
+                profileid, twid, flow, timestamp
+            )
+        else:
+            self.msg_received = False
