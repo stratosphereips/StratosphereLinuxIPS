@@ -26,6 +26,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         # Get a separator from the database
@@ -39,7 +40,6 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.circllu_calls_thread = threading.Thread(
             target=self.make_pending_query, daemon=True
         )
-        self.should_shutdown = False
         self.urlhaus = URLhaus()
 
     def make_pending_query(self):
@@ -988,101 +988,82 @@ class Module(Module, multiprocessing.Process, URLhaus):
             return True
         return False
 
+    def pre_main(self):
+        utils.drop_root_privs()
+        # Load the local Threat Intelligence files that are
+        # stored in the local folder self.path_to_local_ti_files
+        # The remote files are being loaded by the update_manager
+        self.update_local_file('own_malicious_iocs.csv')
+        self.update_local_file('own_malicious_JA3.csv')
+        self.update_local_file('own_malicious_JARM.csv')
+        self.circllu_calls_thread.start()
+        __database__.init_ti_queue()
+
     def run(self):
-        try:
-            utils.drop_root_privs()
-            # Load the local Threat Intelligence files that are
-            # stored in the local folder self.path_to_local_ti_files
-            # The remote files are being loaded by the update_manager
-            self.update_local_file('own_malicious_iocs.csv')
-            self.update_local_file('own_malicious_JA3.csv')
-            self.update_local_file('own_malicious_JARM.csv')
-            self.circllu_calls_thread.start()
-            __database__.init_ti_queue()
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(), 0, 1)
-            return True
+        message = __database__.get_message(self.c1)
+        # The channel now can receive an IP address or a domain name
+        if utils.is_msg_intended_for(
+            message, 'give_threat_intelligence'
+        ):
+            self.msg_received = True
+            # Data is sent in the channel as a json dict so we need to deserialize it first
+            data = json.loads(message['data'])
+            # Extract data from dict
+            profileid = data.get('profileid')
+            twid = data.get('twid')
+            timestamp = data.get('stime')
+            uid = data.get('uid')
+            protocol = data.get('proto')
+            daddr = data.get('daddr')
+            # these 2 are only available when looking up dns answers
+            # the query is needed when a malicious answer is found,
+            # for more detailed description of the evidence
+            self.is_dns_response = data.get('is_dns_response')
+            self.dns_query = data.get('dns_query')
+            # IP is the IP that we want the TI for. It can be a SRC or DST IP
+            to_lookup = data.get('to_lookup', '')
+            # detect the type given because sometimes, http.log host field has ips OR domains
+            type_ = utils.detect_data_type(to_lookup)
 
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.should_shutdown = True
+            # ip_state will say if it is a srcip or if it was a dst_ip
+            ip_state = data.get('ip_state')
 
-                # The channel now can receive an IP address or a domain name
-                if utils.is_msg_intended_for(
-                    message, 'give_threat_intelligence'
-                ):
-                    # Data is sent in the channel as a json dict so we need to deserialize it first
-                    data = json.loads(message['data'])
-                    # Extract data from dict
-                    profileid = data.get('profileid')
-                    twid = data.get('twid')
-                    timestamp = data.get('stime')
-                    uid = data.get('uid')
-                    protocol = data.get('proto')
-                    daddr = data.get('daddr')
-                    # these 2 are only available when looking up dns answers
-                    # the query is needed when a malicious answer is found,
-                    # for more detailed description of the evidence
-                    self.is_dns_response = data.get('is_dns_response')
-                    self.dns_query = data.get('dns_query')
-                    # IP is the IP that we want the TI for. It can be a SRC or DST IP
-                    to_lookup = data.get('to_lookup', '')
-                    # detect the type given because sometimes, http.log host field has ips OR domains
-                    type_ = utils.detect_data_type(to_lookup)
+            # If given an IP, ask for it
+            # Block only if the traffic isn't outgoing ICMP port unreachable packet
+            if type_ == 'ip':
+                ip = to_lookup
+                if not (
+                        utils.is_ignored_ip(ip)
+                        or self.is_outgoing_icmp_packet(protocol, ip_state)
+                    ):
+                    self.is_malicious_ip(ip, uid, daddr, timestamp, profileid, twid, ip_state)
+                    self.ip_belongs_to_blacklisted_range(ip, uid, daddr, timestamp, profileid, twid, ip_state)
+                    self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
+            elif type_ == 'domain':
+                self.is_malicious_domain(
+                    to_lookup,
+                    uid,
+                    timestamp,
+                    profileid,
+                    twid
+                )
+            elif type_ == 'url':
+                self.is_malicious_url(
+                    to_lookup,
+                    uid,
+                    timestamp,
+                    profileid,
+                    twid
+                )
+            __database__.mark_as_analyzed_by_ti_module()
+        else:
+            self.msg_received = False
 
-                    # ip_state will say if it is a srcip or if it was a dst_ip
-                    ip_state = data.get('ip_state')
-
-                    # If given an IP, ask for it
-                    # Block only if the traffic isn't outgoing ICMP port unreachable packet
-                    if type_ == 'ip':
-                        ip = to_lookup
-                        if not (
-                                utils.is_ignored_ip(ip)
-                                or self.is_outgoing_icmp_packet(protocol, ip_state)
-                            ):
-                            self.is_malicious_ip(ip, uid, daddr, timestamp, profileid, twid, ip_state)
-                            self.ip_belongs_to_blacklisted_range(ip, uid, daddr, timestamp, profileid, twid, ip_state)
-                            self.ip_has_blacklisted_ASN(ip, uid, timestamp, profileid, twid, ip_state)
-                    elif type_ == 'domain':
-                        self.is_malicious_domain(
-                            to_lookup,
-                            uid,
-                            timestamp,
-                            profileid,
-                            twid
-                        )
-                    elif type_ == 'url':
-                        self.is_malicious_url(
-                            to_lookup,
-                            uid,
-                            timestamp,
-                            profileid,
-                            twid
-                        )
-                    __database__.mark_as_analyzed_by_ti_module()
-
-
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.should_shutdown = True
-
-                if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-                    file_info = json.loads(message['data'])
-                    if file_info['type'] == 'zeek':
-                        self.is_malicious_hash(file_info)
-
-
-                if self.should_shutdown:
-                     self.shutdown_gracefully()
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc())
+        message = __database__.get_message(self.c2)
+        if utils.is_msg_intended_for(message, 'new_downloaded_file'):
+            self.msg_received = True
+            file_info = json.loads(message['data'])
+            if file_info['type'] == 'zeek':
+                self.is_malicious_hash(file_info)
+        else:
+            self.msg_received = False
