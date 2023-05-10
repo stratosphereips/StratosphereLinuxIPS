@@ -332,15 +332,45 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
 
+
+    def check_for_ips_to_unblock(self):
+            unblocked_ips = set()
+            # check if any ip needs to be unblocked
+            for ip, info in self.unblock_ips.items():
+                # info is a dict with:
+                # 'block_for': block_for,
+                #   'time_of_blocking': time_of_blocking,
+                #   'blocking_details': {
+                #       "from"     : from_ ,
+                #       "to"       : to,
+                #       "dport"    : dport,
+                #       "sport"    : sport,
+                #       "protocol" : protocol}}}
+                if (
+                    time.time()
+                    >= info['time_of_blocking'] + info['block_for']
+                ):
+                    blocking_details = info['blocking_details']
+                    self.unblock_ip(
+                        ip,
+                        blocking_details['from'],
+                        blocking_details['to'],
+                        blocking_details['dport'],
+                        blocking_details['sport'],
+                        blocking_details['protocol'],
+                    )
+                    # make a list of unblocked IPs to remove from dict
+                    unblocked_ips.add(ip)
+
+            for ip in unblocked_ips:
+                self.unblock_ips.pop(ip)
+
     def run(self):
         # Main loop function
         while True:
             try:
                 message = __database__.get_message(self.c1)
-                # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+
                 # There's an IP that needs to be blocked
                 if utils.is_msg_intended_for(message, 'new_blocking'):
                     # message['data'] in the new_blocking channel is a dictionary that contains
@@ -378,37 +408,8 @@ class Module(Module, multiprocessing.Process):
                         )
                     else:
                         self.unblock_ip(ip, from_, to, dport, sport, protocol)
+                self.check_for_ips_to_unblock()
 
-                unblocked_ips = set()
-                # check if any ip needs to be unblocked
-                for ip, info in self.unblock_ips.items():
-                    # info is a dict with:
-                    # 'block_for': block_for,
-                    #   'time_of_blocking': time_of_blocking,
-                    #   'blocking_details': {
-                    #       "from"     : from_ ,
-                    #       "to"       : to,
-                    #       "dport"    : dport,
-                    #       "sport"    : sport,
-                    #       "protocol" : protocol}}}
-                    if (
-                        time.time()
-                        >= info['time_of_blocking'] + info['block_for']
-                    ):
-                        blocking_details = info['blocking_details']
-                        self.unblock_ip(
-                            ip,
-                            blocking_details['from'],
-                            blocking_details['to'],
-                            blocking_details['dport'],
-                            blocking_details['sport'],
-                            blocking_details['protocol'],
-                        )
-                        # make a list of unblocked IPs to remove from dict
-                        unblocked_ips.add(ip)
-
-                for ip in unblocked_ips:
-                    self.unblock_ips.pop(ip)
 
             except KeyboardInterrupt:
                 self.shutdown_gracefully()
