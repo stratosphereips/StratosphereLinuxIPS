@@ -365,58 +365,47 @@ class Module(Module, multiprocessing.Process):
             for ip in unblocked_ips:
                 self.unblock_ips.pop(ip)
 
-    def run(self):
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
+    def main(self):
+        message = __database__.get_message(self.c1)
+        # There's an IP that needs to be blocked
+        if utils.is_msg_intended_for(message, 'new_blocking'):
+            self.msg_received = True
+            # message['data'] in the new_blocking channel is a dictionary that contains
+            # the ip and the blocking options
+            # Example of the data dictionary to block or unblock an ip:
+            # (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
+            #   blocking_data = {
+            #       "ip"       : "0.0.0.0"
+            #       "block"    : True to block  - False to unblock
+            #       "from"     : True to block traffic from ip (default) - False does nothing
+            #       "to"       : True to block traffic to ip  (default)  - False does nothing
+            #       "dport"    : Optional destination port number
+            #       "sport"    : Optional source port number
+            #       "protocol" : Optional protocol
+            #       'block_for': Optional, after this time (in seconds) this ip will be unblocked
+            #   }
+            # Example of passing blocking_data to this module:
+            #   blocking_data = json.dumps(blocking_data)
+            #   __database__.publish('new_blocking', blocking_data )
 
-                # There's an IP that needs to be blocked
-                if utils.is_msg_intended_for(message, 'new_blocking'):
-                    # message['data'] in the new_blocking channel is a dictionary that contains
-                    # the ip and the blocking options
-                    # Example of the data dictionary to block or unblock an ip:
-                    # (notice you have to specify from,to,dport,sport,protocol or at least 2 of them when unblocking)
-                    #   blocking_data = {
-                    #       "ip"       : "0.0.0.0"
-                    #       "block"    : True to block  - False to unblock
-                    #       "from"     : True to block traffic from ip (default) - False does nothing
-                    #       "to"       : True to block traffic to ip  (default)  - False does nothing
-                    #       "dport"    : Optional destination port number
-                    #       "sport"    : Optional source port number
-                    #       "protocol" : Optional protocol
-                    #       'block_for': Optional, after this time (in seconds) this ip will be unblocked
-                    #   }
-                    # Example of passing blocking_data to this module:
-                    #   blocking_data = json.dumps(blocking_data)
-                    #   __database__.publish('new_blocking', blocking_data )
+            # Decode(deserialize) the python dict into JSON formatted string
+            data = json.loads(message['data'])
+            # Parse the data dictionary
+            ip = data.get('ip')
+            block = data.get('block')
+            from_ = data.get('from')
+            to = data.get('to')
+            dport = data.get('dport')
+            sport = data.get('sport')
+            protocol = data.get('protocol')
+            block_for = data.get('block_for')
+            if block:
+                self.block_ip(
+                    ip, from_, to, dport, sport, protocol, block_for
+                )
+            else:
+                self.unblock_ip(ip, from_, to, dport, sport, protocol)
+        else:
+            self.msg_received = False
+        self.check_for_ips_to_unblock()
 
-                    # Decode(deserialize) the python dict into JSON formatted string
-                    data = json.loads(message['data'])
-                    # Parse the data dictionary
-                    ip = data.get('ip')
-                    block = data.get('block')
-                    from_ = data.get('from')
-                    to = data.get('to')
-                    dport = data.get('dport')
-                    sport = data.get('sport')
-                    protocol = data.get('protocol')
-                    block_for = data.get('block_for')
-                    if block:
-                        self.block_ip(
-                            ip, from_, to, dport, sport, protocol, block_for
-                        )
-                    else:
-                        self.unblock_ip(ip, from_, to, dport, sport, protocol)
-                self.check_for_ips_to_unblock()
-
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-
-                return True
