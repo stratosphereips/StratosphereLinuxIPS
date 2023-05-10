@@ -354,7 +354,6 @@ class Utils(object):
         return (
             message
             and type(message['data']) == str
-            and message['data'] != 'stop_process'
             and message['channel'] == channel
         )
 
