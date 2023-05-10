@@ -18,6 +18,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         __database__.start(redis_port)
@@ -460,118 +461,102 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         __database__.publish('finished_modules', self.name)
-
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+    def main(self):
+        message = __database__.get_message(self.c1)
+        if utils.is_msg_intended_for(message, 'new_http'):
+            self.msg_received = True
+            message = json.loads(message['data'])
+            profileid = message['profileid']
+            twid = message['twid']
+            flow = json.loads(message['flow'])
+            uid = flow['uid']
+            host = flow['host']
+            uri = flow['uri']
+            daddr = flow['daddr']
+            timestamp = flow.get('stime', '')
+            user_agent = flow.get('user_agent', False)
+            request_body_len = flow.get('request_body_len')
+            response_body_len = flow.get('response_body_len')
+            method = flow.get('method')
+            resp_mime_types = flow.get('resp_mime_types')
 
-                if utils.is_msg_intended_for(message, 'new_http'):
-                    message = json.loads(message['data'])
-                    profileid = message['profileid']
-                    twid = message['twid']
-                    flow = json.loads(message['flow'])
-                    uid = flow['uid']
-                    host = flow['host']
-                    uri = flow['uri']
-                    daddr = flow['daddr']
-                    timestamp = flow.get('stime', '')
-                    user_agent = flow.get('user_agent', False)
-                    request_body_len = flow.get('request_body_len')
-                    response_body_len = flow.get('response_body_len')
-                    method = flow.get('method')
-                    resp_mime_types = flow.get('resp_mime_types')
+            self.check_suspicious_user_agents(
+                uid, host, uri, timestamp, user_agent, profileid, twid
+            )
+            self.check_multiple_empty_connections(
+                uid, host, timestamp, request_body_len, profileid, twid
+            )
+            # find the UA of this profileid if we don't have it
+            # get the last used ua of this profile
+            cached_ua = __database__.get_user_agent_from_profile(
+                profileid
+            )
+            if cached_ua:
+                self.check_multiple_UAs(
+                    cached_ua,
+                    user_agent,
+                    timestamp,
+                    profileid,
+                    twid,
+                    uid,
+                )
 
-                    self.check_suspicious_user_agents(
-                        uid, host, uri, timestamp, user_agent, profileid, twid
-                    )
-                    self.check_multiple_empty_connections(
-                        uid, host, timestamp, request_body_len, profileid, twid
-                    )
-                    # find the UA of this profileid if we don't have it
-                    # get the last used ua of this profile
-                    cached_ua = __database__.get_user_agent_from_profile(
-                        profileid
-                    )
-                    if cached_ua:
-                        self.check_multiple_UAs(
-                            cached_ua,
-                            user_agent,
-                            timestamp,
-                            profileid,
-                            twid,
-                            uid,
-                        )
+            if (
+                not cached_ua
+                or (type(cached_ua) == dict
+                    and cached_ua.get('user_agent', '') != user_agent
+                    and 'server-bag' not in user_agent)
+            ):
+                # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
+                self.get_user_agent_info(
+                    user_agent,
+                    profileid
+                )
 
-                    if (
-                        not cached_ua
-                        or (type(cached_ua) == dict
-                            and cached_ua.get('user_agent', '') != user_agent
-                            and 'server-bag' not in user_agent)
-                    ):
-                        # only UAs of type dict are browser UAs, skips str UAs as they are SSH clients
-                        self.get_user_agent_info(
-                            user_agent,
-                            profileid
-                        )
+            if 'server-bag' in user_agent:
+                self.extract_info_from_UA(
+                    user_agent,
+                    profileid
+                )
 
-                    if 'server-bag' in user_agent:
-                        self.extract_info_from_UA(
-                            user_agent,
-                            profileid
-                        )
+            if self.detect_executable_mime_types(resp_mime_types):
+                self.report_executable_mime_type(
+                    resp_mime_types,
+                    daddr,
+                    profileid,
+                    twid,
+                    uid,
+                    timestamp
+                )
 
-                    if self.detect_executable_mime_types(resp_mime_types):
-                        self.report_executable_mime_type(
-                            resp_mime_types,
-                            daddr,
-                            profileid,
-                            twid,
-                            uid,
-                            timestamp
-                        )
+            self.check_incompatible_user_agent(
+                host,
+                uri,
+                timestamp,
+                profileid,
+                twid,
+                uid
+            )
 
-                    self.check_incompatible_user_agent(
-                        host,
-                        uri,
-                        timestamp,
-                        profileid,
-                        twid,
-                        uid
-                    )
-
-                    self.check_pastebin_downloads(
-                        daddr,
-                        response_body_len,
-                        method,
-                        profileid,
-                        twid,
-                        timestamp,
-                        uid
-                    )
+            self.check_pastebin_downloads(
+                daddr,
+                response_body_len,
+                method,
+                profileid,
+                twid,
+                timestamp,
+                uid
+            )
 
 
-                    self.set_evidence_http_traffic(
-                        daddr,
-                        profileid,
-                        twid,
-                        uid,
-                        timestamp
-                    )
-
-
-
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+            self.set_evidence_http_traffic(
+                daddr,
+                profileid,
+                twid,
+                uid,
+                timestamp
+            )
+        else:
+            self.msg_received = False
