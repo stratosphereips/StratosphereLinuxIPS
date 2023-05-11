@@ -97,7 +97,7 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-    def pre_run(self):
+    def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
             return False

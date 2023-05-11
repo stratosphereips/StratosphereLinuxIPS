@@ -70,7 +70,7 @@ class UpdateManager(Module, multiprocessing.Process):
         await update_finished
         self.print(f'{__database__.get_loaded_ti_files()} TI files successfully loaded.')
 
-    def pre_run(self):
+    def pre_main(self):
         utils.drop_root_privs()
         try:
             # only one instance of slips should be able to update TI files at a time
