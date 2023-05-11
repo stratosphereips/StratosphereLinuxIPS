@@ -410,8 +410,8 @@ class Module(Module, multiprocessing.Process):
         source_target_tag = 'SendingUnencryptedData'
         category = 'Anomaly.Traffic'
         evidence_type = 'HTTPtraffic'
-        attacker_direction = 'srcip'
-        attacker = profileid.split('_')[1]
+        attacker_direction = 'dstip'
+        attacker = daddr
         description = (f'Unencrypted HTTP traffic from {attacker} to {daddr}.')
 
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,

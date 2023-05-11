@@ -1499,9 +1499,6 @@ class UpdateFileManager:
         try:
             self.log('Checking if we need to download TI files.')
 
-            # self.update_ports_info()
-            # self.update_org_files()
-
             if self.__check_if_update(self.mac_db_link, self.mac_db_update_period):
                 self.update_mac_db()
 
