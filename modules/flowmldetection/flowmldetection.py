@@ -18,7 +18,6 @@ import traceback
 def warn(*args, **kwargs):
     pass
 
-
 import warnings
 
 warnings.warn = warn
@@ -39,6 +38,9 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
+        self.channels = {
+            'new_flow': self.c1
+        }
         self.fieldseparator = __database__.getFieldSeparator()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
@@ -396,10 +398,8 @@ class Module(Module, multiprocessing.Process):
         self.read_model()
 
     def main(self):
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_flow'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_flow'):
+            data = msg['data']
             # Convert from json to dict
             data = json.loads(data)
             profileid = data['profileid']
@@ -480,5 +480,3 @@ class Module(Module, multiprocessing.Process):
                             0,
                             2,
                         )
-        else:
-            self.msg_received = False

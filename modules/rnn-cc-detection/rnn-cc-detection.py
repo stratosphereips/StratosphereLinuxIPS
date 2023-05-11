@@ -31,6 +31,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_letters')
+        self.channels = {
+            'new_letters': self.c1,
+        }
+
 
 
     def set_evidence(
@@ -128,9 +132,8 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         # Main loop function
-        msg = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(msg, 'new_letters'):
-            msg = message['data']
+        if msg:= self.get_msg('new_letters'):
+            msg = msg['data']
             msg = json.loads(msg)
             pre_behavioral_model = msg['new_symbol']
             profileid = msg['profileid']
@@ -147,15 +150,11 @@ class Module(Module, multiprocessing.Process):
                 )
                 # predict the score of behavioral model being c&c channel
                 self.print(
-                    f'predicting the sequence: {pre_behavioral_model}',
-                    3,
-                    0,
+                    f'predicting the sequence: {pre_behavioral_model}', 3, 0,
                 )
                 score = self.tcpmodel.predict(behavioral_model)
                 self.print(
-                    f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
-                    3,
-                    0,
+                    f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 3, 0,
                 )
                 # get a float instead of numpy array
                 score = score[0][0]
@@ -209,5 +208,3 @@ class Module(Module, multiprocessing.Process):
                 if score > threshold:
                     self.set_evidence(score, tupleid, profileid, twid)
             """
-        else:
-            self.msg_received = False

@@ -42,6 +42,13 @@ class Module(Module, multiprocessing.Process):
         self.c2 = __database__.subscribe('new_MAC')
         self.c3 = __database__.subscribe('new_dns')
         self.c4 = __database__.subscribe('check_jarm_hash')
+        self.channels = {
+            'new_ip': self.c1,
+            'new_MAC': self.c2,
+            'new_dns': self.c3,
+            'check_jarm_hash': self.c4,
+        }
+
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -548,10 +555,8 @@ class Module(Module, multiprocessing.Process):
             self.get_rdns(ip)
 
     def main(self):
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_MAC'):
-            self.msg_received = True
-            data = json.loads(message['data'])
+        if msg:= self.get_msg('new_MAC'):
+            data = json.loads(msg['data'])
             mac_addr = data['MAC']
             host_name = data.get('host_name', False)
             profileid = data['profileid']
@@ -567,13 +572,9 @@ class Module(Module, multiprocessing.Process):
                     # try to get the MAC of this IP (of the gw)
                     self.get_gateway_MAC(ip)
                     self.is_gw_mac_set = True
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c3)
-        if utils.is_msg_intended_for(message, 'new_dns'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_dns'):
+            data = msg['data']
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
@@ -583,15 +584,9 @@ class Module(Module, multiprocessing.Process):
             )   # this is a dict {'uid':json flow data}
             if domain := flow_data.get('query', False):
                 self.get_age(domain)
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_ip'):
-            self.msg_received = True
+        if msg:= self.get_msg('new_ip'):
             # Get the IP from the message
-            ip = message['data']
+            ip = msg['data']
             self.handle_new_ip(ip)
-        else:
-            self.msg_received = False
 

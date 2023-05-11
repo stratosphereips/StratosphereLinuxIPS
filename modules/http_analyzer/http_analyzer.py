@@ -23,6 +23,10 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_http')
+        self.channels = {
+            'new_http': self.c1
+        }
+
         self.connections_counter = {}
         self.empty_connections_threshold = 4
         # this is a list of hosts known to be resolved by malware
@@ -465,10 +469,8 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
 
     def main(self):
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_http'):
-            self.msg_received = True
-            message = json.loads(message['data'])
+        if msg:= self.get_msg('new_http'):
+            message = json.loads(msg['data'])
             profileid = message['profileid']
             twid = message['twid']
             flow = json.loads(message['flow'])
@@ -559,5 +561,3 @@ class Module(Module, multiprocessing.Process):
                 uid,
                 timestamp
             )
-        else:
-            self.msg_received = False

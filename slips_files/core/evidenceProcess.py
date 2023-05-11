@@ -73,6 +73,11 @@ class EvidenceProcess(Module, multiprocessing.Process):
 
         self.c1 = __database__.subscribe('evidence_added')
         self.c2 = __database__.subscribe('new_blame')
+        self.channels = {
+            'evidence_added': self.c1,
+            'new_blame': self.c2,
+        }
+
 
         # clear output/alerts.log
         self.logfile = self.clean_file(output_dir, 'alerts.log')
@@ -581,11 +586,9 @@ class EvidenceProcess(Module, multiprocessing.Process):
         return alert_to_log
 
     def main(self):
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'evidence_added'):
-            self.msg_received = True
+        if msg := self.get_msg('evidence_added'):
             # Data sent in the channel as a json dict, it needs to be deserialized first
-            data = json.loads(message['data'])
+            data = json.loads(msg['data'])
             profileid = data.get('profileid')
             srcip = profileid.split(self.separator)[1]
             twid = data.get('twid')
@@ -747,13 +750,10 @@ class EvidenceProcess(Module, multiprocessing.Process):
                         IDEA_dict,
                         blocked=blocked
                     )
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_blame'):
+        if msg := self.get_msg('new_blame'):
             self.msg_received = True
-            data = message['data']
+            data = msg['data']
             try:
                 data = json.loads(data)
             except json.decoder.JSONDecodeError:
@@ -792,6 +792,4 @@ class EvidenceProcess(Module, multiprocessing.Process):
             }
             blocking_data = json.dumps(blocking_data)
             __database__.publish('new_blocking', blocking_data)
-        else:
-            self.msg_received = False
 

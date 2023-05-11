@@ -40,6 +40,10 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
+        self.channels = {
+            'new_ip': self.c1,
+        }
+
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
@@ -50,13 +54,9 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         # Main loop function
-        message = __database__.get_message(self.c1)
-        if message and message['channel'] == 'new_ip':
-            self.msg_received = True
+        if msg:= self.get_msg('new_ip'):
             # Example of printing the number of profiles in the
             # Database every second
             data = len(__database__.getProfiles())
             self.print(f'Amount of profiles: {data}', 3, 0)
-        else:
-            self.msg_received = False
 

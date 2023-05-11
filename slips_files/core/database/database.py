@@ -1764,7 +1764,7 @@ class Database(ProfilingFlowsDatabase, object):
             urldata = json.dumps(urldata)
             self.rcache.hset('URLsInfo', url, urldata)
 
-    def subscribe(self, channel: str, ignore_subscribe_messages=False):
+    def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
         # For when a TW is modified
         if channel not in self.supported_channels:

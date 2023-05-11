@@ -33,6 +33,11 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.separator = __database__.getFieldSeparator()
         self.c1 = __database__.subscribe('give_threat_intelligence')
         self.c2 = __database__.subscribe('new_downloaded_file')
+        self.channels = {
+            'give_threat_intelligence': self.c1,
+            'new_downloaded_file': self.c2,
+        }
+
         self.__read_configuration()
         self.get_malicious_ip_ranges()
         self.create_circl_lu_session()
@@ -1000,14 +1005,10 @@ class Module(Module, multiprocessing.Process, URLhaus):
         __database__.init_ti_queue()
 
     def main(self):
-        message = __database__.get_message(self.c1)
         # The channel now can receive an IP address or a domain name
-        if utils.is_msg_intended_for(
-            message, 'give_threat_intelligence'
-        ):
-            self.msg_received = True
+        if msg:= self.get_msg('give_threat_intelligence'):
             # Data is sent in the channel as a json dict so we need to deserialize it first
-            data = json.loads(message['data'])
+            data = json.loads(msg['data'])
             # Extract data from dict
             profileid = data.get('profileid')
             twid = data.get('twid')
@@ -1056,14 +1057,8 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     twid
                 )
             __database__.mark_as_analyzed_by_ti_module()
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-            self.msg_received = True
-            file_info = json.loads(message['data'])
+        if msg:= self.get_msg('new_downloaded_file'):
+            file_info = json.loads(msg['data'])
             if file_info['type'] == 'zeek':
                 self.is_malicious_hash(file_info)
-        else:
-            self.msg_received = False

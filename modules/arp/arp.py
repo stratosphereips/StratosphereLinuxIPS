@@ -27,6 +27,10 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
+        self.channels = {
+            'new_arp' : self.c1,
+            'tw_closed' : self.c2,
+        }
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
         self.cache_arp_requests = {}
@@ -399,10 +403,8 @@ class Module(Module, multiprocessing.Process):
             # update ts of the new arp.log
             self.arp_ts = time.time()
 
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_arp'):
-            self.msg_received = True
-            flow_details = json.loads(message['data'])
+        if msg := self.get_msg('new_arp'):
+            flow_details = json.loads(msg['data'])
             profileid = flow_details['profileid']
             twid = flow_details['twid']
             # this is the actual arp flow
@@ -449,14 +451,10 @@ class Module(Module, multiprocessing.Process):
                     dst_hw,
                     src_hw,
                 )
-        else:
-            self.msg_received = False
 
         # if the tw is closed, remove all its entries from the cache dict
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'tw_closed'):
-            self.msg_received = True
-            profileid_tw = message['data']
+        if msg := self.get_msg('tw_closed'):
+            profileid_tw = msg['data']
             # when a tw is closed, this means that it's too old so we don't check for arp scan in this time
             # range anymore
             # this copy is made to avoid dictionary changed size during iteration err
@@ -465,5 +463,3 @@ class Module(Module, multiprocessing.Process):
                 if profileid_tw in key:
                     self.cache_arp_requests.pop(key)
                     # don't break, keep looking for more keys that belong to the same tw
-        else:
-            self.msg_received = False

@@ -32,6 +32,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('export_evidence')
+        self.channels = {
+            'export_evidence': self.c1
+        }
         self.read_configuration()
         if 'slack' in self.export_to:
             self.get_slack_token()
@@ -316,9 +319,7 @@ class Module(Module, multiprocessing.Process):
             self.send_to_slack(f'{date_time}: Slips started on sensor: {self.sensor_name}.')
 
     def main(self):
-        msg = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(msg, 'export_evidence'):
-            self.msg_received = True
+        if msg:= self.get_msg('export_evidence'):
             evidence = json.loads(msg['data'])
             description = evidence['description']
             if 'slack' in self.export_to and hasattr(self, 'BOT_TOKEN'):
@@ -336,5 +337,3 @@ class Module(Module, multiprocessing.Process):
                 exported_to_stix = self.export_to_STIX(msg_to_send)
                 if not exported_to_stix:
                     self.print('Problem in export_to_STIX()', 0, 3)
-        else:
-            self.msg_received = False
