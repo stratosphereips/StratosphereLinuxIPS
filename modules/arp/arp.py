@@ -28,8 +28,8 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_arp')
         self.c2 = __database__.subscribe('tw_closed')
         self.channels = {
-            'new_arp' : self.c1,
-            'tw_closed' : self.c2,
+            'new_arp': self.c1,
+            'tw_closed': self.c2,
         }
         self.read_configuration()
         # this dict will categorize arp requests by profileid_twid
@@ -393,6 +393,7 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         """main loop function"""
+
         if (
             self.delete_arp_periodically
             and time.time()
