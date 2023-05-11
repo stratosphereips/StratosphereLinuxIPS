@@ -43,15 +43,7 @@ class Module(Module, multiprocessing.Process):
 
         # Read the conf file
         self.__read_configuration()
-        self.key = None
-        try:
-            with open(self.key_file, 'r') as f:
-                self.key = f.read(64)
-        except (FileNotFoundError, TypeError):
-            self.print(
-                f'The file with API key {self.key_file} '
-                f'could not be loaded. VT module is stopping.'
-            )
+
 
         # query counter for debugging purposes
         self.counter = 0
@@ -68,6 +60,19 @@ class Module(Module, multiprocessing.Process):
         )
         # this will be true when there's a problem with the API key, then the module will exit
         self.incorrect_API_key = False
+
+    def read_api_key(self):
+        self.key = None
+        try:
+            with open(self.key_file, 'r') as f:
+                self.key = f.read(64)
+            return True
+        except (FileNotFoundError, TypeError):
+            self.print(
+                f'The file with API key {self.key_file} '
+                f'could not be loaded. VT module is stopping.'
+            )
+            return False
 
     def __read_configuration(self):
         conf = ConfigParser()
@@ -514,11 +519,14 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
     def pre_main(self):
+        print(f"@@@@@@@@@@@@@@@@ pre main is executed")
         utils.drop_root_privs()
-        if self.key in ('', None):
+        if not self.read_api_key() or self.key in ('', None):
             # We don't have a virustotal key
             return 1
+        print(f"@@@@@@@@@@@@@@@@ key: {self.key}")
         self.api_calls_thread.start()
+
     def main(self):
         if self.incorrect_API_key:
             self.shutdown_gracefully()
