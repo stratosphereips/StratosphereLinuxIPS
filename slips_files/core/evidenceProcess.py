@@ -47,7 +47,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
         inputqueue,
         outputqueue,
         output_dir,
-        logs_dir,
         redis_port,
     ):
         self.name = 'Evidence'
@@ -60,8 +59,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
         self.separator = __database__.separator
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-        # If logs enabled using -l, write alerts to the log folder as well
-        self.clear_logs_dir(logs_dir)
 
         if self.popup_alerts:
             self.notify = Notify()
@@ -92,18 +89,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
         self.print(f'Storing Slips logs in {output_dir}')
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
-
-    def clear_logs_dir(self, logs_dir):
-        self.logs_logfile = False
-        self.logs_jsonfile = False
-        if logs_dir:
-            # these json files are inside the logs dir, not the output/ dir
-            self.logs_jsonfile = self.clean_file(
-                logs_dir, 'alerts.json'
-                )
-            self.logs_logfile = self.clean_file(
-                logs_dir, 'alerts.log'
-                )
 
     def print(self, text, verbose=1, debug=0):
         """
@@ -231,13 +216,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
             self.logfile.write(data)
             self.logfile.write('\n')
             self.logfile.flush()
-
-            # If logs are enabled, write alerts in the folder as well
-            if self.logs_logfile:
-                self.logs_logfile.write(data)
-                self.logs_logfile.write('\n')
-                self.logs_logfile.flush()
-
         except KeyboardInterrupt:
             return True
         except Exception:
@@ -296,14 +274,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
                 f'osascript -e \'display notification "{alert_to_log}" with title "Slips"\' '
             )
 
-    def add_to_log_folder(self, data):
-        # If logs folder is enabled (using -l), write alerts in the folder as well
-        if not self.logs_jsonfile:
-            return False
-        data_json = json.dumps(data)
-        self.logs_jsonfile.write(data_json)
-        self.logs_jsonfile.write('\n')
-        self.logs_jsonfile.flush()
 
     def format_evidence_causing_this_alert(
         self, all_evidence, profileid, twid, flow_datetime
@@ -443,8 +413,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
             'twid': twid,
             'threat_level': accumulated_threat_level,
         }
-        self.add_to_log_folder(blocked_srcip_dict)
-
         # Add a json field stating that this ip is blocked in alerts.json
         # replace the evidence description with slip msg that this is a blocked profile
 
@@ -672,8 +640,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
             self.addDataToLogFile(alert_to_log)
             # add to alerts.json
             self.addDataToJSONFile(IDEA_dict, all_uids)
-            # if -l is given
-            self.add_to_log_folder(IDEA_dict)
 
             __database__.set_evidence_for_profileid(IDEA_dict)
             __database__.publish('report_to_peers', json.dumps(data))

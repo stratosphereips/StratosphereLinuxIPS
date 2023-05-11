@@ -156,13 +156,6 @@ class ArgumentParser(argparse.ArgumentParser):
             help='Read packets from an interface.',
         )
         self.add_argument(
-            '-l',
-            '--createlogfiles',
-            action='store_true',
-            required=False,
-            help='Create log files with all the traffic info and detections.',
-        )
-        self.add_argument(
             '-F',
             '--pcapfilter',
             action='store',
