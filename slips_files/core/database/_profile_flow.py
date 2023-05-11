@@ -1463,8 +1463,6 @@ class ProfilingFlowsDatabase(object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset('DomainsInfo', domain, '{}')
-            # Publish that there is a new domain ready in the channel
-            self.publish('new_dns', domain)
 
     def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
         """
@@ -1587,7 +1585,7 @@ class ProfilingFlowsDatabase(object):
 
         to_send = json.dumps(to_send)
         # publish a dns with its flow
-        self.publish('new_dns_flow', to_send)
+        self.publish('new_dns', to_send)
         # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,
