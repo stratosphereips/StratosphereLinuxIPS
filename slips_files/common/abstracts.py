@@ -84,6 +84,7 @@ class Module(ABC):
             error: bool = self.pre_main()
             if error:
                 self.shutdown_gracefully()
+                return True
         except KeyboardInterrupt:
             self.shutdown_gracefully()
             return True
