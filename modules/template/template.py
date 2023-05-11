@@ -16,10 +16,6 @@ from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
 from slips_files.common.slips_utils import utils
-import sys
-import traceback
-
-# Your imports
 
 
 class Module(Module, multiprocessing.Process):
@@ -30,6 +26,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
@@ -43,35 +40,26 @@ class Module(Module, multiprocessing.Process):
         # - evidence_added
         # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_ip')
-
+        self.channels = {
+            'new_ip': self.c1,
+        }
 
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
 
-    def run(self):
+    def pre_main(self):
+        """
+        Initializations that run only once before the main() function runs in a loop
+        """
         utils.drop_root_privs()
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
 
-                if message and message['channel'] == 'new_ip':
-                    # Example of printing the number of profiles in the
-                    # Database every second
-                    data = len(__database__.getProfiles())
-                    self.print(f'Amount of profiles: {data}', 3, 0)
+    def main(self):
+        """Main loop function"""
+        if msg:= self.get_msg('new_ip'):
+            # Example of printing the number of profiles in the
+            # Database every second
+            data = len(__database__.getProfiles())
+            self.print(f'Amount of profiles: {data}', 3, 0)
 
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True

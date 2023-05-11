@@ -18,7 +18,6 @@ import traceback
 def warn(*args, **kwargs):
     pass
 
-
 import warnings
 
 warnings.warn = warn
@@ -34,10 +33,14 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         # Subscribe to the channel
         self.c1 = __database__.subscribe('new_flow')
+        self.channels = {
+            'new_flow': self.c1
+        }
         self.fieldseparator = __database__.getFieldSeparator()
         # Set the output queue of our database instance
         __database__.setOutputQueue(self.outputqueue)
@@ -389,105 +392,91 @@ class Module(Module, multiprocessing.Process):
         self.store_model()
         __database__.publish('finished_modules', self.name)
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
         # Load the model
         self.read_model()
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
 
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+    def main(self):
+        if msg:= self.get_msg('new_flow'):
+            data = msg['data']
+            # Convert from json to dict
+            data = json.loads(data)
+            profileid = data['profileid']
+            twid = data['twid']
+            # Get flow that is now in json format
+            flow = data['flow']
+            # Convert flow to a dict
+            flow = json.loads(flow)
+            # Convert the common fields to something that can
+            # be interpreted
+            # Get the uid which is the key
+            uid = next(iter(flow))
+            self.flow_dict = json.loads(flow[uid])
 
-                if utils.is_msg_intended_for(message, 'new_flow'):
-                    data = message['data']
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow that is now in json format
-                    flow = data['flow']
-                    # Convert flow to a dict
-                    flow = json.loads(flow)
-                    # Convert the common fields to something that can
-                    # be interpreted
-                    # Get the uid which is the key
-                    uid = next(iter(flow))
-                    self.flow_dict = json.loads(flow[uid])
+            if self.mode == 'train':
+                # We are training
 
-                    if self.mode == 'train':
-                        # We are training
+                # Is the amount in the DB of labels enough to retrain?
+                # Use labeled flows
+                labels = __database__.get_labels()
+                sum_labeled_flows = sum(i[1] for i in labels)
+                if (
+                    sum_labeled_flows >= self.minimum_lables_to_retrain
+                    and sum_labeled_flows
+                    % self.minimum_lables_to_retrain
+                    == 1
+                ):
+                    # We get here every 'self.minimum_lables_to_retrain' amount of labels
+                    # So for example we retrain every 100 labels and only when we have at least 100 labels
+                    self.print(
+                        f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.'
+                    )
+                    # Process all flows in the DB and make them ready for pandas
+                    self.process_flows()
+                    # Train an algorithm
+                    self.train()
+            elif self.mode == 'test':
+                # We are testing, which means using the model to detect
+                self.process_flow()
 
-                        # Is the amount in the DB of labels enough to retrain?
-                        # Use labeled flows
-                        labels = __database__.get_labels()
-                        sum_labeled_flows = sum(i[1] for i in labels)
-                        if (
-                            sum_labeled_flows >= self.minimum_lables_to_retrain
-                            and sum_labeled_flows
-                            % self.minimum_lables_to_retrain
-                            == 1
-                        ):
-                            # We get here every 'self.minimum_lables_to_retrain' amount of labels
-                            # So for example we retrain every 100 labels and only when we have at least 100 labels
-                            self.print(
-                                f'Training the model with the last group of flows and labels. Total flows: {sum_labeled_flows}.'
-                            )
-                            # Process all flows in the DB and make them ready for pandas
-                            self.process_flows()
-                            # Train an algorithm
-                            self.train()
-                    elif self.mode == 'test':
-                        # We are testing, which means using the model to detect
-                        self.process_flow()
+                # After processing the flow, it may happen that we delete icmp/arp/etc
+                # so the dataframe can be empty
+                if not self.flow.empty:
+                    # Predict
+                    pred = self.detect()
+                    label = self.flow_dict['label']
 
-                        # After processing the flow, it may happen that we delete icmp/arp/etc
-                        # so the dataframe can be empty
-                        if not self.flow.empty:
-                            # Predict
-                            pred = self.detect()
-                            label = self.flow_dict['label']
-
-                            # Report
-                            if (
-                                label
-                                and label != 'unknown'
-                                and label != pred[0]
-                            ):
-                                # If the user specified a label in test mode, and the label
-                                # is diff from the prediction, print in debug mode
-                                self.print(
-                                    f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
-                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
-                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
-                                    0,
-                                    3,
-                                )
-                            if pred[0] == 'Malware':
-                                # Generate an alert
-                                self.set_evidence_malicious_flow(
-                                    self.flow_dict['saddr'],
-                                    self.flow_dict['sport'],
-                                    self.flow_dict['daddr'],
-                                    self.flow_dict['dport'],
-                                    profileid,
-                                    twid,
-                                    uid,
-                                )
-                                self.print(
-                                    f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
-                                    f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
-                                    f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
-                                    0,
-                                    2,
-                                )
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                self.print('Error in run()')
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+                    # Report
+                    if (
+                        label
+                        and label != 'unknown'
+                        and label != pred[0]
+                    ):
+                        # If the user specified a label in test mode, and the label
+                        # is diff from the prediction, print in debug mode
+                        self.print(
+                            f'Report Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                            f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                            f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                            0,
+                            3,
+                        )
+                    if pred[0] == 'Malware':
+                        # Generate an alert
+                        self.set_evidence_malicious_flow(
+                            self.flow_dict['saddr'],
+                            self.flow_dict['sport'],
+                            self.flow_dict['daddr'],
+                            self.flow_dict['dport'],
+                            profileid,
+                            twid,
+                            uid,
+                        )
+                        self.print(
+                            f'Prediction {pred[0]} for label {label} flow {self.flow_dict["saddr"]}:'
+                            f'{self.flow_dict["sport"]} -> {self.flow_dict["daddr"]}:'
+                            f'{self.flow_dict["dport"]}/{self.flow_dict["proto"]}',
+                            0,
+                            2,
+                        )

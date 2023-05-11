@@ -14,6 +14,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
@@ -22,6 +23,9 @@ class Module(Module, multiprocessing.Process):
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
         self.c1 = __database__.subscribe('tw_closed')
+        self.channels = {
+            'tw_closed': self.c1
+        }
         self.separator = __database__.separator
 
 
@@ -82,39 +86,18 @@ class Module(Module, multiprocessing.Process):
                     + 1
                 )
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
-                    # Confirm that the module is done processing
-                    self.shutdown_gracefully()
-                    return True
-                if message and message['channel'] == 'tw_closed':
-                    data = message['data']
-                    if type(data) == str:
-                        # Convert from json to dict
-                        profileip = data.split(self.separator)[1]
-                        twid = data.split(self.separator)[2]
-                        profileid = f'profile{self.separator}{profileip}'
 
-                        # First stage -  define the final label for each flow in profileid and twid
-                        # by the majority vote of malicious and normal
-                        # Second stage - group the flows with same dstip and calculate the amount of
-                        # normal and malicious flows
-
-                        self.set_label_per_flow_dstip(profileid, twid)
-
-            except KeyboardInterrupt:
-                # Confirm that the module is done processing
-                self.shutdown_gracefully()
-                return True
-
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+    def main(self):
+        if msg := self.get_msg('tw_closed'):
+            data = msg['data']
+            # Convert from json to dict
+            profileip = data.split(self.separator)[1]
+            twid = data.split(self.separator)[2]
+            profileid = f'profile{self.separator}{profileip}'
+            # First stage -  define the final label for each flow in profileid and twid
+            # by the majority vote of malicious and normal
+            # Second stage - group the flows with same dstip and calculate the amount of
+            # normal and malicious flows
+            self.set_label_per_flow_dstip(profileid, twid)

@@ -21,6 +21,7 @@ class PortScanProcess(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.horizontal_ps = HorizontalPortscan()
         self.vertical_ps = VerticalPortscan()
         self.outputqueue = outputqueue
@@ -33,6 +34,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_modified')
         self.c2 = __database__.subscribe('new_notice')
         self.c3 = __database__.subscribe('new_dhcp')
+        self.channels = {
+            'tw_modified': self.c1,
+            'new_notice': self.c2,
+            'new_dhcp': self.c3,
+        }
+
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
@@ -347,86 +354,56 @@ class PortScanProcess(Module, multiprocessing.Process):
                 number_of_requested_addrs
             )
 
-
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        while True:
-            try:
-                # Wait for a message from the channel that a TW was modified
-                message = __database__.get_message(self.c1)
-                # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+    def main(self):
+        if msg:= self.get_msg('tw_modified'):
+            # Get the profileid and twid
+            profileid = msg['data'].split(':')[0]
+            twid = msg['data'].split(':')[1]
+            # Start of the port scan detection
+            self.print(
+                f'Running the detection of portscans in profile '
+                f'{profileid} TW {twid}', 3, 0
+            )
 
-                if utils.is_msg_intended_for(message, 'tw_modified'):
-                    # Get the profileid and twid
-                    profileid = message['data'].split(':')[0]
-                    twid = message['data'].split(':')[1]
-                    # Start of the port scan detection
-                    self.print(
-                        f'Running the detection of portscans in profile '
-                        f'{profileid} TW {twid}', 3, 0
-                    )
+            # For port scan detection, we will measure different things:
 
-                    # For port scan detection, we will measure different things:
+            # 1. Vertical port scan:
+            # (single IP being scanned for multiple ports)
+            # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
+            # 2. Horizontal port scan:
+            #  (scan against a group of IPs for a single port)
+            # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
+            # 3. Too many connections???:
+            # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
+            # 4. Slow port scan. Same as the others but distributed in multiple time windows
 
-                    # 1. Vertical port scan:
-                    # (single IP being scanned for multiple ports)
-                    # - 1 srcip sends not established flows to > 3 dst ports in the same dst ip. Any number of packets
-                    # 2. Horizontal port scan:
-                    #  (scan against a group of IPs for a single port)
-                    # - 1 srcip sends not established flows to the same dst ports in > 3 dst ip.
-                    # 3. Too many connections???:
-                    # - 1 srcip sends not established flows to the same dst ports, > 3 pkts, to the same dst ip
-                    # 4. Slow port scan. Same as the others but distributed in multiple time windows
+            # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
 
-                    # Remember that in slips all these port scans can happen for traffic going IN to an IP or going OUT from the IP.
+            self.horizontal_ps.check(profileid, twid)
+            self.vertical_ps.check(profileid, twid)
+            self.check_icmp_scan(profileid, twid)
 
-                    self.horizontal_ps.check(profileid, twid)
-                    self.vertical_ps.check(profileid, twid)
-                    self.check_icmp_scan(profileid, twid)
+        if msg:= self.get_msg('new_notice'):
+            data = msg['data']
+            # Convert from json to dict
+            data = json.loads(data)
+            profileid = data['profileid']
+            twid = data['twid']
+            # Get flow as a json
+            flow = data['flow']
+            # Convert flow to a dict
+            flow = json.loads(flow)
+            timestamp = flow['stime']
+            uid = data['uid']
+            msg = flow['msg']
+            note = flow['note']
+            self.check_icmp_sweep(
+                msg, note, profileid, uid, twid, timestamp
+            )
 
-                message = __database__.get_message(self.c2)
-                # print('Message received from channel {} with data {}'.format(message['channel'], message['data']))
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+        if msg:= self.get_msg('new_dhcp'):
+            flow = json.loads(msg['data'])
+            self.check_dhcp_scan(flow)
 
-                if utils.is_msg_intended_for(message, 'new_notice'):
-                    data = message['data']
-                    if type(data) != str:
-                        continue
-                    # Convert from json to dict
-                    data = json.loads(data)
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    # Get flow as a json
-                    flow = data['flow']
-                    # Convert flow to a dict
-                    flow = json.loads(flow)
-                    timestamp = flow['stime']
-                    uid = data['uid']
-                    msg = flow['msg']
-                    note = flow['note']
-                    self.check_icmp_sweep(
-                        msg, note, profileid, uid, twid, timestamp
-                    )
-
-                message = __database__.get_message(self.c3)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'new_dhcp'):
-                    flow = json.loads(message['data'])
-                    self.check_dhcp_scan(flow)
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True

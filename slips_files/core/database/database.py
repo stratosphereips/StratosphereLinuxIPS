@@ -59,7 +59,8 @@ class Database(ProfilingFlowsDatabase, object):
         'p2p_gopy',
         'report_to_peers',
         'new_tunnel',
-        'check_jarm_hash'
+        'check_jarm_hash',
+        'control_module',
     }
 
     """ Database object management """
@@ -1764,7 +1765,7 @@ class Database(ProfilingFlowsDatabase, object):
             urldata = json.dumps(urldata)
             self.rcache.hset('URLsInfo', url, urldata)
 
-    def subscribe(self, channel: str, ignore_subscribe_messages=False):
+    def subscribe(self, channel: str, ignore_subscribe_messages=True):
         """Subscribe to channel"""
         # For when a TW is modified
         if channel not in self.supported_channels:
@@ -1783,8 +1784,7 @@ class Database(ProfilingFlowsDatabase, object):
         """
         all_channels_list = self.r.pubsub_channels()
         self.print('Sending the stop signal to all listeners', 0, 3)
-        for channel in all_channels_list:
-            self.r.publish(channel, 'stop_process')
+        self.r.publish('control_module', 'stop_process')
 
     def get_all_flows_in_profileid_twid(self, profileid, twid):
         """

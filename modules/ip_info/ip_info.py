@@ -29,7 +29,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue. The outputqueue is connected to another process called OutputProcess
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.pending_mac_queries = multiprocessing.Queue()
@@ -40,8 +40,15 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = __database__.subscribe('new_ip')
         self.c2 = __database__.subscribe('new_MAC')
-        self.c3 = __database__.subscribe('new_dns_flow')
+        self.c3 = __database__.subscribe('new_dns')
         self.c4 = __database__.subscribe('check_jarm_hash')
+        self.channels = {
+            'new_ip': self.c1,
+            'new_MAC': self.c2,
+            'new_dns': self.c3,
+            'check_jarm_hash': self.c4,
+        }
+
         # update asn every 1 month
         self.update_period = 2592000
         self.is_gw_mac_set = False
@@ -506,134 +513,80 @@ class Module(Module, multiprocessing.Process):
                                  timestamp, category, source_target_tag=source_target_tag,
                                  port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-
         self.wait_for_dbs()
-
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip():
             __database__.set_default_gateway('IP', ip)
 
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_MAC'):
-                    data = json.loads(message['data'])
-                    mac_addr = data['MAC']
-                    host_name = data.get('host_name', False)
-                    profileid = data['profileid']
-                    self.get_vendor(mac_addr, host_name, profileid)
-                    self.check_if_we_have_pending_mac_queries()
-                    # set the gw mac and ip if they're not set yet
-                    if not self.is_gw_mac_set:
-                        # whether we found the gw ip using dhcp in profileprocess
-                        # or using ip route using self.get_gateway_ip()
-                        # now that it's found, get and store the mac addr of it
-                        if ip:= __database__.get_gateway_ip():
-                            # now that we know the GW IP address,
-                            # try to get the MAC of this IP (of the gw)
-                            self.get_gateway_MAC(ip)
-                            self.is_gw_mac_set = True
+    def handle_new_ip(self, ip):
+        try:
+            # make sure its a valid ip
+            ip_addr = ipaddress.ip_address(ip)
+        except ValueError:
+            # not a valid ip skip
+            return
 
-                message = __database__.get_message(self.c3)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+        if not ip_addr.is_multicast:
+            # Do we have cached info about this ip in redis?
+            # If yes, load it
+            cached_ip_info = __database__.getIPData(ip)
+            if not cached_ip_info:
+                cached_ip_info = {}
 
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
-                    data = message['data']
-                    data = json.loads(data)
-                    # profileid = data['profileid']
-                    # twid = data['twid']
-                    # uid = data['uid']
-                    flow_data = json.loads(
-                        data['flow']
-                    )   # this is a dict {'uid':json flow data}
-                    if domain := flow_data.get('query', False):
-                        self.get_age(domain)
+            # ------ GeoCountry -------
+            # Get the geocountry
+            if (
+                    cached_ip_info == {}
+                    or 'geocountry' not in cached_ip_info
+            ):
+                self.get_geocountry(ip)
 
-                message = __database__.get_message(self.c1)
-                # if timewindows are not updated for a long time (see at logsProcess.py),
-                # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+            # ------ ASN -------
+            # Get the ASN
+            # only update the ASN for this IP if more than 1 month
+            # passed since last ASN update on this IP
+            if update_asn := self.asn.update_asn(
+                    cached_ip_info,
+                    self.update_period
+            ):
+                self.asn.get_asn(ip, cached_ip_info)
+            self.get_rdns(ip)
 
-                if utils.is_msg_intended_for(message, 'new_ip'):
-                    # Get the IP from the message
-                    ip = message['data']
-                    try:
-                        # make sure its a valid ip
-                        ip_addr = ipaddress.ip_address(ip)
-                    except ValueError:
-                        # not a valid ip skip
-                        continue
+    def main(self):
+        if msg:= self.get_msg('new_MAC'):
+            data = json.loads(msg['data'])
+            mac_addr = data['MAC']
+            host_name = data.get('host_name', False)
+            profileid = data['profileid']
+            self.get_vendor(mac_addr, host_name, profileid)
+            self.check_if_we_have_pending_mac_queries()
+            # set the gw mac and ip if they're not set yet
+            if not self.is_gw_mac_set:
+                # whether we found the gw ip using dhcp in profileprocess
+                # or using ip route using self.get_gateway_ip()
+                # now that it's found, get and store the mac addr of it
+                if ip:= __database__.get_gateway_ip():
+                    # now that we know the GW IP address,
+                    # try to get the MAC of this IP (of the gw)
+                    self.get_gateway_MAC(ip)
+                    self.is_gw_mac_set = True
 
-                    if not ip_addr.is_multicast:
-                        # Do we have cached info about this ip in redis?
-                        # If yes, load it
-                        cached_ip_info = __database__.getIPData(ip)
-                        if not cached_ip_info:
-                            cached_ip_info = {}
+        if msg:= self.get_msg('new_dns'):
+            data = msg['data']
+            data = json.loads(data)
+            # profileid = data['profileid']
+            # twid = data['twid']
+            # uid = data['uid']
+            flow_data = json.loads(
+                data['flow']
+            )   # this is a dict {'uid':json flow data}
+            if domain := flow_data.get('query', False):
+                self.get_age(domain)
 
-                        # ------ GeoCountry -------
-                        # Get the geocountry
-                        if (
-                                cached_ip_info == {}
-                                or 'geocountry' not in cached_ip_info
-                        ):
-                            self.get_geocountry(ip)
+        if msg:= self.get_msg('new_ip'):
+            # Get the IP from the message
+            ip = msg['data']
+            self.handle_new_ip(ip)
 
-                        # ------ ASN -------
-                        # Get the ASN
-                        # only update the ASN for this IP if more than 1 month
-                        # passed since last ASN update on this IP
-                        if update_asn := self.asn.update_asn(
-                                cached_ip_info,
-                                self.update_period
-                        ):
-                            self.asn.get_asn(ip, cached_ip_info)
-                        self.get_rdns(ip)
-
-                message = __database__.get_message(self.c4)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(message, 'check_jarm_hash'):
-                    msg = json.loads(message['data'])
-                    # can be 'ip' or 'domain'
-                    attacker_type: str = msg['attacker_type']
-                    profileid = msg['profileid']
-                    twid = msg['twid']
-                    uid = msg['uid']
-                    # the actual ip or domain
-                    attacker = msg['attacker']
-                    flow = msg['flow']
-                    dport = flow['dport']
-
-
-                    jarm_hash = self.JARM.JARM_hash(attacker, dport)
-                    if jarm_hash != '00000000000000000000000000000000000000000000000000000000000000':
-                        if __database__.is_malicious_jarm(jarm_hash):
-                            self.set_evidence_malicious_jarm_hash(
-                                flow,
-                                uid,
-                                profileid,
-                                twid,
-                            )
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
