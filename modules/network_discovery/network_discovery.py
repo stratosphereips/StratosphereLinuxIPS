@@ -37,7 +37,7 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.channels = {
             'tw_modified': self.c1,
             'new_notice': self.c2,
-            'new_dhcp,': self.c3,
+            'new_dhcp': self.c3,
         }
 
         # We need to know that after a detection, if we receive another flow
