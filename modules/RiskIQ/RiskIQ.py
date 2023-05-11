@@ -24,6 +24,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_ip')
+        self.channels = {
+            'new_ip': self.c1,
+        }
         self.read_configuration()
 
     def read_configuration(self):
@@ -100,10 +103,8 @@ class Module(Module, multiprocessing.Process):
             return False
     def main(self):
         # Main loop function
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_ip'):
-            self.msg_received = True
-            ip = message['data']
+        if msg := self.get_msg('new_ip'):
+            ip = msg['data']
             if utils.is_ignored_ip(ip):
                 # return here means keep looping
                 return
@@ -114,6 +115,4 @@ class Module(Module, multiprocessing.Process):
             if passive_dns := self.get_passive_dns(ip):
                 # we found data from passive total, store it in the db
                 __database__.set_passive_dns(ip, passive_dns)
-        else:
-            self.msg_received = False
 

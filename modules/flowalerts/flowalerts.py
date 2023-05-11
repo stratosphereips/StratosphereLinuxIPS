@@ -36,20 +36,10 @@ class Module(Module, multiprocessing.Process):
         super().__init__(outputqueue)
         # Read the configuration
         self.read_configuration()
-        # Retrieve the labels
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
-        self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_ssh')
-        self.c3 = __database__.subscribe('new_notice')
-        self.c4 = __database__.subscribe('new_ssl')
-        self.c5 = __database__.subscribe('tw_closed')
-        self.c6 = __database__.subscribe('new_dns')
-        self.c7 = __database__.subscribe('new_downloaded_file')
-        self.c8 = __database__.subscribe('new_smtp')
-        self.c9 = __database__.subscribe('new_software')
-        self.c10 = __database__.subscribe('new_weird')
-        self.c11 = __database__.subscribe('new_tunnel')
+        # Retrieve the labels
+        self.subscribe_to_channels()
         self.whitelist = Whitelist(outputqueue, redis_port)
         self.conn_counter = 0
         # helper contains all functions used to set evidence
@@ -96,7 +86,31 @@ class Module(Module, multiprocessing.Process):
         self.ssl_waiting_thread = threading.Thread(
             target=self.wait_for_ssl_flows_to_appear_in_connlog, daemon=True
         )
-
+    def subscribe_to_channels(self):
+        self.c1 = __database__.subscribe('new_flow')
+        self.c2 = __database__.subscribe('new_ssh')
+        self.c3 = __database__.subscribe('new_notice')
+        self.c4 = __database__.subscribe('new_ssl')
+        self.c5 = __database__.subscribe('tw_closed')
+        self.c6 = __database__.subscribe('new_dns')
+        self.c7 = __database__.subscribe('new_downloaded_file')
+        self.c8 = __database__.subscribe('new_smtp')
+        self.c9 = __database__.subscribe('new_software')
+        self.c10 = __database__.subscribe('new_weird')
+        self.c11 = __database__.subscribe('new_tunnel')
+        self.channels = {
+            'new_flow': self.c1,
+            'new_ssh': self.c2,
+            'new_notice': self.c3,
+            'new_ssl': self.c4,
+            'tw_closed': self.c5,
+            'new_dns': self.c6,
+            'new_downloaded_file': self.c7,
+            'new_smtp': self.c8,
+            'new_software': self.c9,
+            'new_weird': self.c10,
+            'new_tunnel': self.c11,
+        }
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -1733,12 +1747,9 @@ class Module(Module, multiprocessing.Process):
         self.ssl_waiting_thread.start()
 
     def main(self):
-        # ---------------------------- new_flow channel
-        message = __database__.get_message(self.c1)
         # if timewindows are not updated for a long time, Slips is stopped automatically.
-        if utils.is_msg_intended_for(message, 'new_flow'):
-            self.msg_received = True
-            new_flow = json.loads(message['data'])
+        if msg:= self.get_msg('new_flow'):
+            new_flow = json.loads(msg['data'])
             profileid = new_flow['profileid']
             twid = new_flow['twid']
             flow = new_flow['flow']
@@ -1884,14 +1895,10 @@ class Module(Module, multiprocessing.Process):
                 flow_type, smac, profileid, twid, uid, timestamp
             )
             self.conn_counter += 1
-        else:
-            self.msg_received = False
 
         # --- Detect successful SSH connections ---
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_ssh'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_ssh'):
+            data = msg['data']
             data = json.loads(data)
             profileid = data['profileid']
             twid = data['twid']
@@ -1920,14 +1927,10 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 auth_success
             )
-        else:
-            self.msg_received = False
         # --- Detect alerts from Zeek: Self-signed certs,
         # invalid certs, port-scans and address scans, and password guessing ---
-        message = __database__.get_message(self.c3)
-        if utils.is_msg_intended_for(message, 'new_notice'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_notice'):
+            data = msg['data']
             # Convert from json to dict
             data = json.loads(data)
             profileid = data['profileid']
@@ -1976,14 +1979,10 @@ class Module(Module, multiprocessing.Process):
                     uid,
                     by='Zeek'
                 )
-        else:
-            self.msg_received = False
         # --- Detect maliciuos JA3 TLS servers ---
-        message = __database__.get_message(self.c4)
-        if utils.is_msg_intended_for(message, 'new_ssl'):
-            self.msg_received = True
+        if msg:= self.get_msg('new_ssl'):
             # Check for self signed certificates in new_ssl channel (ssl.log)
-            data = message['data']
+            data = msg['data']
             # Convert from json to dict
             data = json.loads(data)
             # Get flow as a json
@@ -2037,24 +2036,15 @@ class Module(Module, multiprocessing.Process):
                 uid,
                 timestamp
             )
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c5)
-
-        if utils.is_msg_intended_for(message, 'tw_closed'):
-            self.msg_received = True
-            profileid_tw = message['data'].split('_')
+        if msg:= self.get_msg('tw_closed'):
+            profileid_tw = msg['data'].split('_')
             profileid, twid = f'{profileid_tw[0]}_{profileid_tw[1]}', profileid_tw[-1]
             self.detect_data_upload_in_twid(profileid, twid)
-        else:
-            self.msg_received = False
 
         # --- Detect DNS issues: 1) DNS resolutions without connection, 2) DGA, 3) young domains, 4) ARPA SCANs
-        message = __database__.get_message(self.c6)
-        if utils.is_msg_intended_for(message, 'new_dns'):
-            self.msg_received = True
-            data = json.loads(message['data'])
+        if msg:= self.get_msg('new_dns'):
+            data = json.loads(msg['data'])
             profileid = data['profileid']
             twid = data['twid']
             uid = data['uid']
@@ -2090,21 +2080,14 @@ class Module(Module, multiprocessing.Process):
             self.check_dns_arpa_scan(
                 domain, stime, profileid, twid, uid
             )
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c7)
-        if utils.is_msg_intended_for(message, 'new_downloaded_file'):
-            self.msg_received = True
-            ssl_info = json.loads(message['data'])
+        if msg:= self.get_msg('new_downloaded_file'):
+            ssl_info = json.loads(msg['data'])
             self.check_malicious_ssl(ssl_info)
-        else:
-            self.msg_received = False
+
         # --- Detect Bad SMTP logins ---
-        message = __database__.get_message(self.c8)
-        if utils.is_msg_intended_for(message, 'new_smtp'):
-            self.msg_received = True
-            smtp_info = json.loads(message['data'])
+        if msg:= self.get_msg('new_smtp'):
+            smtp_info = json.loads(msg['data'])
             profileid = smtp_info['profileid']
             twid = smtp_info['twid']
             flow: dict = smtp_info['flow']
@@ -2114,13 +2097,9 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 flow
             )
-        else:
-            self.msg_received = False
         # --- Detect multiple used SSH versions ---
-        message = __database__.get_message(self.c9)
-        if utils.is_msg_intended_for(message, 'new_software'):
-            self.msg_received = True
-            msg = json.loads(message['data'])
+        if msg:= self.get_msg('new_software'):
+            msg = json.loads(msg['data'])
             flow:dict = msg['sw_flow']
             twid = msg['twid']
             self.check_multiple_ssh_versions(
@@ -2133,21 +2112,11 @@ class Module(Module, multiprocessing.Process):
                 twid,
                 role='SSH::SERVER'
             )
-        else:
-            self.msg_received = False
-        message = __database__.get_message(self.c10)
 
-        if utils.is_msg_intended_for(message, 'new_weird'):
-            self.msg_received = True
-            msg = json.loads(message['data'])
+        if msg:=self.get_msg('new_weird'):
+            msg = json.loads(msg['data'])
             self.check_weird_http_method(msg)
-        else:
-            self.msg_received = False
-        message = __database__.get_message(self.c11)
 
-        if utils.is_msg_intended_for(message, 'new_tunnel'):
-            self.msg_received = True
-            msg = json.loads(message['data'])
+        if msg:= self.get_msg('new_tunnel'):
+            msg = json.loads(msg['data'])
             self.check_GRE_tunnel(msg)
-        else:
-            self.msg_received = False

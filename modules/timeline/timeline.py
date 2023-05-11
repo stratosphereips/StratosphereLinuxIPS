@@ -26,6 +26,9 @@ class Module(Module, multiprocessing.Process):
         self.separator = __database__.getFieldSeparator()
         # Subscribe to 'new_flow' channel
         self.c1 = __database__.subscribe('new_flow')
+        self.channels = {
+            'new_flow': self.c1,
+        }
         # Read information how we should print timestamp.
         conf = ConfigParser()
         self.is_human_timestamp = conf.timeline_human_timestamp()
@@ -375,10 +378,8 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         # Main loop function
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'new_flow'):
-            self.msg_received = True
-            mdata = message['data']
+        if msg:= self.get_msg('new_flow'):
+            mdata = msg['data']
             # Convert from json to dict
             mdata = json.loads(mdata)
             profileid = mdata['profileid']
@@ -389,5 +390,3 @@ class Module(Module, multiprocessing.Process):
             self.process_flow(
                 profileid, twid, flow, timestamp
             )
-        else:
-            self.msg_received = False

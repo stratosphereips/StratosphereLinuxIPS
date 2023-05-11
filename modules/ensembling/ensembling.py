@@ -23,6 +23,9 @@ class Module(Module, multiprocessing.Process):
         self.normal_label = __database__.normal_label
         self.malicious_label = __database__.malicious_label
         self.c1 = __database__.subscribe('tw_closed')
+        self.channels = {
+            'tw_closed': self.c1
+        }
         self.separator = __database__.separator
 
 
@@ -87,20 +90,14 @@ class Module(Module, multiprocessing.Process):
         utils.drop_root_privs()
 
     def main(self):
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'tw_closed'):
-            self.msg_received = True
-            data = message['data']
+        if msg := self.get_msg('tw_closed'):
+            data = msg['data']
             # Convert from json to dict
             profileip = data.split(self.separator)[1]
             twid = data.split(self.separator)[2]
             profileid = f'profile{self.separator}{profileip}'
-
             # First stage -  define the final label for each flow in profileid and twid
             # by the majority vote of malicious and normal
             # Second stage - group the flows with same dstip and calculate the amount of
             # normal and malicious flows
-
             self.set_label_per_flow_dstip(profileid, twid)
-        else:
-            self.msg_received = False

@@ -131,6 +131,17 @@ class Trust(Module, multiprocessing.Process):
         self.storage_name = 'IPsInfo'
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
+        self.c1 = __database__.subscribe('report_to_peers')
+        # channel to send msgs to whenever slips needs info from other peers about an ip
+        self.c2 = __database__.subscribe(self.p2p_data_request_channel)
+        # this channel receives peers requests/updates
+        self.c3 = __database__.subscribe(self.gopy_channel)
+        self.channels = {
+            'report_to_peers': self.c1,
+            self.p2p_data_request_channel: self.c2,
+            self.gopy_channel: self.c3,
+        }
+
         # they have to be defined here because the variable name utils is already taken
         # TODO rename one of them
         self.threat_levels = {
@@ -619,36 +630,19 @@ class Trust(Module, multiprocessing.Process):
             # rotates p2p.log file every 1 day
             self.rotator_thread.start()
 
-        self.c1 = __database__.subscribe('report_to_peers', ignore_subscribe_messages=True)
-        # channel to send msgs to whenever slips needs info from other peers about an ip
-        self.c2 = __database__.subscribe(self.p2p_data_request_channel, ignore_subscribe_messages=True)
-        # this channel receives peers requests/updates
-        self.c3 = __database__.subscribe(self.gopy_channel, ignore_subscribe_messages=True)
         # should call self.update_callback
         # self.c4 = __database__.subscribe(self.slips_update_channel)
 
     def main(self):
         """main loop function"""
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'report_to_peers'):
-            self.msg_received = True
-            self.new_evidence_callback(message)
-        else:
-            self.msg_received = False
+        if msg:= self.get_msg('report_to_peers'):
+            self.new_evidence_callback(msg)
 
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, self.p2p_data_request_channel):
-            self.msg_received = True
-            self.data_request_callback(message)
-        else:
-            self.msg_received = False
+        if msg:= self.get_msg(self.p2p_data_request_channel):
+            self.data_request_callback(msg)
 
-        message = __database__.get_message(self.c3)
-        if utils.is_msg_intended_for(message, self.gopy_channel):
-            self.msg_received = True
-            self.gopy_callback(message)
-        else:
-            self.msg_received = False
+        if msg:= self.get_msg(self.gopy_channel):
+            self.gopy_callback(msg)
 
         ret_code = self.pigeon.poll()
         if ret_code is not None:

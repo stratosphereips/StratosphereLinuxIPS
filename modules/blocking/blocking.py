@@ -28,6 +28,9 @@ class Module(Module, multiprocessing.Process):
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_blocking')
+        self.channels = {
+            'new_blocking': self.c1,
+        }
         self.os = platform.system()
         if self.os == 'Darwin':
             self.print('Mac OS blocking is not supported yet.')
@@ -366,10 +369,8 @@ class Module(Module, multiprocessing.Process):
                 self.unblock_ips.pop(ip)
 
     def main(self):
-        message = __database__.get_message(self.c1)
         # There's an IP that needs to be blocked
-        if utils.is_msg_intended_for(message, 'new_blocking'):
-            self.msg_received = True
+        if msg := self.get_msg('new_blocking'):
             # message['data'] in the new_blocking channel is a dictionary that contains
             # the ip and the blocking options
             # Example of the data dictionary to block or unblock an ip:
@@ -389,7 +390,7 @@ class Module(Module, multiprocessing.Process):
             #   __database__.publish('new_blocking', blocking_data )
 
             # Decode(deserialize) the python dict into JSON formatted string
-            data = json.loads(message['data'])
+            data = json.loads(msg['data'])
             # Parse the data dictionary
             ip = data.get('ip')
             block = data.get('block')
@@ -405,7 +406,5 @@ class Module(Module, multiprocessing.Process):
                 )
             else:
                 self.unblock_ip(ip, from_, to, dport, sport, protocol)
-        else:
-            self.msg_received = False
         self.check_for_ips_to_unblock()
 

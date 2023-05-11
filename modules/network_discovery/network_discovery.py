@@ -34,6 +34,12 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('tw_modified')
         self.c2 = __database__.subscribe('new_notice')
         self.c3 = __database__.subscribe('new_dhcp')
+        self.channels = {
+            'tw_modified': self.c1,
+            'new_notice': self.c2,
+            'new_dhcp,': self.c3,
+        }
+
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
@@ -351,12 +357,10 @@ class PortScanProcess(Module, multiprocessing.Process):
     def pre_main(self):
         utils.drop_root_privs()
     def main(self):
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'tw_modified'):
-            self.msg_received = True
+        if msg:= self.get_msg('tw_modified'):
             # Get the profileid and twid
-            profileid = message['data'].split(':')[0]
-            twid = message['data'].split(':')[1]
+            profileid = msg['data'].split(':')[0]
+            twid = msg['data'].split(':')[1]
             # Start of the port scan detection
             self.print(
                 f'Running the detection of portscans in profile '
@@ -380,13 +384,9 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.horizontal_ps.check(profileid, twid)
             self.vertical_ps.check(profileid, twid)
             self.check_icmp_scan(profileid, twid)
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_notice'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_notice'):
+            data = msg['data']
             # Convert from json to dict
             data = json.loads(data)
             profileid = data['profileid']
@@ -402,14 +402,8 @@ class PortScanProcess(Module, multiprocessing.Process):
             self.check_icmp_sweep(
                 msg, note, profileid, uid, twid, timestamp
             )
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c3)
-        if utils.is_msg_intended_for(message, 'new_dhcp'):
-            self.msg_received = True
-            flow = json.loads(message['data'])
+        if msg:= self.get_msg('new_dhcp'):
+            flow = json.loads(msg['data'])
             self.check_dhcp_scan(flow)
-        else:
-            self.msg_received = False
 

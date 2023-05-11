@@ -67,6 +67,10 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # there has to be a timeout or it will wait forever and never receive a new line
         self.timeout = 0.0000001
         self.c1 = __database__.subscribe('reload_whitelist')
+        self.channels = {
+            'reload_whitelist': self.c1,
+        }
+
         self.separators = {
             'zeek': '',
             'suricata': '',
@@ -1841,12 +1845,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
 
 
         # listen on this channel in case whitelist.conf is changed, we need to process the new changes
-        message = __database__.get_message(self.c1)
-        if utils.is_msg_intended_for(message, 'reload_whitelist'):
-            self.msg_received = True
+        if msg := self.get_msg('reload_whitelist'):
             # if whitelist.conf is edited using pycharm
             # a msg will be sent to this channel on every keypress, because pycharm saves file automatically
             # otherwise this channel will get a msg only when whitelist.conf is modified and saved to disk
             self.whitelist.read_whitelist()
-        else:
-            self.msg_received = False

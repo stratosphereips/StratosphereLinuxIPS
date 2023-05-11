@@ -35,6 +35,12 @@ class Module(Module, multiprocessing.Process):
         self.c1 = __database__.subscribe('new_flow')
         self.c2 = __database__.subscribe('new_dns')
         self.c3 = __database__.subscribe('new_url')
+        self.channels = {
+            'new_flow': self.c1,
+            'new_dns': self.c2,
+            'new_url': self.c3,
+        }
+
         # Read the conf file
         self.__read_configuration()
         self.key = None
@@ -514,14 +520,12 @@ class Module(Module, multiprocessing.Process):
             return 1
         self.api_calls_thread.start()
     def main(self):
-        message = __database__.get_message(self.c1)
         if self.incorrect_API_key:
             self.shutdown_gracefully()
             return 1
 
-        if utils.is_msg_intended_for(message, 'new_flow'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_flow'):
+            data = msg['data']
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
@@ -556,13 +560,9 @@ class Module(Module, multiprocessing.Process):
                     - cached_data['VirusTotal']['timestamp']
                 ) > self.update_period:
                     self.set_vt_data_in_IPInfo(ip, cached_data)
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c2)
-        if utils.is_msg_intended_for(message, 'new_dns'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_dns'):
+            data = msg['data']
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
@@ -590,13 +590,9 @@ class Module(Module, multiprocessing.Process):
                     self.set_domain_data_in_DomainInfo(
                         domain, cached_data
                     )
-        else:
-            self.msg_received = False
 
-        message = __database__.get_message(self.c3)
-        if utils.is_msg_intended_for(message, 'new_url'):
-            self.msg_received = True
-            data = message['data']
+        if msg:= self.get_msg('new_url'):
+            data = msg['data']
             data = json.loads(data)
             # profileid = data['profileid']
             # twid = data['twid']
@@ -615,5 +611,3 @@ class Module(Module, multiprocessing.Process):
                     - cached_data['VirusTotal']['timestamp']
                 ) > self.update_period:
                     self.set_url_data_in_URLInfo(url, cached_data)
-        else:
-            self.msg_received = False

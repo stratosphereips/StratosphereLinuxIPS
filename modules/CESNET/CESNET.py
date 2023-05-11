@@ -29,6 +29,9 @@ class Module(Module, multiprocessing.Process):
         __database__.start(redis_port)
         self.read_configuration()
         self.c1 = __database__.subscribe('export_evidence')
+        self.channels = {
+            'export_evidence' : self.c1,
+        }
         self.stop_module = False
 
 
@@ -299,7 +302,6 @@ class Module(Module, multiprocessing.Process):
         ]
 
     def main(self):
-        message = __database__.get_message(self.c1)
         if self.receive_from_warden:
             last_update = __database__.get_last_warden_poll_time()
             now = time.time()
@@ -310,12 +312,8 @@ class Module(Module, multiprocessing.Process):
                 __database__.set_last_warden_poll_time(now)
 
         # in case of an interface or a file, push every time we get an alert
-        if (
-            utils.is_msg_intended_for(message, 'export_evidence')
-            and self.send_to_warden
-        ):
+        msg = self.get_msg('export_evidence')
+        if msg and self.send_to_warden:
             self.msg_received = True
-            evidence = json.loads(message['data'])
+            evidence = json.loads(msg['data'])
             self.export_evidence(evidence)
-        else:
-            self.msg_received = False
