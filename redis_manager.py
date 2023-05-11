@@ -47,6 +47,43 @@ class RedisManager:
             # remove the old logline using this port
             self.remove_old_logline(6379)
 
+    def load_redis_db(self, redis_port):
+        # to be able to use running_slips_info later as a non-root user,
+        # we shouldn't modify it as root
+
+        self.main.input_information = os.path.basename(self.main.args.db)
+        redis_pid = self.get_pid_of_redis_server(redis_port)
+        self.zeek_folder = '""'
+        self.log_redis_server_PID(redis_port, redis_pid)
+        self.remove_old_logline(redis_port)
+
+        print(
+            f'{self.main.args.db} loaded successfully.\n'
+            f'Run ./kalipso.sh and choose port {redis_port}'
+        )
+
+    def load_db(self):
+        self.input_type = 'database'
+        # self.input_information = 'database'
+        from slips_files.core.database.database import __database__
+        __database__.start(6379)
+
+        # this is where the db will be loaded
+        redis_port = 32850
+        # make sure the db on 32850 is flushed and ready for the new db to be loaded
+        if pid := self.get_pid_of_redis_server(redis_port):
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
+
+        if not __database__.load(self.main.args.db):
+            print(f'Error loading the database {self.main.args.db}')
+        else:
+            self.load_redis_db(redis_port)
+            # __database__.disable_redis_persistence()
+
+        self.main.terminate_slips()
+
+
     def get_end_port(self):
         return self.end_port
     

@@ -288,8 +288,6 @@ class Main:
 
         print(f'[Main] Storing Slips logs in {self.args.output}')
 
-
-
     def set_mode(self, mode, daemon=''):
         """
         Slips has 2 modes, daemonized and interactive, this function
@@ -327,8 +325,6 @@ class Main:
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-
-
     def handle_flows_from_stdin(self, input_information):
         """
         Make sure the stdin line type is valid (argus, suricata, or zeek)
@@ -354,43 +350,6 @@ class Main:
         line_type = input_information
         input_type = 'stdin'
         return input_type, line_type.lower()
-
-
-    def load_db(self):
-        self.input_type = 'database'
-        # self.input_information = 'database'
-        from slips_files.core.database.database import __database__
-        __database__.start(6379)
-
-        # this is where the db will be loaded
-        redis_port = 32850
-        # make sure the db on 32850 is flushed and ready for the new db to be loaded
-        if pid := self.redis_man.get_pid_of_redis_server(redis_port):
-            self.redis_man.flush_redis_server(pid=pid)
-            self.redis_man.kill_redis_server(pid)
-
-        if not __database__.load(self.args.db):
-            print(f'Error loading the database {self.args.db}')
-        else:
-            self.load_redis_db(redis_port)
-            # __database__.disable_redis_persistence()
-
-        self.terminate_slips()
-
-    def load_redis_db(self, redis_port):
-        # to be able to use running_slips_info later as a non-root user,
-        # we shouldn't modify it as root
-
-        self.input_information = os.path.basename(self.args.db)
-        redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
-        self.zeek_folder = '""'
-        self.redis_man.log_redis_server_PID(redis_port, redis_pid)
-        self.redis_man.remove_old_logline(redis_port)
-
-        print(
-            f'{self.args.db} loaded successfully.\n'
-            f'Run ./kalipso.sh and choose port {redis_port}'
-        )
 
     def get_input_file_type(self, given_path):
         """

@@ -26,7 +26,7 @@ class Checker:
             return input_type, input_information, line_type
 
         if self.main.args.db:
-            self.main.load_db()
+            self.main.redis_man.load_db()
             return
 
         if not self.main.args.filepath:
