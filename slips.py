@@ -34,7 +34,6 @@ from multiprocessing import Queue
 from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.logsProcess import LogsProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
 
 import signal
@@ -121,21 +120,6 @@ class Main:
         else:
             self.zeek_folder = f'zeek_files_{without_ext}/'
 
-    def create_folder_for_logs(self):
-        """
-        Create a dir for logs if logs are enabled
-        """
-        logs_folder = utils.convert_format(datetime.now(), '%Y-%m-%d--%H-%M-%S')
-        # place the logs dir inside the output dir
-        logs_folder = os.path.join(self.args.output, f'detailed_logs_{logs_folder}')
-        try:
-            os.makedirs(logs_folder)
-        except OSError as e:
-            if e.errno != errno.EEXIST:
-                # doesn't exist and can't create
-                return False
-        return logs_folder
-
     def terminate_slips(self):
         """
         Shutdown slips, is called when stopping slips before
@@ -144,40 +128,6 @@ class Main:
         if self.mode == 'daemonized':
             self.daemon.stop()
         sys.exit(0)
-
-    def setup_detailed_logs(self, LogsProcess):
-        """
-        Detailed logs are the ones created by logsProcess
-        """
-
-        do_logs = self.conf.create_log_files()
-        # if -l is provided or create_log_files is yes then we will create log files
-        if self.args.createlogfiles or do_logs:
-            # Create a folder for logs
-            logs_dir = self.create_folder_for_logs()
-            # Create the logsfile thread if by parameter we were told,
-            # or if it is specified in the configuration
-            self.logsProcessQueue = Queue()
-            logs_process = LogsProcess(
-                self.logsProcessQueue,
-                self.outputqueue,
-                self.args.verbose,
-                self.args.debug,
-                logs_dir,
-                self.redis_port
-            )
-            logs_process.start()
-            self.print(
-                f'Started {green("Logs Process")} '
-                f'[PID {green(logs_process.pid)}]', 1, 0
-            )
-            __database__.store_process_PID(
-                'Logs', int(logs_process.pid)
-            )
-        else:
-            # If self.args.nologfiles is False, then we don't want log files,
-            # independently of what the conf says.
-            logs_dir = False
 
     def update_local_TI_files(self):
         from modules.update_manager.update_file_manager import UpdateFileManager
@@ -623,14 +573,11 @@ class Main:
             # The signals SIGKILL and SIGSTOP cannot be caught, blocked, or ignored.
             signal.signal(signal.SIGTERM, sig_handler)
 
-            logs_dir = self.setup_detailed_logs(LogsProcess)
-
             self.evidenceProcessQueue = Queue()
             evidence_process = EvidenceProcess(
                 self.evidenceProcessQueue,
                 self.outputqueue,
                 self.args.output,
-                logs_dir,
                 self.redis_port,
             )
             evidence_process.start()

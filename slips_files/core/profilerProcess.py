@@ -1764,8 +1764,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.print(f"Stopping profiler process. Number of whitelisted conn flows: "
                        f"{self.whitelisted_flows_ctr}", 2, 0)
 
-            # if timewindows are not updated for a long time (see at logsProcess.py),
-            # we will stop slips automatically.The 'stop_process' line is sent from logsProcess.py.
             self.shutdown_gracefully()
             self.print(
                 f'Stopping Profiler Process. Received {self.rec_lines} lines '

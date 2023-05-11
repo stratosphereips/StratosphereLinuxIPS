@@ -179,12 +179,6 @@ class ConfigParser(object):
         )
         return 'no' not in store_a_copy_of_zeek_files.lower()
 
-    def create_log_files(self):
-        do_logs = self.read_configuration(
-            'parameters', 'create_log_files', 'no'
-        )
-        return  'yes' in do_logs 
-
     def whitelist_path(self):
         return self.read_configuration(
             'parameters', 'whitelist_path', 'whitelist.conf'
@@ -217,17 +211,6 @@ class ConfigParser(object):
         return self.read_configuration(
             'timestamp', 'format', None
         )
-
-
-    def log_report_time(self):
-        time = self.read_configuration(
-            'parameters', 'log_report_time', 5
-        )
-        try:
-            time = int(time)
-        except ValueError:
-            time = 5
-        return time
 
     def delete_zeek_files(self):
         delete = self.read_configuration(
