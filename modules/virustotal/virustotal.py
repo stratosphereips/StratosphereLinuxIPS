@@ -519,12 +519,10 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
     def pre_main(self):
-        print(f"@@@@@@@@@@@@@@@@ pre main is executed")
         utils.drop_root_privs()
         if not self.read_api_key() or self.key in ('', None):
             # We don't have a virustotal key
             return 1
-        print(f"@@@@@@@@@@@@@@@@ key: {self.key}")
         self.api_calls_thread.start()
 
     def main(self):
