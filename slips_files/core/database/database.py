@@ -1454,7 +1454,7 @@ class Database(ProfilingFlowsDatabase, object):
         self.r.set('number_of_evidence', 0)
 
     def get_evidence_number(self):
-        self.r.get('number_of_evidence')
+        return self.r.get('number_of_evidence')
 
     def mark_evidence_as_processed(self, evidence_ID):
         """
