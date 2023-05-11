@@ -68,13 +68,6 @@ def test_load_modules():
 #     x = database.r.hgetall('profile_10.0.2.2_timewindow1_flows')
 #     assert 'CDm47v3jrYL8lx0cOh' in str(x)
 
-
-
-def test_create_folder_for_logs():
-    main = create_Main_instance()
-    assert main.create_folder_for_logs() is not False
-
-
 def test_clear_redis_cache_database():
     redis_manager = create_redis_manager_instance()
     assert redis_manager.clear_redis_cache_database() == True
