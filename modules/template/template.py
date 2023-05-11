@@ -50,10 +50,13 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', self.name)
 
     def pre_main(self):
+        """
+        Initializations that run only once before the main() function runs in a loop
+        """
         utils.drop_root_privs()
 
     def main(self):
-        # Main loop function
+        """Main loop function"""
         if msg:= self.get_msg('new_ip'):
             # Example of printing the number of profiles in the
             # Database every second
