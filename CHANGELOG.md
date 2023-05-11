@@ -1,7 +1,8 @@
 -1.0.5 (May 2023):
 - Fix missing flows due to modules stopping before the processing is done
 - Fix how we detect vertical and horizontal portscans
-- 
+- Update whitelist by adding all the ips of whitelisted domains
+- Fixed error whitelisting Unencrypted HTTP traffic 
 -1.0.4 (April 2023)
 - Add more descriptive titles to VT scores in the web UI thanks to @shubhangi.
 - Add stratoletters documentation, thanks to @haleelsada.
