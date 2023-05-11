@@ -423,22 +423,28 @@ class Main:
             f'Run ./kalipso.sh and choose port {redis_port}'
         )
 
-    def get_input_file_type(self, input_information):
+    def get_input_file_type(self, given_path):
         """
-        input_information: given file
+        given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
         """
         # default value
         input_type = 'file'
         # Get the type of file
         cmd_result = subprocess.run(
-            ['file', input_information], stdout=subprocess.PIPE
+            ['file', given_path], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-        if 'pcap' in cmd_result:
+        if 'pcap capture file' in cmd_result and os.path.isfile(given_path):
             input_type = 'pcap'
-        elif 'dBase' in cmd_result or 'nfcap' in input_information or 'nfdump' in input_information:
+        elif (
+                ('dBase' in cmd_result
+                 or 'nfcap' in given_path
+                 or 'nfdump' in given_path
+                )
+                and os.path.isfile(given_path)
+        ):
             input_type = 'nfdump'
             if shutil.which('nfdump') is None:
                 # If we do not have nfdump, terminate Slips.
@@ -446,22 +452,22 @@ class Main:
                     'nfdump is not installed. terminating slips.'
                 )
                 self.terminate_slips()
-        elif 'CSV' in cmd_result:
+        elif 'CSV' in cmd_result and os.path.isfile(given_path):
             input_type = 'binetflow'
-        elif 'directory' in cmd_result:
+        elif 'directory' in cmd_result and os.path.isdir(given_path):
             input_type = 'zeek_folder'
         else:
             # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
             # use first line to determine
-            with open(input_information, 'r') as f:
+            with open(given_path, 'r') as f:
                 while True:
                     # get the first line that isn't a comment
                     first_line = f.readline().replace('\n', '')
                     if not first_line.startswith('#'):
                         break
-            if 'flow_id' in first_line:
+            if 'flow_id' in first_line and os.path.isfile(given_path):
                 input_type = 'suricata'
-            else:
+            elif os.path.isfile(given_path):
                 # this is a text file, it can be binetflow or zeek_log_file
                 try:
                     # is it a json log file
@@ -489,8 +495,6 @@ class Main:
                         input_type = 'zeek_log_file'
 
         return input_type
-
-
 
     def setup_print_levels(self):
         """
