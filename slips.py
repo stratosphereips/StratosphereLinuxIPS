@@ -66,7 +66,7 @@ class Main:
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         # objects to manage various functionality
-        self.redis_man = RedisManager(terminate_slips=self.terminate_slips)
+        self.redis_man = RedisManager(self)
         self.ui_man = UIManager(self)
         self.metadata_man = MetadataManager(self)
         self.proc_man = ProcessManager(self)
@@ -290,37 +290,6 @@ class Main:
 
 
 
-
-    def log_redis_server_PID(self, redis_port, redis_pid):
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
-        try:
-            # used in case we need to remove the line using 6379 from running logfile
-            with open(self.redis_man.running_logfile, 'a') as f:
-                # add the header lines if the file is newly created
-                if f.tell() == 0:
-                    f.write(
-                        '# This file contains a list of used redis ports.\n'
-                        '# Once a server is killed, it will be removed from this file.\n'
-                        'Date, File or interface, Used port, Server PID,'
-                        ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
-                    )
-
-                f.write(
-                    f'{now},{self.input_information},{redis_port},'
-                    f'{redis_pid},{self.zeek_folder},{self.args.output},'
-                    f'{os.getpid()},'
-                    f'{bool(self.args.daemon)},{self.args.save}\n'
-                )
-        except PermissionError:
-            # last run was by root, change the file ownership to non-root
-            os.remove(self.redis_man.running_logfile)
-            open(self.redis_man.running_logfile, 'w').close()
-            self.log_redis_server_PID(redis_port, redis_pid)
-
-        if redis_port == 6379:
-            # remove the old logline using this port
-            self.redis_man.remove_old_logline(6379)
-
     def set_mode(self, mode, daemon=''):
         """
         Slips has 2 modes, daemonized and interactive, this function
@@ -415,7 +384,7 @@ class Main:
         self.input_information = os.path.basename(self.args.db)
         redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
         self.zeek_folder = '""'
-        self.log_redis_server_PID(redis_port, redis_pid)
+        self.redis_man.log_redis_server_PID(redis_port, redis_pid)
         self.redis_man.remove_old_logline(redis_port)
 
         print(
@@ -586,7 +555,7 @@ class Main:
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
+            self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
 
