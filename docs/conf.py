@@ -26,7 +26,7 @@ author = 'Stratosphere Laboratory'
 
 # The full version, including alpha/beta/rc tags
 url = "https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/VERSION"
-response = requests.get(url)
+response = requests.get(url, timeout=5)
 
 if response.status_code == 200:
     release = response.text

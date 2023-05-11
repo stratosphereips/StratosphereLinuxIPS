@@ -312,7 +312,7 @@ class UpdateFileManager:
         # Retry 3 times to get the TI file if an error occured
         for _try in range(5):
             try:
-                response = requests.get(file_to_download, timeout=10)
+                response = requests.get(file_to_download, timeout=5)
                 if response.status_code != 200:
                     error = f'An error occurred while downloading the file {file_to_download}.' \
                             f'status code: {response.status_code}. Aborting'
