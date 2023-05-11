@@ -25,8 +25,8 @@ def create_Main_instance():
     main.line_type = False
     return main
 
-def create_redis_manager_instance():
-    return RedisManager()
+def create_redis_manager_instance(main):
+    return RedisManager(main)
 def create_process_manager_instance():
     return ProcessManager(create_Main_instance())
 
@@ -36,8 +36,6 @@ def test_load_modules():
         ['template', 'mldetection-1', 'ensembling']
     )[1]
     assert failed_to_load_modules == 0
-
-
 #
 # @pytest.mark.skipif(IS_IN_A_DOCKER_CONTAINER, reason='This functionality is not supported in docker')
 # def test_save():
@@ -76,7 +74,8 @@ def test_create_folder_for_logs():
 
 
 def test_clear_redis_cache_database():
-    redis_manager = create_redis_manager_instance()
+    main = create_Main_instance()
+    redis_manager = create_redis_manager_instance(main)
     assert redis_manager.clear_redis_cache_database() == True
 
 
