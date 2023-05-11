@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from slips_files.core.database.database import __database__
+from slips_files.common.slips_utils import utils
 import sys
 import traceback
 # This is the abstract Module class to check against. Do not modify
@@ -68,6 +69,15 @@ class Module(ABC):
         """
         pass
 
+    def get_msg(self, channel_name):
+        message = __database__.get_message(self.channels[channel_name])
+        if utils.is_msg_intended_for(message, channel_name):
+            self.msg_received = True
+            return message
+        else:
+            self.msg_received = False
+            return False
+
     def run(self):
         """ This is the loop function, it runs non-stop as long as the module is online """
         try:
@@ -83,8 +93,8 @@ class Module(ABC):
             self.print(traceback.format_exc(), 0, 1)
             return True
 
-        online = True
-        while online:
+        error = False
+        while not error:
             try:
                 # keep running main() in a loop as long as the module is online
                 # if a module's main() returns 1, it means there's an error and it needs to stop immediately
