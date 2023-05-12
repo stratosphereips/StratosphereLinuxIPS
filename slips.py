@@ -65,7 +65,7 @@ class Main:
         self.alerts_default_path = 'output/'
         self.mode = 'interactive'
         # objects to manage various functionality
-        self.redis_man = RedisManager(terminate_slips=self.terminate_slips)
+        self.redis_man = RedisManager(self)
         self.ui_man = UIManager(self)
         self.metadata_man = MetadataManager(self)
         self.proc_man = ProcessManager(self)
@@ -238,39 +238,6 @@ class Main:
 
         print(f'[Main] Storing Slips logs in {self.args.output}')
 
-
-
-
-    def log_redis_server_PID(self, redis_port, redis_pid):
-        now = utils.convert_format(datetime.now(), utils.alerts_format)
-        try:
-            # used in case we need to remove the line using 6379 from running logfile
-            with open(self.redis_man.running_logfile, 'a') as f:
-                # add the header lines if the file is newly created
-                if f.tell() == 0:
-                    f.write(
-                        '# This file contains a list of used redis ports.\n'
-                        '# Once a server is killed, it will be removed from this file.\n'
-                        'Date, File or interface, Used port, Server PID,'
-                        ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
-                    )
-
-                f.write(
-                    f'{now},{self.input_information},{redis_port},'
-                    f'{redis_pid},{self.zeek_folder},{self.args.output},'
-                    f'{os.getpid()},'
-                    f'{bool(self.args.daemon)},{self.args.save}\n'
-                )
-        except PermissionError:
-            # last run was by root, change the file ownership to non-root
-            os.remove(self.redis_man.running_logfile)
-            open(self.redis_man.running_logfile, 'w').close()
-            self.log_redis_server_PID(redis_port, redis_pid)
-
-        if redis_port == 6379:
-            # remove the old logline using this port
-            self.redis_man.remove_old_logline(6379)
-
     def set_mode(self, mode, daemon=''):
         """
         Slips has 2 modes, daemonized and interactive, this function
@@ -308,8 +275,6 @@ class Main:
         levels = f'{verbose}{debug}'
         self.outputqueue.put(f'{levels}|{self.name}|{text}')
 
-
-
     def handle_flows_from_stdin(self, input_information):
         """
         Make sure the stdin line type is valid (argus, suricata, or zeek)
@@ -336,59 +301,28 @@ class Main:
         input_type = 'stdin'
         return input_type, line_type.lower()
 
-
-    def load_db(self):
-        self.input_type = 'database'
-        # self.input_information = 'database'
-        from slips_files.core.database.database import __database__
-        __database__.start(6379)
-
-        # this is where the db will be loaded
-        redis_port = 32850
-        # make sure the db on 32850 is flushed and ready for the new db to be loaded
-        if pid := self.redis_man.get_pid_of_redis_server(redis_port):
-            self.redis_man.flush_redis_server(pid=pid)
-            self.redis_man.kill_redis_server(pid)
-
-        if not __database__.load(self.args.db):
-            print(f'Error loading the database {self.args.db}')
-        else:
-            self.load_redis_db(redis_port)
-            # __database__.disable_redis_persistence()
-
-        self.terminate_slips()
-
-    def load_redis_db(self, redis_port):
-        # to be able to use running_slips_info later as a non-root user,
-        # we shouldn't modify it as root
-
-        self.input_information = os.path.basename(self.args.db)
-        redis_pid = self.redis_man.get_pid_of_redis_server(redis_port)
-        self.zeek_folder = '""'
-        self.log_redis_server_PID(redis_port, redis_pid)
-        self.redis_man.remove_old_logline(redis_port)
-
-        print(
-            f'{self.args.db} loaded successfully.\n'
-            f'Run ./kalipso.sh and choose port {redis_port}'
-        )
-
-    def get_input_file_type(self, input_information):
+    def get_input_file_type(self, given_path):
         """
-        input_information: given file
+        given_path: given file
         returns binetflow, pcap, nfdump, zeek_folder, suricata, etc.
         """
         # default value
         input_type = 'file'
         # Get the type of file
         cmd_result = subprocess.run(
-            ['file', input_information], stdout=subprocess.PIPE
+            ['file', given_path], stdout=subprocess.PIPE
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-        if 'pcap' in cmd_result:
+        if 'pcap capture file' in cmd_result and os.path.isfile(given_path):
             input_type = 'pcap'
-        elif 'dBase' in cmd_result or 'nfcap' in input_information or 'nfdump' in input_information:
+        elif (
+                ('dBase' in cmd_result
+                 or 'nfcap' in given_path
+                 or 'nfdump' in given_path
+                )
+                and os.path.isfile(given_path)
+        ):
             input_type = 'nfdump'
             if shutil.which('nfdump') is None:
                 # If we do not have nfdump, terminate Slips.
@@ -396,22 +330,22 @@ class Main:
                     'nfdump is not installed. terminating slips.'
                 )
                 self.terminate_slips()
-        elif 'CSV' in cmd_result:
+        elif 'CSV' in cmd_result and os.path.isfile(given_path):
             input_type = 'binetflow'
-        elif 'directory' in cmd_result:
+        elif 'directory' in cmd_result and os.path.isdir(given_path):
             input_type = 'zeek_folder'
         else:
             # is it a zeek log file or suricata, binetflow tabs, or binetflow comma separated file?
             # use first line to determine
-            with open(input_information, 'r') as f:
+            with open(given_path, 'r') as f:
                 while True:
                     # get the first line that isn't a comment
                     first_line = f.readline().replace('\n', '')
                     if not first_line.startswith('#'):
                         break
-            if 'flow_id' in first_line:
+            if 'flow_id' in first_line and os.path.isfile(given_path):
                 input_type = 'suricata'
-            else:
+            elif os.path.isfile(given_path):
                 # this is a text file, it can be binetflow or zeek_log_file
                 try:
                     # is it a json log file
@@ -439,8 +373,6 @@ class Main:
                         input_type = 'zeek_log_file'
 
         return input_type
-
-
 
     def setup_print_levels(self):
         """
@@ -532,7 +464,7 @@ class Main:
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
-            self.log_redis_server_PID(self.redis_port, redis_pid)
+            self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
             __database__.set_slips_mode(self.mode)
 
