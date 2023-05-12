@@ -337,9 +337,10 @@ class OutputProcess(multiprocessing.Process):
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
         modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
         profilesLen = __database__.getProfilesLen()
-        
-        msg = f'Total analyzed IPs: ' \
+        evidence_number = __database__.get_evidence_number() or 0
+        msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \
+              f'Evidence Added: {evidence_number} ' \
               f'IPs sending traffic in the last ' \
               f'{self.printable_twid_width}: {modified_ips_in_the_last_tw}. ' \
               f'({now})'

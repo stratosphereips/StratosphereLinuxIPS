@@ -59,7 +59,8 @@ class EvidenceProcess(Module, multiprocessing.Process):
         self.separator = __database__.separator
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60
-
+        # to keep track of the number of generated evidence
+        __database__.init_evidence_number()
         if self.popup_alerts:
             self.notify = Notify()
             if self.notify.bin_found:
@@ -74,7 +75,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
             'evidence_added': self.c1,
             'new_blame': self.c2,
         }
-
 
         # clear output/alerts.log
         self.logfile = self.clean_file(output_dir, 'alerts.log')
