@@ -1,9 +1,7 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.slips_utils import utils
 import sys
-import traceback
 import socket
 import json
 import os
@@ -17,10 +15,12 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.port = None
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_alert')
+        self.channels = {'new_alert': self.c1}
         self.cyst_UDS = '/run/slips.sock'
         self.conn_closed = False
 
@@ -135,62 +135,38 @@ class Module(Module, multiprocessing.Process):
         __database__.publish('finished_modules', 'stop_slips')
         return
 
-    def run(self):
+    def pre_main(self):
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return
-        try:
-            # connect to cyst
-            self.sock, self.cyst_conn = self.initialize_unix_socket()
-        except KeyboardInterrupt:
+        # connect to cyst
+        self.sock, self.cyst_conn = self.initialize_unix_socket()
+
+    def main(self):
+        #check for connection before sending
+        if self.conn_closed :
+            self.print('Connection closed by CYST.', 0, 1)
             self.shutdown_gracefully()
-            return True
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on initialize_unix_socket() line {exception_line}', 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
-            return True
+            return 1
 
+        # RECEIVE FLOWS FROM CYST
+        if flow := self.get_flow():
+            # send the flow to inputprocess so slips can process it normally
+            __database__.publish('new_cyst_flow', json.dumps(flow))
 
-        while True:
-            try:
-                #check for connection before sending
-                if self.conn_closed :
-                    self.print( 'Connection closed by CYST.', 0, 1)
-                    self.shutdown_gracefully()
-                    return True
+        # check for connection before receiving
+        if self.conn_closed:
+            self.print( 'Connection closed by CYST.', 0, 1)
+            self.shutdown_gracefully()
+            return 1
 
-                # RECEIVE FLOWS FROM CYST
-                if flow := self.get_flow():
-                    # send the flow to inputprocess so slips can process it normally
-                    __database__.publish('new_cyst_flow', json.dumps(flow))
+        if msg := self.get_msg('new_alert'):
+            print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
+            alert_info: dict = json.loads(msg['data'])
+            profileid = alert_info['profileid']
+            # twid = alert_info['twid']
+            # alert_ID is {profileid}_{twid}_{ID}
+            alert_ID = alert_info['alert_ID']
+            self.send_alert(alert_ID, profileid.split('_')[-1])
 
-                #check for connection before receiving
-                if self.conn_closed:
-                    self.print( 'Connection closed by CYST.', 0, 1)
-                    self.shutdown_gracefully()
-                    return True
-
-                msg = __database__.get_message(self.c1)
-                if (msg and msg['data'] == 'stop_process'):
-                    self.shutdown_gracefully()
-                    return True
-
-                if utils.is_msg_intended_for(msg, 'new_alert'):
-                    print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
-                    alert_info: dict = json.loads(msg['data'])
-                    profileid = alert_info['profileid']
-                    twid = alert_info['twid']
-                    # alert_ID is {profileid}_{twid}_{ID}
-                    alert_ID = alert_info['alert_ID']
-                    self.send_alert(alert_ID, profileid.split('_')[-1])
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception as inst:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
 
 
