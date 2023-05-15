@@ -693,44 +693,44 @@ class EvidenceProcess(Module, multiprocessing.Process):
                     }
                     __database__.publish('new_alert', json.dumps(to_send))
 
-            self.send_to_exporting_module(tw_evidence)
+                    self.send_to_exporting_module(tw_evidence)
 
-            # print the alert
-            alert_to_print = (
-                self.format_evidence_causing_this_alert(
-                    tw_evidence,
-                    profileid,
-                    twid,
-                    flow_datetime,
-                )
-            )
-            self.print(f'{alert_to_print}', 1, 0)
+                    # print the alert
+                    alert_to_print = (
+                        self.format_evidence_causing_this_alert(
+                            tw_evidence,
+                            profileid,
+                            twid,
+                            flow_datetime,
+                        )
+                    )
+                    self.print(f'{alert_to_print}', 1, 0)
 
-            if self.popup_alerts:
-                # remove the colors from the alerts before printing
-                alert_to_print = (
-                    alert_to_print.replace(Fore.RED, '')
-                    .replace(Fore.CYAN, '')
-                    .replace(Style.RESET_ALL, '')
-                )
-                self.notify.show_popup(alert_to_print)
+                    if self.popup_alerts:
+                        # remove the colors from the alerts before printing
+                        alert_to_print = (
+                            alert_to_print.replace(Fore.RED, '')
+                            .replace(Fore.CYAN, '')
+                            .replace(Style.RESET_ALL, '')
+                        )
+                        self.notify.show_popup(alert_to_print)
 
-            # todo if it's already blocked, we shouldn't decide blocking
-            blocked = False
+                    # todo if it's already blocked, we shouldn't decide blocking
+                    blocked = False
 
-            if self.is_blocking_module_enabled():
-                # send ip to the blocking module
-                if self.decide_blocking(profileid):
-                    blocked = True
+                    if self.is_blocking_module_enabled():
+                        # send ip to the blocking module
+                        if self.decide_blocking(profileid):
+                            blocked = True
 
-            self.mark_as_blocked(
-                profileid,
-                twid,
-                flow_datetime,
-                accumulated_threat_level,
-                IDEA_dict,
-                blocked=blocked
-            )
+                    self.mark_as_blocked(
+                        profileid,
+                        twid,
+                        flow_datetime,
+                        accumulated_threat_level,
+                        IDEA_dict,
+                        blocked=blocked
+                    )
 
         if msg := self.get_msg('new_blame'):
             self.msg_received = True
