@@ -137,15 +137,17 @@ class Module(Module, multiprocessing.Process):
 
     def pre_main(self):
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
-            return
+            return 1
         # connect to cyst
         self.sock, self.cyst_conn = self.initialize_unix_socket()
 
     def main(self):
+        """
+        returning non-zero will cause shutdown_gracefully to be called
+        """
         #check for connection before sending
         if self.conn_closed :
             self.print('Connection closed by CYST.', 0, 1)
-            self.shutdown_gracefully()
             return 1
 
         # RECEIVE FLOWS FROM CYST
@@ -156,7 +158,6 @@ class Module(Module, multiprocessing.Process):
         # check for connection before receiving
         if self.conn_closed:
             self.print( 'Connection closed by CYST.', 0, 1)
-            self.shutdown_gracefully()
             return 1
 
         if msg := self.get_msg('new_alert'):
