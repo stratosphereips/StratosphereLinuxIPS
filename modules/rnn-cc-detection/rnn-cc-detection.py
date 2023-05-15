@@ -25,11 +25,16 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         # All the printing output should be sent to the outputqueue. The
         # outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_letters')
+        self.channels = {
+            'new_letters': self.c1,
+        }
+
 
 
     def set_evidence(
@@ -65,6 +70,8 @@ class Module(Module, multiprocessing.Process):
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
+
+
 
     def convert_input_for_module(self, pre_behavioral_model):
         """
@@ -112,108 +119,92 @@ class Module(Module, multiprocessing.Process):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
         return True
-
-    def run(self, model_file='modules/rnn-cc-detection/rnn_model.h5'):
+    def pre_main(self):
         utils.drop_root_privs()
         # TODO: set the decision threshold in the function call
         try:
             # Download lstm model
-            tcpmodel = load_model(model_file)
+            self.tcpmodel = load_model('modules/rnn-cc-detection/rnn_model.h5')
         except AttributeError as e:
             self.print('Error loading the model.')
             self.print(e)
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-            return True
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(),0,1)
-            return True
+            return 1
 
+    def main(self):
         # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                # Check that the message is for you. Probably unnecessary...
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
+        if msg:= self.get_msg('new_letters'):
+            msg = msg['data']
+            msg = json.loads(msg)
+            pre_behavioral_model = msg['new_symbol']
+            profileid = msg['profileid']
+            twid = msg['twid']
+            tupleid = msg['tupleid']
+            flow = msg['flow']
 
-                if utils.is_msg_intended_for(message, 'new_letters'):
-                    data = message['data']
-                    data = json.loads(data)
-                    pre_behavioral_model = data['new_symbol']
-                    profileid = data['profileid']
-                    twid = data['twid']
-                    tupleid = data['tupleid']
-                    uid = data['uid']
-                    stime = data['stime']
-
-                    if 'tcp' in tupleid.lower():
-                        # to reduce false positives
-                        threshold = 0.99
-                        # function to convert each letter of behavioral model to ascii
-                        behavioral_model = self.convert_input_for_module(
-                            pre_behavioral_model
+            if 'tcp' in tupleid.lower():
+                # to reduce false positives
+                threshold = 0.99
+                # function to convert each letter of behavioral model to ascii
+                behavioral_model = self.convert_input_for_module(
+                    pre_behavioral_model
+                )
+                # predict the score of behavioral model being c&c channel
+                self.print(
+                    f'predicting the sequence: {pre_behavioral_model}', 3, 0,
+                )
+                score = self.tcpmodel.predict(behavioral_model)
+                self.print(
+                    f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 3, 0,
+                )
+                # get a float instead of numpy array
+                score = score[0][0]
+                if score > threshold:
+                    threshold_confidence = 100
+                    if (
+                        len(pre_behavioral_model)
+                        >= threshold_confidence
+                    ):
+                        confidence = 1
+                    else:
+                        confidence = (
+                            len(pre_behavioral_model)
+                            / threshold_confidence
                         )
-                        # predict the score of behavioral model being c&c channel
-                        self.print(
-                            f'predicting the sequence: {pre_behavioral_model}',
-                            3,
-                            0,
-                        )
-                        score = tcpmodel.predict(behavioral_model)
-                        self.print(
-                            f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}',
-                            3,
-                            0,
-                        )
-                        # get a float instead of numpy array
-                        score = score[0][0]
-                        if score > threshold:
-                            threshold_confidence = 100
-                            if (
-                                len(pre_behavioral_model)
-                                >= threshold_confidence
-                            ):
-                                confidence = 1
-                            else:
-                                confidence = (
-                                    len(pre_behavioral_model)
-                                    / threshold_confidence
-                                )
-                            self.set_evidence(
-                                score,
-                                confidence,
-                                uid,
-                                stime,
-                                tupleid,
-                                profileid,
-                                twid,
-                            )
-                    """
-                    elif 'udp' in tupleid.lower():
-                        # Define why this threshold
-                        threshold = 0.7
-                        # function to convert each letter of behavioral model to ascii
-                        behavioral_model = self.convert_input_for_module(pre_behavioral_model)
-                        # predict the score of behavioral model being c&c channel
-                        self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
-                        score = udpmodel.predict(behavioral_model)
-                        self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
-                        # get a float instead of numpy array
-                        score = score[0][0]
-                        if score > threshold:
-                            self.set_evidence(score, tupleid, profileid, twid)
-                    """
+                    uid = msg['uid']
+                    stime = flow['starttime']
+                    self.set_evidence(
+                        score,
+                        confidence,
+                        uid,
+                        stime,
+                        tupleid,
+                        profileid,
+                        twid,
+                    )
+                    attacker = tupleid.split('-')[0]
+                    # port = int(tupleid.split('-')[1])
+                    to_send = {
+                        'attacker': attacker,
+                        'attacker_type': utils.detect_data_type(attacker),
+                        'profileid' : profileid,
+                        'twid' : twid,
+                        'flow': flow,
+                        'uid': uid,
+                    }
+                    __database__.publish('check_jarm_hash', json.dumps(to_send))
 
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+            """
+            elif 'udp' in tupleid.lower():
+                # Define why this threshold
+                threshold = 0.7
+                # function to convert each letter of behavioral model to ascii
+                behavioral_model = self.convert_input_for_module(pre_behavioral_model)
+                # predict the score of behavioral model being c&c channel
+                self.print(f'predicting the sequence: {pre_behavioral_model}', 4, 0)
+                score = udpmodel.predict(behavioral_model)
+                self.print(f' >> sequence: {pre_behavioral_model}. final prediction score: {score[0][0]:.20f}', 5, 0)
+                # get a float instead of numpy array
+                score = score[0][0]
+                if score > threshold:
+                    self.set_evidence(score, tupleid, profileid, twid)
+            """

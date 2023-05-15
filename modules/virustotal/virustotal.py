@@ -26,25 +26,24 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         # All the printing output should be sent to the outputqueue, which is connected to OutputProcess
         self.outputqueue = outputqueue
         # This line might not be needed when running SLIPS, but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
         __database__.start(redis_port)
         self.c1 = __database__.subscribe('new_flow')
-        self.c2 = __database__.subscribe('new_dns_flow')
+        self.c2 = __database__.subscribe('new_dns')
         self.c3 = __database__.subscribe('new_url')
+        self.channels = {
+            'new_flow': self.c1,
+            'new_dns': self.c2,
+            'new_url': self.c3,
+        }
+
         # Read the conf file
         self.__read_configuration()
-        self.key = None
-        try:
-            with open(self.key_file, 'r') as f:
-                self.key = f.read(64)
-        except (FileNotFoundError, TypeError):
-            self.print(
-                f'The file with API key {self.key_file} '
-                f'could not be loaded. VT module is stopping.'
-            )
+
 
         # query counter for debugging purposes
         self.counter = 0
@@ -61,6 +60,19 @@ class Module(Module, multiprocessing.Process):
         )
         # this will be true when there's a problem with the API key, then the module will exit
         self.incorrect_API_key = False
+
+    def read_api_key(self):
+        self.key = None
+        try:
+            with open(self.key_file, 'r') as f:
+                self.key = f.read(64)
+            return True
+        except (FileNotFoundError, TypeError):
+            self.print(
+                f'The file with API key {self.key_file} '
+                f'could not be loaded. VT module is stopping.'
+            )
+            return False
 
     def __read_configuration(self):
         conf = ConfigParser()
@@ -506,136 +518,102 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         __database__.publish('finished_modules', self.name)
-
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        try:
-            if self.key in ('', None):
-                # We don't have a virustotal key
-                return
-            self.api_calls_thread.start()
-        except KeyboardInterrupt:
+        if not self.read_api_key() or self.key in ('', None):
+            # We don't have a virustotal key
+            return 1
+        self.api_calls_thread.start()
+
+    def main(self):
+        if self.incorrect_API_key:
             self.shutdown_gracefully()
-            return True
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.print_exc(),0,1)
-            return True
+            return 1
 
-        # Main loop function
-        while True:
-            try:
-                message = __database__.get_message(self.c1)
-                # if timewindows are not updated for a long time, Slips is stopped automatically.
-                # exit module if there's a problem with the API key
+        if msg:= self.get_msg('new_flow'):
+            data = msg['data']
+            data = json.loads(data)
+            # profileid = data['profileid']
+            # twid = data['twid']
+            # stime = data['stime']
+            flow = json.loads(
+                data['flow']
+            )   # this is a dict {'uid':json flow data}
+            # there is only one pair key-value in the dictionary
+            for key, value in flow.items():
+                flow_data = json.loads(value)
+            ip = flow_data['daddr']
+            cached_data = __database__.getIPData(ip)
+            if not cached_data:
+                cached_data = {}
+
+            # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
+            ip_addr = ipaddress.ip_address(ip)
+            # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
+            # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
+            if (
+                'VirusTotal' not in cached_data
+                and not ip_addr.is_multicast
+                and not ip_addr.is_private
+            ):
+                self.set_vt_data_in_IPInfo(ip, cached_data)
+
+            # if VT data of this IP is in the IPInfo, check the timestamp.
+            elif 'VirusTotal' in cached_data:
+                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
                 if (
-                    message and message['data'] == 'stop_process'
-                ) or self.incorrect_API_key:
-                    self.shutdown_gracefully()
-                    return True
+                    time.time()
+                    - cached_data['VirusTotal']['timestamp']
+                ) > self.update_period:
+                    self.set_vt_data_in_IPInfo(ip, cached_data)
 
-                if utils.is_msg_intended_for(message, 'new_flow'):
-                    data = message['data']
-                    data = json.loads(data)
-                    # profileid = data['profileid']
-                    # twid = data['twid']
-                    # stime = data['stime']
-                    flow = json.loads(
-                        data['flow']
-                    )   # this is a dict {'uid':json flow data}
-                    # there is only one pair key-value in the dictionary
-                    for key, value in flow.items():
-                        flow_data = json.loads(value)
-                    ip = flow_data['daddr']
-                    cached_data = __database__.getIPData(ip)
-                    if not cached_data:
-                        cached_data = {}
+        if msg:= self.get_msg('new_dns'):
+            data = msg['data']
+            data = json.loads(data)
+            # profileid = data['profileid']
+            # twid = data['twid']
+            # uid = data['uid']
+            flow_data = json.loads(
+                data['flow']
+            )   # this is a dict {'uid':json flow data}
+            domain = flow_data.get('query', False)
 
-                    # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
-                    ip_addr = ipaddress.ip_address(ip)
-                    # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
-                    # if the IP is not a multicast and 'VirusTotal' key is not in the IPInfo, proceed.
-                    if (
-                        'VirusTotal' not in cached_data
-                        and not ip_addr.is_multicast
-                        and not ip_addr.is_private
-                    ):
-                        self.set_vt_data_in_IPInfo(ip, cached_data)
+            cached_data = __database__.getDomainData(domain)
+            # If VT data of this domain is not in the DomainInfo, ask VT
+            # If 'Virustotal' key is not in the DomainInfo
+            if domain and (
+                not cached_data or 'VirusTotal' not in cached_data
+            ):
+                self.set_domain_data_in_DomainInfo(domain, cached_data)
+            elif (
+                domain and cached_data and 'VirusTotal' in cached_data
+            ):
+                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                if (
+                    time.time()
+                    - cached_data['VirusTotal']['timestamp']
+                ) > self.update_period:
+                    self.set_domain_data_in_DomainInfo(
+                        domain, cached_data
+                    )
 
-                    # if VT data of this IP is in the IPInfo, check the timestamp.
-                    elif 'VirusTotal' in cached_data:
-                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                        if (
-                            time.time()
-                            - cached_data['VirusTotal']['timestamp']
-                        ) > self.update_period:
-                            self.set_vt_data_in_IPInfo(ip, cached_data)
-
-                message = __database__.get_message(self.c2)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_dns_flow'):
-                    data = message['data']
-                    data = json.loads(data)
-                    # profileid = data['profileid']
-                    # twid = data['twid']
-                    # uid = data['uid']
-                    flow_data = json.loads(
-                        data['flow']
-                    )   # this is a dict {'uid':json flow data}
-                    domain = flow_data.get('query', False)
-
-                    cached_data = __database__.getDomainData(domain)
-                    # If VT data of this domain is not in the DomainInfo, ask VT
-                    # If 'Virustotal' key is not in the DomainInfo
-                    if domain and (
-                        not cached_data or 'VirusTotal' not in cached_data
-                    ):
-                        self.set_domain_data_in_DomainInfo(domain, cached_data)
-                    elif (
-                        domain and cached_data and 'VirusTotal' in cached_data
-                    ):
-                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                        if (
-                            time.time()
-                            - cached_data['VirusTotal']['timestamp']
-                        ) > self.update_period:
-                            self.set_domain_data_in_DomainInfo(
-                                domain, cached_data
-                            )
-
-                message = __database__.get_message(self.c3)
-                if message and message['data'] == 'stop_process':
-                    self.shutdown_gracefully()
-                    return True
-                if utils.is_msg_intended_for(message, 'new_url'):
-                    data = message['data']
-                    data = json.loads(data)
-                    # profileid = data['profileid']
-                    # twid = data['twid']
-                    flow_data = json.loads(data['flow'])
-                    url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
-                    cached_data = __database__.getURLData(url)
-                    # If VT data of this domain is not in the DomainInfo, ask VT
-                    # If 'Virustotal' key is not in the DomainInfo
-                    if not cached_data or 'VirusTotal' not in cached_data:
-                        # cached data is either False or {}
-                        self.set_url_data_in_URLInfo(url, cached_data)
-                    elif cached_data and 'VirusTotal' in cached_data:
-                        # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
-                        if (
-                            time.time()
-                            - cached_data['VirusTotal']['timestamp']
-                        ) > self.update_period:
-                            self.set_url_data_in_URLInfo(url, cached_data)
-
-            except KeyboardInterrupt:
-                self.shutdown_gracefully()
-                return True
-            except Exception:
-                exception_line = sys.exc_info()[2].tb_lineno
-                self.print(f'Problem on the run() line {exception_line}', 0, 1)
-                self.print(traceback.format_exc(), 0, 1)
-                return True
+        if msg:= self.get_msg('new_url'):
+            data = msg['data']
+            data = json.loads(data)
+            # profileid = data['profileid']
+            # twid = data['twid']
+            flow_data = json.loads(data['flow'])
+            url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
+            cached_data = __database__.getURLData(url)
+            # If VT data of this domain is not in the DomainInfo, ask VT
+            # If 'Virustotal' key is not in the DomainInfo
+            if not cached_data or 'VirusTotal' not in cached_data:
+                # cached data is either False or {}
+                self.set_url_data_in_URLInfo(url, cached_data)
+            elif cached_data and 'VirusTotal' in cached_data:
+                # If VT is in data, check timestamp. Take time difference, if not valid, update vt scores.
+                if (
+                    time.time()
+                    - cached_data['VirusTotal']['timestamp']
+                ) > self.update_period:
+                    self.set_url_data_in_URLInfo(url, cached_data)

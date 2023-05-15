@@ -5,6 +5,7 @@ import ipaddress
 import sys
 import validators
 from slips_files.common.slips_utils import utils
+from dataclasses import asdict
 
 class ProfilingFlowsDatabase(object):
     def __init__(self):
@@ -509,7 +510,7 @@ class ProfilingFlowsDatabase(object):
             pass
 
     def add_tuple(
-        self, profileid, twid, tupleid, data_tuple, role, starttime, uid
+        self, profileid, twid, tupleid, data_tuple, role, flow
     ):
         """
         Add the tuple going in or out for this profile
@@ -561,8 +562,8 @@ class ProfilingFlowsDatabase(object):
                         'profileid': profileid,
                         'twid': twid,
                         'tupleid': str(tupleid),
-                        'uid': uid,
-                        'stime': starttime,
+                        'uid': flow.uid,
+                        'flow': asdict(flow)
                     }
                     to_send = json.dumps(to_send)
                     self.publish('new_letters', to_send)
@@ -585,7 +586,7 @@ class ProfilingFlowsDatabase(object):
             # Store the new data on the db
             self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
-            self.markProfileTWAsModified(profileid, twid, starttime)
+            self.markProfileTWAsModified(profileid, twid, flow.starttime)
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
@@ -1462,8 +1463,6 @@ class ProfilingFlowsDatabase(object):
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
             self.rcache.hset('DomainsInfo', domain, '{}')
-            # Publish that there is a new domain ready in the channel
-            self.publish('new_dns', domain)
 
     def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
         """
@@ -1586,7 +1585,7 @@ class ProfilingFlowsDatabase(object):
 
         to_send = json.dumps(to_send)
         # publish a dns with its flow
-        self.publish('new_dns_flow', to_send)
+        self.publish('new_dns', to_send)
         # Check if the dns query is detected by the threat intelligence.
         self.give_threat_intelligence(
             profileid,

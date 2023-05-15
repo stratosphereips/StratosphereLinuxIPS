@@ -7,15 +7,82 @@ import os
 import time
 
 class RedisManager:
-    def __init__(self, terminate_slips=None):
+    def __init__(self, main):
+        self.main = main
         # slips picks a redis port from the following range
         self.start_port = 32768
         self.end_port = 32850
-        self.terminate_slips = terminate_slips
         self.running_logfile = 'running_slips_info.txt'
 
     def get_start_port(self):
         return self.start_port
+
+    def log_redis_server_PID(self, redis_port, redis_pid):
+        now = utils.convert_format(datetime.now(), utils.alerts_format)
+        try:
+            # used in case we need to remove the line using 6379 from running logfile
+            with open(self.running_logfile, 'a') as f:
+                # add the header lines if the file is newly created
+                if f.tell() == 0:
+                    f.write(
+                        '# This file contains a list of used redis ports.\n'
+                        '# Once a server is killed, it will be removed from this file.\n'
+                        'Date, File or interface, Used port, Server PID,'
+                        ' Output Zeek Dir, Logs Dir, Slips PID, Is Daemon, Save the DB\n'
+                    )
+
+                f.write(
+                    f'{now},{self.main.input_information},{redis_port},'
+                    f'{redis_pid},{self.main.zeek_folder},{self.main.args.output},'
+                    f'{os.getpid()},'
+                    f'{bool(self.main.args.daemon)},{self.main.args.save}\n'
+                )
+        except PermissionError:
+            # last run was by root, change the file ownership to non-root
+            os.remove(self.running_logfile)
+            open(self.running_logfile, 'w').close()
+            self.log_redis_server_PID(redis_port, redis_pid)
+
+        if redis_port == 6379:
+            # remove the old logline using this port
+            self.remove_old_logline(6379)
+
+    def load_redis_db(self, redis_port):
+        # to be able to use running_slips_info later as a non-root user,
+        # we shouldn't modify it as root
+
+        self.main.input_information = os.path.basename(self.main.args.db)
+        redis_pid = self.get_pid_of_redis_server(redis_port)
+        self.zeek_folder = '""'
+        self.log_redis_server_PID(redis_port, redis_pid)
+        self.remove_old_logline(redis_port)
+
+        print(
+            f'{self.main.args.db} loaded successfully.\n'
+            f'Run ./kalipso.sh and choose port {redis_port}'
+        )
+
+    def load_db(self):
+        self.input_type = 'database'
+        # self.input_information = 'database'
+        from slips_files.core.database.database import __database__
+        __database__.start(6379)
+
+        # this is where the db will be loaded
+        redis_port = 32850
+        # make sure the db on 32850 is flushed and ready for the new db to be loaded
+        if pid := self.get_pid_of_redis_server(redis_port):
+            self.flush_redis_server(pid=pid)
+            self.kill_redis_server(pid)
+
+        if not __database__.load(self.main.args.db):
+            print(f'Error loading the database {self.main.args.db}')
+        else:
+            self.load_redis_db(redis_port)
+            # __database__.disable_redis_persistence()
+
+        self.main.terminate_slips()
+
 
     def get_end_port(self):
         return self.end_port
@@ -42,8 +109,7 @@ class RedisManager:
                 # only try to open redi-server once.
                 if tries == 2:
                     print(f'[Main] Problem starting redis cache database. \n{ex}\nStopping')
-                    if self.terminate_slips:
-                        self.terminate_slips()
+                    self.main.terminate_slips()
                     return False
 
                 print('[Main] Starting redis cache database..')
@@ -121,8 +187,7 @@ class RedisManager:
 
         with contextlib.suppress(FileNotFoundError):
             os.remove(self.running_logfile)
-        if self.terminate_slips:
-            self.terminate_slips()
+        self.main.terminate_slips()
         return
 
     def get_pid_of_redis_server(self, port: int) -> str:
@@ -332,8 +397,8 @@ class RedisManager:
         with contextlib.suppress(KeyboardInterrupt):
             # open_servers {counter: (port,pid),...}}
             open_servers:dict = self.print_open_redis_servers()
-            if not open_servers and self.terminate_slips:
-                self.terminate_slips()
+            if not open_servers:
+                self.main.terminate_slips()
 
             server_to_close = input()
             # close all ports in running_slips_logs.txt and in our supported range
@@ -355,5 +420,4 @@ class RedisManager:
                 except (KeyError, ValueError):
                     print(f"Invalid input {server_to_close}")
 
-        if self.terminate_slips:
-            self.terminate_slips()
+        self.main.terminate_slips()

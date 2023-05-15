@@ -20,6 +20,7 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue, redis_port):
         multiprocessing.Process.__init__(self)
+        super().__init__(outputqueue)
         self.outputqueue = outputqueue
         __database__.start(redis_port)
         # this module is only loaded when a pcap is given get the pcap path
@@ -308,21 +309,19 @@ class Module(Module, multiprocessing.Process):
                     'offset': offset,
                 })
 
-    def run(self):
+    def pre_main(self):
         utils.drop_root_privs()
-        try:
-            if not self.bin_found:
-                return True
 
-            # if we we don't have compiled rules, compile them
-            if self.compile_and_save_rules():
-                # run the yara rules on the given pcap
-                self.find_matches()
-        except KeyboardInterrupt:
-            self.shutdown_gracefully()
-            return True
-        except Exception:
-            exception_line = sys.exc_info()[2].tb_lineno
-            self.print(f'Problem on the run() line {exception_line}', 0, 1)
-            self.print(traceback.format_exc(), 0, 1)
-            return True
+        if not self.bin_found:
+            # yara is not installed
+            return 1
+
+        # if we we don't have compiled rules, compile them
+        if self.compile_and_save_rules():
+            # run the yara rules on the given pcap
+            self.find_matches()
+
+    def main(self):
+        # nothing runs in a loop in this module
+        # exit module
+        return 1
