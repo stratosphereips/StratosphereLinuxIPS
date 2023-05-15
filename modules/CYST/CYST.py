@@ -1,7 +1,6 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
 from slips_files.core.database.database import __database__
-from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 import sys
 import traceback
@@ -97,7 +96,7 @@ class Module(Module, multiprocessing.Process):
 
         # send the length of the msg to cyst first
         msg_len = str(len(msg)).encode()
-        # pad the length so it takes exactly 5 bytes, this is what cyst expects
+        # pad the length, so it takes exactly 5 bytes, this is what cyst expects
         msg_len += (5- len(msg_len) ) *b' '
 
         self.cyst_conn.sendall(msg_len)

@@ -647,12 +647,10 @@ class EvidenceProcess(Module, multiprocessing.Process):
             alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
             alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
 
-                    # Add the evidence to the log files
-                    self.addDataToLogFile(alert_to_log)
-                    # add to alerts.json
-                    self.addDataToJSONFile(IDEA_dict, all_uids)
-                    # if -l is given
-                    self.add_to_log_folder(IDEA_dict)
+            # Add the evidence to alerts.log
+            self.add_to_log_file(alert_to_log)
+            # add to alerts.json
+            self.add_to_json_log_file(IDEA_dict, all_uids)
 
             __database__.set_evidence_for_profileid(IDEA_dict)
             __database__.publish('report_to_peers', json.dumps(data))
