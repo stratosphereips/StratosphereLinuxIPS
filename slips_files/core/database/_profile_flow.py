@@ -1325,6 +1325,9 @@ class ProfilingFlowsDatabase(object):
                 current_twid += 1
             else:
                 return True
+    
+    def delete_dns_resolution(self , ip):
+        self.r.hdel("DNSresolution" , ip)
 
     def set_dns_resolution(
         self,

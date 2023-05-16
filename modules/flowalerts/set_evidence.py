@@ -552,6 +552,18 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, profileid=profileid, twid=twid, uid=uid)
 
+    def set_evidence_blocked_dns_answer(self, query, answer,daddr, profileid, twid, stime, uid):
+        evidence_type = "BlockedDNSDomain"
+        attacker_direction = "dst_domain"
+        attacker = query
+        threat_level = "info"
+        confidence = 0.7
+        description = f"The DNS query to {query} has responded with {answer}"
+        timestamp = stime
+        category = "Anamoly.Behaviour"
+        __database__.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
+                                 timestamp , category , profileid=profileid , twid=twid , uid=uid)
+
     def set_evidence_for_port_0_connection(
             self, saddr, daddr, sport, dport, direction, profileid, twid, uid, timestamp
     ):
