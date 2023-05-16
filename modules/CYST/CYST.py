@@ -37,7 +37,7 @@ class Module(Module, multiprocessing.Process):
         if not failure:
             self.print(f"Slips is now listening. waiting for CYST to connect.")
         else:
-            error = (f" failed to initialize sips socket. Error code: {failure}")
+            error = (f"Failed to initialize sips socket. Error code: {failure}")
             return False, error
 
         connection, client_address = sock.accept()
@@ -120,7 +120,7 @@ class Module(Module, multiprocessing.Process):
             return
 
     def close_connection(self):
-        print(f"@@@@@@@@@@@@@@@@@@  close conn is called!! ")
+        print(f"Closing connection", 0, 1)
         if hasattr(self, 'sock'):
             self.sock.close()
         # delete the socket
@@ -139,7 +139,11 @@ class Module(Module, multiprocessing.Process):
         if not ('-C' in sys.argv or '--CYST' in sys.argv):
             return 1
         # connect to cyst
+        print(f"Initializing socket", 0, 1)
         self.sock, self.cyst_conn = self.initialize_unix_socket()
+        if not self.sock:
+            return 1
+        print(f"Done initializing socket", 0, 1)
 
     def main(self):
         """
@@ -157,11 +161,11 @@ class Module(Module, multiprocessing.Process):
 
         # check for connection before receiving
         if self.conn_closed:
-            self.print( 'Connection closed by CYST.', 0, 1)
+            self.print('Connection closed by CYST.', 0, 1)
             return 1
 
         if msg := self.get_msg('new_alert'):
-            print(f"@@@@@@@@@@@@@@@@@@ cyst module received a new blocking request . sending ... ")
+            print(f"Cyst module received a new blocking request . sending ... ")
             alert_info: dict = json.loads(msg['data'])
             profileid = alert_info['profileid']
             # twid = alert_info['twid']

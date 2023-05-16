@@ -1195,17 +1195,14 @@ class ProfilerProcess(Module, multiprocessing.Process):
         It includes checking if the profile exists and how to put the flow correctly.
         It interprets each column
         """
-        print(f"@@@@@@@@@@@@@@@@@@ add_flow_to_profile is called")
         try:
             if not hasattr(self, 'flow'):
                 #TODO this is a quick fix
                 return False
 
             if not self.is_supported_flow():
-                print(f"@@@@@@@@@@@@@@@@@@  not a supported flow")
                 return False
-            print(f"@@@@@@@@@@@@@@@@@@  is a supported flow")
-            print(f"@@@@@@@@@@@@@@@@ {self.flow}")
+            print(f"Received flow: {self.flow}") #@@@@@@
             self.make_sure_theres_a_uid()
             self.profileid = f'profile_{self.flow.saddr}'
 
