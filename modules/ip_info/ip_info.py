@@ -453,25 +453,22 @@ class Module(Module, multiprocessing.Process):
                                       capture_output=True, check=True, text=True).stdout
             gw_MAC = ip_output.split()[-2]
             __database__.set_default_gateway('MAC', gw_MAC)
-            self.print(f"Gateway ({gw_ip}) MAC Address found using ip neigh show: {gw_MAC} ", 2, 0)
             return gw_MAC
         except (subprocess.CalledProcessError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the arp command
             try:
-                arp_output = subprocess.run(["arp", "-an"], 
+                arp_output = subprocess.run(["arp", "-an"],
                                            capture_output=True, check=True, text=True).stdout
                 for line in arp_output.split('\n'):
                     fields = line.split()
-                    # Match the gw_ip in the output and compare the length
-                    if len(fields) >= 2 and fields[1].strip('()') == gw_ip and len(fields[1].strip('()')) == len(gw_ip):
+                    gw_ip_from_arp_cmd = fields[1].strip('()')
+                    # Match the gw_ip in the output with the one given to this function
+                    if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
                         gw_MAC = fields[-4]
                         __database__.set_default_gateway('MAC', gw_MAC)
-                        self.print(f"Gateway ({gw_ip}) MAC Address found using arp -an: {gw_MAC} ", 2, 0)
                         return gw_MAC
-                        break 
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Could not find the MAC address of gw_ip
-                self.print(f"Cannot find the MAC address of the gateway ({gw_ip}). Please ensure either 'ip neigh show' or 'arp -an' commands work ", 0, 1 )
                 return
 
         return gw_MAC
