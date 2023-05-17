@@ -20,6 +20,8 @@ import re
 import time
 import asyncio
 
+import shutil
+
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -446,14 +448,35 @@ class Module(Module, multiprocessing.Process):
             # if it's seen associated with a public IP
             return
 
-        # get it using arp table
-        cmd = "arp -a"
-        output = subprocess.check_output(cmd.split()).decode()
-        for line in output:
-            if gw_ip in line:
-                gw_MAC = line.split()[-4]
-                __database__.set_default_gateway('MAC', gw_MAC)
-                return gw_MAC
+        # Obtain the MAC address by using the hosts ARP table
+        # First, try the ip command
+        try:
+            ip_output = subprocess.run(["ip", "neigh", "show", gw_ip],
+                                      capture_output=True, check=True, text=True).stdout
+            gw_MAC = ip_output.split()[-2]
+            __database__.set_default_gateway('MAC', gw_MAC)
+            self.print(f"Gateway ({gw_ip}) MAC Address found using ip neigh show: {gw_MAC} ", 1, 0)
+            return gw_MAC
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # If the ip command doesn't exist or has failed, try using the arp command
+            try:
+                arp_output = subprocess.run(["arp", "-an"], 
+                                           capture_output=True, check=True, text=True).stdout
+                for line in arp_output.split('\n'):
+                    fields = line.split()
+                    # Match the gw_ip in the output and compare the length
+                    if len(fields) >= 2 and fields[1].strip('()') == gw_ip and len(fields[1].strip('()')) == len(gw_ip):
+                        gw_MAC = fields[-4]
+                        __database__.set_default_gateway('MAC', gw_MAC)
+                        self.print(f"Gateway ({gw_ip}) MAC Address found using arp -an: {gw_MAC} ", 1, 0)
+                        return gw_MAC
+                        break 
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Could not find the MAC address of gw_ip
+                self.print(f"Cannot find the MAC address of the gateway ({gw_ip}). Please ensure either 'ip neigh show' or 'arp -an' commands work ", 0, 1 )
+                return
+
+        return gw_MAC
 
     def check_if_we_have_pending_mac_queries(self):
         """
