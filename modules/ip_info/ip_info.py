@@ -455,7 +455,7 @@ class Module(Module, multiprocessing.Process):
                                       capture_output=True, check=True, text=True).stdout
             gw_MAC = ip_output.split()[-2]
             __database__.set_default_gateway('MAC', gw_MAC)
-            self.print(f"Gateway ({gw_ip}) MAC Address found using ip neigh show: {gw_MAC} ", 1, 0)
+            self.print(f"Gateway ({gw_ip}) MAC Address found using ip neigh show: {gw_MAC} ", 2, 0)
             return gw_MAC
         except (subprocess.CalledProcessError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the arp command
@@ -468,7 +468,7 @@ class Module(Module, multiprocessing.Process):
                     if len(fields) >= 2 and fields[1].strip('()') == gw_ip and len(fields[1].strip('()')) == len(gw_ip):
                         gw_MAC = fields[-4]
                         __database__.set_default_gateway('MAC', gw_MAC)
-                        self.print(f"Gateway ({gw_ip}) MAC Address found using arp -an: {gw_MAC} ", 1, 0)
+                        self.print(f"Gateway ({gw_ip}) MAC Address found using arp -an: {gw_MAC} ", 2, 0)
                         return gw_MAC
                         break 
             except (subprocess.CalledProcessError, FileNotFoundError):
