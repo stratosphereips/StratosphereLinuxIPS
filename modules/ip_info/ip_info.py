@@ -20,8 +20,6 @@ import re
 import time
 import asyncio
 
-import shutil
-
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
