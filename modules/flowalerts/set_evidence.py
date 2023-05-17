@@ -1,5 +1,5 @@
 # Must imports
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 from slips_files.common.slips_utils import utils
 
 # Your imports
