@@ -15,7 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import Redis
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
 import multiprocessing
@@ -68,6 +68,7 @@ class OutputProcess(multiprocessing.Process):
             )
         self.done_reading_flows = False
         # Start the DB
+        __database__ = Redis(redis_port)
         __database__.start(redis_port)
         # are we in daemon of interactive mode
         self.slips_mode = __database__.get_slips_mode()

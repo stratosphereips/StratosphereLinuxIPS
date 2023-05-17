@@ -35,7 +35,7 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
-    from slips_files.core.database.database import __database__
+    from slips_files.core.database.redis_database import __database__
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     __database__.deletePrevdb = True

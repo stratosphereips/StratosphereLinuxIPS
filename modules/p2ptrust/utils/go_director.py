@@ -14,7 +14,7 @@ from modules.p2ptrust.utils.utils import (
 from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.printer import Printer
 from modules.p2ptrust.trust.trustdb import TrustDB
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 import time
 
 

@@ -26,7 +26,7 @@ import socket
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 import time
 import json
 import traceback

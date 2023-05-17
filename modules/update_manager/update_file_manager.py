@@ -1,4 +1,4 @@
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.whitelist import Whitelist
