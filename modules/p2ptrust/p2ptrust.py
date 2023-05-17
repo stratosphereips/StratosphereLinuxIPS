@@ -17,7 +17,7 @@ from slips_files.common.slips_utils import utils
 from modules.p2ptrust.utils.go_director import GoDirector
 from modules.p2ptrust.utils.printer import Printer
 from slips_files.common.abstracts import Module
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 import threading
 
 

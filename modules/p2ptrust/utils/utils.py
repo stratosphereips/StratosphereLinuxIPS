@@ -5,7 +5,7 @@ import time
 import json
 from typing import Union, Dict
 
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 
 
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)

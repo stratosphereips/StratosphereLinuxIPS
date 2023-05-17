@@ -1,5 +1,5 @@
 import contextlib
-from slips_files.core.database.database import __database__
+from slips_files.core.database.redis_database import __database__
 from slips_files.common.slips_utils import utils
 from datetime import datetime
 import redis
@@ -65,7 +65,7 @@ class RedisManager:
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
-        from slips_files.core.database.database import __database__
+        from slips_files.core.database.redis_database import __database__
         __database__.start(6379)
 
         # this is where the db will be loaded

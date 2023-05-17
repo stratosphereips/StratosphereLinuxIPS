@@ -71,7 +71,7 @@ class Timeline extends table.TableClass{
                 redis_timeline_data.forEach((timeline)=>{
                     let row = [];
                     let timeline_json = JSON.parse(timeline)
-                    // this one is coming from database.py: get_dns_resolution
+                    // this one is coming from redis_database.py: get_dns_resolution
                     let pink_keywords_parameter = ['dns_resolution']
                     let red_keywords = ['critical warning' ]
                     let orange_keywords = ['sent','recv','tot','size','type','duration']
