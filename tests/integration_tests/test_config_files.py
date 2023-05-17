@@ -2,6 +2,7 @@
 This file tests 2 different config files other than slips' default config/slips.conf
 test/test.conf and tests/test2.conf
 """
+import os
 import pytest
 from ...slips import *
 from pathlib import Path

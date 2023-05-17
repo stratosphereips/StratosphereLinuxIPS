@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-# common imports for all modules
 from slips_files.common.slips_utils import utils
 import sys
 import traceback

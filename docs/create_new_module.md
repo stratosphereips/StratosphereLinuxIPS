@@ -307,7 +307,7 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
-        # slips/core/database.py file. However common options are:
+        # slips/core/redis_database.py file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
