@@ -1,6 +1,5 @@
 # Must imports
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.redis_database import __database__
+from slips_files.common.imports import *
 
 # Your imports
 import json
@@ -13,7 +12,8 @@ class URLhaus():
     description = 'URLhaus lookups of URLs and hashes'
     authors = ['Alya Gomaa']
 
-    def __init__(self):
+    def __init__(self, rdb):
+        self.rdb = rdb
         self.create_urlhaus_session()
 
 
@@ -143,7 +143,7 @@ class URLhaus():
         attacker = flow["md5"]
         daddr = flow["daddr"]
 
-        ip_identification = __database__.getIPIdentification(daddr)
+        ip_identification = self.rdb.getIPIdentification(daddr)
         # we have more info about the downloaded file
         # so we need a more detailed description
         description = f"Malicious downloaded file: {flow['md5']}. " \
@@ -162,7 +162,7 @@ class URLhaus():
 
         confidence = 0.7
 
-        __database__.setEvidence(evidence_type,
+        self.rdb.setEvidence(evidence_type,
                                  attacker_direction,
                                  attacker,
                                  threat_level,
@@ -207,5 +207,5 @@ class URLhaus():
         category = 'Malware'
         evidence_type = 'MaliciousURL'
 
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)

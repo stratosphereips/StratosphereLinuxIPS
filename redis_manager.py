@@ -1,6 +1,5 @@
 import contextlib
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 from datetime import datetime
 import redis
 import os
@@ -65,8 +64,8 @@ class RedisManager:
     def load_db(self):
         self.input_type = 'database'
         # self.input_information = 'database'
-        from slips_files.core.database.redis_database import __database__
-        __database__.start(6379)
+        from slips_files.core.database.redis_database import Redis
+        self.main.rdb.start(6379)
 
         # this is where the db will be loaded
         redis_port = 32850
@@ -75,11 +74,11 @@ class RedisManager:
             self.flush_redis_server(pid=pid)
             self.kill_redis_server(pid)
 
-        if not __database__.load(self.main.args.db):
+        if not self.main.rdb.load(self.main.args.db):
             print(f'Error loading the database {self.main.args.db}')
         else:
             self.load_redis_db(redis_port)
-            # __database__.disable_redis_persistence()
+            # self.main.rdb.disable_redis_persistence()
 
         self.main.terminate_slips()
 
@@ -130,8 +129,8 @@ class RedisManager:
             # 2.server is not being used by another instance of slips
             # note: using r.keys() blocks the server
             try:
-                if __database__.connect_to_redis_server(port):
-                    server_used = len(list(__database__.r.keys())) < 2
+                if self.main.rdb.connect_to_redis_server(port):
+                    server_used = len(list(self.main.rdb.r.keys())) < 2
                     if server_used:
                         # if the db managed to connect to this random port, then this is
                         # the port we'll be using
@@ -297,7 +296,7 @@ class RedisManager:
 
         # clear the server opened on this port
         try:
-            # if connected := __database__.connect_to_redis_server(port):
+            # if connected := self.main.rdb.connect_to_redis_server(port):
             # noinspection PyTypeChecker
             #todo move this to the db
             r = redis.StrictRedis(

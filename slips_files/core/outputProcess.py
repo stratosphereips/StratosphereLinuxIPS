@@ -15,10 +15,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
-from slips_files.core.database.redis_database import Redis
-from slips_files.common.slips_utils import utils
-from slips_files.common.config_parser import ConfigParser
-import multiprocessing
+from slips_files.common.imports import *
 import sys
 import io
 from pathlib import Path
@@ -39,7 +36,7 @@ class OutputProcess(multiprocessing.Process):
         inputqueue,
         verbose,
         debug,
-        redis_port,
+        rdb: Redis,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'
@@ -67,11 +64,11 @@ class OutputProcess(multiprocessing.Process):
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
             )
         self.done_reading_flows = False
-        # Start the DB
-        __database__ = Redis(redis_port)
-        __database__.start(redis_port)
+        self.rdb = rdb
+        print(f"@@@@@@@@@@@@@@@@ []output rdb: {id(rdb)} {rdb}")
+        print(f"@@@@@@@@@@@@@@@@ []output self.rdb: {id(self.rdb)} {self.rdb}")
         # are we in daemon of interactive mode
-        self.slips_mode = __database__.get_slips_mode()
+        self.slips_mode = self.rdb.get_slips_mode()
         # we update the stats printed by slips every 5seconds
         # this is the last time the stats was printed
         self.last_updated_stats_time = float("-inf")
@@ -287,7 +284,7 @@ class OutputProcess(multiprocessing.Process):
             # no need to print the progress bar
             return
 
-        self.total_flows = int(__database__.get_total_flows())
+        self.total_flows = int(self.rdb.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
@@ -330,7 +327,7 @@ class OutputProcess(multiprocessing.Process):
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
-        __database__.publish('finished_modules', self.name)
+        self.rdb.publish('finished_modules', self.name)
 
     def remove_stats_from_progress_bar(self):
         # remove the stats from the progress bar
@@ -353,9 +350,9 @@ class OutputProcess(multiprocessing.Process):
         # only update the stats if 5 seconds passed
         self.last_updated_stats_time = now
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
-        modified_ips_in_the_last_tw = __database__.get_modified_ips_in_the_last_tw()
-        profilesLen = __database__.getProfilesLen()
-        evidence_number = __database__.get_evidence_number() or 0
+        modified_ips_in_the_last_tw = self.rdb.get_modified_ips_in_the_last_tw()
+        profilesLen = self.rdb.getProfilesLen()
+        evidence_number = self.rdb.get_evidence_number() or 0
         msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \
               f'Evidence Added: {evidence_number} ' \

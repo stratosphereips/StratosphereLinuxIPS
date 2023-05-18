@@ -1,6 +1,4 @@
-from slips_files.common.abstracts import Module
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.redis_database import __database__
+from slips_files.common.imports import *
 from style import green
 import signal
 import os
@@ -137,16 +135,16 @@ class ProcessManager:
             if 'P2P Trust' == module_name:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port,
+                    self.main.rdb,
                     output_dir=self.main.args.output
                 )
             else:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.redis_port
+                    self.main.rdb
                 )
             module.start()
-            __database__.store_process_PID(
+            self.main.rdb.store_process_PID(
                 module_name, int(module.pid)
             )
             description = modules_to_call[module_name]['description']
@@ -227,7 +225,7 @@ class ProcessManager:
         ]
         if self.main.args.blocking:
             modules_to_be_killed_last.append('Blocking')
-        if 'exporting_alerts' not in __database__.get_disabled_modules():
+        if 'exporting_alerts' not in self.main.rdb.get_disabled_modules():
             modules_to_be_killed_last.append('Exporting Alerts')
         return modules_to_be_killed_last
 
@@ -245,26 +243,26 @@ class ProcessManager:
 
             wait_for_modules_to_finish  = self.main.conf.wait_for_modules_to_finish()
             # close all tws
-            __database__.check_TW_to_close(close_all=True)
+            self.main.rdb.check_TW_to_close(close_all=True)
 
             # set analysis end date
             end_date = self.main.metadata_man.set_analysis_end_date()
 
-            start_time = __database__.get_slips_start_time()
+            start_time = self.main.rdb.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
             # Stop the modules that are subscribed to channels
-            __database__.publish_stop()
+            self.main.rdb.publish_stop()
 
             # get dict of PIDs spawned by slips
-            self.main.PIDs = __database__.get_PIDs()
+            self.main.PIDs = self.main.rdb.get_PIDs()
 
             # we don't want to kill this process
             self.main.PIDs.pop('slips.py', None)
 
             if self.main.mode == 'daemonized':
-                profilesLen = __database__.getProfilesLen()
+                profilesLen = self.main.rdb.getProfilesLen()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
             modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()

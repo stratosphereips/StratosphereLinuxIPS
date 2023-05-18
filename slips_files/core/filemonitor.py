@@ -20,24 +20,23 @@ import os
 import json
 import time
 from watchdog.events import RegexMatchingEventHandler
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 
 
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, redis_port, dir_to_monitor, input_type):
+    def __init__(self, rdb, dir_to_monitor, input_type):
         super().__init__(self.REGEX)
         self.dir_to_monitor = dir_to_monitor
-        __database__.start(redis_port)
         utils.drop_root_privs()
+        self.rdb = rdb
         self.input_type = input_type
 
     def on_created(self, event):
         filename, ext = os.path.splitext(event.src_path)
         if 'log' in ext:
-            __database__.add_zeek_file(filename + ext)
+            self.rdb.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
         """this will be triggered everytime zeek renames all log files"""
@@ -45,7 +44,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         if event.dest_path != 'True':
             to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
             to_send = json.dumps(to_send)
-            __database__.publish('remove_old_files', to_send)
+            self.rdb.publish('remove_old_files', to_send)
             # give inputProc.py time to close the handle or delete the file
             time.sleep(1)
 
@@ -65,7 +64,7 @@ class FileEventHandler(RegexMatchingEventHandler):
                     while line := f.readline():
                         if 'termination' in line:
                             # this is how modules tell slips to terminate
-                            __database__.publish('finished_modules', 'stop_slips')
+                            self.rdb.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:
-            __database__.publish('reload_whitelist', 'reload')
+            self.rdb.publish('reload_whitelist', 'reload')

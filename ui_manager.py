@@ -1,4 +1,4 @@
-from slips_files.core.database.redis_database import __database__
+from slips_files.core.database.redis_database import Redis
 from slips_files.core.guiProcess import GuiProcess
 from style import green
 
@@ -53,7 +53,7 @@ class UIManager:
                 preexec_fn=detach_child
             )
             # self.webinterface_pid = webinterface.pid
-            __database__.store_process_PID('Web Interface', webinterface.pid)
+            self.main.rdb.store_process_PID('Web Interface', webinterface.pid)
             # we'll assume that it started, and if not, the return value will immediately change and this thread will
             # print an error
             self.webinterface_return_value.put(True)
@@ -94,7 +94,7 @@ class UIManager:
                 guiProcessQueue, self.main.outputqueue, self.main.args.verbose,
                 self.main.args.debug
             )
-            __database__.store_process_PID(
+            self.main.rdb.store_process_PID(
                 'GUI',
                 int(guiProcess.pid)
             )
