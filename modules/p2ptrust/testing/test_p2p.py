@@ -4,7 +4,6 @@ import modules.p2ptrust.testing.json_data as json_data
 from modules.p2ptrust.utils.utils import save_ip_report_to_db
 from modules.p2ptrust.p2ptrust import Trust
 from modules.p2ptrust.trust.trustdb import TrustDB
-from slips_files.core.database.redis_database import Redis
 from multiprocessing import Queue
 from outputProcess import OutputProcess
 import json
@@ -23,7 +22,7 @@ def init_tests(pigeon_port=6669):
 
     # Start the DB
     __database__.start()
-    __database__.setOutputQueue(output_process_queue)
+    __database__.set_output_queue(output_process_queue)
     module_process = Trust(
         output_process_queue,
         config,
@@ -43,7 +42,7 @@ def init_tests(pigeon_port=6669):
 
 def set_ip_data(ip: str, data: dict):
     # TODO: remove the first call after database is fixed
-    __database__.setNewIP(ip)
+    __database__.set_new_ip(ip)
     __database__.setInfoForIPs(ip, data)
 
 

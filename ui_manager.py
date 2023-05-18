@@ -1,4 +1,3 @@
-from slips_files.core.database.redis_database import Redis
 from slips_files.core.guiProcess import GuiProcess
 from style import green
 

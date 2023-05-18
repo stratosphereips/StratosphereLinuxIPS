@@ -160,7 +160,7 @@ class Module(Module, multiprocessing.Process):
         evidence_type = 'ExecutableMIMEType'
         attacker_direction = 'dstip'
         srcip = profileid.split('_')[1]
-        ip_identification = self.rdb.getIPIdentification(attacker)
+        ip_identification = self.rdb.get_ip_identification(attacker)
         description = f'download of an executable with mime type: {mime_type} ' \
                       f'by {srcip} from {attacker} {ip_identification}.'
 
@@ -435,7 +435,7 @@ class Module(Module, multiprocessing.Process):
         except ValueError:
             return False
 
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         if ('pastebin' in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):

@@ -462,7 +462,7 @@ class Trust(Module, multiprocessing.Process):
         # we'll be using this to make the description more clear
         other_direction = 'to' if 'from' in direction else 'from'
 
-        ip_identification = self.rdb.getIPIdentification(ip)
+        ip_identification = self.rdb.get_ip_identification(ip)
         description = (
             f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
             f'{other_direction} {profileid.split("_")[-1]}'

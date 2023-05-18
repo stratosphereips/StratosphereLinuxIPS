@@ -16,7 +16,7 @@ class HorizontalPortscan():
         self.malicious_label = self.rdb.malicious_label
 
         # the separator used to separate the IP and the word profile
-        self.fieldseparator = self.rdb.getFieldSeparator()
+        self.fieldseparator = self.rdb.get_field_separator()
 
         # The minimum amount of ips to scan horizontal scan
         self.port_scan_minimum_dips = 5

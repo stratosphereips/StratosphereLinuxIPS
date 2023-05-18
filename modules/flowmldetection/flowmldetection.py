@@ -37,9 +37,9 @@ class Module(Module, multiprocessing.Process):
         self.channels = {
             'new_flow': self.c1
         }
-        self.fieldseparator = self.rdb.getFieldSeparator()
+        self.fieldseparator = self.rdb.get_field_separator()
         # Set the output queue of our database instance
-        self.rdb.setOutputQueue(self.outputqueue)
+        self.rdb.set_output_queue(self.outputqueue)
         # Read the configuration
         self.read_configuration()
         # Minum amount of new lables needed to trigger the train
@@ -377,7 +377,7 @@ class Module(Module, multiprocessing.Process):
         category = 'Anomaly.Traffic'
         attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
         evidence_type = 'MaliciousFlow'
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
         self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,

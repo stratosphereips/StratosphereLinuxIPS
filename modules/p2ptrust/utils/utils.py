@@ -4,7 +4,6 @@ import ipaddress
 import time
 import json
 from typing import Union, Dict
-from slips_files.core.database.redis_database import Redis
 
 
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)
