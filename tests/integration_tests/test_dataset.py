@@ -17,7 +17,7 @@ if not os.path.exists(integration_tests_dir):
     path.mkdir(parents=True, exist_ok=True)
 
 def connect_to_redis(redis_port):
-    from slips_files.core.database.redis_database import __database__
+    from slips_files.core.database.redis_database import Redis
     __database__.connect_to_redis_server(redis_port)
     return __database__
 

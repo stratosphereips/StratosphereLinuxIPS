@@ -1,8 +1,4 @@
-from slips_files.common.abstracts import Module
-from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.slips_utils import utils
-import multiprocessing
+from slips_files.common.imports import *
 import sys
 from ..CESNET.warden_client import Client, read_cfg
 import os
@@ -20,15 +16,14 @@ class Module(Module, multiprocessing.Process):
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, rdb):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+        super().__init__(outputqueue, rdb)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        __database__.start(redis_port)
         self.read_configuration()
-        self.c1 = __database__.subscribe('export_evidence')
+        self.c1 = self.rdb.subscribe('export_evidence')
         self.channels = {
             'export_evidence' : self.c1,
         }
@@ -271,11 +266,11 @@ class Module(Module, multiprocessing.Process):
 
                 src_ips.update({srcip: json.dumps(event_info)})
 
-        __database__.add_ips_to_IoC(src_ips)
+        self.rdb.add_ips_to_IoC(src_ips)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        __database__.publish('finished_modules', self.name)
+        self.rdb.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -303,13 +298,13 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         if self.receive_from_warden:
-            last_update = __database__.get_last_warden_poll_time()
+            last_update = self.rdb.get_last_warden_poll_time()
             now = time.time()
             # did we wait the poll_delay period since last poll?
             if last_update + self.poll_delay < now:
                 self.import_alerts()
                 # set last poll time to now
-                __database__.set_last_warden_poll_time(now)
+                self.rdb.set_last_warden_poll_time(now)
 
         # in case of an interface or a file, push every time we get an alert
         msg = self.get_msg('export_evidence')

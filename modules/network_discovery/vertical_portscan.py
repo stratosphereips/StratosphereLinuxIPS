@@ -1,7 +1,4 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 import sys
 import traceback
 import time
@@ -10,16 +7,17 @@ import json
 import threading
 
 class VerticalPortscan():
-    def __init__(self):
+    def __init__(self, rdb):
+        self.rdb = rdb
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
         # Retrieve malicious/benigh labels
-        self.normal_label = __database__.normal_label
-        self.malicious_label = __database__.malicious_label
+        self.normal_label = self.rdb.normal_label
+        self.malicious_label = self.rdb.malicious_label
         # Get from the database the separator used to separate the IP and the word profile
-        self.fieldseparator = __database__.getFieldSeparator()
+        self.fieldseparator = self.rdb.getFieldSeparator()
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         # list of tuples, each tuple is the args to setevidence
@@ -86,11 +84,11 @@ class VerticalPortscan():
                         f'Total packets sent to all ports: {pkts_sent}. '
                         f'Confidence: {confidence}. by Slips'
                     )
-        __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
                                  proto=protocol, profileid=profileid, twid=twid, uid=uid)
         # Set 'malicious' label in the detected profile
-        __database__.set_profile_module_label(
+        self.rdb.set_profile_module_label(
             profileid, evidence_type, self.malicious_label
         )
 
@@ -116,7 +114,7 @@ class VerticalPortscan():
         evidence_type = 'VerticalPortscan'
         for state in ('Not Established', 'Established'):
             for protocol in ('TCP', 'UDP'):
-                dstips = __database__.getDataFromProfileTW(
+                dstips = self.rdb.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
                 # For each dstip, see if the amount of ports connections is over the threshold
