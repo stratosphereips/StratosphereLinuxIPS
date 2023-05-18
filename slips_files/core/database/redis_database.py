@@ -1,6 +1,6 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database._profile_flow import ProfilingFlowsDatabase
+from dataclasses import asdict
 import os
 import signal
 import redis
@@ -16,9 +16,9 @@ import validators
 import ast
 from uuid import uuid4
 
-
-
-class Database(ProfilingFlowsDatabase, object):
+RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
+class Redis(object):
+    _obj = None
     supported_channels = {
         'tw_modified',
         'evidence_added',
@@ -63,46 +63,51 @@ class Database(ProfilingFlowsDatabase, object):
         'control_module',
         'new_module_flow'
     }
+    # The name is used to print in the outputprocess
+    name = 'DB'
+    separator = '_'
+    normal_label = 'benign'
+    malicious_label = 'malicious'
+    sudo = 'sudo '
+    if RUNNING_IN_DOCKER:
+        sudo = ''
+    # flag to know if we found the gateway MAC using the most seen MAC method
+    _gateway_MAC_found = False
+    _conf_file = 'redis.conf'
+    our_ips = utils.get_own_IPs()
+    # flag to know which flow is the start of the pcap/file
+    first_flow = True
+    # to make sure we only detect and store the user's localnet once
+    is_localnet_set = False
 
-    """ Database object management """
+    def __new__(cls, *args, **kwargs):
+        if cls._obj is None or not isinstance(cls._obj, cls):
+            cls._obj = super(Redis, cls).__new__(Redis)
+            cls._set_redis_options()
+            cls._read_configuration()
+            cls.start(args[0])
+            # By default the slips internal time is 0 until we receive something
+            cls.setSlipsInternalTime(0)
+            while cls.get_slips_start_time() is None:
+                cls._set_slips_start_time()
 
-    def __init__(self):
-        # The name is used to print in the outputprocess
-        self.name = 'DB'
-        self.separator = '_'
-        self.normal_label = 'normal'
-        self.malicious_label = 'malicious'
-        self.sudo = 'sudo '
-        self.running_in_docker = os.environ.get(
-            'IS_IN_A_DOCKER_CONTAINER', False
-        )
-        self.sudo = 'sudo '
-        if self.running_in_docker:
-            self.sudo = ''
-        # flag to know if we found the gateway MAC using the most seen MAC method
-        self.gateway_MAC_found = False
-        self.redis_conf_file = 'redis.conf'
-        self.set_redis_options()
-        self.our_ips = utils.get_own_IPs()
-        # flag to know which flow is the start of the pcap/file
-        self.first_flow = True
-        # to make sure we only detect and store the user's localnet once
-        self.is_localnet_set = False
+            # To treat the db as a singelton
+        return cls._obj
 
-
-    def set_redis_options(self):
+    @classmethod
+    def _set_redis_options(cls):
         """
         Sets the default slips options,
          when using a different port we override it with -p
         """
-        self.redis_options=\
-                {
+        cls._options = {
                 'port': 6379,
                 'daemonize': 'yes',
                 'stop-writes-on-bgsave-error': 'no',
                 'save': '""',
                 'appendonly': 'no'
             }
+
         if '-s' in sys.argv:
             #   Will save the DB if both the given number of seconds and the given
             #   number of write operations against the DB occurred.
@@ -111,17 +116,73 @@ class Database(ProfilingFlowsDatabase, object):
             #   AOF persistence logs every write operation received by the server,
             #   that will be played again at server startup
             # saved the db to <Slips-dir>/dump.rdb
-            self.redis_options.update({
+            cls._options.update({
                 'save': '30 500',
                 'appendonly': 'yes',
                 'dir': os.getcwd(),
                 'dbfilename': 'dump.rdb',
             })
-        with open(self.redis_conf_file, 'w') as f:
-            for option, val in self.redis_options.items():
+
+        with open(cls._conf_file, 'w') as f:
+            for option, val in cls._options.items():
                 f.write(f'{option} {val}\n')
 
-    def get_redis_server_PID(self, redis_port):
+    @classmethod
+    def _read_configuration(cls):
+        conf = ConfigParser()
+        cls.deletePrevdb = conf.deletePrevdb()
+        cls.disabled_detections = conf.disabled_detections()
+        cls.home_network = conf.get_home_network()
+        cls.width = conf.get_tw_width_as_float()
+
+    @classmethod
+    def setSlipsInternalTime(cls, timestamp):
+        cls.r.set('slips_internal_time', timestamp)
+
+    @classmethod
+    def get_slips_start_time(cls):
+        """get the time slips started (datetime obj)"""
+        if start_time := cls.r.get('slips_start_time'):
+            start_time = utils.convert_format(start_time, utils.alerts_format)
+            return start_time
+
+    @classmethod
+    def start(cls, redis_port):
+        """Flushes and Starts the DB and """
+        # self._read_configuration()
+
+        # Read values from the configuration file
+        try:
+            if not hasattr(cls, 'r'):
+                cls.connect_to_redis_server(redis_port)
+                # Set the memory limits of the output buffer,  For normal clients: no limits
+                # for pub-sub 4GB maximum buffer size
+                # and 2GB for soft limit
+                # The original values were 50MB for maxmem and 8MB for soft limit.
+                # don't flush the loaded db when using '-db'
+                if (
+                        cls.deletePrevdb
+                        and not ('-S' in sys.argv or '-cb' in sys.argv or '-d'  in sys.argv)
+                ):
+                    # when stopping the daemon, don't flush bc we need to get the pids
+                    # to close slips files
+                    cls.r.flushdb()
+
+                cls.change_redis_limits(cls.r)
+                cls.change_redis_limits(cls.rcache)
+
+                # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
+                # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
+                # Even if the DB is not deleted. We need to delete some temp data
+                cls.r.delete('zeekfiles')
+
+        except redis.exceptions.ConnectionError as ex:
+            print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
+            return False
+
+
+    @staticmethod
+    def get_redis_server_PID(redis_port):
         """
         get the PID of the redis server started on the given redis_port
         retrns the pid
@@ -134,7 +195,8 @@ class Database(ProfilingFlowsDatabase, object):
                 return pid
         return False
 
-    def connect_to_redis_server(self, port: str):
+    @classmethod
+    def connect_to_redis_server(cls, port: str):
         """Connects to the given port and Sets r and rcache"""
         try:
             # start the redis server
@@ -150,7 +212,7 @@ class Database(ProfilingFlowsDatabase, object):
 
             # retry_on_timeout=True after the command times out, it will be retried once,
             # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-            self.r = redis.StrictRedis(
+            cls.r = redis.StrictRedis(
                 host='localhost',
                 port=port,
                 db=0,
@@ -161,7 +223,7 @@ class Database(ProfilingFlowsDatabase, object):
                 health_check_interval=20,
             )  # password='password')
             # port 6379 db 0 is cache, delete it using -cc flag
-            self.rcache = redis.StrictRedis(
+            cls.rcache = redis.StrictRedis(
                 host='localhost',
                 port=6379,
                 db=1,
@@ -176,7 +238,7 @@ class Database(ProfilingFlowsDatabase, object):
             # so make sure it's established first
             # fix  ConnectionRefused error by giving redis time to open
             time.sleep(1)
-            self.r.client_list()
+            cls.r.client_list()
             return True
         except redis.exceptions.ConnectionError:
             # unable to connect to this port
@@ -188,7 +250,7 @@ class Database(ProfilingFlowsDatabase, object):
                 # we shouldn't close it because this is what kalipso will
                 # use to view the loaded the db
 
-                self.close_redis_server(port)
+                cls.close_redis_server(port)
             return False
 
     def set_slips_mode(self, slips_mode):
@@ -214,20 +276,14 @@ class Database(ProfilingFlowsDatabase, object):
             return modified_ips
         else:
             return 0
-    
-    def close_redis_server(self, redis_port):
-        if server_pid := self.get_redis_server_PID(redis_port):
+
+    @classmethod
+    def close_redis_server(cls, redis_port):
+        if server_pid := cls.get_redis_server_PID(redis_port):
             os.kill(int(server_pid), signal.SIGKILL)
 
-    def read_configuration(self):
-        conf = ConfigParser()
-        self.deletePrevdb = conf.deletePrevdb()
-        self.disabled_detections = conf.disabled_detections()
-        self.home_network = conf.get_home_network()
-        self.width = conf.get_tw_width_as_float()
-
-
-    def change_redis_limits(self, redis_client):
+    @classmethod
+    def change_redis_limits(cls, client):
         """
         To fix redis closing/resetting the pub/sub connection, change redis soft and hard limits
         """
@@ -238,47 +294,10 @@ class Database(ProfilingFlowsDatabase, object):
         # soft limit for pub/sub clients: 2147483648 Bytes = 2GB over 10 mins,
         # means if the client has an output buffer bigger than 2GB
         # for, continuously, 10 mins, the connection gets closed.
-        redis_client.config_set('client-output-buffer-limit', "normal 0 0 0 "
+        client.config_set('client-output-buffer-limit', "normal 0 0 0 "
                                                         "slave 268435456 67108864 60 "
                                                         "pubsub 4294967296 2147483648 600")
 
-    def start(self, redis_port):
-        """Start the DB. Allow it to read the conf"""
-        self.read_configuration()
-
-        # Read values from the configuration file
-        try:
-            if not hasattr(self, 'r'):
-                self.connect_to_redis_server(redis_port)
-                # Set the memory limits of the output buffer,  For normal clients: no limits
-                # for pub-sub 4GB maximum buffer size
-                # and 2GB for soft limit
-                # The original values were 50MB for maxmem and 8MB for soft limit.
-                # don't flush the loaded db when using '-db'
-                if (
-                        self.deletePrevdb
-                        and not ('-S' in sys.argv or '-cb' in sys.argv or '-d'  in sys.argv)
-                ):
-                    # when stopping the daemon, don't flush bc we need to get the pids
-                    # to close slips files
-                    self.r.flushdb()
-
-                self.change_redis_limits(self.r)
-                self.change_redis_limits(self.rcache)
-
-                # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
-                # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
-                # Even if the DB is not deleted. We need to delete some temp data
-                self.r.delete('zeekfiles')
-
-
-            # By default the slips internal time is 0 until we receive something
-            self.setSlipsInternalTime(0)
-            while self.get_slips_start_time() is None:
-                self.set_slips_start_time()
-        except redis.exceptions.ConnectionError as ex:
-            print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
-            return False
 
     def is_connection_error_logged(self):
         return bool(self.r.get('logged_connection_error'))
@@ -304,17 +323,12 @@ class Database(ProfilingFlowsDatabase, object):
                 # make sure we publish the stop msg and log the error only once
                 self.mark_connection_error_as_logged()
 
-
-    def set_slips_start_time(self):
+    @classmethod
+    def _set_slips_start_time(cls):
         """store the time slips started (datetime obj)"""
         now = utils.convert_format(datetime.now(), utils.alerts_format)
-        self.r.set('slips_start_time', now)
+        cls.r.set('slips_start_time', now)
 
-    def get_slips_start_time(self):
-        """get the time slips started (datetime obj)"""
-        if start_time := self.r.get('slips_start_time'):
-            start_time = utils.convert_format(start_time, utils.alerts_format)
-            return start_time
 
     def setOutputQueue(self, outputqueue):
         """Set the output queue"""
@@ -380,7 +394,7 @@ class Database(ProfilingFlowsDatabase, object):
             return True
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
-                '00|database|Error in addProfile in database.py'
+                '00|database|Error in addProfile in redis_database.py'
             )
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
@@ -523,9 +537,9 @@ class Database(ProfilingFlowsDatabase, object):
         if not validators.mac_address(MAC):
             return False
 
-        if self.gateway_MAC_found:
+        if Redis._gateway_MAC_found:
             # gateway MAC already set using this function
-            return __database__.get_gateway_MAC() == MAC
+            return Redis.get_gateway_MAC() == MAC
 
         # since we don't have a mac gw in the db, see eif this given mac is the gw mac
         ip_obj = ipaddress.ip_address(ip)
@@ -539,7 +553,7 @@ class Database(ProfilingFlowsDatabase, object):
                 self.set_default_gateway(address_type, address)
 
             # mark the gw mac as found so we don't look for it again
-            self.gateway_MAC_found = True
+            Redis._gateway_MAC_found = True
             return True
 
 
@@ -726,7 +740,7 @@ class Database(ProfilingFlowsDatabase, object):
             return False
         except redis.exceptions.ResponseError as inst:
             self.outputqueue.put(
-                '00|database|error in addprofileidfromip in database.py'
+                '00|database|error in addprofileidfromip in redis_database.py'
             )
             self.outputqueue.put(f'00|database|{type(inst)}')
             self.outputqueue.put(f'00|database|{inst}')
@@ -784,7 +798,7 @@ class Database(ProfilingFlowsDatabase, object):
         except Exception as e:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
-                f'01|database|[DB] Error in getT2ForProfileTW in database.py line {exception_line}'
+                f'01|database|[DB] Error in getT2ForProfileTW in redis_database.py line {exception_line}'
             )
 
             self.outputqueue.put(f'01|database|[DB] {type(e)}')
@@ -878,7 +892,7 @@ class Database(ProfilingFlowsDatabase, object):
             return twid
         except redis.exceptions.ResponseError as e:
             self.outputqueue.put(
-                '01|database|error in addNewOlderTW in database.py', 0, 1
+                '01|database|error in addNewOlderTW in redis_database.py', 0, 1
             )
             self.outputqueue.put(f'01|database|{type(e)}', 0, 1)
             self.outputqueue.put(f'01|database|{e}', 0, 1)
@@ -964,8 +978,7 @@ class Database(ProfilingFlowsDatabase, object):
         data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
         return bool(data)
 
-    def setSlipsInternalTime(self, timestamp):
-        self.r.set('slips_internal_time', timestamp)
+
 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -982,7 +995,7 @@ class Database(ProfilingFlowsDatabase, object):
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.outputqueue.put(
-                f'01|database|[DB] Error in getDataFromProfileTW in database.py line {exception_line}'
+                f'01|database|[DB] Error in getDataFromProfileTW in redis_database.py line {exception_line}'
             )
             self.outputqueue.put(f'01|database|[DB] {traceback.print_exc()}')
 
@@ -1206,7 +1219,7 @@ class Database(ProfilingFlowsDatabase, object):
                         3,
                         0,
                     )
-                    if data := __database__.getTWofTime(profileid, flowtime):
+                    if data := self.getTWofTime(profileid, flowtime):
                         # We found a TW where this flow belongs to
                         (twid, tw_start_time) = data
                         return twid
@@ -1219,7 +1232,7 @@ class Database(ProfilingFlowsDatabase, object):
                         )
                         # amount_of_current_tw is the real amount of tw we have now
                         amount_of_current_tw = (
-                            __database__.getamountTWsfromProfile(profileid)
+                            self.getamountTWsfromProfile(profileid)
                         )
                         # diff is the new ones we should add in the past. (Yes, we could have computed this differently)
                         diff = amount_of_new_tw - amount_of_current_tw
@@ -1227,7 +1240,7 @@ class Database(ProfilingFlowsDatabase, object):
                         # Get the first TW
                         [
                             (firsttwid, firsttw_start_time)
-                        ] = __database__.getFirstTWforProfile(profileid)
+                        ] = self.getFirstTWforProfile(profileid)
                         firsttw_start_time = float(firsttw_start_time)
                         # The start of the new older TW should be the first - the width
                         temp_start = firsttw_start_time - self.width
@@ -1235,7 +1248,7 @@ class Database(ProfilingFlowsDatabase, object):
                             new_start = temp_start
                             # The method to add an older TW is the same as
                             # to add a new one, just the starttime changes
-                            twid = __database__.addNewOlderTW(
+                            twid = self.addNewOlderTW(
                                 profileid, new_start
                             )
                             self.print(f'Creating the new older TW id {twid}. Start: {new_start}.', 3, 0)
@@ -2142,7 +2155,7 @@ class Database(ProfilingFlowsDatabase, object):
             # outside of home_network when this param is given
             return False
         # get all profiles and twis where this IP was met
-        domain_profiled_twid = __database__.get_malicious_domain(domain)
+        domain_profiled_twid = self.get_malicious_domain(domain)
         try:
             profile_tws = domain_profiled_twid[
                 profileid
@@ -2517,14 +2530,14 @@ class Database(ProfilingFlowsDatabase, object):
             return False
 
         try:
-            self.redis_options.update({
+            Redis._options.update({
                 'dbfilename': os.path.basename(backup_file),
                 'dir': os.path.dirname(backup_file),
                 'port': 32850,
             })
 
-            with open(self.redis_conf_file, 'w') as f:
-                for option, val in self.redis_options.items():
+            with open(Redis._conf_file, 'w') as f:
+                for option, val in Redis._options.items():
                     f.write(f'{option} {val}\n')
             # Stop the server first in order for redis to load another db
             os.system(f'{self.sudo}service redis-server stop')
@@ -2631,4 +2644,3 @@ class Database(ProfilingFlowsDatabase, object):
     def is_cyst_enabled(self) -> bool:
         return True if self.r.get('running_cyst') else False
 
-__database__ = Database()
