@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from slips_files.common.slips_utils import utils
-import multiprocessing
 import sys
 import traceback
 # This is the abstract Module class to check against. Do not modify

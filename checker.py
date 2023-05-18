@@ -145,7 +145,6 @@ class Checker:
 
     def delete_blocking_chain(self):
         # start only the blocking module process and the db
-        from slips_files.core.database.redis_database import Redis
         from multiprocessing import Queue, active_children
         from modules.blocking.blocking import Module
 
