@@ -1,17 +1,21 @@
 from abc import ABC, abstractmethod
-from slips_files.core.database.redis_database import __database__
+# common imports for all modules
+from slips_files.core.database.redis_database import Redis
+from slips_files.common.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+import multiprocessing
 import sys
 import traceback
+
 # This is the abstract Module class to check against. Do not modify
 class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-
-    def __init__(self, outputqueue):
+    def __init__(self, outputqueue, rdb):
         self.outputqueue = outputqueue
-        self.control_channel = __database__.subscribe('control_module')
+        self.rdb = rdb
+        self.control_channel = self.rdb.subscribe('control_module')
         self.msg_received = True
 
     def should_stop(self) -> bool:
@@ -25,7 +29,7 @@ class Module(ABC):
             # this module is still receiving msgs, don't stop
             return False
 
-        message = __database__.get_message(self.control_channel)
+        message = self.rdb.get_message(self.control_channel)
         if message and message['data'] == 'stop_process':
             self.shutdown_gracefully()
             return True
@@ -70,7 +74,7 @@ class Module(ABC):
         pass
 
     def get_msg(self, channel_name):
-        message = __database__.get_message(self.channels[channel_name])
+        message = self.rdb.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.msg_received = True
             return message
