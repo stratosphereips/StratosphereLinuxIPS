@@ -18,9 +18,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz, stratosphere@aic.fel.cvut.cz
 
 import contextlib
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.config_parser import ConfigParser
+from slips_files.common.imports import *
 from exclusiveprocess import Lock, CannotAcquireLock
 from redis_manager import RedisManager
 from metadata_manager import MetadataManager
@@ -135,7 +133,7 @@ class Main:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.redis_port)
+                update_manager = UpdateFileManager(self.outputqueue, self.rdb)
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -163,15 +161,15 @@ class Main:
             ]
         # Give the exact path to save(), this is where our saved .rdb backup will be
         rdb_filepath = os.path.join(backups_dir, self.input_information)
-        __database__.save(rdb_filepath)
-        # info will be lost only if you're out of space and redis can't write to dump.rdb, otherwise you're fine
+        self.rdb.save(rdb_filepath)
+        # info will be lost only if you're out of space and redis can't write to dump.self.rdb, otherwise you're fine
         print(
             '[Main] [Warning] stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file.'
         )
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek wa sused in this run """
-        return __database__.get_input_type() in ('pcap', 'interface') or __database__.is_growing_zeek_dir()
+        return self.rdb.get_input_type() in ('pcap', 'interface') or self.rdb.is_growing_zeek_dir()
 
     def store_zeek_dir_copy(self):
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
@@ -437,7 +435,7 @@ class Main:
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
-
+            self.rdb = Redis(self.redis_port)
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -445,28 +443,28 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.redis_port,
+                self.rdb,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
             )
             # this process starts the db
             output_process.start()
-            __database__.store_process_PID('Output', int(output_process.pid))
+            self.rdb.store_process_PID('Output', int(output_process.pid))
 
             if self.args.growing:
                 if self.input_type != 'zeek_folder':
                     self.print(f"Parameter -g should be using with -f <dirname> not a {self.input_type}. Ignoring -g")
                 else:
                     self.print(f"Running on a growing zeek dir: {self.input_information}")
-                    __database__.set_growing_zeek_dir()
+                    self.rdb.set_growing_zeek_dir()
 
             # log the PID of the started redis-server
             # should be here after we're sure that the server was started
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
-            __database__.set_slips_mode(self.mode)
+            self.rdb.set_slips_mode(self.mode)
 
             if self.mode == 'daemonized':
                 std_files = {
@@ -482,14 +480,14 @@ class Main:
                     'stdout': slips_logfile,
                 }
 
-            __database__.store_std_file(**std_files)
+            self.rdb.store_std_file(**std_files)
 
             self.print(f'Using redis server on port: {green(self.redis_port)}', 1, 0)
             self.print(f'Started {green("Main")} process [PID {green(self.pid)}]', 1, 0)
             self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
-            # if slips is given a .rdb file, don't load the modules as we don't need them
+            # if slips is given a .self.rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
@@ -510,18 +508,18 @@ class Main:
                 self.evidenceProcessQueue,
                 self.outputqueue,
                 self.args.output,
-                self.redis_port,
+                self.rdb,
             )
             evidence_process.start()
             self.print(
                 f'Started {green("Evidence Process")} '
                 f'[PID {green(evidence_process.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.rdb.store_process_PID(
                 'Evidence',
                 int(evidence_process.pid)
             )
-            __database__.store_process_PID(
+            self.rdb.store_process_PID(
                 'slips.py',
                 int(self.pid)
             )
@@ -532,19 +530,19 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.redis_port,
+                self.rdb,
             )
             profiler_process.start()
             self.print(
                 f'Started {green("Profiler Process")} '
                 f'[PID {green(profiler_process.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.rdb.store_process_PID(
                 'Profiler',
                 int(profiler_process.pid)
             )
 
-            self.c1 = __database__.subscribe('finished_modules')
+            self.c1 = self.rdb.subscribe('finished_modules')
             self.metadata_man.enable_metadata()
 
             inputProcess = InputProcess(
@@ -556,14 +554,14 @@ class Main:
                 self.zeek_bro,
                 self.zeek_folder,
                 self.line_type,
-                self.redis_port,
+                self.rdb,
             )
             inputProcess.start()
             self.print(
                 f'Started {green("Input Process")} '
                 f'[PID {green(inputProcess.pid)}]', 1, 0
             )
-            __database__.store_process_PID(
+            self.rdb.store_process_PID(
                 'Input Process',
                 int(inputProcess.pid)
             )
@@ -594,7 +592,7 @@ class Main:
             intervals_to_wait = max_intervals_to_wait
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
-            is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+            is_interface: bool = self.args.interface or self.rdb.is_growing_zeek_dir()
 
             while True:
                 message = self.c1.get_message(timeout=0.01)
@@ -618,7 +616,7 @@ class Main:
                 # for other files, we prin a progress bar + the stats using outputprocess
                 if self.mode != 'daemonized' and (self.input_type in ('pcap', 'interface') or self.args.growing):
                     # How many profiles we have?
-                    profilesLen = str(__database__.getProfilesLen())
+                    profilesLen = str(self.rdb.getProfilesLen())
                     now = utils.convert_format(datetime.now(), '%Y/%m/%d %H:%M:%S')
                     print(
                         f'Total analyzed IPs so '
@@ -629,13 +627,13 @@ class Main:
                     )
 
                 # Check if we need to close any TWs
-                __database__.check_TW_to_close()
+                self.rdb.check_TW_to_close()
 
                 if is_interface and hostIP not in modified_profiles:
                     # In interface we keep track of the host IP. If there was no
                     # modified TWs in the host IP, we check if the network was changed.
                     if hostIP := self.metadata_man.get_host_ip():
-                        __database__.set_host_ip(hostIP)
+                        self.rdb.set_host_ip(hostIP)
 
                 # these are the cases where slips should be running non-stop
                 if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
@@ -653,7 +651,7 @@ class Main:
                     intervals_to_wait -= 1
 
 
-                __database__.pubsub.check_health()
+                self.rdb.pubsub.check_health()
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working
