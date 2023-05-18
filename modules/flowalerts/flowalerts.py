@@ -1052,12 +1052,12 @@ class Module(Module, multiprocessing.Process):
                     )
 
     def check_invalid_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
-        # this function is used to check for certain IP answers to DNS queries being blocked 
+        # this function is used to check for certain IP answers to DNS queries being blocked
         # (perhaps by ad blockers) and set to the following IP values
         invalid_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
         if not answers:
             return
-        
+
         for answer in answers:
             if answer in invalid_answers and domain != "localhost":
                 #blocked answer found
