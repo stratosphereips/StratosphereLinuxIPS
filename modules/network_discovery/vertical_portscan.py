@@ -17,7 +17,7 @@ class VerticalPortscan():
         self.normal_label = self.rdb.normal_label
         self.malicious_label = self.rdb.malicious_label
         # Get from the database the separator used to separate the IP and the word profile
-        self.fieldseparator = self.rdb.getFieldSeparator()
+        self.fieldseparator = self.rdb.get_field_separator()
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         # list of tuples, each tuple is the args to setevidence

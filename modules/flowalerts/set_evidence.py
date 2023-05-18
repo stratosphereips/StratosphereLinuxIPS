@@ -129,7 +129,7 @@ class Helper:
         attacker_direction = 'dstip'
         evidence_type = 'Non-HTTP-Port-80-Connection'
         attacker = daddr
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
 
         description = f'non-HTTP established connection to port 80.' \
                       f' destination IP: {daddr} {ip_identification}'
@@ -145,7 +145,7 @@ class Helper:
         attacker_direction = 'dstip'
         evidence_type = 'Non-SSL-Port-443-Connection'
         attacker = daddr
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'non-SSL established connection to port 443.' \
                       f' destination IP: {daddr} {ip_identification}'
 
@@ -169,7 +169,7 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'WeirdHTTPMethod'
         attacker = profileid.split("_")[-1]
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'Weird HTTP method "{weird_method}" to IP: {daddr} {ip_identification}. by Zeek.'
         self.rdb.setEvidence(evidence_type,
                                  attacker_direction,
@@ -195,7 +195,7 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'IncompatibleCN'
         attacker = daddr
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'Incompatible certificate CN to IP: {daddr} {ip_identification} claiming to belong {org.capitalize()}.'
         self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
@@ -272,7 +272,7 @@ class Helper:
             if diff < 5:
                 confidence = 0.1
 
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'a connection without DNS resolution to IP: {daddr} {ip_identification}'
         self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
@@ -302,7 +302,7 @@ class Helper:
         attacker_direction = 'srcip'
         evidence_type = 'UnknownPort'
         attacker = profileid.split('_')[-1]
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = (
             f'Connection to unknown destination port {dport}/{proto.upper()} '
             f'destination IP {daddr}. {ip_identification}'
@@ -387,7 +387,7 @@ class Helper:
         ts = tunnel_flow['starttime']
         uid = tunnel_flow['uid']
 
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         saddr = profileid.split('_')[-1]
         description = f'GRE tunnel from {saddr} ' \
                       f'to {daddr} {ip_identification} ' \
@@ -459,7 +459,7 @@ class Helper:
         threat_level = 'info'
         confidence = 0.8
         category = 'Infomation'
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = (
             f'SSH successful to IP {daddr}. {ip_identification}. '
             f'From IP {saddr}. Size: {str(size)}. Detection model {by}.'
@@ -485,7 +485,7 @@ class Helper:
         # scale the confidence from 0 to 1, 1 means 24 hours long
         confidence = 1 / (3600 * 24) * (duration - 3600 * 24) + 1
         confidence = round(confidence, 2)
-        ip_identification = self.rdb.getIPIdentification(ip)
+        ip_identification = self.rdb.get_ip_identification(ip)
         # get the duration in minutes
         duration = int(duration / 60)
         srcip = profileid.split('_')[1]
@@ -578,7 +578,7 @@ class Helper:
         evidence_type = 'Port0Connection'
         attacker = saddr if direction == 'source' else daddr
 
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'Connection on port 0 from {saddr}:{sport} to {daddr}:{dport}. {ip_identification}.'
 
         conn_count = 1
@@ -619,7 +619,7 @@ class Helper:
             attacker_direction = 'dstip'
 
         # append daddr identification to the description
-        ip_identification = self.rdb.getIPIdentification(ip)
+        ip_identification = self.rdb.get_ip_identification(ip)
         description += (
             f'{ip_identification} description: {ja3_description} {tags}'
         )
@@ -646,7 +646,7 @@ class Helper:
         evidence_type = 'DataUpload'
         category = 'Malware'
         attacker = daddr
-        ip_identification = self.rdb.getIPIdentification(
+        ip_identification = self.rdb.get_ip_identification(
             daddr
         )
         description = f'Large data upload. {src_mbs} MBs sent to {daddr} '
@@ -665,7 +665,7 @@ class Helper:
         evidence_type = 'BadSMTPLogin'
         attacker_direction = 'srcip'
         attacker = saddr
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = (
             f'doing bad SMTP login to {daddr} {ip_identification}'
         )
@@ -690,7 +690,7 @@ class Helper:
         category = 'Attempt.Login'
         attacker_direction = 'srcip'
         evidence_type = 'SMTPLoginBruteforce'
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description = f'doing SMTP login bruteforce to {daddr}. ' \
                       f'{smtp_bruteforce_threshold} logins in 10 seconds. ' \
                       f'{ip_identification}'
@@ -734,7 +734,7 @@ class Helper:
 
         description = f'Malicious SSL certificate to server {daddr}.'
         # append daddr identification to the description
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         description += (
             f'{ip_identification} description: {cert_description} {tags}  '
         )

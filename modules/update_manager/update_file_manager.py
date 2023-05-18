@@ -19,9 +19,8 @@ class UpdateFileManager:
         # For now, read the malicious IPs from here
         self.name = 'Update File Manager'
         self.rdb = rdb
-        print(f"@@@@@@@@@@@@@@@@ update manager: {id(self.rdb)}")
         # Get a separator from the database
-        self.separator = self.rdb.getFieldSeparator()
+        self.separator = self.rdb.get_field_separator()
         self.read_configuration()
         # this will store the number of loaded ti files
         self.loaded_ti_files = 0

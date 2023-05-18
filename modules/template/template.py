@@ -30,11 +30,11 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
-        # slips/core/redis_database.py file. However common options are:
+        # slips/core/database.py file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
-        # Remember to subscribe to this channel in redis_database.py
+        # Remember to subscribe to this channel in database.py
         self.c1 = self.rdb.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,

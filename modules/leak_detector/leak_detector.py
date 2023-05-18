@@ -189,14 +189,14 @@ class Module(Module, multiprocessing.Process):
                 attacker_direction = 'dstip'
                 profileid = src_profileid
                 attacker = dstip
-                ip_identification = self.rdb.getIPIdentification(dstip)
+                ip_identification = self.rdb.get_ip_identification(dstip)
                 description = f"{rule} to destination address: {dstip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             elif self.rdb.has_profile(dst_profileid):
                 attacker_direction = 'srcip'
                 profileid = dst_profileid
                 attacker = srcip
-                ip_identification = self.rdb.getIPIdentification(srcip)
+                ip_identification = self.rdb.get_ip_identification(srcip)
                 description = f"{rule} to destination address: {srcip} {ip_identification} port: {portproto} {port_info or ''}. Leaked location: {strings_matched}"
 
             else:

@@ -435,7 +435,7 @@ class Main:
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
-            self.rdb = Redis(self.redis_port)
+            self.rdb = Redis(self.redis_port, self.outputqueue)
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()

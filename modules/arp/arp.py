@@ -251,7 +251,7 @@ class Module(Module, multiprocessing.Process):
             # comes here if the IP isn't in any of the local networks
             confidence = 0.6
             threat_level = 'low'
-            ip_identification = self.rdb.getIPIdentification(daddr)
+            ip_identification = self.rdb.get_ip_identification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             evidence_type = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
@@ -301,7 +301,7 @@ class Module(Module, multiprocessing.Process):
         #  the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
-        original_IP = self.rdb.get_IP_of_MAC(src_mac)
+        original_IP = self.rdb.get_ip_of_mac(src_mac)
         if original_IP is None:
             return
 
@@ -326,7 +326,7 @@ class Module(Module, multiprocessing.Process):
             attacker = profileid.split('_')[1]
 
             gateway_ip = self.rdb.get_gateway_ip()
-            gateway_MAC = self.rdb.get_gateway_MAC()
+            gateway_MAC = self.rdb.get_gateway_mac()
 
             if saddr == gateway_ip:
                 saddr = f'The gateway {saddr}'

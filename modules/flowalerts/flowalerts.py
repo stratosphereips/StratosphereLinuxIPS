@@ -271,7 +271,7 @@ class Module(Module, multiprocessing.Process):
             return True
 
         # check if the SNI, hostname, rDNS of this ip belong to org_name
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         if org_name in ip_identification.lower():
             return True
 
@@ -1174,7 +1174,7 @@ class Module(Module, multiprocessing.Process):
         key = f'{saddr}-{daddr}-{dport}'
 
         # add this conn to the stored number of reconnections
-        current_reconnections = self.rdb.getReconnectionsForTW(profileid, twid)
+        current_reconnections = self.rdb.get_reconnections_for_tw(profileid, twid)
 
         try:
             reconnections, uids = current_reconnections[key]
@@ -1189,7 +1189,7 @@ class Module(Module, multiprocessing.Process):
             return
 
         ip_identification = (
-            self.rdb.getIPIdentification(daddr)
+            self.rdb.get_ip_identification(daddr)
         )
         description = (
             f'Multiple reconnection attempts to Destination IP:'
@@ -1366,7 +1366,7 @@ class Module(Module, multiprocessing.Process):
             if len(dstports) <= 1:
                 return
 
-            ip_identification = self.rdb.getIPIdentification(daddr)
+            ip_identification = self.rdb.get_ip_identification(daddr)
             description = (
                 f'Connection to multiple ports {dstports} of '
                 f'Destination IP: {daddr}. {ip_identification}'
@@ -1480,7 +1480,7 @@ class Module(Module, multiprocessing.Process):
 
 
         ip_identification = (
-            self.rdb.getIPIdentification(daddr)
+            self.rdb.get_ip_identification(daddr)
         )
         description = f'Self-signed certificate. Destination IP: {daddr}.' \
                       f' {ip_identification}'
@@ -1729,7 +1729,7 @@ class Module(Module, multiprocessing.Process):
         ):
             return
 
-        if old_ip_list := self.rdb.get_IP_of_MAC(smac):
+        if old_ip_list := self.rdb.get_ip_of_mac(smac):
             # old_ip is a list that may contain the ipv6 of this MAC
             # this ipv6 may be of the same device that has the given saddr and MAC
             # so this would be fp. make sure we're dealing with ipv4 only

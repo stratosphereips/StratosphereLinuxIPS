@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         self.asn = ASN(self.rdb)
         self.JARM = JARM()
         # Set the output queue of our database instance
-        self.rdb.setOutputQueue(self.outputqueue)
+        self.rdb.set_output_queue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.rdb.subscribe('new_ip')
         self.c2 = self.rdb.subscribe('new_MAC')
@@ -516,7 +516,7 @@ class Module(Module, multiprocessing.Process):
         port_info = self.rdb.get_port_info(portproto)
         port_info = port_info or ""
         port_info = f'({port_info.upper()})' if port_info else ""
-        dstip_id = self.rdb.getIPIdentification(dstip)
+        dstip_id = self.rdb.get_ip_identification(dstip)
         description = (
            f"Malicious JARM hash detected for destination IP: {dstip}"
            f" on port: {portproto} {port_info}.  {dstip_id}"
