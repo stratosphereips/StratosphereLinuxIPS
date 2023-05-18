@@ -143,7 +143,7 @@ class URLhaus():
         attacker = flow["md5"]
         daddr = flow["daddr"]
 
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         # we have more info about the downloaded file
         # so we need a more detailed description
         description = f"Malicious downloaded file: {flow['md5']}. " \

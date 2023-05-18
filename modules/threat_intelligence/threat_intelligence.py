@@ -23,15 +23,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
         super().__init__(outputqueue, rdb)
         self.outputqueue = outputqueue
         # Get a separator from the database
-        self.separator = self.rdb.getFieldSeparator()
+        self.separator = self.rdb.get_field_separator()
         self.c1 = self.rdb.subscribe('give_threat_intelligence')
         self.c2 = self.rdb.subscribe('new_downloaded_file')
         self.channels = {
             'give_threat_intelligence': self.c1,
             'new_downloaded_file': self.c2,
         }
-        print(f"@@@@@@@@@@@@@@@@ ti {id(self.rdb)}")
-
         self.__read_configuration()
         self.get_malicious_ip_ranges()
         self.create_circl_lu_session()
@@ -121,7 +119,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         tags = asn_info.get('tags', False)
         source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
-        identification = self.rdb.getIPIdentification(ip)
+        identification = self.rdb.get_ip_identification(ip)
 
         description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
                       f'Description: {asn_info["description"]}, ' \
@@ -183,7 +181,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
         # setting it to true results in the following alert
         # blacklisted ip description: <Spamhaus description> source: ipsum
-        ip_identification = self.rdb.getIPIdentification(ip, get_ti_data=False).strip()
+        ip_identification = self.rdb.get_ip_identification(ip, get_ti_data=False).strip()
 
         if self.is_dns_response:
             description = (
@@ -672,7 +670,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         attacker = file_info['flow']["md5"]
         threat_level = file_info["threat_level"]
         daddr = file_info['flow']["daddr"]
-        ip_identification = self.rdb.getIPIdentification(daddr)
+        ip_identification = self.rdb.get_ip_identification(daddr)
         confidence = file_info["confidence"]
         threat_level = utils.threat_level_to_string(threat_level)
 

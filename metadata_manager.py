@@ -179,7 +179,7 @@ class MetadataManager:
         self.main.rdb.set_input_metadata({'modified_ips_in_the_last_tw': modified_ips_in_the_last_tw})
         # Get the time of last modified timewindow and set it as a new
         if last_modified_tw_time != 0:
-            self.main.rdb.setSlipsInternalTime(
+            self.main.rdb.set_slips_internal_time(
                 last_modified_tw_time
             )
         return modified_ips_in_the_last_tw, modified_profiles

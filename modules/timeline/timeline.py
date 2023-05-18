@@ -18,7 +18,7 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue, rdb)
         self.outputqueue = outputqueue
-        self.separator = self.rdb.getFieldSeparator()
+        self.separator = self.rdb.get_field_separator()
         # Subscribe to 'new_flow' channel
         self.c1 = self.rdb.subscribe('new_flow')
         self.channels = {
@@ -382,8 +382,6 @@ class Module(Module, multiprocessing.Process):
             flow = mdata['flow']
             timestamp = mdata['stime']
             flow = json.loads(flow)
-            if twid is None:
-                print(f"@@@@@@@@@@@@@@@@ flow {flow} has no twid")
             self.process_flow(
                 profileid, twid, flow, timestamp
             )

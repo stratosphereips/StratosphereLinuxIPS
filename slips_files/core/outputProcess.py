@@ -65,8 +65,6 @@ class OutputProcess(multiprocessing.Process):
             )
         self.done_reading_flows = False
         self.rdb = rdb
-        print(f"@@@@@@@@@@@@@@@@ []output rdb: {id(rdb)} {rdb}")
-        print(f"@@@@@@@@@@@@@@@@ []output self.rdb: {id(self.rdb)} {self.rdb}")
         # are we in daemon of interactive mode
         self.slips_mode = self.rdb.get_slips_mode()
         # we update the stats printed by slips every 5seconds

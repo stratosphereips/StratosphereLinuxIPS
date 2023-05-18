@@ -2,7 +2,6 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
-import os
 import pytest
 from ...slips import *
 from pathlib import Path
@@ -17,7 +16,6 @@ if not os.path.exists(integration_tests_dir):
     path.mkdir(parents=True, exist_ok=True)
 
 def connect_to_redis(redis_port):
-    from slips_files.core.database.redis_database import Redis
     __database__.connect_to_redis_server(redis_port)
     return __database__
 

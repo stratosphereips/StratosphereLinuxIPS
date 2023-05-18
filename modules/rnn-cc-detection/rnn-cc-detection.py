@@ -26,8 +26,6 @@ class Module(Module, multiprocessing.Process):
         # All the printing output should be sent to the outputqueue. The
         # outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        print(f"@@@@@@@@@@@@@@@@ rnn {id(self.rdb)}")
-
         self.c1 = self.rdb.subscribe('new_letters')
         self.channels = {
             'new_letters': self.c1,
@@ -59,7 +57,7 @@ class Module(Module, multiprocessing.Process):
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         portproto = f'{port}/{proto}'
         port_info = self.rdb.get_port_info(portproto)
-        ip_identification = self.rdb.getIPIdentification(dstip)
+        ip_identification = self.rdb.get_ip_identification(dstip)
         description = (
             f'C&C channel, destination IP: {dstip} '
             f'port: {port_info.upper() if port_info else ""} {portproto} '

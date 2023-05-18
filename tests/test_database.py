@@ -1,7 +1,5 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
-from dataclasses import asdict
-import ipaddress
 import redis
 import os
 import json
@@ -35,7 +33,6 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(outputQueue):
-    from slips_files.core.database.redis_database import Redis
     __database__.outputqueue = outputQueue
     __database__.print = do_nothing
     __database__.deletePrevdb = True
@@ -44,7 +41,7 @@ def create_db_instace(outputQueue):
     __database__.width = 3600
     __database__.connect_to_redis_server(6381)
     __database__.r.flushdb()
-    __database__.setSlipsInternalTime(0)
+    __database__.set_slips_internal_time(0)
     return __database__
 
 def add_flow(db):
