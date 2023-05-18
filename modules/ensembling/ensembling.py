@@ -1,7 +1,4 @@
-from slips_files.common.abstracts import Module
-import multiprocessing
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.slips_utils import utils
+from slips_files.common.imports import *
 import sys
 import json
 import traceback
@@ -12,21 +9,20 @@ class Module(Module, multiprocessing.Process):
     description = 'The module to assign '
     authors = ['Kamila Babayeva, Sebastian Garcia']
 
-    def __init__(self, outputqueue, redis_port):
+    def __init__(self, outputqueue, rdb):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+        super().__init__(outputqueue, rdb)
         # All the printing output should be sent to the outputqueue.
         # The outputqueue is connected to another process called OutputProcess
         self.outputqueue = outputqueue
-        __database__.start(redis_port)
         # Retrieve the labels
-        self.normal_label = __database__.normal_label
-        self.malicious_label = __database__.malicious_label
-        self.c1 = __database__.subscribe('tw_closed')
+        self.normal_label = self.rdb.normal_label
+        self.malicious_label = self.rdb.malicious_label
+        self.c1 = self.rdb.subscribe('tw_closed')
         self.channels = {
             'tw_closed': self.c1
         }
-        self.separator = __database__.separator
+        self.separator = self.rdb.separator
 
 
     def set_label_per_flow_dstip(self, profileid, twid):
@@ -39,7 +35,7 @@ class Module(Module, multiprocessing.Process):
         : return: None
         """
 
-        flows = __database__.get_all_flows_in_profileid_twid(profileid, twid)
+        flows = self.rdb.get_all_flows_in_profileid_twid(profileid, twid)
         dstip_labels_total = {}
         for flow_uid, flow_data in flows.items():
             flow_data = json.loads(flow_data)
@@ -62,7 +58,7 @@ class Module(Module, multiprocessing.Process):
                 malicious_label_total == normal_label_total == 0
                 or normal_label_total > malicious_label_total
             ):
-                __database__.set_first_stage_ensembling_label_to_flow(
+                self.rdb.set_first_stage_ensembling_label_to_flow(
                     profileid, twid, flow_uid, self.normal_label
                 )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
@@ -73,7 +69,7 @@ class Module(Module, multiprocessing.Process):
                     + 1
                 )
             else:
-                __database__.set_first_stage_ensembling_label_to_flow(
+                self.rdb.set_first_stage_ensembling_label_to_flow(
                     profileid, twid, flow_uid, self.malicious_label
                 )
                 # Second stage - calculate the amount of normal and malicious labels per daddr

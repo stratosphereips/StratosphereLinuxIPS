@@ -12,7 +12,7 @@ alerts_file = 'alerts.log'
 
 
 def connect_to_redis(redis_port):
-    from slips_files.core.database.redis_database import __database__
+    from slips_files.core.database.redis_database import Redis
 
     __database__.connect_to_redis_server(redis_port)
     return __database__

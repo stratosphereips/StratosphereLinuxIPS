@@ -1,5 +1,4 @@
-from slips_files.core.database.redis_database import __database__
-from slips_files.common.config_parser import ConfigParser
+from slips_files.common.imports import *
 import sys
 import os
 from signal import SIGTERM
@@ -242,6 +241,6 @@ class Daemon():
         self.stdout = 'slips.log'
         self.logsfile = 'slips.log'
         self.prepare_std_streams(output_dir)
-        __database__.start(port)
-        self.slips.c1 = __database__.subscribe('finished_modules')
+        self.rdb = Redis(port)
+        self.slips.c1 = self.rdb.subscribe('finished_modules')
         self.slips.proc_man.shutdown_gracefully()
