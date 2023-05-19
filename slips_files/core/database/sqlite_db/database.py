@@ -1,11 +1,11 @@
 import sqlite3
 
-class SQLite():
+class SQLiteDB():
     _obj = None
 
     def __new__(cls, *args, **kwargs):
         if cls._obj is None or not isinstance(cls._obj, cls):
-            cls._obj = super(SQLite, cls).__new__(SQLite)
+            cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
             db_name = args[0]
             cls.conn = sqlite3.connect(db_name)
             cls.cursor = cls.conn.cursor()

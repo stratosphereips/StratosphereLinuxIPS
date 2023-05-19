@@ -1,26 +1,24 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
-from slips_files.core.database.redis.ioc_handler import IoCHandler
-from slips_files.core.database.redis.alert_handler import AlertHandler
-from slips_files.core.database.redis.profile_handler import ProfileHandler
+from slips_files.core.database.redis_db.ioc_handler import IoCHandler
+from slips_files.core.database.redis_db.alert_handler import AlertHandler
+from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 
 import os
 import signal
 import redis
 import time
 import json
-from typing import Tuple
 import subprocess
 from datetime import datetime
 import ipaddress
 import sys
 import validators
-import ast
 
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 
-class Redis(IoCHandler, AlertHandler, ProfileHandler):
+class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     """Main redis db class."""
     _obj = None
     supported_channels = {
@@ -85,7 +83,7 @@ class Redis(IoCHandler, AlertHandler, ProfileHandler):
 
     def __new__(cls, *args, **kwargs):
         if cls._obj is None or not isinstance(cls._obj, cls):
-            cls._obj = super(Redis, cls).__new__(Redis)
+            cls._obj = super(RedisDB, cls).__new__(RedisDB)
             cls.redis_port, cls.outputqueue = args[0], args[1]
             cls._set_redis_options()
             cls._read_configuration()
@@ -1269,14 +1267,14 @@ class Redis(IoCHandler, AlertHandler, ProfileHandler):
             return False
 
         try:
-            Redis._options.update({
+            RedisDB._options.update({
                 'dbfilename': os.path.basename(backup_file),
                 'dir': os.path.dirname(backup_file),
                 'port': 32850,
             })
 
-            with open(Redis._conf_file, 'w') as f:
-                for option, val in Redis._options.items():
+            with open(RedisDB._conf_file, 'w') as f:
+                for option, val in RedisDB._options.items():
                     f.write(f'{option} {val}\n')
             # Stop the server first in order for redis to load another db
             os.system(f'{self.sudo}service redis-server stop')
