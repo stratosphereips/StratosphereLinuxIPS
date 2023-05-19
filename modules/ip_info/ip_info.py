@@ -32,7 +32,6 @@ class Module(Module, multiprocessing.Process):
         self.asn = ASN(self.rdb)
         self.JARM = JARM()
         # Set the output queue of our database instance
-        self.rdb.set_output_queue(self.outputqueue)
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
         self.c1 = self.rdb.subscribe('new_ip')
         self.c2 = self.rdb.subscribe('new_MAC')
