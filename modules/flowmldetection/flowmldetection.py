@@ -39,7 +39,6 @@ class Module(Module, multiprocessing.Process):
         }
         self.fieldseparator = self.rdb.get_field_separator()
         # Set the output queue of our database instance
-        self.rdb.set_output_queue(self.outputqueue)
         # Read the configuration
         self.read_configuration()
         # Minum amount of new lables needed to trigger the train
