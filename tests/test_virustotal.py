@@ -75,10 +75,10 @@ def read_configuration():
     return
 
 
-def create_virustotal_instance(outputQueue):
+def create_virustotal_instance(output_queue, database):
     """Create an instance of virustotal.py
     needed by every other test in this file"""
-    virustotal = Module(outputQueue, 6380)
+    virustotal = Module(output_queue, database)
     # override the self.print function to avoid broken pipes
     virustotal.print = do_nothing
     virustotal.__read_configuration = read_configuration
@@ -88,11 +88,11 @@ def create_virustotal_instance(outputQueue):
     return virustotal
 
 # @pytest.mark.parametrize('ip', ['8.8.8.8'])
-# def test_api_query_(outputQueue, ip):
+# def test_api_query_(output_queue, ip):
 #     """
 #     This one depends on the available quota
 #     """
-#     virustotal = create_virustotal_instance(outputQueue)
+#     virustotal = create_virustotal_instance(output_queue, database)
 #     response = virustotal.api_query_(ip)
 #     # make sure response.status != 204 or 403
 #     assert response != {}, 'Server Error: Response code is not 200'
@@ -101,16 +101,16 @@ def create_virustotal_instance(outputQueue):
 @pytest.mark.dependency(name='sufficient_quota')
 @pytest.mark.parametrize('ip', ['8.8.8.8'])
 @valid_api_key
-def test_interpret_rsponse(outputQueue, ip):
-    virustotal = create_virustotal_instance(outputQueue)
+def test_interpret_rsponse(output_queue, ip, database):
+    virustotal = create_virustotal_instance(output_queue, database)
     response = virustotal.api_query_(ip)
     for ratio in virustotal.interpret_response(response):
         assert type(ratio) == float
 
 @pytest.mark.dependency(depends=["sufficient_quota"])
 @valid_api_key
-def test_get_domain_vt_data(outputQueue):
-    virustotal = create_virustotal_instance(outputQueue)
+def test_get_domain_vt_data(output_queue, database):
+    virustotal = create_virustotal_instance(output_queue, database)
     assert virustotal.get_domain_vt_data('google.com') is not False
 
 

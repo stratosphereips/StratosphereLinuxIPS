@@ -1,5 +1,6 @@
 import pytest
 from slips_files.core.inputProcess import InputProcess
+from slips_files.core.database.redis_db.database import RedisDB
 import shutil
 import os
 
@@ -24,24 +25,29 @@ def check_zeek_or_bro():
         return False
 
     return zeek_bro
+def create_db(output_queue, port):
+    db = RedisDB(port, output_queue)
+    db.print = do_nothing
+    return db
 
 def create_inputProcess_instance(
-    outputQueue, profilerQueue, input_information, input_type
+    output_queue, profiler_queue, input_information, input_type
 ):
     """Create an instance of inputProcess.py
     needed by every other test in this file"""
     global redis_port
     redis_port +=1
+
     inputProcess = InputProcess(
-        outputQueue,
-        profilerQueue,
+        output_queue,
+        profiler_queue,
         input_type,
         input_information,
         None,
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        redis_port
+        create_db(output_queue, redis_port)
     )
 
     inputProcess.bro_timeout = 1
@@ -58,11 +64,11 @@ def create_inputProcess_instance(
     [('pcap', 'dataset/test7-malicious.pcap')],
 )
 def test_handle_pcap_and_interface(
-    outputQueue, profilerQueue, input_type, input_information
+    output_queue, profiler_queue, input_type, input_information
 ):
     # no need to test interfaces because in that case read_zeek_files runs in a loop and never returns
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     inputProcess.zeek_pid = 'False'
     inputProcess.is_zeek_tabs = True
@@ -77,10 +83,10 @@ def test_handle_pcap_and_interface(
     ],
 )
 def test_read_zeek_folder(
-    outputQueue, profilerQueue, input_type, input_information
+    output_queue, profiler_queue, input_type, input_information
 ):
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     assert inputProcess.read_zeek_folder() is True
 
@@ -94,10 +100,10 @@ def test_read_zeek_folder(
     ],
 )
 def test_handle_zeek_log_file(
-    outputQueue, profilerQueue, input_type, input_information, expected_output
+    output_queue, profiler_queue, input_type, input_information, expected_output
 ):
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     assert inputProcess.handle_zeek_log_file() == expected_output
 
@@ -106,10 +112,10 @@ def test_handle_zeek_log_file(
     'input_type,input_information', [('nfdump', 'dataset/test1-normal.nfdump')]
 )
 def test_handle_nfdump(
-    outputQueue, profilerQueue, input_type, input_information
+    output_queue, profiler_queue, input_type, input_information
 ):
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     assert inputProcess.handle_nfdump() is True
 
@@ -127,10 +133,10 @@ def test_handle_nfdump(
 #                                                           ('binetflow','dataset/test3-mixed.binetflow'),
 #                                                           ('binetflow','dataset/test4-malicious.binetflow'),
 def test_handle_binetflow(
-    outputQueue, profilerQueue, input_type, input_information
+    output_queue, profiler_queue, input_type, input_information
 ):
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     assert inputProcess.handle_binetflow() is True
 
@@ -140,9 +146,9 @@ def test_handle_binetflow(
     [('suricata', 'dataset/test6-malicious.suricata.json')],
 )
 def test_handle_suricata(
-    outputQueue, profilerQueue, input_type, input_information
+    output_queue, profiler_queue, input_type, input_information
 ):
     inputProcess = create_inputProcess_instance(
-        outputQueue, profilerQueue, input_information, input_type
+        output_queue, profiler_queue, input_information, input_type
     )
     assert inputProcess.handle_suricata() is True

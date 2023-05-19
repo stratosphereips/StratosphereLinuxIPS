@@ -1,7 +1,6 @@
 """Unit test for modules/ip_info/ip_info.py"""
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
-from ..modules.update_manager.update_file_manager import UpdateFileManager
 import maxminddb
 
 def do_nothing(*args):
@@ -9,27 +8,18 @@ def do_nothing(*args):
     pass
 
 
-def create_ip_info_instance(outputQueue):
+def create_ip_info_instance(output_queue, database):
     """Create an instance of ip_info.py
     needed by every other test in this file"""
-    ip_info = Module(outputQueue, 6380)
+    ip_info = Module(output_queue, database)
     # override the self.print function to avoid broken pipes
     ip_info.print = do_nothing
     return ip_info
 
-# needed to make sure the macdb is downloaded before running the unit tests
-def create_update_manager_instance(outputQueue):
-    """Create an instance of update_manager.py
-    needed by every other test in this file"""
-    update_manager = UpdateFileManager(outputQueue, 6380)
-    # override the self.print function to avoid broken pipes
-    update_manager.print = do_nothing
-    return update_manager
-
-def create_ASN_Info_instance():
+def create_ASN_Info_instance(database):
     """Create an instance of asn_info.py
     needed by every other test in this file"""
-    return ASN()
+    return ASN(database)
 
 
 # ASN unit tests
@@ -37,7 +27,7 @@ def test_get_asn_info_from_geolite(database):
     """
     geolite is an offline db
     """
-    ASN_info = create_ASN_Info_instance()
+    ASN_info = create_ASN_Info_instance(database)
     # check an ip that we know is in the db
     expected_asn_info = {'asn': {'number': 'AS7018', 'org': 'ATT-INTERNET4'}}
     assert ASN_info.get_asn_info_from_geolite('108.200.116.255') == expected_asn_info
@@ -45,12 +35,12 @@ def test_get_asn_info_from_geolite(database):
     assert ASN_info.get_asn_info_from_geolite('0.0.0.0') == {}
 
 def test_cache_ip_range(database):
-    ASN_info = create_ASN_Info_instance()
+    ASN_info = create_ASN_Info_instance(database)
     assert ASN_info.cache_ip_range('8.8.8.8') == {'asn': {'number': 'AS15169', 'org': 'GOOGLE, US'}}
 
 # GEOIP unit tests
-def test_get_geocountry(outputQueue, database):
-    ip_info = create_ip_info_instance(outputQueue)
+def test_get_geocountry(output_queue, database):
+    ip_info = create_ip_info_instance(output_queue, database)
 
     #open the db we'll be using for this test
     # ip_info.wait_for_dbs()
@@ -65,9 +55,9 @@ def test_get_geocountry(outputQueue, database):
         'geocountry': 'Unknown'
     }
 
-def test_get_vendor(outputQueue, database, mocker):
+def test_get_vendor(output_queue, database, mocker):
     # make sure the mac db is download so that wai_for_dbs doesn't wait forever :'D
-    ip_info = create_ip_info_instance(outputQueue)
+    ip_info = create_ip_info_instance(output_queue, database)
     profileid = 'profile_10.0.2.15'
     mac_addr = '08:00:27:7f:09:e1'
     host_name = 'FooBar-PC'
