@@ -153,90 +153,91 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         # self._read_configuration()
 
         # Read values from the configuration file
-        # try:
-        if not hasattr(cls, 'r'):
-            cls.connect_to_redis_server(redis_port)
-            # Set the memory limits of the output buffer,  For normal clients: no limits
-            # for pub-sub 4GB maximum buffer size
-            # and 2GB for soft limit
-            # The original values were 50MB for maxmem and 8MB for soft limit.
-            # don't flush the loaded db when using '-db'
-            if (
-                    cls.deletePrevdb
-                    and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv)
-            ):
-                # when stopping the daemon, don't flush bc we need to get the pids
-                # to close slips files
-                cls.r.flushdb()
+        try:
+            if not hasattr(cls, 'r'):
+                cls.connect_to_redis_server(redis_port)
+                # Set the memory limits of the output buffer,  For normal clients: no limits
+                # for pub-sub 4GB maximum buffer size
+                # and 2GB for soft limit
+                # The original values were 50MB for maxmem and 8MB for soft limit.
+                # don't flush the loaded db when using '-db'
+                if (
+                        cls.deletePrevdb
+                        and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv)
+                ):
+                    # when stopping the daemon, don't flush bc we need to get the pids
+                    # to close slips files
+                    cls.r.flushdb()
 
-            cls.change_redis_limits(cls.r)
-            cls.change_redis_limits(cls.rcache)
+                cls.change_redis_limits(cls.r)
+                cls.change_redis_limits(cls.rcache)
 
-            # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
-            # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
-            # Even if the DB is not deleted. We need to delete some temp data
-            cls.r.delete('zeekfiles')
+                # to fix redis.exceptions.ResponseError MISCONF Redis is configured to save RDB snapshots
+                # configure redis to stop writing to dump.rdb when an error occurs without throwing errors in slips
+                # Even if the DB is not deleted. We need to delete some temp data
+                cls.r.delete('zeekfiles')
 
-        # except redis.exceptions.ConnectionError as ex:
-        #     print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
-        #     return False
+        except redis.exceptions.ConnectionError as ex:
+            print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
+            return False
 
     @classmethod
     def connect_to_redis_server(cls, port: str):
         """Connects to the given port and Sets r and rcache"""
-        # start the redis server
-        os.system(
-            f'redis-server redis.conf --port {port}  > /dev/null 2>&1'
-        )
+        try:
+            # start the redis server
+            os.system(
+                f'redis-server redis.conf --port {port}  > /dev/null 2>&1'
+            )
 
-        # db 0 changes everytime we run slips
-        # set health_check_interval to avoid redis ConnectionReset errors:
-        # if the connection is idle for more than 30 seconds,
-        # a round trip PING/PONG will be attempted before next redis cmd.
-        # If the PING/PONG fails, the connection will reestablished
+            # db 0 changes everytime we run slips
+            # set health_check_interval to avoid redis ConnectionReset errors:
+            # if the connection is idle for more than 30 seconds,
+            # a round trip PING/PONG will be attempted before next redis cmd.
+            # If the PING/PONG fails, the connection will reestablished
 
-        # retry_on_timeout=True after the command times out, it will be retried once,
-        # if the retry is successful, it will return normally; if it fails, an exception will be thrown
-        cls.r = redis.StrictRedis(
-            host='localhost',
-            port=port,
-            db=0,
-            charset='utf-8',
-            socket_keepalive=True,
-            decode_responses=True,
-            retry_on_timeout=True,
-            health_check_interval=20,
-        )  # password='password')
-        # port 6379 db 0 is cache, delete it using -cc flag
-        cls.rcache = redis.StrictRedis(
-            host='localhost',
-            port=6379,
-            db=1,
-            charset='utf-8',
-            socket_keepalive=True,
-            retry_on_timeout=True,
-            decode_responses=True,
-            health_check_interval=30,
-        )  # password='password')
-        # the connection to redis is only established
-        # when you try to execute a command on the server.
-        # so make sure it's established first
-        # fix  ConnectionRefused error by giving redis time to open
-        time.sleep(1)
-        cls.r.client_list()
-        return True
-        # except redis.exceptions.ConnectionError:
-        #     # unable to connect to this port
-        #     # sometimes we open the server but we have trouble connecting,
-        #     # so we need to close it
-        #     # if the port is used for another instance, slips.py is going to detect it
-        #     if port != 32850:
-        #         # 32850 is where we have the loaded rdb file when loading a saved db
-        #         # we shouldn't close it because this is what kalipso will
-        #         # use to view the loaded the db
-        #
-        #         cls.close_redis_server(port)
-        #     return False
+            # retry_on_timeout=True after the command times out, it will be retried once,
+            # if the retry is successful, it will return normally; if it fails, an exception will be thrown
+            cls.r = redis.StrictRedis(
+                host='localhost',
+                port=port,
+                db=0,
+                charset='utf-8',
+                socket_keepalive=True,
+                decode_responses=True,
+                retry_on_timeout=True,
+                health_check_interval=20,
+            )  # password='password')
+            # port 6379 db 0 is cache, delete it using -cc flag
+            cls.rcache = redis.StrictRedis(
+                host='localhost',
+                port=6379,
+                db=1,
+                charset='utf-8',
+                socket_keepalive=True,
+                retry_on_timeout=True,
+                decode_responses=True,
+                health_check_interval=30,
+            )  # password='password')
+            # the connection to redis is only established
+            # when you try to execute a command on the server.
+            # so make sure it's established first
+            # fix  ConnectionRefused error by giving redis time to open
+            time.sleep(1)
+            cls.r.client_list()
+            return True
+        except redis.exceptions.ConnectionError:
+            # unable to connect to this port
+            # sometimes we open the server but we have trouble connecting,
+            # so we need to close it
+            # if the port is used for another instance, slips.py is going to detect it
+            if port != 32850:
+                # 32850 is where we have the loaded rdb file when loading a saved db
+                # we shouldn't close it because this is what kalipso will
+                # use to view the loaded the db
+
+                cls.close_redis_server(port)
+            return False
 
     @classmethod
     def close_redis_server(cls, redis_port):
