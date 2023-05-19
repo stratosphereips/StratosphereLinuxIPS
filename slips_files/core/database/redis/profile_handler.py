@@ -22,39 +22,14 @@ class ProfileHandler():
     Contains all the logic related to flows, profiles and timewindows
     """
     name = 'DB'
-    def __init__(self, outputqueue, rdb):
-        self.rdb = rdb
-        self.outputqueue = outputqueue
-
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
-
+ 
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
             """
             key_name = [Src,Dst] + [Port,IP] + [Client,Server] + [TCP,UDP, ICMP, ICMP6] + [Established, NotEstablihed]
             Example: key_name = 'SrcPortClientTCPEstablished'
             """
-            data = self.rdb.r.hget(hash_key, key_name)
+            data = self.r.hget(hash_key, key_name)
             value = {}
             if data:
                 portdata = json.loads(data)
@@ -69,16 +44,16 @@ class ProfileHandler():
 
     def getOutTuplesfromProfileTW(self, profileid, twid):
         """Get the out tuples"""
-        return self.rdb.r.hget(profileid + self.separator + twid, 'OutTuples')
+        return self.r.hget(profileid + self.separator + twid, 'OutTuples')
 
     def getInTuplesfromProfileTW(self, profileid, twid):
         """Get the in tuples"""
-        return self.rdb.r.hget(profileid + self.separator + twid, 'InTuples')
+        return self.r.hget(profileid + self.separator + twid, 'InTuples')
     def get_dhcp_flows(self, profileid, twid) -> list:
         """
         returns a dict of dhcp flows that happened in this profileid and twid
         """
-        if flows := self.rdb.r.hget('DHCP_flows', f'{profileid}_{twid}'):
+        if flows := self.r.hget('DHCP_flows', f'{profileid}_{twid}'):
             return json.loads(flows)
 
     def set_dhcp_flow(self, profileid, twid, requested_addr, uid):
@@ -89,9 +64,9 @@ class ProfileHandler():
         if cached_flows := self.get_dhcp_flows(profileid, twid):
             # we already have flows in this twid, update them
             cached_flows.update(flow)
-            self.rdb.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(cached_flows))
         else:
-            self.rdb.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
+            self.r.hset('DHCP_flows', f'{profileid}_{twid}', json.dumps(flow))
 
 
     def get_timewindow(self, flowtime, profileid):
@@ -243,7 +218,7 @@ class ProfileHandler():
         # Convert to json string
         http_flow_dict = json.dumps(http_flow_dict)
 
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
             flow.uid,
             http_flow_dict,
@@ -319,7 +294,7 @@ class ProfileHandler():
         # Convert to json string
         dns_flow = json.dumps(dns_flow)
         # Set the dns as alternative flow
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             dns_flow,
@@ -478,7 +453,7 @@ class ProfileHandler():
         data = json.dumps(old_profileid_twid_data)
         hash_key = f'{profileid}{self.separator}{twid}'
         key_name = f'{port_type}Ports{role}{proto}{summaryState}'
-        self.rdb.r.hset(hash_key, key_name, str(data))
+        self.r.hset(hash_key, key_name, str(data))
         self.markProfileTWAsModified(profileid, twid, starttime)
     def getFinalStateFromFlags(self, state, pkts):
         """
@@ -653,7 +628,7 @@ class ProfileHandler():
         try:
             key = direction + type_data + role + protocol + state
             # self.print('Asked Key: {}'.format(key))
-            data = self.rdb.r.hget(f'{profileid}{self.separator}{twid}', key)
+            data = self.r.hget(f'{profileid}{self.separator}{twid}', key)
             value = {}
             if data:
                 portdata = json.loads(data)
@@ -766,7 +741,7 @@ class ProfileHandler():
             f'{direction}IPs{role}{flow.proto.upper()}{summaryState}'
         )
         # Store this data in the profile hash
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{self.separator}{twid}',
             key_name,
             json.dumps(profileid_twid_data)
@@ -775,7 +750,7 @@ class ProfileHandler():
     def get_altflow_from_uid(self, profileid, twid, uid):
         """ Given a uid, get the alternative flow realted to it """
         return (
-            self.rdb.r.hget(
+            self.r.hget(
                 profileid + self.separator + twid + self.separator + 'altflows',
                 uid,
             )
@@ -786,7 +761,7 @@ class ProfileHandler():
         """
         Return a list of all the flows in this profileid and twid
         """
-        if data := self.rdb.r.hgetall(
+        if data := self.r.hgetall(
             profileid + self.separator + twid + self.separator + 'flows'
         ):
             return data
@@ -855,7 +830,7 @@ class ProfileHandler():
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
-            self.rdb.r.hset(
+            self.r.hset(
                 profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
@@ -878,13 +853,13 @@ class ProfileHandler():
         """Add this profile and tw to the list of blocked"""
         tws = self.getBlockedProfTW(profileid)
         tws.append(twid)
-        self.rdb.r.hset('BlockedProfTW', profileid, json.dumps(tws))
+        self.r.hset('BlockedProfTW', profileid, json.dumps(tws))
 
 
 
     def getBlockedProfTW(self, profileid):
         """Return all the list of blocked tws"""
-        if tws := self.rdb.r.hget('BlockedProfTW', profileid):
+        if tws := self.r.hget('BlockedProfTW', profileid):
             return json.loads(tws)
         return []
 
@@ -906,14 +881,14 @@ class ProfileHandler():
             data = json.loads(flow[uid])
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
-            self.rdb.r.hset(
+            self.r.hset(
                 profileid + self.separator + twid + self.separator + 'flows',
                 uid,
                 data,
             )
     def wasProfileTWModified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
-        data = self.rdb.r.zrank('ModifiedTW', profileid + self.separator + twid)
+        data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
         return bool(data)
     def add_flow(
         self,
@@ -953,7 +928,7 @@ class ProfileHandler():
         # Convert to json string
         flow_dict = json.dumps(flow_dict)
         # Store in the hash x.x.x.x_timewindowx_flows
-        value = self.rdb.r.hset(
+        value = self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}flows',
             flow.uid,
             flow_dict,
@@ -965,7 +940,7 @@ class ProfileHandler():
         # The key was not there before. So this flow is not repeated
         # Store the label in our uniq set, and increment it by 1
         if label:
-            self.rdb.r.zincrby('labels', 1, label)
+            self.r.zincrby('labels', 1, label)
 
         flow_dict = {flow.uid: flow_dict}
 
@@ -1012,16 +987,16 @@ class ProfileHandler():
                 return
             # add this new sw to the list of softwares this profile is using
             cached_sw.update(sw_dict)
-            self.rdb.r.hset(profileid, 'used_software', json.dumps(cached_sw))
+            self.r.hset(profileid, 'used_software', json.dumps(cached_sw))
         else:
             # first time for this profile to use a software
-            self.rdb.r.hset(profileid, 'used_software', json.dumps(sw_dict))
+            self.r.hset(profileid, 'used_software', json.dumps(sw_dict))
 
     def get_total_flows(self):
         """
         gets total flows to process from the db
         """
-        return self.rdb.r.hget('analysis', 'total_flows')
+        return self.r.hget('analysis', 'total_flows')
     def add_out_ssh(
         self,
         profileid,
@@ -1055,7 +1030,7 @@ class ProfileHandler():
         # Convert to json string
         ssh_flow_dict = json.dumps(ssh_flow_dict)
         # Set the dns as alternative flow
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             ssh_flow_dict,
@@ -1107,7 +1082,7 @@ class ProfileHandler():
             'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             notice_flow,
@@ -1128,7 +1103,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        temp = self.rdb.r.hget(
+        temp = self.r.hget(
             f'{profileid}{self.separator}{twid}{self.separator}flows', uid
         )
         return {uid: temp}
@@ -1168,7 +1143,7 @@ class ProfileHandler():
         # TODO do something with is_doh
         # Convert to json string
         ssl_flow = json.dumps(ssl_flow)
-        self.rdb.r.hset(
+        self.r.hset(
             f'{profileid}{self.separator}{twid}{self.separator}altflows',
             flow.uid,
             ssl_flow,
@@ -1206,7 +1181,7 @@ class ProfileHandler():
         if SNI_port not in sni_ipdata:
             # Verify that the SNI is equal to any of the domains in the DNS resolution
             # only add this SNI to our db if it has a DNS resolution
-            if dns_resolutions := self.rdb.r.hgetall('DNSresolution'):
+            if dns_resolutions := self.r.hgetall('DNSresolution'):
                 # dns_resolutions is a dict with {ip:{'ts'..,'domains':..., 'uid':..}}
                 for ip, resolution in dns_resolutions.items():
                     resolution = json.loads(resolution)
@@ -1223,7 +1198,7 @@ class ProfileHandler():
         """Receive an IP and we want the profileid"""
         try:
             profileid = f'profile{self.separator}{str(daddr_as_obj)}'
-            if self.rdb.r.sismember('profiles', profileid):
+            if self.r.sismember('profiles', profileid):
                 return profileid
             return False
         except redis.exceptions.ResponseError as inst:
@@ -1235,7 +1210,7 @@ class ProfileHandler():
 
     def getProfiles(self):
         """Get a list of all the profiles"""
-        profiles = self.rdb.r.smembers('profiles')
+        profiles = self.r.smembers('profiles')
         return profiles if profiles != set() else {}
 
 
@@ -1245,7 +1220,7 @@ class ProfileHandler():
         Returns a list of tuples (twid, ts) or an empty list
         """
         return (
-            self.rdb.r.zrange(f'tws{profileid}', 0, -1, withscores=True)
+            self.r.zrange(f'tws{profileid}', 0, -1, withscores=True)
             if profileid
             else False
         )
@@ -1260,13 +1235,13 @@ class ProfileHandler():
         """
         Get the src ip for a specific TW for a specific profileid
         """
-        return self.rdb.r.hget(profileid + self.separator + twid, 'SrcIPs')
+        return self.r.hget(profileid + self.separator + twid, 'SrcIPs')
 
     def getDstIPsfromProfileTW(self, profileid, twid):
         """
         Get the dst ip for a specific TW for a specific profileid
         """
-        return self.rdb.r.hget(profileid + self.separator + twid, 'DstIPs')
+        return self.r.hget(profileid + self.separator + twid, 'DstIPs')
 
     def getT2ForProfileTW(self, profileid, twid, tupleid, tuple_key: str):
         """
@@ -1274,7 +1249,7 @@ class ProfileHandler():
         """
         try:
             hash_id = profileid + self.separator + twid
-            data = self.rdb.r.hget(hash_id, tuple_key)
+            data = self.r.hget(hash_id, tuple_key)
             if not data:
                 return False, False
             data = json.loads(data)
@@ -1297,16 +1272,16 @@ class ProfileHandler():
 
     def has_profile(self, profileid):
         """Check if we have the given profile"""
-        return self.rdb.r.sismember('profiles', profileid) if profileid else False
+        return self.r.sismember('profiles', profileid) if profileid else False
 
     def getProfilesLen(self):
         """Return the amount of profiles. Redis should be faster than python to do this count"""
-        return self.rdb.r.scard('profiles')
+        return self.r.scard('profiles')
 
     def getLastTWforProfile(self, profileid):
         """Return the last TW id and the time for the given profile id"""
         return (
-            self.rdb.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
+            self.r.zrange(f'tws{profileid}', -1, -1, withscores=True)
             if profileid
             else False
         )
@@ -1314,7 +1289,7 @@ class ProfileHandler():
     def getFirstTWforProfile(self, profileid):
         """Return the first TW id and the time for the given profile id"""
         return (
-            self.rdb.r.zrange(f'tws{profileid}', 0, 0, withscores=True)
+            self.r.zrange(f'tws{profileid}', 0, 0, withscores=True)
             if profileid
             else False
         )
@@ -1328,7 +1303,7 @@ class ProfileHandler():
         """
         # [-1] so we bring the last TW that matched this time.
         try:
-            data = self.rdb.r.zrangebyscore(
+            data = self.r.zrangebyscore(
                 f'tws{profileid}',
                 float('-inf'),
                 float(time),
@@ -1339,7 +1314,7 @@ class ProfileHandler():
 
         except IndexError:
             # We dont have any last tw?
-            data = self.rdb.r.zrangebyscore(
+            data = self.r.zrangebyscore(
                 f'tws{profileid}',
                 0,
                 float(time),
@@ -1371,7 +1346,7 @@ class ProfileHandler():
                 pass
             # Add the new TW to the index of TW
             data = {str(twid): float(startoftw)}
-            self.rdb.r.zadd(f'tws{profileid}', data)
+            self.r.zadd(f'tws{profileid}', data)
             self.outputqueue.put(
                 f'04|database|[DB]: Created and added to DB the new older TW with id {twid}. Time: {startoftw} '
             )
@@ -1406,7 +1381,7 @@ class ProfileHandler():
                 twid = 'timewindow1'
             # Add the new TW to the index of TW
             data = {twid: float(startoftw)}
-            self.rdb.r.zadd(f'tws{profileid}', data)
+            self.r.zadd(f'tws{profileid}', data)
             self.outputqueue.put(
                 f'04|database|[DB]: Created and added to DB for profile {profileid} on TW with id {twid}. Time: {startoftw} '
             )
@@ -1425,15 +1400,15 @@ class ProfileHandler():
         """Return the time when this TW in this profile was created"""
         # Get all the TW for this profile
         # We need to encode it to 'search' because the data in the sorted set is encoded
-        return self.rdb.r.zscore(f'tws{profileid}', twid.encode('utf-8'))
+        return self.r.zscore(f'tws{profileid}', twid.encode('utf-8'))
 
     def getAmountTW(self, profileid):
         """Return the number of tws for this profile id"""
-        return self.rdb.r.zcard(f'tws{profileid}') if profileid else False
+        return self.r.zcard(f'tws{profileid}') if profileid else False
 
     def getModifiedTWSinceTime(self, time):
         """Return the list of modified timewindows since a certain time"""
-        data = self.rdb.r.zrangebyscore(
+        data = self.r.zrangebyscore(
             'ModifiedTW', time, float('+inf'), withscores=True
         )
         return data or []
@@ -1484,13 +1459,13 @@ class ProfileHandler():
             # we're trying to assign the gw mac to an ip that isn't the gateway's
             return False
         # get the ips that belong to this mac
-        cached_ip = self.rdb.r.hmget('MAC', MAC_info['MAC'])[0]
+        cached_ip = self.r.hmget('MAC', MAC_info['MAC'])[0]
         if not cached_ip:
             # no mac info stored for profileid
             ip = json.dumps([incoming_ip])
-            self.rdb.r.hset('MAC', MAC_info['MAC'], ip)
+            self.r.hset('MAC', MAC_info['MAC'], ip)
             # Add the MAC addr, hostname and vendor to this profile
-            self.rdb.r.hset(profileid, 'MAC', json.dumps(MAC_info))
+            self.r.hset(profileid, 'MAC', json.dumps(MAC_info))
         else:
             # we found another profile that has the same mac as this one
             # incoming_ip = profileid.split('_')[1]
@@ -1518,7 +1493,7 @@ class ProfileHandler():
                 # If 2 IPV6 are claiming to have the same MAC it's fine
                 # a computer is allowed to have many ipv6
                 # add this found ipv6 to the list of ipv6 of the incoming ip(profileid)
-                ipv6: str = self.rdb.r.hmget(profileid, 'IPv6')[0]
+                ipv6: str = self.r.hmget(profileid, 'IPv6')[0]
                 if not ipv6:
                     ipv6 = [found_ip]
                 else:
@@ -1529,7 +1504,7 @@ class ProfileHandler():
                 self.set_ipv6_of_profile(profileid, ipv6)
 
                 # add this incoming ipv6(profileid) to the list of ipv6 of the found ip
-                ipv6: str = self.rdb.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
+                ipv6: str = self.r.hmget(f'profile_{found_ip}', 'IPv6')[0]
                 if not ipv6:
                     ipv6 = [incoming_ip]
                 else:
@@ -1549,7 +1524,7 @@ class ProfileHandler():
             # add the incoming ip to the list of ips that belong to this mac
             cached_ips.add(incoming_ip)
             cached_ips = json.dumps(list(cached_ips))
-            self.rdb.r.hset('MAC', MAC_info['MAC'], cached_ips)
+            self.r.hset('MAC', MAC_info['MAC'], cached_ips)
 
         return True
 
@@ -1561,7 +1536,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.rdb.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info)['MAC']
         else:
             return MAC_info
@@ -1570,20 +1545,20 @@ class ProfileHandler():
         Used to associate this profile with it's used user_agent
         :param user_agent: dict containing user_agent, os_type , os_name and agent_name
         """
-        self.rdb.r.hset(profileid, 'User-agent', user_agent)
+        self.r.hset(profileid, 'User-agent', user_agent)
 
     def add_all_user_agent_to_profile(self, profileid, user_agent: str):
         """
         Used to keep history of past user agents of profile
         :param user_agent: str of user_agent
         """
-        if not self.rdb.r.hexists(profileid ,'past_user_agents'):
-            self.rdb.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
+        if not self.r.hexists(profileid ,'past_user_agents'):
+            self.r.hset(profileid, 'past_user_agents', json.dumps([user_agent]))
         else:
-            user_agents = json.loads(self.rdb.r.hget(profileid, 'past_user_agents'))
+            user_agents = json.loads(self.r.hget(profileid, 'past_user_agents'))
             if user_agent not in user_agents:
                 user_agents.append(user_agent)
-                self.rdb.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
+                self.r.hset(profileid, 'past_user_agents', json.dumps(user_agents))
 
 
 
@@ -1594,7 +1569,7 @@ class ProfileHandler():
         if not profileid:
             return False
 
-        if used_software := self.rdb.r.hmget(profileid, 'used_software')[0]:
+        if used_software := self.r.hmget(profileid, 'used_software')[0]:
             used_software = json.loads(used_software)
             return used_software
 
@@ -1608,7 +1583,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if user_agent := self.rdb.r.hmget(profileid, 'User-agent')[0]:
+        if user_agent := self.r.hmget(profileid, 'User-agent')[0]:
             # user agents may be OpenSSH_8.6 , no need to deserialize them
             if '{' in user_agent:
                 user_agent = json.loads(user_agent)
@@ -1624,13 +1599,13 @@ class ProfileHandler():
             return False
 
         # returns a list of dhcp if the profile is in the db
-        profile_in_db = self.rdb.r.hmget(profileid, 'dhcp')
+        profile_in_db = self.r.hmget(profileid, 'dhcp')
         if not profile_in_db:
             return False
         is_dhcp_set = profile_in_db[0]
         # check if it's already marked as dhcp
         if not is_dhcp_set:
-            self.rdb.r.hset(profileid, 'dhcp', 'true')
+            self.r.hset(profileid, 'dhcp', 'true')
 
     def addProfile(self, profileid, starttime, duration):
         """
@@ -1640,22 +1615,22 @@ class ProfileHandler():
         """
         try:
             # make sure we don't add public ips if the user specified a home_network
-            if self.rdb.r.sismember('profiles', str(profileid)):
+            if self.r.sismember('profiles', str(profileid)):
                 # we already have this profile
                 return False
             # execlude ips outside of local network is it's set in slips.conf
             if not self.should_add(profileid):
                 return False
             # Add the profile to the index. The index is called 'profiles'
-            self.rdb.r.sadd('profiles', str(profileid))
+            self.r.sadd('profiles', str(profileid))
             # Create the hashmap with the profileid. The hasmap of each profile is named with the profileid
             # Add the start time of profile
-            self.rdb.r.hset(profileid, 'starttime', starttime)
+            self.r.hset(profileid, 'starttime', starttime)
             # For now duration of the TW is fixed
-            self.rdb.r.hset(profileid, 'duration', duration)
+            self.r.hset(profileid, 'duration', duration)
             # When a new profiled is created assign threat level = 0 and confidence = 0.05
-            self.rdb.r.hset(profileid, 'threat_level', 0)
-            self.rdb.r.hset(profileid, 'confidence', 0.05)
+            self.r.hset(profileid, 'threat_level', 0)
+            self.r.hset(profileid, 'confidence', 0.05)
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
             # If the ip is new add it to the list of ips
@@ -1683,7 +1658,7 @@ class ProfileHandler():
         data = self.get_profile_modules_labels(profileid)
         data[module] = label
         data = json.dumps(data)
-        self.rdb.r.hset(profileid, 'modules_labels', data)
+        self.r.hset(profileid, 'modules_labels', data)
     def check_TW_to_close(self, close_all=False):
         """
         Check if we should close some TW
@@ -1699,7 +1674,7 @@ class ProfileHandler():
             # close all tws no matter when they were last modified
             modification_time = float('inf')
 
-        profiles_tws_to_close = self.rdb.r.zrangebyscore(
+        profiles_tws_to_close = self.r.zrangebyscore(
             'ModifiedTW', 0, modification_time, withscores=True
         )
 
@@ -1721,8 +1696,8 @@ class ProfileHandler():
         """
         Mark the TW as closed so tools can work on its data
         """
-        self.rdb.r.sadd('ClosedTW', profileid_tw)
-        self.rdb.r.zrem('ModifiedTW', profileid_tw)
+        self.r.sadd('ClosedTW', profileid_tw)
+        self.r.zrem('ModifiedTW', profileid_tw)
         self.publish('tw_closed', profileid_tw)
 
     def markProfileTWAsModified(self, profileid, twid, timestamp):
@@ -1739,7 +1714,7 @@ class ProfileHandler():
         data = {
             f'{profileid}{self.separator}{twid}': float(timestamp)
         }
-        self.rdb.r.zadd('ModifiedTW', data)
+        self.r.zadd('ModifiedTW', data)
         self.publish(
             'tw_modified',
             f'{profileid}:{twid}'
@@ -1772,7 +1747,7 @@ class ProfileHandler():
             )
             # Get all the InTuples or OutTuples for this profileid in this TW
             profileid_twid = f'{profileid}{self.separator}{twid}'
-            tuples = self.rdb.r.hget(profileid_twid, direction)
+            tuples = self.r.hget(profileid_twid, direction)
             # Separate the symbold to add and the previous data
             (symbol_to_add, previous_two_timestamps) = data_tuple
             if not tuples:
@@ -1823,7 +1798,7 @@ class ProfileHandler():
                 # Convet the dictionary to json
                 tuples = json.dumps(tuples)
             # Store the new data on the db
-            self.rdb.r.hset(profileid_twid, direction, str(tuples))
+            self.r.hset(profileid_twid, direction, str(tuples))
             # Mark the tw as modified
             self.markProfileTWAsModified(profileid, twid, flow.starttime)
 
@@ -1867,7 +1842,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return {}
-        data = self.rdb.r.hget(profileid, 'modules_labels')
+        data = self.r.hget(profileid, 'modules_labels')
         data = json.loads(data) if data else {}
         return data
 
@@ -1883,7 +1858,7 @@ class ProfileHandler():
         )
         data = json.dumps(data)
         mapping = {data: timestamp}
-        self.rdb.r.zadd(key, mapping)
+        self.r.zadd(key, mapping)
         # Mark the tw as modified since the timeline line is new data in the TW
         self.markProfileTWAsModified(profileid, twid, timestamp='')
 
@@ -1899,9 +1874,9 @@ class ProfileHandler():
             profileid + self.separator + twid + self.separator + 'timeline'
         )
         # The the amount of lines in this list
-        last_index = self.rdb.r.zcard(key)
+        last_index = self.r.zcard(key)
         # Get the data in the list from the index asked (first_index) until the last
-        data = self.rdb.r.zrange(key, first_index, last_index - 1)
+        data = self.r.zrange(key, first_index, last_index - 1)
         return data, last_index
 
     def should_add(self, profileid: str) -> bool:
@@ -1928,14 +1903,14 @@ class ProfileHandler():
             # outside of home_network when this param is given
             return False
 
-        self.rdb.r.hset(profileid, 'gateway', 'true')
+        self.r.hset(profileid, 'gateway', 'true')
 
 
     def set_ipv6_of_profile(self, profileid, ip: list):
-        self.rdb.r.hset(profileid, 'IPv6',  json.dumps(ip))
+        self.r.hset(profileid, 'IPv6',  json.dumps(ip))
 
     def set_ipv4_of_profile(self, profileid, ip):
-        self.rdb.r.hset(profileid, 'IPv4', json.dumps([ip]))
+        self.r.hset(profileid, 'IPv4', json.dumps([ip]))
     def get_mac_vendor_from_profile(self, profileid) -> str:
         """
         Returns MAC vendor about a certain profile or None
@@ -1944,7 +1919,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.rdb.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info)['Vendor']
         else:
             return MAC_info
@@ -1957,7 +1932,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        if MAC_info := self.rdb.r.hget(profileid, 'MAC'):
+        if MAC_info := self.r.hget(profileid, 'MAC'):
             return json.loads(MAC_info).get('host_name', False)
         else:
             return MAC_info
@@ -1966,13 +1941,13 @@ class ProfileHandler():
         """
         Returns ipv4 about a certain profile or None
         """
-        return self.rdb.r.hmget(profileid, 'IPv4')[0] if profileid else False
+        return self.r.hmget(profileid, 'IPv4')[0] if profileid else False
 
     def get_ipv6_from_profile(self, profileid) -> str:
         """
         Returns ipv6 about a certain profile or None
         """
-        return self.rdb.r.hmget(profileid, 'IPv6')[0] if profileid else False
+        return self.r.hmget(profileid, 'IPv6')[0] if profileid else False
 
     def get_the_other_ip_version(self, profileid):
         """
