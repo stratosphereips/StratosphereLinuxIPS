@@ -18,8 +18,6 @@ class PortScanProcess(Module, multiprocessing.Process):
         self.horizontal_ps = HorizontalPortscan(rdb)
         self.vertical_ps = VerticalPortscan(rdb)
         self.outputqueue = outputqueue
-        # Set the output queue of our database instance
-        self.rdb.set_output_queue(self.outputqueue)
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = self.rdb.get_field_separator()
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup

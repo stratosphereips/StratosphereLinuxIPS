@@ -57,7 +57,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # Read the configuration
         self.read_configuration()
         # Set the database output queue
-        self.rdb.set_output_queue(self.outputqueue)
         self.verbose = verbose
         self.debug = debug
         # there has to be a timeout or it will wait forever and never receive a new line
