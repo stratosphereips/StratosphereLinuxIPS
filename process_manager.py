@@ -256,7 +256,7 @@ class ProcessManager:
             self.main.rdb.publish_stop()
 
             # get dict of PIDs spawned by slips
-            self.main.PIDs = self.main.rdb.get_PIDs()
+            self.main.PIDs = self.main.rdb.get_pids()
 
             # we don't want to kill this process
             self.main.PIDs.pop('slips.py', None)

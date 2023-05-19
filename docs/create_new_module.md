@@ -276,7 +276,7 @@ Here is the whole local_connection_detector.py code for copy/paste.
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database.redis_database import __database__
+from slips_files.core.database.redis.database import Redis
 from slips_files.common.slips_utils import utils
 import platform
 import sys
@@ -307,11 +307,11 @@ class Module(Module, multiprocessing.Process):
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
-        # slips/core/redis_database.py file. However common options are:
+        # slips/core/database.py file. However common options are:
         # - new_ip
         # - tw_modified
         # - evidence_added
-        # Remember to subscribe to this channel in redis_database.py
+        # Remember to subscribe to this channel in database.py
         self.c1 = __database__.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
