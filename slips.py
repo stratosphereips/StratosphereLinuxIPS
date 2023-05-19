@@ -33,6 +33,8 @@ from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
+from slips_files.core.database.sqlite_db.database import SQLiteDB
+
 
 import signal
 import sys
@@ -41,7 +43,6 @@ import time
 import shutil
 import warnings
 import json
-import errno
 import subprocess
 import re
 from datetime import datetime
@@ -435,7 +436,7 @@ class Main:
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
-            self.rdb = Redis(self.redis_port, self.outputqueue)
+            self.rdb = RedisDB(self.redis_port, self.outputqueue)
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()

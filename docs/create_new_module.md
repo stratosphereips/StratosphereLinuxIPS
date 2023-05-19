@@ -276,7 +276,7 @@ Here is the whole local_connection_detector.py code for copy/paste.
 # Must imports
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database.redis.database import Redis
+from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.common.slips_utils import utils
 import platform
 import sys
