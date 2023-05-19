@@ -36,7 +36,7 @@ class OutputProcess(multiprocessing.Process):
         inputqueue,
         verbose,
         debug,
-        rdb: Redis,
+        rdb: RedisDB,
         stdout='',
         stderr='output/errors.log',
         slips_logfile='output/slips.log'

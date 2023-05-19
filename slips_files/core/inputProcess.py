@@ -43,7 +43,7 @@ class InputProcess(multiprocessing.Process):
             zeek_or_bro,
             zeek_folder,
             line_type,
-            rdb: Redis,
+            rdb: RedisDB,
     ):
         multiprocessing.Process.__init__(self)
         self.name = 'Input'
