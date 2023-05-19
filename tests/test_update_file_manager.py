@@ -7,18 +7,18 @@ def do_nothing(*args):
     pass
 
 
-def create_update_manager_instance(outputQueue):
+def create_update_manager_instance(output_queue, database):
     """Create an instance of update_manager.py
     needed by every other test in this file"""
-    update_manager = UpdateFileManager(outputQueue, 6380)
+    update_manager = UpdateFileManager(output_queue, database)
     # override the self.print function to avoid broken pipes
     update_manager.print = do_nothing
     return update_manager
 
 
 
-def test_getting_header_fields(outputQueue, mocker):
-    update_manager = create_update_manager_instance(outputQueue)
+def test_getting_header_fields(output_queue, mocker, database):
+    update_manager = create_update_manager_instance(output_queue, database)
     url = 'google.com/play'
     mock_requests = mocker.patch("requests.get")
     mock_requests.return_value.status_code = 200
@@ -28,14 +28,14 @@ def test_getting_header_fields(outputQueue, mocker):
     assert update_manager.get_e_tag(response) == '1234'
 
 
-def test_check_if_update_based_on_update_period(outputQueue, database):
-    update_manager = create_update_manager_instance(outputQueue)
+def test_check_if_update_based_on_update_period(output_queue, database):
+    update_manager = create_update_manager_instance(output_queue, database)
     url = 'abc.com/x'
     # update period hasnt passed
     assert update_manager._UpdateFileManager__check_if_update(url, float('inf')) is False
 
-def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
-    update_manager = create_update_manager_instance(outputQueue)
+def test_check_if_update_based_on_e_tag(output_queue, database, mocker):
+    update_manager = create_update_manager_instance(output_queue, database)
 
     # period passed, etag same
     etag = '1234'
@@ -58,8 +58,8 @@ def test_check_if_update_based_on_e_tag(outputQueue, database, mocker):
     mock_requests.return_value.text = ""
     assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
-def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
-    update_manager = create_update_manager_instance(outputQueue)
+def test_check_if_update_based_on_last_modified(output_queue, database, mocker):
+    update_manager = create_update_manager_instance(output_queue, database)
 
     # period passed, no etag, last modified the same
     url = 'google.com/photos'
@@ -81,8 +81,8 @@ def test_check_if_update_based_on_last_modified(outputQueue, database, mocker):
     assert update_manager._UpdateFileManager__check_if_update(url, float('-inf')) is True
 
 
-def test_read_ports_info(outputQueue, database):
-    update_manager = create_update_manager_instance(outputQueue)
+def test_read_ports_info(output_queue, database):
+    update_manager = create_update_manager_instance(output_queue, database)
     filepath = 'slips_files/ports_info/ports_used_by_specific_orgs.csv'
     assert update_manager.read_ports_info(filepath) > 100
 
