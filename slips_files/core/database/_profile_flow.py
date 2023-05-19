@@ -1329,6 +1329,25 @@ class ProfilingFlowsDatabase(object):
     def delete_dns_resolution(self , ip):
         self.r.hdel("DNSresolution" , ip)
 
+    def should_store_resolution(self, query: str, answers: list, qtype_name: str):
+        # don't store queries ending with arpa as dns resolutions, they're reverse dns
+        # only store type A and AAAA for ipv4 and ipv6
+        if (
+                qtype_name not in ['AAAA', 'A']
+                or answers == '-'
+                or query.endswith('arpa')
+        ):
+            return False
+
+        # sometimes adservers are resolved to 0.0.0.0 or "127.0.0.1" to block the domain.
+        # don't store this as a valid dns resolution
+        if query != 'localhost':
+            for answer in answers:
+                if answer in ("127.0.0.1" , "0.0.0.0"):
+                    return False
+
+        return True
+
     def set_dns_resolution(
         self,
         query: str,
@@ -1347,16 +1366,8 @@ class ProfilingFlowsDatabase(object):
 
         :param srcip: ip that performed the dns query
         """
-        # don't store queries ending with arpa as dns resolutions, they're reverse dns
-        # type A: for ipv4
-        # type AAAA: for ipv6
-        if (
-            qtype_name not in ['AAAA', 'A']
-            or answers == '-'
-            or query.endswith('arpa')
-        ):
+        if not self.should_store_resolution(query, answers, qtype_name):
             return
-        # ATENTION: the IP can be also a domain, since the dns answer can be CNAME.
 
         # Also store these IPs inside the domain
         ips_to_add = []
