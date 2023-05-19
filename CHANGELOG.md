@@ -4,7 +4,7 @@
 - Update whitelist by adding all the ips of whitelisted domains
 - Fixed error whitelisting Unencrypted HTTP traffic 
 - Remove the feature of creating log directories using -l, now the only logs Slips generates are store in the output/ dir
-
+- Detect invalid DNS answers when querying adservers. thanks to @ganesh-dagadi 
 
 -1.0.4 (April 2023)
 - Add more descriptive titles to VT scores in the web UI thanks to @shubhangi.
