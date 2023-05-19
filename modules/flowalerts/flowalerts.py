@@ -1055,21 +1055,23 @@ class Module(Module, multiprocessing.Process):
                         uid
                     )
 
-    def check_blocked_domain_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
+    def check_invalid_dns_answers(self, domain, answers, daddr, profileid, twid, stime, uid):
         # this function is used to check for certain IP answers to DNS queries being blocked 
         # (perhaps by ad blockers) and set to the following IP values
-        blocked_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
+        invalid_answers = {"127.0.0.1" , "0.0.0.0"} # currently hardcoding blocked ips
         if not answers:
             return
         
         for answer in answers:
-            if answer in blocked_answers and domain != "localhost":
+            if answer in invalid_answers and domain != "localhost":
                 #blocked answer found
-                self.helper.set_evidence_blocked_dns_answer(domain , answer , daddr , profileid , twid , stime , uid)
-                #delete answer from redis cache to prevent dns without connection reporting
+                self.helper.set_evidence_invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
+                # delete answer from redis cache to prevent associating this dns answer with this domain/query and
+                # avoid FP "DNS without connection" evidence
                 __database__.delete_dns_resolution(answer)
 
     def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
+
         """
         Detect DGA based on the amount of NXDOMAINs seen in dns.log
         alerts when 10 15 20 etc. nxdomains are found
@@ -2084,7 +2086,7 @@ class Module(Module, multiprocessing.Process):
                 domain, answers, daddr, profileid, twid, stime, uid
             )
 
-            self.check_blocked_domain_answers(
+            self.check_invalid_dns_answers(
                 domain, answers, daddr, profileid, twid, stime, uid
             )
 

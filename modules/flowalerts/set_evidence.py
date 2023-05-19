@@ -552,13 +552,13 @@ class Helper:
         __database__.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  stime, category, profileid=profileid, twid=twid, uid=uid)
 
-    def set_evidence_blocked_dns_answer(self, query, answer,daddr, profileid, twid, stime, uid):
-        evidence_type = "BlockedDNSDomain"
+    def set_evidence_invalid_dns_answer(self, query, answer, daddr, profileid, twid, stime, uid):
+        evidence_type = "InvalidDNSResolution"
         attacker_direction = "dst_domain"
         attacker = query
         threat_level = "info"
         confidence = 0.7
-        description = f"The DNS query to {query} has responded with {answer}"
+        description = f"The DNS query {query} was resolved to {answer}"
         timestamp = stime
         category = "Anamoly.Behaviour"
         __database__.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
