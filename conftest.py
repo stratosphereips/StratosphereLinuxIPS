@@ -1,6 +1,6 @@
 """
 This file will contain the fixtures that are commonly needed by all other test files
-for example: setting up the database, inputqueue, outputqueue, etc..
+for example: setting up the database, input_queue, output_queue, etc..
 """
 import pytest
 import os, sys, inspect
@@ -21,33 +21,33 @@ def do_nothing(*arg):
 
 
 @pytest.fixture
-def outputQueue():
-    """This outputqueue will be passed to all module constructors that need it"""
-    outputQueue = Queue()
-    outputQueue.put = do_nothing
+def output_queue():
+    """This output_queue will be passed to all module constructors that need it"""
+    output_queue = Queue()
+    output_queue.put = do_nothing
     return Queue()
 
 
 @pytest.fixture
-def inputQueue():
-    """This inputQueue will be passed to all module constructors that need it"""
-    inputQueue = Queue()
-    inputQueue.put = do_nothing
-    return inputQueue
+def input_queue():
+    """This input_queue will be passed to all module constructors that need it"""
+    input_queue = Queue()
+    input_queue.put = do_nothing
+    return input_queue
 
 
 @pytest.fixture
-def profilerQueue():
-    """This profilerQueue will be passed to all module constructors that need it"""
-    profilerQueue = Queue()
-    profilerQueue.put = do_nothing
-    return profilerQueue
+def profiler_queue():
+    """This profiler_queue will be passed to all module constructors that need it"""
+    profiler_queue = Queue()
+    profiler_queue.put = do_nothing
+    return profiler_queue
 
 
 @pytest.fixture
-def database(outputQueue):
-    from slips_files.core.database.redis_database import Redis
-    __database__.start(1234)
-    __database__.outputqueue = outputQueue
-    __database__.print = do_nothing
-    return __database__
+def database(output_queue):
+    from slips_files.core.database.redis_db.database import RedisDB
+    import redis
+    rdb = RedisDB(1234, output_queue)
+    rdb.print = do_nothing
+    return rdb
