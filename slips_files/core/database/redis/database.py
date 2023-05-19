@@ -23,7 +23,7 @@ from uuid import uuid4
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 
-class Redis(object):
+class Redis(IoCHandler, AlertHandler, ProfileHandler):
     """Main redis db class."""
     _obj = None
     supported_channels = {
@@ -90,10 +90,7 @@ class Redis(object):
         if cls._obj is None or not isinstance(cls._obj, cls):
             cls._obj = super(Redis, cls).__new__(Redis)
             redis_port, outputqueue = args[0], args[1]
-            cls._obj.ioc_handler = IoCHandler(outputqueue, cls._obj)
-            cls._obj.alert_handler = AlertHandler(outputqueue, cls._obj)
-            cls._obj.profile_handler = ProfileHandler(outputqueue, cls._obj)
-            cls.set_output_queue(outputqueue)
+            cls._set_output_queue(outputqueue)
             cls._set_redis_options()
             cls._read_configuration()
             cls.start(redis_port)
@@ -101,7 +98,6 @@ class Redis(object):
             cls.set_slips_internal_time(0)
             while cls.get_slips_start_time() is None:
                 cls._set_slips_start_time()
-
             # To treat the db as a singelton
         return cls._obj
 
@@ -529,7 +525,6 @@ class Redis(object):
         return self.r.hget('analysis', 'zeek_dir')
 
 
-
     def get_input_type(self):
         """
         gets input type from the db
@@ -821,7 +816,7 @@ class Redis(object):
         self.r.set('logged_connection_error', 'True')
 
     @classmethod
-    def set_output_queue(cls, outputqueue):
+    def _set_output_queue(cls, outputqueue):
         """Set the output queue"""
         Redis.outputqueue = outputqueue
 
@@ -1369,6 +1364,3 @@ class Redis(object):
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
-
-    def get_TI_file_info(self, *args):
-        self.ioc_handler.get_TI_file_info(*args)
