@@ -686,7 +686,7 @@ class ProfileHandler():
         # Store the Dst as IP address and notify in the channel
         # We send the obj but when accessed as str, it is automatically
         # converted to str
-        self.setNewIP(ip)
+        self.set_new_ip(ip)
 
         #############
 
@@ -1634,7 +1634,7 @@ class ProfileHandler():
             # The IP of the profile should also be added as a new IP we know about.
             ip = profileid.split(self.separator)[1]
             # If the ip is new add it to the list of ips
-            self.setNewIP(ip)
+            self.set_new_ip(ip)
             # Publish that we have a new profile
             self.publish('new_profile', ip)
             return True
@@ -1804,10 +1804,10 @@ class ProfileHandler():
 
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
-            self.outputqueue.put(
+            self.print(
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
             )
-            self.outputqueue.put(f'01|database|[DB] {traceback.format_exc()}')
+            self.print(f'01|database|[DB] {traceback.format_exc()}')
     def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
         """
         Search for the given uid in the given twid, or the tws before
