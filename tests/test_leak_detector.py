@@ -1,5 +1,5 @@
 """Unit test for modules/leak_detector/leak_detector.py"""
-import os
+import os, redis
 
 from ..modules.leak_detector.leak_detector import Module
 
@@ -17,10 +17,10 @@ compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
 compiled_test_rule = f'{compiled_yara_rules_path}test_rule.yara_compiled'
 
 
-def create_leak_detector_instance(outputQueue):
+def create_leak_detector_instance(output_queue, database):
     """Create an instance of leak_detector.py
     needed by every other test in this file"""
-    leak_detector = Module(outputQueue, 6380)
+    leak_detector = Module(output_queue, database)
     # override the self.print function to avoid broken pipes
     leak_detector.print = do_nothing
     # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -30,8 +30,8 @@ def create_leak_detector_instance(outputQueue):
     return leak_detector
 
 
-def test_compile_and_save_rules(outputQueue):
-    leak_detector = create_leak_detector_instance(outputQueue)
+def test_compile_and_save_rules(output_queue, database):
+    leak_detector = create_leak_detector_instance(output_queue, database)
     leak_detector.compile_and_save_rules()
     compiled_rules = os.listdir(compiled_yara_rules_path)
     assert 'test_rule.yara_compiled' in compiled_rules

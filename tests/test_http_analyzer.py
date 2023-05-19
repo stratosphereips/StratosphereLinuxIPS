@@ -23,17 +23,17 @@ def do_nothing(*args):
     pass
 
 
-def create_http_analyzer_instance(outputQueue):
+def create_http_analyzer_instance(output_queue, database):
     """Create an instance of http_analyzer.py
     needed by every other test in this file"""
-    http_analyzer = Module(outputQueue, 6380)
+    http_analyzer = Module(output_queue, database)
     # override the self.print function to avoid broken pipes
     http_analyzer.print = do_nothing
     return http_analyzer
 
 
-def test_check_suspicious_user_agents(outputQueue, database):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+def test_check_suspicious_user_agents(output_queue, database):
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     # create a flow with suspicious user agent
     host = '147.32.80.7'
     uri = '/wpad.dat'
@@ -43,8 +43,8 @@ def test_check_suspicious_user_agents(outputQueue, database):
     )
 
 
-def test_check_multiple_google_connections(outputQueue, database):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+def test_check_multiple_google_connections(output_queue, database):
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     # {"ts":1635765765.435485,"uid":"C7mv0u4M1zqJBHydgj",
     # "id.orig_h":"192.168.1.28","id.orig_p":52102,"id.resp_h":"216.58.198.78",
     # "id.resp_p":80,"trans_depth":1,"method":"GET","host":"google.com","uri":"/",
@@ -60,11 +60,11 @@ def test_check_multiple_google_connections(outputQueue, database):
         )
     assert found_detection is True
 
-def test_parsing_online_ua_info(outputQueue, database, mocker):
+def test_parsing_online_ua_info(output_queue, database, mocker):
     """
     tests the parsing and processing the ua found by the online query
     """
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db
     profileid = 'profile_192.168.99.99'
@@ -83,9 +83,9 @@ def test_parsing_online_ua_info(outputQueue, database, mocker):
     assert ua_info['browser'] == 'Safari'
 
 
-def test_check_incompatible_user_agent(outputQueue, database, mocker):
+def test_check_incompatible_user_agent(output_queue, database, mocker):
 
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     # use a different profile for this unit test to make sure we don't already have info about
     # it in the db. it has to be a private IP for its' MAC to not be marked as the gw MAC
     profileid = 'profile_192.168.77.254'
@@ -116,8 +116,8 @@ def test_check_incompatible_user_agent(outputQueue, database, mocker):
     )
 
 
-def test_extract_info_from_UA(outputQueue):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+def test_extract_info_from_UA(output_queue, database):
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     # use another profile, because the default
     # one already has a ua in the db
     profileid = 'profile_192.168.1.2'
@@ -128,8 +128,8 @@ def test_extract_info_from_UA(outputQueue):
     )
 
 
-def test_check_multiple_UAs(outputQueue):
-    http_analyzer = create_http_analyzer_instance(outputQueue)
+def test_check_multiple_UAs(output_queue, database):
+    http_analyzer = create_http_analyzer_instance(output_queue, database)
     mozilla_ua = 'Mozilla/5.0 (X11; Fedora;Linux x86; rv:60.0) Gecko/20100101 Firefox/60.0'
     # old ua
     cached_ua = {'os_type': 'Fedora', 'os_name': 'Linux'}

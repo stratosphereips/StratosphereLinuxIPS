@@ -44,10 +44,10 @@ def do_nothing(*args):
     pass
 
 
-def create_blocking_instance(outputQueue):
+def create_blocking_instance(output_queue, database):
     """Create an instance of blocking.py
     needed by every other test in this file"""
-    blocking = Module(outputQueue, 6380)
+    blocking = Module(output_queue, database)
     # override the print function to avoid broken pipes
     blocking.print = do_nothing
     return blocking
@@ -55,8 +55,8 @@ def create_blocking_instance(outputQueue):
 @linuxOS
 @isroot
 @has_net_admin_cap
-def is_slipschain_initialized(outputQueue) -> bool:
-    blocking = create_blocking_instance(outputQueue)
+def is_slipschain_initialized(output_queue, database) -> bool:
+    blocking = create_blocking_instance(output_queue, database)
     output = blocking.get_cmd_output(f'{blocking.sudo} iptables -S')
     rules = [
         '-A INPUT -j slipsBlocking',
@@ -68,28 +68,28 @@ def is_slipschain_initialized(outputQueue) -> bool:
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_initialize_chains_in_firewall(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_initialize_chains_in_firewall(output_queue, database):
+    blocking = create_blocking_instance(output_queue, database)
     # manually set the firewall
     blocking.firewall = 'iptables'
     blocking.initialize_chains_in_firewall()
-    assert is_slipschain_initialized(outputQueue) is True
+    assert is_slipschain_initialized(output_queue) is True
 
 
 # todo
-# def test_delete_slipsBlocking_chain(outputQueue, database):
-#     blocking = create_blocking_instance(outputQueue)
+# def test_delete_slipsBlocking_chain(output_queue, database):
+#     blocking = create_blocking_instance(output_queue, database)
 #     # first make sure they are initialized
-#     if not is_slipschain_initialized(outputQueue):
+#     if not is_slipschain_initialized(output_queue):
 #         blocking.initialize_chains_in_firewall()
 #     os.system('./slips.py -cb')
-#     assert is_slipschain_initialized(outputQueue) == False
+#     assert is_slipschain_initialized(output_queue) == False
 
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_block_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_block_ip(output_queue, database):
+    blocking = create_blocking_instance(output_queue, database)
     blocking.initialize_chains_in_firewall()
     if not blocking.is_ip_blocked('2.2.0.0'):
         ip = '2.2.0.0'
@@ -100,8 +100,8 @@ def test_block_ip(outputQueue, database):
 @linuxOS
 @isroot
 @has_net_admin_cap
-def test_unblock_ip(outputQueue, database):
-    blocking = create_blocking_instance(outputQueue)
+def test_unblock_ip(output_queue, database):
+    blocking = create_blocking_instance(output_queue, database)
     ip = '2.2.0.0'
     from_ = True
     to = True
