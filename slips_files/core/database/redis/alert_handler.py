@@ -9,31 +9,7 @@ class AlertHandler():
     Contains all the logic related to setting and retrieving evidence and alerts in the db
     """
     name = 'DB'
-    def __init__(self, outputqueue, rdb):
-        self.rdb = rdb
-        self.outputqueue = outputqueue
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
     def set_evidence_causing_alert(self, profileid, twid, alert_ID, evidence_IDs: list):
         """
         When we have a bunch of evidence causing an alert,

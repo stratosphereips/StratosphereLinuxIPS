@@ -89,11 +89,10 @@ class Redis(IoCHandler, AlertHandler, ProfileHandler):
     def __new__(cls, *args, **kwargs):
         if cls._obj is None or not isinstance(cls._obj, cls):
             cls._obj = super(Redis, cls).__new__(Redis)
-            redis_port, outputqueue = args[0], args[1]
-            cls._set_output_queue(outputqueue)
+            cls.redis_port, cls.outputqueue = args[0], args[1]
             cls._set_redis_options()
             cls._read_configuration()
-            cls.start(redis_port)
+            cls.start(cls.redis_port)
             # By default the slips internal time is 0 until we receive something
             cls.set_slips_internal_time(0)
             while cls.get_slips_start_time() is None:
@@ -815,10 +814,6 @@ class Redis(IoCHandler, AlertHandler, ProfileHandler):
         """
         self.r.set('logged_connection_error', 'True')
 
-    @classmethod
-    def _set_output_queue(cls, outputqueue):
-        """Set the output queue"""
-        Redis.outputqueue = outputqueue
 
     def was_ip_seen_in_connlog_before(self, ip) -> bool:
         """
