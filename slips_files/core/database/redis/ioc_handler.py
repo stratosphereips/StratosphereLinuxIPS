@@ -7,57 +7,33 @@ class IoCHandler():
     Contains all the logic related to setting and retrieving evidence and alerts in the db
     """
     name = 'DB'
-    def __init__(self, outputqueue, rdb):
-        self.rdb = rdb
-        self.outputqueue = outputqueue
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-        levels = f'{verbose}{debug}'
-        try:
-            self.outputqueue.put(f'{levels}|{self.name}|{text}')
-        except AttributeError:
-            pass
 
     def init_ti_queue(self):
         """used when the TI module starts to initialize the queue size """
-        self.rdb.r.set('threat_intelligence_q_size', 0)
+        self.r.set('threat_intelligence_q_size', 0)
 
     def set_loaded_ti_files(self, number_of_loaded_files: int):
         """
         Stores the number of successfully loaded TI files
         """
-        self.rdb.r.set('loaded TI files', number_of_loaded_files)
+        self.r.set('loaded TI files', number_of_loaded_files)
 
     def get_loaded_ti_files(self):
         """
         returns the number of successfully loaded TI files. or 0 if none is loaded
         """
-        return self.rdb.r.get('loaded TI files') or 0
+        return self.r.get('loaded TI files') or 0
 
     def mark_as_analyzed_by_ti_module(self):
         """
         everytime an ip/domain is analyzed by the ti module, this function will decrease the
         ti queue by 1
         """
-        self.rdb.r.incrby('threat_intelligence_q_size', -1)
+        self.r.incrby('threat_intelligence_q_size', -1)
 
     def get_ti_queue_size(self):
-        return self.rdb.r.get('threat_intelligence_q_size')
+        return self.r.get('threat_intelligence_q_size')
 
     def give_threat_intelligence(
             self, profileid, twid, ip_state, starttime, uid, daddr, proto=False, lookup='', extra_info:dict =False
@@ -80,7 +56,7 @@ class IoCHandler():
             'give_threat_intelligence', json.dumps(data_to_send)
         )
         # this is a trick to know how many ips/domains that slips needs to analyze before stopping
-        self.rdb.r.incr("threat_intelligence_q_size")
+        self.r.incr("threat_intelligence_q_size")
 
         return data_to_send
 
@@ -88,13 +64,13 @@ class IoCHandler():
         """
         Delete old IPs from IoC
         """
-        self.rdb.rcache.hdel('IoC_ips', *ips)
+        self.rcache.hdel('IoC_ips', *ips)
 
     def delete_domains_from_IoC_domains(self, domains):
         """
         Delete old domains from IoC
         """
-        self.rdb.rcache.hdel('IoC_domains', *domains)
+        self.rcache.hdel('IoC_domains', *domains)
 
     def add_ips_to_IoC(self, ips_and_description: dict) -> None:
         """
@@ -106,7 +82,7 @@ class IoCHandler():
 
         """
         if ips_and_description:
-            self.rdb.rcache.hmset('IoC_ips', ips_and_description)
+            self.rcache.hmset('IoC_ips', ips_and_description)
 
     def add_domains_to_IoC(self, domains_and_description: dict) -> None:
         """
@@ -116,7 +92,7 @@ class IoCHandler():
                                                             'threat_level':... ,'description'}}
         """
         if domains_and_description:
-            self.rdb.rcache.hmset('IoC_domains', domains_and_description)
+            self.rcache.hmset('IoC_domains', domains_and_description)
 
     def add_ip_range_to_IoC(self, malicious_ip_ranges: dict) -> None:
         """
@@ -125,7 +101,7 @@ class IoCHandler():
                                                             'threat_level':... ,'description'}}
         """
         if malicious_ip_ranges:
-            self.rdb.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
+            self.rcache.hmset('IoC_ip_ranges', malicious_ip_ranges)
 
     def add_asn_to_IoC(self, blacklisted_ASNs: dict):
         """
@@ -134,10 +110,10 @@ class IoCHandler():
                                                      'threat_level':... ,'description'}}
         """
         if blacklisted_ASNs:
-            self.rdb.rcache.hmset('IoC_ASNs', blacklisted_ASNs)
+            self.rcache.hmset('IoC_ASNs', blacklisted_ASNs)
 
     def is_blacklisted_ASN(self, ASN) -> bool:
-        return self.rdb.rcache.hget('IoC_ASNs', ASN)
+        return self.rcache.hget('IoC_ASNs', ASN)
 
 
     def add_ja3_to_IoC(self, ja3: dict) -> None:
@@ -147,7 +123,7 @@ class IoCHandler():
                             'threat_level':... ,'description'}}
 
         """
-        self.rdb.rcache.hmset('IoC_JA3', ja3)
+        self.rcache.hmset('IoC_JA3', ja3)
 
     def add_jarm_to_IoC(self, jarm: dict) -> None:
         """
@@ -155,7 +131,7 @@ class IoCHandler():
         :param jarm:  {jarm: {'source':..,'tags':..,
                             'threat_level':... ,'description'}}
         """
-        self.rdb.rcache.hmset('IoC_JARM', jarm)
+        self.rcache.hmset('IoC_JARM', jarm)
 
     def add_ssl_sha1_to_IoC(self, malicious_ssl_certs):
         """
@@ -164,7 +140,7 @@ class IoCHandler():
                                     'threat_level':... ,'description'}}
 
         """
-        self.rdb.rcache.hmset('IoC_SSL', malicious_ssl_certs)
+        self.rcache.hmset('IoC_SSL', malicious_ssl_certs)
 
     def get_malicious_ip_ranges(self) -> dict:
         """
@@ -172,37 +148,37 @@ class IoCHandler():
         return format is {range: json.dumps{'source':..,'tags':..,
                                             'threat_level':... ,'description'}}
         """
-        return self.rdb.rcache.hgetall('IoC_ip_ranges')
+        return self.rcache.hgetall('IoC_ip_ranges')
     def get_IPs_in_IoC(self):
         """
         Get all IPs and their description from IoC_ips
         """
-        return self.rdb.rcache.hgetall('IoC_ips')
+        return self.rcache.hgetall('IoC_ips')
 
     def get_Domains_in_IoC(self):
         """
         Get all Domains and their description from IoC_domains
         """
-        return self.rdb.rcache.hgetall('IoC_domains')
+        return self.rcache.hgetall('IoC_domains')
 
     def get_ja3_in_IoC(self):
         """
         Get all ja3 and their description from IoC_JA3
         """
-        return self.rdb.rcache.hgetall('IoC_JA3')
+        return self.rcache.hgetall('IoC_JA3')
 
     def is_malicious_jarm(self, jarm_hash: str):
         """
         search for the given hash in the malicious hashes stored in the db
         """
-        return self.rdb.rcache.hget('IoC_JARM', jarm_hash)
+        return self.rcache.hget('IoC_JARM', jarm_hash)
 
     def search_IP_in_IoC(self, ip: str) -> str:
         """
         Search in the dB of malicious IPs and return a
         description if we found a match
         """
-        ip_description = self.rdb.rcache.hget('IoC_ips', ip)
+        ip_description = self.rcache.hget('IoC_ips', ip)
         return False if ip_description is None else ip_description
 
 
@@ -232,7 +208,7 @@ class IoCHandler():
             )                   # add key-pair to the dict if does not exist
         data = json.dumps(ip_profileid_twid)
 
-        self.rdb.r.hset('MaliciousIPs', ip, data)
+        self.r.hset('MaliciousIPs', ip, data)
 
     def set_malicious_domain(self, domain, profileid, twid):
         """
@@ -260,14 +236,14 @@ class IoCHandler():
             )               # add key-pair to the dict if does not exist
         data = json.dumps(domain_profiled_twid)
 
-        self.rdb.r.hset('MaliciousDomains', domain, data)
+        self.r.hset('MaliciousDomains', domain, data)
 
     def get_malicious_ip(self, ip):
         """
         Return malicious IP and its list of presence in
         the traffic (profileid, twid)
         """
-        data = self.rdb.r.hget('MaliciousIPs', ip)
+        data = self.r.hget('MaliciousIPs', ip)
         data = json.loads(data) if data else {}
         return data
 
@@ -276,12 +252,12 @@ class IoCHandler():
         Return malicious domain and its list of presence in
         the traffic (profileid, twid)
         """
-        data = self.rdb.r.hget('MaliciousDomains', domain)
+        data = self.r.hget('MaliciousDomains', domain)
         data = json.loads(data) if data else {}
         return data
 
     def get_ssl_info(self, sha1):
-        info = self.rdb.rcache.hmget('IoC_SSL', sha1)[0]
+        info = self.rcache.hmget('IoC_SSL', sha1)[0]
         return False if info is None else info
     def is_domain_malicious(self, domain: str) -> tuple:
         """
@@ -291,10 +267,10 @@ class IoCHandler():
         description: description of the subdomain if found
         bool: True if we found a match for exactly the given domain False if we matched a subdomain
         """
-        domain_description = self.rdb.rcache.hget('IoC_domains', domain)
+        domain_description = self.rcache.hget('IoC_domains', domain)
         if domain_description is None:
             # try to match subdomain
-            ioc_domains = self.rdb.rcache.hgetall('IoC_domains')
+            ioc_domains = self.rcache.hgetall('IoC_domains')
             for malicious_domain, description in ioc_domains.items():
                 #  if the we contacted images.google.com and we have google.com in our blacklists, we find a match
                 if malicious_domain in domain:
@@ -310,23 +286,23 @@ class IoCHandler():
         # get the feed name from the given url
         feed_to_delete = url.split('/')[-1]
         # get all domains that are read from TI files in our db
-        IoC_domains = self.rdb.rcache.hgetall('IoC_domains')
+        IoC_domains = self.rcache.hgetall('IoC_domains')
         for domain, domain_description in IoC_domains.items():
             domain_description = json.loads(domain_description)
             if feed_to_delete in domain_description['source']:
                 # this entry has the given feed as source, delete it
-                self.rdb.rcache.hdel('IoC_domains', domain)
+                self.rcache.hdel('IoC_domains', domain)
 
         # get all IPs that are read from TI files in our db
-        IoC_ips = self.rdb.rcache.hgetall('IoC_ips')
+        IoC_ips = self.rcache.hgetall('IoC_ips')
         for ip, ip_description in IoC_ips.items():
             ip_description = json.loads(ip_description)
             if feed_to_delete in ip_description['source']:
                 # this entry has the given feed as source, delete it
-                self.rdb.rcache.hdel('IoC_ips', ip)
+                self.rcache.hdel('IoC_ips', ip)
 
     def is_profile_malicious(self, profileid: str) -> str:
-        return self.rdb.r.hget(profileid, 'labeled_as_malicious') if profileid else False
+        return self.r.hget(profileid, 'labeled_as_malicious') if profileid else False
 
     def set_TI_file_info(self, file, data):
         """
@@ -338,34 +314,34 @@ class IoCHandler():
         # for key in file_data:
         # data[key] = file_data[key]
         data = json.dumps(data)
-        self.rdb.rcache.hset('TI_files_info', file, data)
+        self.rcache.hset('TI_files_info', file, data)
 
     def set_last_update_time(self, file: str, time: float):
         """
         sets the 'time' of last update of the given file
         :param file: ti file
         """
-        if file_info := self.rdb.rcache.hget('TI_files_info', file):
+        if file_info := self.rcache.hget('TI_files_info', file):
             # update an existin time
             file_info = json.loads(file_info)
             file_info.update({"time": time})
-            self.rdb.rcache.hset('TI_files_info', file, json.dumps(file_info))
+            self.rcache.hset('TI_files_info', file, json.dumps(file_info))
             return
 
         # no cached info about this file
-        self.rdb.rcache.hset('TI_files_info', file, json.dumps({"time": time}))
+        self.rcache.hset('TI_files_info', file, json.dumps({"time": time}))
 
     def get_TI_file_info(self, file):
         """
         Get TI file info
         :param file: a valid filename not a feed url
         """
-        data = self.rdb.rcache.hget('TI_files_info', file)
+        data = self.rcache.hget('TI_files_info', file)
         data = json.loads(data) if data else {}
         return data
 
     def delete_file_info(self, file):
-        self.rdb.rcache.hdel('TI_files_info', file)
+        self.rcache.hdel('TI_files_info', file)
     def getURLData(self, url):
         """
         Return information about this URL
@@ -375,7 +351,7 @@ class IoCHandler():
         2- IP is in the DB with data. Return dict.
         3- IP is not in the DB. Return False
         """
-        data = self.rdb.rcache.hget('URLsInfo', url)
+        data = self.rcache.hget('URLsInfo', url)
         data = json.loads(data) if data else False
         return data
 
@@ -393,7 +369,7 @@ class IoCHandler():
             # Its VERY important that the data of the first time we see a URL
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if an URL exists or not
-            self.rdb.rcache.hset('URLsInfo', url, '{}')
+            self.rcache.hset('URLsInfo', url, '{}')
 
     def getDomainData(self, domain):
         """
@@ -404,7 +380,7 @@ class IoCHandler():
         2- Domain is in the DB with data. Return dict.
         3- Domain is not in the DB. Return False
         """
-        data = self.rdb.rcache.hget('DomainsInfo', domain)
+        data = self.rcache.hget('DomainsInfo', domain)
         data = json.loads(data) if data or data == {} else False
         return data
 
@@ -421,7 +397,7 @@ class IoCHandler():
             # Its VERY important that the data of the first time we see a domain
             # must be '{}', an empty dictionary! if not the logic breaks.
             # We use the empty dictionary to find if a domain exists or not
-            self.rdb.rcache.hset('DomainsInfo', domain, '{}')
+            self.rcache.hset('DomainsInfo', domain, '{}')
 
     def setInfoForDomains(self, domain: str, info_to_set: dict, mode='leave'):
         """
@@ -494,9 +470,9 @@ class IoCHandler():
                     domain_data[key] = data_to_store
             # Store
             domain_data = json.dumps(domain_data)
-            self.rdb.rcache.hset('DomainsInfo', domain, domain_data)
+            self.rcache.hset('DomainsInfo', domain, domain_data)
             # Publish the changes
-            self.rdb.r.publish('dns_info_change', domain)
+            self.r.publish('dns_info_change', domain)
 
     def setInfoForURLs(self, url: str, urldata: dict):
         """
@@ -527,11 +503,11 @@ class IoCHandler():
                     # There is no data for the key so far.
                     pass
                     # Publish the changes
-                    # self.rdb.r.publish('url_info_change', url)
+                    # self.r.publish('url_info_change', url)
                 data[key] = data_to_store
                 newdata_str = json.dumps(data)
-                self.rdb.rcache.hset('URLsInfo', url, newdata_str)
+                self.rcache.hset('URLsInfo', url, newdata_str)
         else:
             # URL found in the database but has no keys , set the keys now
             urldata = json.dumps(urldata)
-            self.rdb.rcache.hset('URLsInfo', url, urldata)
+            self.rcache.hset('URLsInfo', url, urldata)
