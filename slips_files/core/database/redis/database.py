@@ -4,21 +4,18 @@ from slips_files.core.database.redis.ioc_handler import IoCHandler
 from slips_files.core.database.redis.alert_handler import AlertHandler
 from slips_files.core.database.redis.profile_handler import ProfileHandler
 
-from dataclasses import asdict
 import os
 import signal
 import redis
 import time
 import json
 from typing import Tuple
-import traceback
 import subprocess
 from datetime import datetime
 import ipaddress
 import sys
 import validators
 import ast
-from uuid import uuid4
 
 RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
