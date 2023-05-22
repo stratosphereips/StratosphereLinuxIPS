@@ -558,11 +558,12 @@ class EvidenceProcess(Module, multiprocessing.Process):
     def is_blocking_module_enabled(self) -> bool:
         """
         returns true if slips is running in an interface or growing zeek dir with -p
-        or if slips is using cyst. when using cyst, there's no need for -p to enable the blocking
+        or if slips is using custom flows. meaning slips is reading the flows by a custom module not by
+        inputprocess. there's no need for -p to enable the blocking
         """
 
-        is_cyst_running = '-C' in sys.argv or '--CYST' in sys.argv
-        return (self.is_running_on_interface() and '-p' not in sys.argv) or is_cyst_running
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
     def main(self):
         if msg := self.get_msg('evidence_added'):

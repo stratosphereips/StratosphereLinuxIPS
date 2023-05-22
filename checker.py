@@ -66,8 +66,8 @@ class Checker:
             print('Only -i or -f is allowed. Stopping slips.')
             self.main.terminate_slips()
 
-        if (self.main.args.interface or self.main.args.filepath) and self.main.args.CYST:
-            print('You can\'t use --CYST with -f or -i. Stopping slips.')
+        if (self.main.args.interface or self.main.args.filepath) and self.main.args.input_module:
+            print('You can\'t use --input-module with -f or -i. Stopping slips.')
             self.main.terminate_slips()
 
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:

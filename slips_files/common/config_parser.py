@@ -660,6 +660,18 @@ class ConfigParser(object):
              'Docker', 'GID', 0
         ))
 
+    def reading_flows_from_cyst(self):
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        if not custom_flows:
+            return False
+        # are we reading custom flows from this module?
+        if 'CYST' not in (
+                sys.argv[sys.argv.index('--input-module') + 1],
+                sys.argv[sys.argv.index('--im') + 1]
+        ):
+            return False
+        return True
+
     def get_disabled_modules(self, input_type) -> list:
         """
         Uses input type to enable leak detector only on pcaps
@@ -710,7 +722,7 @@ class ConfigParser(object):
         if input_type != 'pcap':
             to_ignore.append('leak_detector')
 
-        if not ('-C' in sys.argv or '--CYST' in sys.argv):
+        if not self.reading_flows_from_cyst():
             to_ignore.append('CYST')
 
         return to_ignore

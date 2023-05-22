@@ -491,7 +491,7 @@ class InputProcess(multiprocessing.Process):
             if line == '\n':
                 continue
 
-            # slips supports reading zeek  json conn.log only using stdin, tabs aren't supported
+            # slips supports reading zeek json conn.log only using stdin, tabs aren't supported
             if self.line_type == 'zeek':
                 try:
                     line = json.loads(line)
