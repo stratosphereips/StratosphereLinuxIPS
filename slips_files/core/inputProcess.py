@@ -22,6 +22,7 @@ from pathlib import Path
 from re import split
 import sys
 import os
+import socket
 from datetime import datetime
 from watchdog.observers import Observer
 from .filemonitor import FileEventHandler
@@ -490,13 +491,14 @@ class InputProcess(multiprocessing.Process):
             if line == '\n':
                 continue
 
-            # slips supports zeek json only, tabs arent supported
+            # slips supports reading zeek json conn.log only using stdin, tabs aren't supported
             if self.line_type == 'zeek':
                 try:
                     line = json.loads(line)
                 except json.decoder.JSONDecodeError:
                     self.print('Invalid json line')
                     continue
+
             line_info = {
                 'type': 'stdin',
                 'line_type': self.line_type,
@@ -548,6 +550,7 @@ class InputProcess(multiprocessing.Process):
         try:
             total_flows = self.get_flows_number(self.given_path)
             __database__.set_input_metadata({'total_flows': total_flows})
+
             with open(self.given_path) as file_stream:
                 for t_line in file_stream:
                     line = {
@@ -582,21 +585,26 @@ class InputProcess(multiprocessing.Process):
                 return True
 
     def handle_zeek_log_file(self):
+        """
+        Handles conn.log files given to slips directly, and conn.log flows given to slips through CYST unix socket.
+        """
         try:
             if (
-                    not self.given_path.endswith(".log")
-                    or self.is_ignored_file(self.given_path)
+                    (not self.given_path.endswith(".log")
+                    or self.is_ignored_file(self.given_path))
+                    and 'cyst' not in self.given_path.lower()
             ):
                 # unsupported file
                 return False
-
-            total_flows = self.get_flows_number(self.given_path)
-            self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
-            if self.is_zeek_tabs:
-                # zeek tab files contain many comments at the begging of the file and at the end
-                # subtract the comments from the flows number
-                total_flows -= 9
-            __database__.set_input_metadata({'total_flows': total_flows})
+            if os.path.exists(self.given_path):
+                # in case of CYST flows, the given path is cyst and there's no way to get the total flows
+                total_flows = self.get_flows_number(self.given_path)
+                self.is_zeek_tabs = self.is_zeek_tabs_file(self.given_path)
+                if self.is_zeek_tabs:
+                    # zeek tab files contain many comments at the begging of the file and at the end
+                    # subtract the comments from the flows number
+                    total_flows -= 9
+                __database__.set_input_metadata({'total_flows': total_flows})
 
             file_path_without_extension = os.path.splitext(self.given_path)[0]
             # Add log file to database
@@ -835,6 +843,46 @@ class InputProcess(multiprocessing.Process):
         if error:
             self.print (f"Zeek error. return code: {zeek.returncode} error:{error.strip()}")
 
+    def handle_cyst(self):
+        """
+        Read flows sent by any external module (for example the cYST module)
+        Supported flows are of type zeek conn log
+        """
+        # slips supports reading zeek json conn.log only using CYST
+        # this type is passed here by slips.py, so in the future
+        # to support more types, modify slips.py
+        if self.line_type != 'zeek':
+            return
+
+        channel = __database__.subscribe('new_module_flow')
+        while True:
+            # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
+            # todo when to break? cyst should send something like stop?
+
+            msg = __database__.get_message(channel)
+            if msg and msg['data'] == 'stop_process':
+                self.shutdown_gracefully()
+                return True
+
+            if utils.is_msg_intended_for(msg, 'new_module_flow'):
+                msg:str = msg["data"]
+                msg = json.loads(msg)
+                flow = msg['flow']
+                src_module = msg['module']
+                line_info = {
+                    'type': 'external_module',
+                    'module': src_module,
+                    'line_type': self.line_type,
+                    'data': flow
+                }
+                self.print(f'	> Sent Line: {line_info}', 0, 3)
+                self.profilerqueue.put(line_info)
+                self.lines += 1
+                self.print('Done reading 1 CYST flow.\n ', 0, 3)
+
+                time.sleep(2)
+
+
 
     def run(self):
         utils.drop_root_privs()
@@ -873,6 +921,8 @@ class InputProcess(multiprocessing.Process):
                 self.handle_pcap_and_interface()
             elif self.input_type == 'suricata':
                 self.handle_suricata()
+            elif self.input_type == 'CYST':
+                self.handle_cyst()
             else:
                 # if self.input_type is 'file':
                 # default value

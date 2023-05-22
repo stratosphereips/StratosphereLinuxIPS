@@ -190,7 +190,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
             open(logfile_path, 'w').close()
         return open(logfile_path, 'a')
 
-    def addDataToJSONFile(self, IDEA_dict: dict, all_uids):
+    def add_to_json_log_file(self, IDEA_dict: dict, all_uids):
         """
         Add a new evidence line to our alerts.json file in json IDEA format.
         :param IDEA_dict: dict containing 1 alert
@@ -207,7 +207,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
             self.print('Error in addDataToJSONFile()')
             self.print(traceback.print_exc(), 0, 1)
 
-    def addDataToLogFile(self, data):
+    def add_to_log_file(self, data):
         """
         Add a new evidence line to the alerts.log and other log files if logging is enabled.
         """
@@ -364,6 +364,8 @@ class EvidenceProcess(Module, multiprocessing.Process):
         # now since this source ip(profileid) caused an alert,
         # it means it caused so many evidence(attacked others a lot)
         # that we decided to alert and block it
+        #todo if by default we don't block everything from/to this ip anymore, remember to update the CYST module
+
         ip_to_block = profileid.split('_')[-1]
 
         # Make sure we don't block our own IP
@@ -404,7 +406,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         msg += f'given enough evidence on timewindow {twid.split("timewindow")[1]}. (real time {now})'
 
         # log in alerts.log
-        self.addDataToLogFile(msg)
+        self.add_to_log_file(msg)
 
         # log the alert
         blocked_srcip_dict = {
@@ -420,7 +422,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
         IDEA_dict['Category'] = 'Alert'
         IDEA_dict['Attach'][0]['Content'] = msg
         # add to alerts.json
-        self.addDataToJSONFile(IDEA_dict, [])
+        self.add_to_json_log_file(IDEA_dict, [])
 
 
     def shutdown_gracefully(self):
@@ -553,6 +555,16 @@ class EvidenceProcess(Module, multiprocessing.Process):
             )
         return alert_to_log
 
+    def is_blocking_module_enabled(self) -> bool:
+        """
+        returns true if slips is running in an interface or growing zeek dir with -p
+        or if slips is using custom flows. meaning slips is reading the flows by a custom module not by
+        inputprocess. there's no need for -p to enable the blocking
+        """
+
+        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
+        return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
+
     def main(self):
         if msg := self.get_msg('evidence_added'):
             # Data sent in the channel as a json dict, it needs to be deserialized first
@@ -636,10 +648,10 @@ class EvidenceProcess(Module, multiprocessing.Process):
             alert_to_log = f'{flow_datetime}: Src IP {srcip:26}. {evidence}'
             alert_to_log = self.add_hostname_to_alert(alert_to_log, profileid, flow_datetime, evidence)
 
-            # Add the evidence to the log files
-            self.addDataToLogFile(alert_to_log)
+            # Add the evidence to alerts.log
+            self.add_to_log_file(alert_to_log)
             # add to alerts.json
-            self.addDataToJSONFile(IDEA_dict, all_uids)
+            self.add_to_json_log_file(IDEA_dict, all_uids)
 
             __database__.set_evidence_for_profileid(IDEA_dict)
             __database__.publish('report_to_peers', json.dumps(data))
@@ -675,7 +687,12 @@ class EvidenceProcess(Module, multiprocessing.Process):
                         alert_ID,
                         self.IDs_causing_an_alert
                     )
-                    __database__.publish('new_alert', alert_ID)
+                    to_send = {
+                        'alert_ID': alert_ID,
+                        'profileid': profileid,
+                        'twid': twid,
+                    }
+                    __database__.publish('new_alert', json.dumps(to_send))
 
                     self.send_to_exporting_module(tw_evidence)
 
@@ -701,12 +718,11 @@ class EvidenceProcess(Module, multiprocessing.Process):
 
                     # todo if it's already blocked, we shouldn't decide blocking
                     blocked = False
-                    if (
-                        self.is_running_on_interface()
-                        and '-p' in sys.argv
-                        and self.decide_blocking(profileid)
-                    ):
-                        blocked = True
+
+                    if self.is_blocking_module_enabled():
+                        # send ip to the blocking module
+                        if self.decide_blocking(profileid):
+                            blocked = True
 
                     self.mark_as_blocked(
                         profileid,

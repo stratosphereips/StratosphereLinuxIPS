@@ -431,6 +431,21 @@ The above line listens on the channel called ```new_flow``` that we subscribed t
 
 The messages received in the channel can either be stop_process or a message with data
 
+
+## Reading Input flows from an external module
+
+Slips relies on input process for reading flows, either from an interface, a pcap, or zeek files, etc.
+
+If you want to add your own module that reads flows from somehwere else, 
+for example from a simulation framework like the CYST module,
+you can easily do that using the ```--input-module <module_name>``` parameter
+
+Reading flows should be handeled by that module, then sent to the inputprocess for processing using the
+```new_module_flow``` channel.
+
+For now, this feature only supports reading flows in zeek json format, but feel free to extend it.
+
+
 ### How to shutdown_gracefully()
 
 The ```stop_message ``` is sent from the main slips.py to the ```control_module``` channel

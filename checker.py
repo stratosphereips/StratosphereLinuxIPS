@@ -29,6 +29,14 @@ class Checker:
             self.main.redis_man.load_db()
             return
 
+
+        if self.main.args.input_module:
+            input_information = 'input_module'
+            input_type = self.main.args.input_module
+            # this is the default value of the type of flows slips reads from a module
+            line_type = 'zeek'
+            return input_type, input_information, line_type
+
         if not self.main.args.filepath:
             print('[Main] You need to define an input source.')
             sys.exit(-1)
@@ -42,6 +50,7 @@ class Checker:
             )
 
         return input_type, input_information, line_type
+
 
     def check_given_flags(self):
         """
@@ -60,6 +69,10 @@ class Checker:
             print('Only -i or -f is allowed. Stopping slips.')
             self.main.terminate_slips()
 
+
+        if (self.main.args.interface or self.main.args.filepath) and self.main.args.input_module:
+            print('You can\'t use --input-module with -f or -i. Stopping slips.')
+            self.main.terminate_slips()
 
         if (self.main.args.save or self.main.args.db) and os.getuid() != 0:
             print('Saving and loading the database requires root privileges.')
@@ -86,6 +99,9 @@ class Checker:
                 print(f"{self.main.args.interface} is not a valid interface. Stopping Slips")
                 self.main.terminate_slips()
 
+        # if we're reading flows from some module other than the input process, make sure it exists
+        if self.main.args.input_module and not self.input_module_exists(self.main.args.input_module):
+            self.main.terminate_slips()
 
         # Clear cache if the parameter was included
         if self.main.args.clearcache:
@@ -149,7 +165,25 @@ class Checker:
         self.main.zeek_folder = ''
         self.main.redis_man.log_redis_server_PID(6379, self.main.redis_man.get_pid_of_redis_server(6379))
         self.main.terminate_slips()
-    
+
+    def input_module_exists(self, module):
+        """
+        :param module: this is the one given to slips via --input-module
+        check if the module was created in modules/ dir
+        """
+        available_modules = os.listdir('modules/')
+
+        if module not in available_modules:
+            print(f"{module} module is not available. Stopping slips")
+            return False
+
+        # this function assumes that the module is created in module/name/name.py
+        if f"{module}.py" not in os.listdir(f'modules/{module}/'):
+            print(f"{module} is not available in modules/{module}/{module}.py. Stopping slips")
+            return False
+
+        return True
+
     def check_output_redirection(self) -> tuple:
         """
         Determine where slips will place stdout,

@@ -699,6 +699,7 @@ All zeek lines taken from stdin should be in json form and are treated as conn.l
 
 This feature is specifically designed to allow slips to interact with network simulators and scripts.
 
+
 ## Plug in a zeek script
 
 Slips supports automatically running a custom zeek script by adding it to ```zeek-scripts``` dir and adding the file
@@ -733,6 +734,8 @@ Zeek output is suppressed by default, so if your script has errors, Slips will f
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Start Slips web interface automatically
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
+- ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
+
 
 ## Containing Slips resource consumption
 
@@ -751,3 +754,5 @@ command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```
+
+

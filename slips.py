@@ -28,6 +28,7 @@ from process_manager import ProcessManager
 from ui_manager import UIManager
 from checker import Checker
 from style import green
+import socket
 
 
 from multiprocessing import Queue
@@ -400,6 +401,20 @@ class Main:
             slips_version += f' ({commit[:8]})'
         print(slips_version)
 
+    def should_run_non_stop(self) -> bool:
+        """
+        determines if slips shouldn't terminate because by default,
+        it terminates when there's no more incoming flows
+        """
+        # these are the cases where slips should be running non-stop
+        # when slips is reading from a special module other than the input process
+        # this module should handle the stopping of slips
+        if (
+                self.is_debugger_active()
+                or self.input_type in ('stdin','CYST')
+                or self.is_interface
+        ):
+            return True
 
     def start(self):
         """Main Slips Function"""
@@ -409,13 +424,11 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
-
             self.setup_print_levels()
+
             ##########################
             # Creation of the threads
             ##########################
-
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
@@ -466,6 +479,9 @@ class Main:
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
+            if 'CYST' in self.input_type:
+                __database__.mark_cyst_as_enabled()
+
             __database__.set_slips_mode(self.mode)
 
             if self.mode == 'daemonized':
@@ -489,11 +505,13 @@ class Main:
             self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
+
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                self.proc_man.load_modules()
+                self.loaded_modules: list = self.proc_man.load_modules()
+
 
             # self.start_gui_process()
             if self.args.webinterface:
@@ -594,7 +612,7 @@ class Main:
             intervals_to_wait = max_intervals_to_wait
 
             # Don't try to stop slips if it's capturing from an interface or a growing zeek dir
-            is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
+            self.is_interface: bool = self.args.interface or __database__.is_growing_zeek_dir()
 
             while True:
                 message = self.c1.get_message(timeout=0.01)
@@ -631,14 +649,13 @@ class Main:
                 # Check if we need to close any TWs
                 __database__.check_TW_to_close()
 
-                if is_interface and hostIP not in modified_profiles:
+                if self.is_interface and hostIP not in modified_profiles:
                     # In interface we keep track of the host IP. If there was no
                     # modified TWs in the host IP, we check if the network was changed.
                     if hostIP := self.metadata_man.get_host_ip():
                         __database__.set_host_ip(hostIP)
 
-                # these are the cases where slips should be running non-stop
-                if self.is_debugger_active() or self.input_type == 'stdin' or is_interface:
+                if self.should_run_non_stop():
                     continue
 
                 # Reaches this point if we're running Slips on a file.

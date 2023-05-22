@@ -61,6 +61,7 @@ class Database(ProfilingFlowsDatabase, object):
         'new_tunnel',
         'check_jarm_hash',
         'control_module',
+        'new_module_flow'
     }
 
     """ Database object management """
@@ -2622,5 +2623,12 @@ class Database(ProfilingFlowsDatabase, object):
 
     def get_stdfile(self, file_type):
         return self.r.get(file_type)
+
+    def mark_cyst_as_enabled(self):
+        """bool flag to know if cyst is enabled"""
+        self.r.set('running_cyst', 'yes')
+
+    def is_cyst_enabled(self) -> bool:
+        return True if self.r.get('running_cyst') else False
 
 __database__ = Database()
