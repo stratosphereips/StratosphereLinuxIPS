@@ -256,14 +256,31 @@ class OutputProcess(multiprocessing.Process):
         if debug_level == 1:
             self.log_error(sender, msg)
 
+    def unknown_total_flows(self) -> bool:
+        """
+        When running on a pcap, interface, or taking flows from an
+        external module, the total amount of flows are unknown
+        """
+        if __database__.get_input_type() in ('pcap', 'interface', 'stdin'):
+            return True
+
+        # whenever any of those is present, slips won't be able to get the
+        # total flows when starting, nor init the progress bar
+        params = ('-g', '--growing', '-im', '--input_module')
+        for param in params:
+            if param in sys.argv:
+                return True
+
     def init_progress_bar(self):
         """
         initializes the progress bar when slips is runnning on a file or a zeek dir
         ignores pcaps, interface and dirs given to slips if -g is enabled
         """
-        if __database__.get_input_type() in ('pcap', 'interface', 'cyst', 'stdin') or '-g' in sys.argv:
-            # we don't know how to get the total number of flows slips is going to process, because they're growing
+        if self.unknown_total_flows():
+            # we don't know how to get the total number of flows slips is going to process,
+            # because they're growing
             return
+
         if self.stdout != '':
             # this means that stdout was redirected to a file,
             # no need to print the progress bar
