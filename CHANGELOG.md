@@ -4,6 +4,8 @@
 - Update whitelist by adding all the ips of whitelisted domains
 - Fixed error whitelisting Unencrypted HTTP traffic 
 - Remove the feature of creating log directories using -l, now the only logs Slips generates are store in the output/ dir
+- added support for reading flows from any module, not just inputprocess, using --input-module
+- CYST module improvements
 
 
 -1.0.4 (April 2023)
