@@ -137,14 +137,7 @@ class Module(Module, multiprocessing.Process):
 
     def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
-        if not custom_flows:
-            return 1
-        # are we reading custom flows from this module?
-        if self.name not in (
-                sys.argv[sys.argv.index('--input-module') + 1],
-                sys.argv[sys.argv.index('--im') + 1]
-        ):
+        if not __database__.is_cyst_enabled():
             return 1
         # connect to cyst
         print(f"Initializing socket", 0, 1)
