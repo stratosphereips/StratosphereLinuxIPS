@@ -446,14 +446,32 @@ class Module(Module, multiprocessing.Process):
             # if it's seen associated with a public IP
             return
 
-        # get it using arp table
-        cmd = "arp -a"
-        output = subprocess.check_output(cmd.split()).decode()
-        for line in output:
-            if gw_ip in line:
-                gw_MAC = line.split()[-4]
-                __database__.set_default_gateway('MAC', gw_MAC)
-                return gw_MAC
+        # Obtain the MAC address by using the hosts ARP table
+        # First, try the ip command
+        try:
+            ip_output = subprocess.run(["ip", "neigh", "show", gw_ip],
+                                      capture_output=True, check=True, text=True).stdout
+            gw_MAC = ip_output.split()[-2]
+            __database__.set_default_gateway('MAC', gw_MAC)
+            return gw_MAC
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            # If the ip command doesn't exist or has failed, try using the arp command
+            try:
+                arp_output = subprocess.run(["arp", "-an"],
+                                           capture_output=True, check=True, text=True).stdout
+                for line in arp_output.split('\n'):
+                    fields = line.split()
+                    gw_ip_from_arp_cmd = fields[1].strip('()')
+                    # Match the gw_ip in the output with the one given to this function
+                    if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
+                        gw_MAC = fields[-4]
+                        __database__.set_default_gateway('MAC', gw_MAC)
+                        return gw_MAC
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                # Could not find the MAC address of gw_ip
+                return
+
+        return gw_MAC
 
     def check_if_we_have_pending_mac_queries(self):
         """

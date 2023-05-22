@@ -6,6 +6,7 @@
 - Remove the feature of creating log directories using -l, now the only logs Slips generates are store in the output/ dir
 - added support for reading flows from any module, not just inputprocess, using --input-module
 - CYST module improvements
+- Detect invalid DNS answers when querying adservers. thanks to @ganesh-dagadi 
 
 
 -1.0.4 (April 2023)
