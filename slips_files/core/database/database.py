@@ -61,7 +61,7 @@ class Database(ProfilingFlowsDatabase, object):
         'new_tunnel',
         'check_jarm_hash',
         'control_module',
-        'new_cyst_flow'
+        'new_module_flow'
     }
 
     """ Database object management """

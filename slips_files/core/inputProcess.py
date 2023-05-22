@@ -845,7 +845,7 @@ class InputProcess(multiprocessing.Process):
 
     def handle_cyst(self):
         """
-        Read flows sent by the CYST simulation framework from the unix socket
+        Read flows sent by any external module (for example the cYST module)
         Supported flows are of type zeek conn log
         """
         # slips supports reading zeek json conn.log only using CYST
@@ -854,24 +854,26 @@ class InputProcess(multiprocessing.Process):
         if self.line_type != 'zeek':
             return
 
-        cyst_channel =  __database__.subscribe('new_cyst_flow')
+        channel = __database__.subscribe('new_module_flow')
         while True:
             # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
             # todo when to break? cyst should send something like stop?
 
-            msg = __database__.get_message(cyst_channel)
+            msg = __database__.get_message(channel)
             if msg and msg['data'] == 'stop_process':
                 self.shutdown_gracefully()
                 return True
 
-            if utils.is_msg_intended_for(msg, 'new_cyst_flow'):
-                flow:str = msg["data"]
-                flow = json.loads(flow)
-
+            if utils.is_msg_intended_for(msg, 'new_module_flow'):
+                msg:str = msg["data"]
+                msg = json.loads(msg)
+                flow = msg['flow']
+                src_module = msg['module']
                 line_info = {
-                    'type': 'cyst',
+                    'type': 'external_module',
+                    'module': src_module,
                     'line_type': self.line_type,
-                    'data' : flow
+                    'data': flow
                 }
                 self.print(f'	> Sent Line: {line_info}', 0, 3)
                 self.profilerqueue.put(line_info)

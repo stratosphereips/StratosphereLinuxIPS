@@ -158,7 +158,11 @@ class Module(Module, multiprocessing.Process):
         # RECEIVE FLOWS FROM CYST
         if flow := self.get_flow():
             # send the flow to inputprocess so slips can process it normally
-            __database__.publish('new_cyst_flow', json.dumps(flow))
+            to_send = {
+                'flow': flow,
+                'module': self.name # to know where this flow is coming from aka what's the input module
+                }
+            __database__.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
         if self.conn_closed:
