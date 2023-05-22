@@ -1,7 +1,5 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
-from dataclasses import asdict
-import ipaddress
 from slips_files.core.database.redis_db.database import RedisDB
 import redis
 import os

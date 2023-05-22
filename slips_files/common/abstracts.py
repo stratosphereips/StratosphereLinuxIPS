@@ -1,7 +1,9 @@
 from abc import ABC, abstractmethod
+# common imports for all modules
 from slips_files.common.slips_utils import utils
 import sys
 import traceback
+
 # This is the abstract Module class to check against. Do not modify
 class Module(ABC):
     name = ''

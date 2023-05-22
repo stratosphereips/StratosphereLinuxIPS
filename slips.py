@@ -480,7 +480,7 @@ class Main:
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
-            __database__.set_slips_mode(self.mode)
+            self.rdb.set_slips_mode(self.mode)
 
             if self.mode == 'daemonized':
                 std_files = {

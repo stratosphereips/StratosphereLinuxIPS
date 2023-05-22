@@ -849,12 +849,12 @@ class InputProcess(multiprocessing.Process):
         if self.line_type != 'zeek':
             return
 
-        channel = __database__.subscribe('new_module_flow')
+        channel = self.rdb.subscribe('new_module_flow')
         while True:
             # the CYST module will send msgs to this channel when it read s a new flow from the CYST UDS
             # todo when to break? cyst should send something like stop?
 
-            msg = __database__.get_message(channel)
+            msg = self.rdb.get_message(channel)
             if msg and msg['data'] == 'stop_process':
                 self.shutdown_gracefully()
                 return True
