@@ -9,10 +9,14 @@ import shutil
 
 alerts_file = 'alerts.log'
 
+def do_nothing(*arg):
+    """Used to override the print function because using the self.print causes broken pipes"""
+    pass
 
-def connect_to_redis(redis_port):
-    __database__.connect_to_redis_server(redis_port)
-    return __database__
+def connect_to_redis(output_queue, port):
+    db = RedisDB(port, output_queue)
+    db.print = do_nothing
+    return db
 
 
 def is_evidence_present(log_file, expected_evidence):
@@ -86,7 +90,7 @@ def check_for_text(txt, output_dir):
     ],
 )
 def test_conf_file(
-    pcap_path, expected_profiles, output_dir, redis_port
+    pcap_path, expected_profiles, output_dir, redis_port, output_queue
 ):
     """
     In this test we're using tests/test.conf
@@ -105,7 +109,7 @@ def test_conf_file(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = connect_to_redis(output_queue, redis_port)
     profiles = int(database.getProfilesLen())
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
@@ -154,7 +158,7 @@ def test_conf_file(
     ],
 )
 def test_conf_file2(
-    pcap_path, expected_profiles, output_dir, redis_port
+    pcap_path, expected_profiles, output_dir, redis_port, output_queue
 ):
     """
     In this test we're using tests/test2.conf
@@ -174,7 +178,7 @@ def test_conf_file2(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = connect_to_redis(output_queue, redis_port)
 
     # test 1 homenet ip
     # the only profile we should have is the one in home_network parameter
