@@ -257,7 +257,7 @@ class OutputProcess(multiprocessing.Process):
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows are unknown
         """
-        if __database__.get_input_type() in ('pcap', 'interface', 'stdin'):
+        if self.rdb.get_input_type() in ('pcap', 'interface', 'stdin'):
             return True
 
         # whenever any of those is present, slips won't be able to get the

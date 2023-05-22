@@ -1064,7 +1064,7 @@ class Module(Module, multiprocessing.Process):
                 self.helper.set_evidence_invalid_dns_answer(domain, answer, daddr, profileid, twid, stime, uid)
                 # delete answer from redis cache to prevent associating this dns answer with this domain/query and
                 # avoid FP "DNS without connection" evidence
-                __database__.delete_dns_resolution(answer)
+                self.rdb.delete_dns_resolution(answer)
 
     def detect_DGA(self, rcode_name, query, stime, daddr, profileid, twid, uid):
 
