@@ -6,8 +6,7 @@ import pytest
 from ...slips import *
 from pathlib import Path
 import shutil
-from slips_files.core.database.redis_db.database import RedisDB
-
+import redis
 alerts_file = 'alerts.log'
 integration_tests_dir = 'output/integration_tests/'
 #create the integration tests dir
@@ -17,15 +16,21 @@ if not os.path.exists(integration_tests_dir):
     path.mkdir(parents=True, exist_ok=True)
 
 
-def do_nothing(*arg):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
-def connect_to_redis(output_queue, port):
-    db = RedisDB(port, output_queue)
-    db.print = do_nothing
+def connect_to_redis(port):
+    db = redis.StrictRedis(
+            host='localhost',
+            port=port,
+            db=0,
+            charset='utf-8',
+            socket_keepalive=True,
+            decode_responses=True,
+            retry_on_timeout=True,
+            health_check_interval=20,
+        )
     return db
 
+def get_total_profiles(db):
+    return int(db.scard('profiles'))
 
 def is_evidence_present(log_file, expected_evidence):
     """Function to read the log file line by line and returns when it finds the expected evidence"""
@@ -116,7 +121,7 @@ def create_Main_instance(input_information):
     ],
 )
 def test_pcap(
-    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port
+    pcap_path, expected_profiles, output_dir, expected_evidence, redis_port, output_queue
 ):
     output_dir = create_output_dir(output_dir)
     output_file = os.path.join(output_dir, 'slips_output.txt')
@@ -125,17 +130,13 @@ def test_pcap(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    db = connect_to_redis(redis_port)
+    profiles = get_total_profiles(db)
     assert profiles > expected_profiles
 
-    # log_file = output_dir + alerts_file
     log_file = os.path.join(output_dir, alerts_file)
     assert is_evidence_present(log_file, expected_evidence) is True
     shutil.rmtree(output_dir)
-
-    slips = create_Main_instance(pcap_path)
-    slips.prepare_zeek_output_dir()
 
 @pytest.mark.parametrize(
     'binetflow_path, expected_profiles, expected_evidence, output_dir, redis_port',
@@ -194,8 +195,8 @@ def test_binetflow(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    database = connect_to_redis(redis_port)
+    profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -281,8 +282,8 @@ def test_zeek_dir(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    database = connect_to_redis(redis_port)
+    profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -330,8 +331,8 @@ def test_zeek_conn_log(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    database = connect_to_redis(redis_port)
+    profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
     log_file = os.path.join(output_dir, alerts_file)
@@ -379,8 +380,8 @@ def test_suricata(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    database = connect_to_redis(redis_port)
+    profiles = get_total_profiles(database)
     #todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
     assert profiles > 10
 
@@ -415,8 +416,8 @@ def test_nfdump(
     # this function returns when slips is done
     run_slips(command)
 
-    database = connect_to_redis(output_queue, redis_port)
-    profiles = int(database.getProfilesLen())
+    database = connect_to_redis(redis_port)
+    profiles = get_total_profiles(database)
     assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't
     # put the number of profiles exactly because slips

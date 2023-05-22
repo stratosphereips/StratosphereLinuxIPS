@@ -19,7 +19,6 @@ def do_nothing(*arg):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 
-
 @pytest.fixture
 def output_queue():
     """This output_queue will be passed to all module constructors that need it"""
@@ -47,7 +46,6 @@ def profiler_queue():
 @pytest.fixture
 def database(output_queue):
     from slips_files.core.database.redis_db.database import RedisDB
-    import redis
     rdb = RedisDB(1234, output_queue)
     rdb.print = do_nothing
     return rdb
