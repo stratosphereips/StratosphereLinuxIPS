@@ -20,7 +20,13 @@ RUNNING_IN_DOCKER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
 class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     """Main redis db class."""
+    # this db should be a singelton per port. meaning no 2 instances should be created for the same port at the same
+    # time
     _obj = None
+    _port = None
+    # Stores instances per port
+    _instances = {}
+
     supported_channels = {
         'tw_modified',
         'evidence_added',
@@ -82,18 +88,23 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
     is_localnet_set = False
 
     def __new__(cls, *args, **kwargs):
-        if cls._obj is None or not isinstance(cls._obj, cls):
-            cls._obj = super(RedisDB, cls).__new__(RedisDB)
-            cls.redis_port, cls.outputqueue = args[0], args[1]
+        """
+        treat the db as a singelton per port
+        meaning every port will have exactly 1 single obj of this db at any given time
+        """
+
+        cls.redis_port, cls.outputqueue = args[0], args[1]
+        if cls.redis_port not in cls._instances:
+            cls._instances[cls.redis_port] = super().__new__(cls)
             cls._set_redis_options()
             cls._read_configuration()
-            cls.start(cls.redis_port)
+            cls.start()
             # By default the slips internal time is 0 until we receive something
             cls.set_slips_internal_time(0)
             while cls.get_slips_start_time() is None:
                 cls._set_slips_start_time()
-            # To treat the db as a singelton
-        return cls._obj
+
+        return cls._instances[cls.redis_port]
 
     @classmethod
     def _set_redis_options(cls):
@@ -148,14 +159,10 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             return start_time
     
     @classmethod
-    def start(cls, redis_port):
+    def start(cls):
         """Flushes and Starts the DB and """
-        # self._read_configuration()
-
-        # Read values from the configuration file
-        # try:
-        if not hasattr(cls, 'r'):
-            cls.connect_to_redis_server(redis_port)
+        try:
+            cls.connect_to_redis_server()
             # Set the memory limits of the output buffer,  For normal clients: no limits
             # for pub-sub 4GB maximum buffer size
             # and 2GB for soft limit
@@ -177,16 +184,16 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             # Even if the DB is not deleted. We need to delete some temp data
             cls.r.delete('zeekfiles')
 
-        # except redis.exceptions.ConnectionError as ex:
-        #     print(f"[DB] Can't connect to redis on port {redis_port}: {ex}")
-        #     return False
+        except redis.exceptions.ConnectionError as ex:
+            print(f"[DB] Can't connect to redis on port {cls.redis_port}: {ex}")
+            return False
 
     @classmethod
-    def connect_to_redis_server(cls, port: str):
+    def connect_to_redis_server(cls):
         """Connects to the given port and Sets r and rcache"""
         # start the redis server
         os.system(
-            f'redis-server redis.conf --port {port}  > /dev/null 2>&1'
+            f'redis-server redis.conf --port {cls.redis_port}  > /dev/null 2>&1'
         )
 
         # db 0 changes everytime we run slips
@@ -199,7 +206,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         # if the retry is successful, it will return normally; if it fails, an exception will be thrown
         cls.r = redis.StrictRedis(
             host='localhost',
-            port=port,
+            port=cls.redis_port,
             db=0,
             charset='utf-8',
             socket_keepalive=True,
