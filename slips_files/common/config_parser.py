@@ -666,7 +666,7 @@ class ConfigParser(object):
             return False
 
         # are we reading custom flows from cyst module?
-        for param in ('--input-module', '--im'):
+        for param in ('--input-module', '-im'):
             try:
                 if 'CYST' in sys.argv[sys.argv.index(param) + 1]:
                     return True
