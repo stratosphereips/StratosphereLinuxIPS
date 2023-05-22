@@ -128,6 +128,7 @@ class ProcessManager:
         to_ignore = self.main.conf.get_disabled_modules(self.main.input_type)
         # Import all the modules
         modules_to_call = self.get_modules(to_ignore)[0]
+        loaded_modules = []
         for module_name in modules_to_call:
             if module_name in to_ignore:
                 continue
@@ -154,10 +155,12 @@ class ProcessManager:
                 f'({description}) '
                 f'[PID {green(module.pid)}]', 1, 0
                 )
+            loaded_modules.append(module_name)
         # give outputprocess time to print all the started modules
         time.sleep(0.5)
         print('-' * 27)
         self.main.print(f"Disabled Modules: {to_ignore}", 1, 0)
+        return loaded_modules
     
     def print_stopped_module(self, module):
         self.main.PIDs.pop(module, None)

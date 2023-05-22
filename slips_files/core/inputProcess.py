@@ -919,7 +919,7 @@ class InputProcess(multiprocessing.Process):
                 self.handle_pcap_and_interface()
             elif self.input_type == 'suricata':
                 self.handle_suricata()
-            elif self.input_type == 'cyst':
+            elif self.input_type == 'CYST':
                 self.handle_cyst()
             else:
                 # if self.input_type is 'file':

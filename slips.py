@@ -407,10 +407,11 @@ class Main:
         it terminates when there's no more incoming flows
         """
         # these are the cases where slips should be running non-stop
-
+        # when slips is reading from a special module other than the input process
+        # this module should handle the stopping of slips
         if (
                 self.is_debugger_active()
-                or self.input_type in ('stdin','cyst')
+                or self.input_type in ('stdin','CYST')
                 or self.is_interface
         ):
             return True
@@ -423,13 +424,11 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
-
             self.setup_print_levels()
+
             ##########################
             # Creation of the threads
             ##########################
-
             # get the port that is going to be used for this instance of slips
             if self.args.port:
                 self.redis_port = int(self.args.port)
@@ -480,6 +479,9 @@ class Main:
             redis_pid = self.redis_man.get_pid_of_redis_server(self.redis_port)
             self.redis_man.log_redis_server_PID(self.redis_port, redis_pid)
 
+            if 'CYST' in self.input_type:
+                __database__.mark_cyst_as_enabled()
+
             __database__.set_slips_mode(self.mode)
 
             if self.mode == 'daemonized':
@@ -503,11 +505,13 @@ class Main:
             self.print(f'Started {green("Output Process")} [PID {green(output_process.pid)}]', 1, 0)
             self.print('Starting modules', 1, 0)
 
+
             # if slips is given a .rdb file, don't load the modules as we don't need them
             if not self.args.db:
                 # update local files before starting modules
                 self.update_local_TI_files()
-                self.proc_man.load_modules()
+                self.loaded_modules: list = self.proc_man.load_modules()
+
 
             # self.start_gui_process()
             if self.args.webinterface:

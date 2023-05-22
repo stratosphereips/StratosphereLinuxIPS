@@ -664,13 +664,15 @@ class ConfigParser(object):
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         if not custom_flows:
             return False
-        # are we reading custom flows from this module?
-        if 'CYST' not in (
-                sys.argv[sys.argv.index('--input-module') + 1],
-                sys.argv[sys.argv.index('--im') + 1]
-        ):
-            return False
-        return True
+
+        # are we reading custom flows from cyst module?
+        for param in ('--input-module', '--im'):
+            try:
+                if 'CYST' in sys.argv[sys.argv.index(param) + 1]:
+                    return True
+            except ValueError:
+                # param isn't used
+                pass
 
     def get_disabled_modules(self, input_type) -> list:
         """
