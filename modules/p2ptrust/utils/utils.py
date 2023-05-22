@@ -87,7 +87,7 @@ def validate_go_reports(data: str) -> list:
 #
 
 
-def get_ip_info_from_slips(ip_address: str) -> (float, float):
+def get_ip_info_from_slips(ip_address: str, db) -> (float, float):
     """
     Get score and confidence on IP from Slips.
 
@@ -96,7 +96,7 @@ def get_ip_info_from_slips(ip_address: str) -> (float, float):
     """
 
     # poll new info from redis
-    ip_info = __database__.getIPData(ip_address)
+    ip_info = db.getIPData(ip_address)
 
     # There is a bug in the database where sometimes False is returned when key is not found. Correctly, dictionary
     # should be always returned, even if it is empty. This check cannot be simplified to `if not ip_info`, because I
@@ -141,7 +141,8 @@ def read_data_from_ip_info(ip_info: dict) -> (float, float):
         return None, None
 
 
-def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
+
+def save_ip_report_to_db(ip, score, confidence, network_trust, db, timestamp=None):
     if timestamp is None:
         timestamp = time.time()
 
@@ -154,11 +155,11 @@ def save_ip_report_to_db(ip, score, confidence, network_trust, timestamp=None):
 
     # store it in p2p_reports key
     # print(f"*** [debugging p2p] ***  stored a report about {ip} in p2p_Reports and IPsInfo keys")
-    __database__.store_p2p_report(ip, report_data)
+    db.store_p2p_report(ip, report_data)
 
     # store it in IPsInfo key
     wrapped_data = {'p2p4slips': report_data}
-    __database__.setInfoForIPs(ip, wrapped_data)
+    db.setInfoForIPs(ip, wrapped_data)
 
 
 #
@@ -206,7 +207,7 @@ def build_score_confidence(score: float, confidence: float) -> dict:
 
 
 def send_evaluation_to_go(
-    ip: str, score: float, confidence: float, recipient: str, channel_name: str
+    ip: str, score: float, confidence: float, recipient: str, channel_name: str, db
 ) -> None:
     """
     Take data and send it to a peer as report.
@@ -223,7 +224,7 @@ def send_evaluation_to_go(
         'report', 'ip', ip, 'score_confidence', evaluation=evaluation_raw
     )
 
-    send_message_to_go(ip, recipient, channel_name, message_raw)
+    send_message_to_go(ip, recipient, channel_name, message_raw, db)
 
 
 def send_empty_evaluation_to_go(
@@ -240,10 +241,10 @@ def send_empty_evaluation_to_go(
     message_raw = build_go_message(
         'report', 'ip', ip, 'score_confidence', evaluation=None
     )
-    send_message_to_go(ip, recipient, channel_name, message_raw)
+    send_message_to_go(ip, recipient, channel_name, message_raw, db)
 
 
-def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict):
+def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict, db):
     """
     Send raw msg as json and b64 to other peer.
 
@@ -256,11 +257,11 @@ def send_message_to_go(ip: str, recipient: str, channel_name: str, msg: Dict):
     message_json = json.dumps(msg)
     message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
 
-    send_b64_to_go(message_b64, recipient, channel_name)
+    send_b64_to_go(message_b64, recipient, channel_name, db)
 
 
 def send_blame_to_go(
-    ip: str, score: float, confidence: float, channel_name: str
+    ip: str, score: float, confidence: float, channel_name: str, db
 ) -> None:
     """
     Take data and send it to a peer as a blame.
@@ -280,10 +281,10 @@ def send_blame_to_go(
     message_json = json.dumps(message_raw)
     message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
 
-    send_b64_to_go(message_b64, recipient, channel_name)
+    send_b64_to_go(message_b64, recipient, channel_name, db)
 
 
-def send_request_to_go(ip: str, channel_name: str) -> None:
+def send_request_to_go(ip: str, channel_name: str, db) -> None:
     """
     Send a request about an IP to peers.
 
@@ -299,10 +300,10 @@ def send_request_to_go(ip: str, channel_name: str) -> None:
     message_json = json.dumps(message_raw)
     message_b64 = base64.b64encode(bytes(message_json, 'ascii')).decode()
 
-    send_b64_to_go(message_b64, recipient, channel_name)
+    send_b64_to_go(message_b64, recipient, channel_name, db)
 
 
-def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
+def send_b64_to_go(message: str, recipient: str, channel_name: str, db) -> None:
     """
     Send message to a peer
 
@@ -318,7 +319,7 @@ def send_b64_to_go(message: str, recipient: str, channel_name: str) -> None:
 
     data_raw = {'message': message, 'recipient': recipient}
     data_json = json.dumps(data_raw)
-    __database__.publish(channel_name, data_json)
+    db.publish(channel_name, data_json)
     # only channel used right now is self.pygo_channel defined in p2ptrst.py
     decoded_data = base64.b64decode(message)
     data_json = json.loads(decoded_data.decode('utf-8'))

@@ -270,10 +270,10 @@ class GoDirector:
         """
         Gets the info about the IP the peer asked about, and send it to the network
         """
-        score, confidence = get_ip_info_from_slips(key)
+        score, confidence = get_ip_info_from_slips(key, self.rdb)
         if score is not None:
             send_evaluation_to_go(
-                key, score, confidence, reporter, self.pygo_channel
+                key, score, confidence, reporter, self.pygo_channel, self.rdb
             )
             self.print(
                 f'[Slips -> The Network] Slips responded with info score={score} confidence={confidence} about IP: {key} to {reporter}.',

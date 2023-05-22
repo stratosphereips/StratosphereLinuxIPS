@@ -147,7 +147,6 @@ class Trust(Module, multiprocessing.Process):
             'high': 0.8,
             'critical': 1,
         }
-        self.rdb.start(redis_port)
 
         self.sql_db_name = f'{self.data_dir}trustdb.db'
         if rename_sql_db_file:
@@ -341,7 +340,7 @@ class Trust(Module, multiprocessing.Process):
         if not data_already_reported:
             # Take data and send it to a peer as report.
             p2p_utils.send_evaluation_to_go(
-                attacker, score, confidence, '*', self.pygo_channel
+                attacker, score, confidence, '*', self.pygo_channel, self.rdb
             )
 
     def gopy_callback(self, msg: Dict):
@@ -537,7 +536,7 @@ class Trust(Module, multiprocessing.Process):
         # TODO: in some cases, it is not necessary to wait, specify that and implement it
         #       I do not remember writing this comment. I have no idea in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
-        p2p_utils.send_request_to_go(ip_address, self.pygo_channel)
+        p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.rdb)
         self.print(f'[Slips -> The Network] request about {ip_address}')
 
         # go will send a reply in no longer than 10s (or whatever the
@@ -572,6 +571,7 @@ class Trust(Module, multiprocessing.Process):
                 combined_score,
                 combined_confidence,
                 network_score,
+                self.rdb,
                 self.storage_name,
             )
             if int(combined_score) * int(confidence) > 0:

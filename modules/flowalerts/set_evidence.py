@@ -563,7 +563,7 @@ class Helper:
         description = f"The DNS query {query} was resolved to {answer}"
         timestamp = stime
         category = "Anamoly.Behaviour"
-        __database__.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
+        self.rdb.setEvidence(evidence_type , attacker_direction , attacker , threat_level , confidence , description ,
                                  timestamp , category , profileid=profileid , twid=twid , uid=uid)
 
     def set_evidence_for_port_0_connection(
