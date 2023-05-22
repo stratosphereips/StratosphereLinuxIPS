@@ -1203,7 +1203,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
 
             if not self.is_supported_flow():
                 return False
-            print(f"Received flow: {self.flow}") #@@@@@@
+
             self.make_sure_theres_a_uid()
             self.profileid = f'profile_{self.flow.saddr}'
 
