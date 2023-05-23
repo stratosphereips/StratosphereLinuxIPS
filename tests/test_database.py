@@ -34,7 +34,7 @@ def do_nothing(*arg):
 # create another database instance other than the one in
 # conftest because the port in conftest is used in other test files
 def create_db_instace(output_queue):
-    db = RedisDB(6381, output_queue)
+    db = RedisDB(6381, output_queue, True)
     db.print = do_nothing
     return db
 

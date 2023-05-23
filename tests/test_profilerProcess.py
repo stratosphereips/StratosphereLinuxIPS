@@ -11,7 +11,7 @@ def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
 def create_db_instace(output_queue, port):
-    db = RedisDB(port, output_queue)
+    db = RedisDB(port, output_queue, True)
     db.print = do_nothing
     return db
 

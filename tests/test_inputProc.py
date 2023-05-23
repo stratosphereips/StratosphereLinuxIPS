@@ -26,7 +26,7 @@ def check_zeek_or_bro():
 
     return zeek_bro
 def create_db(output_queue, port):
-    db = RedisDB(port, output_queue)
+    db = RedisDB(port, output_queue, True)
     db.print = do_nothing
     return db
 
