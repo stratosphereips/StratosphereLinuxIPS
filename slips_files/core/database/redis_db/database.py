@@ -93,7 +93,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
         meaning every port will have exactly 1 single obj of this db at any given time
         """
 
-        cls.redis_port, cls.outputqueue = args[0], args[1]
+        cls.redis_port, cls.outputqueue, cls.flush_db = args[0], args[1], args[2]
         if cls.redis_port not in cls._instances:
             cls._instances[cls.redis_port] = super().__new__(cls)
             cls._set_redis_options()
@@ -171,6 +171,7 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             if (
                     cls.deletePrevdb
                     and not ('-S' in sys.argv or '-cb' in sys.argv or '-d' in sys.argv)
+                    and cls.flush_db
             ):
                 # when stopping the daemon, don't flush bc we need to get the pids
                 # to close slips files
