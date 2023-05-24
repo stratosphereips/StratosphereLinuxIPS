@@ -35,8 +35,6 @@ class Module(Module, multiprocessing.Process):
             'new_letters': self.c1,
         }
 
-
-
     def set_evidence(
         self,
         score,
