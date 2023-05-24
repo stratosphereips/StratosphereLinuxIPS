@@ -1,23 +1,35 @@
+import os.path
 import sqlite3
 
 class SQLiteDB():
+    """Stores all the flows slips reads and handles labeling them"""
     _obj = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, output_dir):
         if cls._obj is None or not isinstance(cls._obj, cls):
             cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
-            db_name = args[0]
-            cls.conn = sqlite3.connect(db_name)
+            cls._flows_db = os.path.join(output_dir, 'flows.sqlite')
+            cls._init_db()
+            cls.conn = sqlite3.connect(cls._flows_db)
             cls.cursor = cls.conn.cursor()
+            flows_schema = "uid INTEGER PRIMARY KEY, flow TEXT, label TEXT"
+            cls.create_table('flows', flows_schema)
 
         # To treat the db as a singelton
         return cls._obj
 
+    @classmethod
+    def _init_db(cls):
+        """
+        creates the db if it doesn't exist and clears it if it exists
+        """
+        open(cls._flows_db,'w').close()
 
-    def create_table(self, table_name, schema):
+    @classmethod
+    def create_table(cls, table_name, schema):
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
-        self.cursor.execute(query)
-        self.conn.commit()
+        cls.cursor.execute(query)
+        cls.conn.commit()
 
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"

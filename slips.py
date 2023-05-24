@@ -453,6 +453,7 @@ class Main:
             self.outputqueue = Queue()
             flush_db = True
             self.rdb = RedisDB(self.redis_port, self.outputqueue, flush_db)
+            self.sqlite = SQLiteDB(self.args.output)
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
