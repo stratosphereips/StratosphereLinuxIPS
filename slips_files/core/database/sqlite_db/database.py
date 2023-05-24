@@ -34,6 +34,20 @@ class SQLiteDB():
         cls.cursor.execute(query)
         cls.conn.commit()
 
+    def set_flow_label(self, uids: list, new_label: str):
+        """
+        sets the given new_label to each flow in the uids list
+        """
+        for uid in uids:
+            query = f'UPDATE flows SET label="{new_label}" WHERE uid="{uid}"'
+            try:
+                self.conn.execute(
+                    query
+                )
+                self.conn.commit()
+            except sqlite3.Error as e:
+                # An error occurred during execution
+                print(f"Error executing query ({query}): {e}")
 
     def add_flow(
             self, uid:str, raw_flow: str, profileid: str, twid:str, label='benign'

@@ -85,26 +85,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
         # this list will have our local and public ips when using -i
         self.our_ips = utils.get_own_IPs()
 
-    def print(self, text, verbose=1, debug=0):
-        """
-        Function to use to print text using the outputqueue of slips.
-        Slips then decides how, when and where to print this text by taking all the processes into account
-        :param verbose:
-            0 - don't print
-            1 - basic operation/proof of work
-            2 - log I/O operations and filenames
-            3 - log database/profile/timewindow changes
-        :param debug:
-            0 - don't print
-            1 - print exceptions
-            2 - unsupported and unhandled types (cases that may cause errors)
-            3 - red warnings that needs examination - developer warnings
-        :param text: text to print. Can include format like 'Test {}'.format('here')
-        """
-
-        levels = f'{verbose}{debug}'
-        self.outputqueue.put(f'{levels}|{self.name}|{text}')
-
     def read_configuration(self):
         conf = ConfigParser()
         self.width = conf.get_tw_width_as_float()
@@ -560,6 +540,11 @@ class EvidenceProcess(Module, multiprocessing.Process):
         custom_flows = '-im' in sys.argv or '--input-module' in sys.argv
         return (self.is_running_on_interface() and '-p' not in sys.argv) or custom_flows
 
+    def label_flows_causing_alert(self):
+        for evidence_id in self.IDs_causing_an_alert:
+            uids: list = self.rdb.get_flows_causing_evidence(evidence_id)
+            self.sqlite.set_flow_label(uids, 'malicious')
+
     def main(self):
         if msg := self.get_msg('evidence_added'):
             # Data sent in the channel as a json dict, it needs to be deserialized first
@@ -688,7 +673,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
                         'twid': twid,
                     }
                     self.rdb.publish('new_alert', json.dumps(to_send))
-
+                    self.label_flows_causing_alert()
                     self.send_to_exporting_module(tw_evidence)
 
                     # print the alert
