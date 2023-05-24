@@ -104,6 +104,8 @@ class RedisDB(IoCHandler, AlertHandler, ProfileHandler):
             cls.set_slips_internal_time(0)
             while cls.get_slips_start_time() is None:
                 cls._set_slips_start_time()
+            # useful for debugging using 'CLIENT LIST' redis cmd
+            cls.r.client_setname(f"Slips-DB")
 
         return cls._instances[cls.redis_port]
 
