@@ -1,5 +1,8 @@
 import os.path
 import sqlite3
+import json
+from slips_files.common.slips_utils import utils
+
 
 class SQLiteDB():
     """Stores all the flows slips reads and handles labeling them"""
@@ -12,7 +15,7 @@ class SQLiteDB():
             cls._init_db()
             cls.conn = sqlite3.connect(cls._flows_db)
             cls.cursor = cls.conn.cursor()
-            flows_schema = "uid INTEGER PRIMARY KEY, flow TEXT, label TEXT"
+            flows_schema = "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT"
             cls.create_table('flows', flows_schema)
 
         # To treat the db as a singelton
@@ -30,6 +33,19 @@ class SQLiteDB():
         query = f"CREATE TABLE IF NOT EXISTS {table_name} ({schema})"
         cls.cursor.execute(query)
         cls.conn.commit()
+
+
+    def add_flow(
+            self, uid:str, raw_flow: str, profileid: str, twid:str, label='benign'
+            ):
+        parameters = (profileid, twid, uid, utils.sanitize(raw_flow), label)
+
+        self.conn.execute(
+            'INSERT INTO flows (profileid, twid, uid, flow, label) '
+            'VALUES (?, ?, ?, ?, ?);',
+            parameters,
+        )
+        self.conn.commit()
 
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"
