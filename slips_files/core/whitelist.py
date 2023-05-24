@@ -15,7 +15,6 @@ class Whitelist:
         self.ignored_flow_types = ('arp')
         self.rdb = rdb
 
-
     def print(self, text, verbose=1, debug=0):
         """
         Function to use to print text using the outputqueue of slips.

@@ -45,6 +45,7 @@ class InputProcess(multiprocessing.Process):
             zeek_folder,
             line_type,
             rdb: RedisDB,
+            sqlite,
     ):
         multiprocessing.Process.__init__(self)
         self.name = 'Input'

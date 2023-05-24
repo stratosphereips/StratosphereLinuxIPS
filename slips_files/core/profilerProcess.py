@@ -46,10 +46,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
     ):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
-        self.sqlite = sqlite
+        super().__init__(outputqueue, rdb, sqlite)
         self.inputqueue = inputqueue
-        self.outputqueue = outputqueue
         self.timeformat = None
         self.input_type = False
         self.whitelisted_flows_ctr = 0

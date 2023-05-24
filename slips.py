@@ -135,7 +135,7 @@ class Main:
             # only one instance of slips should be able to update ports and orgs at a time
             # so this function will only be allowed to run from 1 slips instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = UpdateFileManager(self.outputqueue, self.rdb)
+                update_manager = UpdateFileManager(self.outputqueue, self.rdb, self.sqlite)
                 update_manager.update_ports_info()
                 update_manager.update_org_files()
         except CannotAcquireLock:
@@ -527,6 +527,7 @@ class Main:
                 self.outputqueue,
                 self.args.output,
                 self.rdb,
+                self.sqlite,
             )
             evidence_process.start()
             self.print(
@@ -574,6 +575,7 @@ class Main:
                 self.zeek_folder,
                 self.line_type,
                 self.rdb,
+                self.sqlite,
             )
             inputProcess.start()
             self.print(

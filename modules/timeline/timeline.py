@@ -14,10 +14,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Creates kalipso timeline of what happened in the network based on flows and available data'
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
-        self.outputqueue = outputqueue
+        super().__init__(outputqueue, rdb, sqlite)
         self.separator = self.rdb.get_field_separator()
         # Subscribe to 'new_flow' channel
         self.c1 = self.rdb.subscribe('new_flow')

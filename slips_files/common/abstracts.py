@@ -9,9 +9,10 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         self.outputqueue = outputqueue
         self.rdb = rdb
+        self.sqlite = sqlite
         self.control_channel = self.rdb.subscribe('control_module')
         self.msg_received = True
 

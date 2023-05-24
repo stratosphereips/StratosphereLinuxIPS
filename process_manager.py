@@ -136,12 +136,14 @@ class ProcessManager:
                 module = module_class(
                     self.main.outputqueue,
                     self.main.rdb,
-                    output_dir=self.main.args.output
+                    self.main.sqlite,
+                    output_dir=self.main.args.output,
                 )
             else:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.rdb
+                    self.main.rdb,
+                    self.main.sqlite,
                 )
             module.start()
             self.main.rdb.store_process_PID(

@@ -12,11 +12,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Analyze HTTP flows'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
+        super().__init__(outputqueue, rdb, sqlite)
         self.c1 = self.rdb.subscribe('new_http')
         self.channels = {
             'new_http': self.c1

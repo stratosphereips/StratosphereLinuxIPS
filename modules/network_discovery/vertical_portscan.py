@@ -7,8 +7,9 @@ import json
 import threading
 
 class VerticalPortscan():
-    def __init__(self, rdb):
+    def __init__(self, rdb, sqlite):
         self.rdb = rdb
+        self.sqlite = sqlite
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.

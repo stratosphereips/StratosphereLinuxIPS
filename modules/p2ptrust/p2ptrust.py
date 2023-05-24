@@ -53,12 +53,13 @@ def validate_slips_data(message_data: str) -> (str, int):
 class Trust(Module, multiprocessing.Process):
     name = 'P2P Trust'
     description = 'Enables sharing detection data with other Slips instances'
-    authors = ['Dita']
+    authors = ['Dita', 'Alya Gomaa']
 
     def __init__(
         self,
         output_queue: multiprocessing.Queue,
         rdb,
+        sqlite,
         pigeon_port=6668,
         rename_with_port=False,
         output_dir='output/',
@@ -75,7 +76,7 @@ class Trust(Module, multiprocessing.Process):
     ):
         # this module is called automatically when slips starts
         multiprocessing.Process.__init__(self)
-        super().__init__(output_queue)
+        super().__init__(output_queue, rdb, sqlite)
         # flag to ensure slips prints multiaddress only once
         self.mutliaddress_printed = False
         # get the used interface

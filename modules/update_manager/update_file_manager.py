@@ -13,11 +13,10 @@ import datetime
 
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, rdb):
-        self.outputqueue = outputqueue
-
-        # For now, read the malicious IPs from here
+    def __init__(self, outputqueue, rdb, sqlite):
         self.name = 'Update File Manager'
+        self.outputqueue = outputqueue
+        self.sqlite = sqlite
         self.rdb = rdb
         # Get a separator from the database
         self.separator = self.rdb.get_field_separator()

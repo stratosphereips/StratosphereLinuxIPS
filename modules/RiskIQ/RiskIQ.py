@@ -12,11 +12,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Module to get passive DNS info about IPs from RiskIQ'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
-        self.rdb = rdb
-        self.outputqueue = outputqueue
+        super().__init__(outputqueue, rdb, sqlite)
         self.c1 = self.rdb.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,

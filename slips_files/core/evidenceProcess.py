@@ -44,12 +44,12 @@ class EvidenceProcess(Module, multiprocessing.Process):
         outputqueue,
         output_dir,
         rdb,
+        sqlite
     ):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
+        super().__init__(outputqueue, rdb, sqlite)
         self.inputqueue = inputqueue
-        self.outputqueue = outputqueue
         self.whitelist = Whitelist(outputqueue, rdb)
         self.separator = self.rdb.separator
         self.read_configuration()

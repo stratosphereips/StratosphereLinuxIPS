@@ -24,12 +24,9 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         multiprocessing.Process.__init__(self)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
-        super().__init__(outputqueue, rdb)
+        super().__init__(outputqueue, rdb, sqlite)
         # Read the configuration
         self.read_configuration()
         self.normal_label = self.rdb.normal_label

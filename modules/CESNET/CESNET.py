@@ -16,12 +16,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Send and receive alerts from warden servers.'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb):
+    def __init__(self, outputqueue, rdb, sqlite):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb)
-        # All the printing output should be sent to the outputqueue.
-        # The outputqueue is connected to another process called OutputProcess
-        self.outputqueue = outputqueue
+        super().__init__(outputqueue, rdb, sqlite)
         self.read_configuration()
         self.c1 = self.rdb.subscribe('export_evidence')
         self.channels = {

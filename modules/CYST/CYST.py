@@ -13,12 +13,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Communicates with CYST simulation framework'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb: RedisDB):
+    def __init__(self, outputqueue, rdb: RedisDB, sqlite):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue)
+        super().__init__(outputqueue, rdb, sqlite)
         self.port = None
-        self.rdb = rdb
-        self.outputqueue = outputqueue
         self.c1 = self.rdb.subscribe('new_alert')
         self.channels = {'new_alert': self.c1}
         self.cyst_UDS = '/run/slips.sock'
