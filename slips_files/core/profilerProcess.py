@@ -42,11 +42,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, rdb
+        self, inputqueue, outputqueue, verbose, debug, rdb, sqlite
     ):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue, rdb)
+        self.sqlite = sqlite
         self.inputqueue = inputqueue
         self.outputqueue = outputqueue
         self.timeformat = None
@@ -261,6 +262,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
         """
         line = new_line['data']
         line = line.rstrip('\n')
+        # the flow as read from the file
+        self.raw_flow: str = line
         # the data is either \t separated or space separated
         # zeek files that are space separated are either separated by 2 or 3 spaces so we can't use python's split()
         # using regex split, split line when you encounter more than 2 spaces in a row
@@ -561,6 +564,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
         else:
             starttime = ''
 
+        # the flow as read from the file
+        self.raw_flow: str = line
 
         if 'conn' in file_type:
             self.flow: Conn = Conn(
@@ -812,6 +817,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
+        # the flow as read from the file
+        self.raw_flow: str = line
 
         self.flow: ArgusConn = ArgusConn(
             utils.convert_to_datetime(get_value_of('starttime')),
@@ -848,6 +855,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
+        # the flow as read from the file
+        self.raw_flow: str = line
 
         self.flow: NfdumpConn = NfdumpConn(
             utils.convert_to_datetime(get_value_at(0)),
@@ -929,7 +938,8 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 return val or default_
             except (IndexError, KeyError):
                 return default_
-
+        # the flow as read from the file
+        self.raw_flow: str = line
         if event_type == 'flow':
             self.flow: SuricataFlow = SuricataFlow(
                 flow_id,
@@ -1283,6 +1293,12 @@ class ProfilerProcess(Module, multiprocessing.Process):
             twid=self.twid,
             label=self.label,
         )
+        self.sqlite.add_flow(
+            self.flow.uid,
+            json.dumps(self.raw_flow),
+            self.profileid,
+            self.twid, 'benign'
+            )
         self.publish_to_new_MAC(self.flow.smac, self.flow.saddr)
         self.publish_to_new_MAC(self.flow.dmac, self.flow.daddr)
 
@@ -1409,6 +1425,13 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.profileid,
             self.twid,
         )
+        # self.sqlite.add_flow(
+        #     self.flow.uid,
+        #     json.dumps(self.raw_flow),
+        #     self.profileid,
+        #     self.twid,
+        #     'benign')
+
 
     def handle_weird(self):
         """

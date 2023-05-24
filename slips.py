@@ -549,6 +549,7 @@ class Main:
                 self.args.verbose,
                 self.args.debug,
                 self.rdb,
+                self.sqlite
             )
             profiler_process.start()
             self.print(
