@@ -3,7 +3,6 @@ from modules.ip_info.jarm import JARM
 from .asn_info import ASN
 import platform
 import sys
-import traceback
 import datetime
 import maxminddb
 import ipaddress
@@ -28,14 +27,14 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         self.pending_mac_queries = multiprocessing.Queue()
-        self.asn = ASN(self.rdb)
+        self.asn = ASN()
         self.JARM = JARM()
         # Set the output queue of our database instance
         # To which channels do you wnat to subscribe? When a message arrives on the channel the module will wakeup
-        self.c1 = self.rdb.subscribe('new_ip')
-        self.c2 = self.rdb.subscribe('new_MAC')
-        self.c3 = self.rdb.subscribe('new_dns')
-        self.c4 = self.rdb.subscribe('check_jarm_hash')
+        self.c1 = self.db.subscribe('new_ip')
+        self.c2 = self.db.subscribe('new_MAC')
+        self.c3 = self.db.subscribe('new_dns')
+        self.c4 = self.db.subscribe('check_jarm_hash')
         self.channels = {
             'new_ip': self.c1,
             'new_MAC': self.c2,
@@ -211,7 +210,7 @@ class Module(Module, multiprocessing.Process):
 
         else:
             data = {'geocountry': 'Unknown'}
-        self.rdb.setInfoForIPs(ip, data)
+        self.db.setInfoForIPs(ip, data)
         return data
 
     # RDNS functions
@@ -240,7 +239,7 @@ class Module(Module, multiprocessing.Process):
             except socket.error:
                 # all good, store it
                 data['reverse_dns'] = reverse_dns
-                self.rdb.setInfoForIPs(ip, data)
+                self.db.setInfoForIPs(ip, data)
         except (socket.gaierror, socket.herror, OSError):
             # not an ip or multicast, can't get the reverse dns record of it
             return False
@@ -307,7 +306,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # don't look for the vendor again if we already have it for this profileid
-        if self.rdb.get_mac_vendor_from_profile(profileid):
+        if self.db.get_mac_vendor_from_profile(profileid):
             return True
 
         MAC_info = {
@@ -325,7 +324,7 @@ class Module(Module, multiprocessing.Process):
             MAC_info['Vendor'] = 'Unknown'
 
         # either we found the vendor or not, store the mac of this ip to the db
-        self.rdb.add_mac_addr_to_profile(profileid, MAC_info)
+        self.db.add_mac_addr_to_profile(profileid, MAC_info)
         return MAC_info
 
     # domain info
@@ -346,7 +345,7 @@ class Module(Module, multiprocessing.Process):
             # tld not supported
             return False
 
-        cached_data = self.rdb.getDomainData(domain)
+        cached_data = self.db.getDomainData(domain)
         if cached_data and 'Age' in cached_data:
             # we already have age info about this domain
             return False
@@ -374,7 +373,7 @@ class Module(Module, multiprocessing.Process):
             return_type='days'
         )
 
-        self.rdb.setInfoForDomains(domain, {'Age': age})
+        self.db.setInfoForDomains(domain, {'Age': age})
         return age
 
     def shutdown_gracefully(self):
@@ -385,7 +384,7 @@ class Module(Module, multiprocessing.Process):
         if hasattr(self, 'mac_db'):
             self.mac_db.close()
         # confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     # GW
     def get_gateway_ip(self):
@@ -394,7 +393,7 @@ class Module(Module, multiprocessing.Process):
         this method tries to get the default gateway IP address using ip route
         only works when running on an interface
         """
-        if not ('-i' in sys.argv or self.rdb.is_growing_zeek_dir()):
+        if not ('-i' in sys.argv or self.db.is_growing_zeek_dir()):
             # only works if running on an interface
             return False
 
@@ -427,12 +426,12 @@ class Module(Module, multiprocessing.Process):
         # we keep a cache of the macs and their IPs
         # In case of a zeek dir or a pcap,
         # check if we have the mac of this ip already saved in the db.
-        if gw_MAC := self.rdb.get_mac_addr_from_profile(f'profile_{gw_ip}'):
-            self.rdb.set_default_gateway('MAC', gw_MAC)
+        if gw_MAC := self.db.get_mac_addr_from_profile(f'profile_{gw_ip}'):
+            self.db.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
 
         # we don't have it in arp.log(in the db)
-        running_on_interface = '-i' in sys.argv or self.rdb.is_growing_zeek_dir()
+        running_on_interface = '-i' in sys.argv or self.db.is_growing_zeek_dir()
         if not running_on_interface:
             # no MAC in arp.log (in the db) and can't use arp tables,
             # so it's up to the db.is_gw_mac() function to determine the gw mac
@@ -445,7 +444,7 @@ class Module(Module, multiprocessing.Process):
             ip_output = subprocess.run(["ip", "neigh", "show", gw_ip],
                                       capture_output=True, check=True, text=True).stdout
             gw_MAC = ip_output.split()[-2]
-            self.rdb.set_default_gateway('MAC', gw_MAC)
+            self.db.set_default_gateway('MAC', gw_MAC)
             return gw_MAC
         except (subprocess.CalledProcessError, FileNotFoundError):
             # If the ip command doesn't exist or has failed, try using the arp command
@@ -458,7 +457,7 @@ class Module(Module, multiprocessing.Process):
                     # Match the gw_ip in the output with the one given to this function
                     if len(fields) >= 2 and gw_ip_from_arp_cmd == gw_ip:
                         gw_MAC = fields[-4]
-                        self.rdb.set_default_gateway('MAC', gw_MAC)
+                        self.db.set_default_gateway('MAC', gw_MAC)
                         return gw_MAC
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Could not find the MAC address of gw_ip
@@ -511,16 +510,16 @@ class Module(Module, multiprocessing.Process):
         confidence = 0.7
         category = 'Anomaly.Traffic'
         portproto = f'{dport}/{protocol}'
-        port_info = self.rdb.get_port_info(portproto)
+        port_info = self.db.get_port_info(portproto)
         port_info = port_info or ""
         port_info = f'({port_info.upper()})' if port_info else ""
-        dstip_id = self.rdb.get_ip_identification(dstip)
+        dstip_id = self.db.get_ip_identification(dstip)
         description = (
            f"Malicious JARM hash detected for destination IP: {dstip}"
            f" on port: {portproto} {port_info}.  {dstip_id}"
         )
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag,
                                  port=dport, proto=protocol, profileid=profileid, twid=twid, uid=uid)
 
@@ -529,7 +528,7 @@ class Module(Module, multiprocessing.Process):
         self.wait_for_dbs()
         # the following method only works when running on an interface
         if ip := self.get_gateway_ip():
-            self.rdb.set_default_gateway('IP', ip)
+            self.db.set_default_gateway('IP', ip)
 
     def handle_new_ip(self, ip):
         try:
@@ -542,7 +541,7 @@ class Module(Module, multiprocessing.Process):
         if not ip_addr.is_multicast:
             # Do we have cached info about this ip in redis?
             # If yes, load it
-            cached_ip_info = self.rdb.getIPData(ip)
+            cached_ip_info = self.db.getIPData(ip)
             if not cached_ip_info:
                 cached_ip_info = {}
 
@@ -578,7 +577,7 @@ class Module(Module, multiprocessing.Process):
                 # whether we found the gw ip using dhcp in profileprocess
                 # or using ip route using self.get_gateway_ip()
                 # now that it's found, get and store the mac addr of it
-                if ip:= self.rdb.get_gateway_ip():
+                if ip:= self.db.get_gateway_ip():
                     # now that we know the GW IP address,
                     # try to get the MAC of this IP (of the gw)
                     self.get_gateway_MAC(ip)

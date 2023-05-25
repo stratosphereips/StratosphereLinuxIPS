@@ -14,10 +14,10 @@ class VerticalPortscan():
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
         # Retrieve malicious/benigh labels
-        self.normal_label = self.rdb.normal_label
-        self.malicious_label = self.rdb.malicious_label
+        self.normal_label = self.db.normal_label
+        self.malicious_label = self.db.malicious_label
         # Get from the database the separator used to separate the IP and the word profile
-        self.fieldseparator = self.rdb.get_field_separator()
+        self.fieldseparator = self.db.get_field_separator()
         # The minimum amount of ports to scan in vertical scan
         self.port_scan_minimum_dports = 5
         # list of tuples, each tuple is the args to setevidence
@@ -84,13 +84,9 @@ class VerticalPortscan():
                         f'Total packets sent to all ports: {pkts_sent}. '
                         f'Confidence: {confidence}. by Slips'
                     )
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, conn_count=pkts_sent,
                                  proto=protocol, profileid=profileid, twid=twid, uid=uid)
-        # Set 'malicious' label in the detected profile
-        self.rdb.set_profile_module_label(
-            profileid, evidence_type, self.malicious_label
-        )
 
 
     def calculate_confidence(self, pkts_sent):
@@ -114,7 +110,7 @@ class VerticalPortscan():
         evidence_type = 'VerticalPortscan'
         for state in ('Not Established', 'Established'):
             for protocol in ('TCP', 'UDP'):
-                dstips = self.rdb.getDataFromProfileTW(
+                dstips = self.db.getDataFromProfileTW(
                     profileid, twid, direction, state, protocol, role, type_data
                 )
                 # For each dstip, see if the amount of ports connections is over the threshold

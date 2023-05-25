@@ -15,8 +15,8 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.c1 = self.rdb.subscribe('new_arp')
-        self.c2 = self.rdb.subscribe('tw_closed')
+        self.c1 = self.db.subscribe('new_arp')
+        self.c2 = self.db.subscribe('tw_closed')
         self.channels = {
             'new_arp': self.c1,
             'tw_closed': self.c2,
@@ -139,7 +139,7 @@ class Module(Module, multiprocessing.Process):
         saddr = profileid.split('_')[1]
 
         # Don't detect arp scan from the GW router
-        if self.rdb.get_gateway_ip() == saddr:
+        if self.db.get_gateway_ip() == saddr:
             return False
 
         # What is this?
@@ -211,7 +211,7 @@ class Module(Module, multiprocessing.Process):
         attacker_direction = 'srcip'
         source_target_tag = 'Recon'  # srcip description
         attacker = profileid.split('_')[1]
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  ts, category, source_target_tag=source_target_tag, conn_count=conn_count,
                                  profileid=profileid, twid=twid, uid=uids)
         # after we set evidence, clear the dict so we can detect if it does another scan
@@ -248,13 +248,13 @@ class Module(Module, multiprocessing.Process):
             # comes here if the IP isn't in any of the local networks
             confidence = 0.6
             threat_level = 'low'
-            ip_identification = self.rdb.get_ip_identification(daddr)
+            ip_identification = self.db.get_ip_identification(daddr)
             description = f'{saddr} sending ARP packet to a destination address outside of local network: {daddr}. {ip_identification}'
             evidence_type = 'arp-outside-localnet'
             category = 'Anomaly.Behaviour'
             attacker_direction = 'srcip'
             attacker = profileid.split('_')[1]
-            self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, ts, category, profileid=profileid, twid=twid, uid=uid)
             return True
 
@@ -278,7 +278,7 @@ class Module(Module, multiprocessing.Process):
             attacker_direction = 'srcip'
             source_target_tag = 'Recon'   # srcip description
             attacker = profileid.split('_')[1]
-            self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, ts, category, source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
             return True
@@ -298,7 +298,7 @@ class Module(Module, multiprocessing.Process):
         #  the original IP of this src mac is now the IP of the attacker?
 
         # get the original IP of the src mac from the database
-        original_IP = self.rdb.get_ip_of_mac(src_mac)
+        original_IP = self.db.get_ip_of_mac(src_mac)
         if original_IP is None:
             return
 
@@ -322,8 +322,8 @@ class Module(Module, multiprocessing.Process):
             source_target_tag = 'MITM'
             attacker = profileid.split('_')[1]
 
-            gateway_ip = self.rdb.get_gateway_ip()
-            gateway_MAC = self.rdb.get_gateway_mac()
+            gateway_ip = self.db.get_gateway_ip()
+            gateway_MAC = self.db.get_gateway_mac()
 
             if saddr == gateway_ip:
                 saddr = f'The gateway {saddr}'
@@ -339,14 +339,14 @@ class Module(Module, multiprocessing.Process):
                           f'now belonging to {saddr}, was seen before for {original_IP}.'
 
             # self.print(f'{saddr} is claiming to have {src_mac}')
-            self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, ts, category, source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
             return True
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def check_if_gratutitous_ARP(
             self, saddr, daddr, src_mac, dst_mac, src_hw, dst_hw, operation

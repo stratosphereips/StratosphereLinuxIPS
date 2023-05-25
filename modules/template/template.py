@@ -32,7 +32,7 @@ class Module(Module, multiprocessing.Process):
         # - tw_modified
         # - evidence_added
         # Remember to subscribe to this channel in database.py
-        self.c1 = self.rdb.subscribe('new_ip')
+        self.c1 = self.db.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,
         }
@@ -40,7 +40,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         """
@@ -53,6 +53,6 @@ class Module(Module, multiprocessing.Process):
         if msg:= self.get_msg('new_ip'):
             # Example of printing the number of profiles in the
             # Database every second
-            data = len(self.rdb.getProfiles())
+            data = len(self.db.getProfiles())
             self.print(f'Amount of profiles: {data}', 3, 0)
 

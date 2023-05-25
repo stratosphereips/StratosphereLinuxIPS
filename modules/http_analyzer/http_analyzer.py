@@ -1,6 +1,4 @@
 from slips_files.common.imports import *
-import sys
-import traceback
 import json
 import urllib
 import requests
@@ -15,7 +13,7 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.c1 = self.rdb.subscribe('new_http')
+        self.c1 = self.db.subscribe('new_http')
         self.channels = {
             'new_http': self.c1
         }
@@ -77,7 +75,7 @@ class Module(Module, multiprocessing.Process):
                 category = 'Anomaly.Behaviour'
                 confidence = 1
                 description = f'suspicious user-agent: {user_agent} while connecting to {host}{uri}'
-                self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+                self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                          description, timestamp, category, source_target_tag=source_target_tag,
                                          profileid=profileid, twid=twid, uid=uid)
                 return True
@@ -120,7 +118,7 @@ class Module(Module, multiprocessing.Process):
             category = 'Anomaly.Connection' 
             confidence = 1
             description = f'multiple empty HTTP connections to {host}'
-            self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, timestamp, category, profileid=profileid, twid=twid, uid=uids)
             # reset the counter
             self.connections_counter[host] = ([], 0)
@@ -146,7 +144,7 @@ class Module(Module, multiprocessing.Process):
             f'while connecting to {host}{uri}. '
             f'IP has MAC vendor: {vendor.capitalize()}'
         )
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         
@@ -158,11 +156,11 @@ class Module(Module, multiprocessing.Process):
         evidence_type = 'ExecutableMIMEType'
         attacker_direction = 'dstip'
         srcip = profileid.split('_')[1]
-        ip_identification = self.rdb.get_ip_identification(attacker)
+        ip_identification = self.db.get_ip_identification(attacker)
         description = f'download of an executable with mime type: {mime_type} ' \
                       f'by {srcip} from {attacker} {ip_identification}.'
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -174,12 +172,12 @@ class Module(Module, multiprocessing.Process):
         Compare the user agent of this profile to the MAC vendor and check incompatibility
         """
         # get the mac vendor
-        vendor = self.rdb.get_mac_vendor_from_profile(profileid)
+        vendor = self.db.get_mac_vendor_from_profile(profileid)
         if not vendor:
             return False
         vendor = vendor.lower()
 
-        user_agent: dict = self.rdb.get_user_agent_from_profile(profileid)
+        user_agent: dict = self.db.get_user_agent_from_profile(profileid)
         if not user_agent or type(user_agent) != dict:
             return False
 
@@ -280,10 +278,10 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # keep a history of the past user agents
-        self.rdb.add_all_user_agent_to_profile(profileid, user_agent)
+        self.db.add_all_user_agent_to_profile(profileid, user_agent)
 
         # don't make a request again if we already have a user agent associated with this profile
-        if self.rdb.get_user_agent_from_profile(profileid) is not None:
+        if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return False
 
@@ -320,7 +318,7 @@ class Module(Module, multiprocessing.Process):
                 }
             )
 
-        self.rdb.add_user_agent_to_profile(profileid, json.dumps(UA_info))
+        self.db.add_user_agent_to_profile(profileid, json.dumps(UA_info))
         return UA_info
 
     def extract_info_from_UA(self, user_agent, profileid):
@@ -328,7 +326,7 @@ class Module(Module, multiprocessing.Process):
         Zeek sometimes collects info about a specific UA, in this case the UA starts with
         'server-bag'
         """
-        if self.rdb.get_user_agent_from_profile(profileid) is not None:
+        if self.db.get_user_agent_from_profile(profileid) is not None:
             # this profile already has a user agent
             return True
         # for example: server-bag[macOS,11.5.1,20G80,MacBookAir10,1]
@@ -349,7 +347,7 @@ class Module(Module, multiprocessing.Process):
             }
         )
         UA_info = json.dumps(UA_info)
-        self.rdb.add_user_agent_to_profile(profileid, UA_info)
+        self.db.add_user_agent_to_profile(profileid, UA_info)
         return UA_info
 
     def check_multiple_UAs(
@@ -392,7 +390,7 @@ class Module(Module, multiprocessing.Process):
         description = (
             f'using multiple user-agents: {ua} then {user_agent}'
         )
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
@@ -412,7 +410,7 @@ class Module(Module, multiprocessing.Process):
         saddr = profileid.split('_')[-1]
         description = (f'Unencrypted HTTP traffic from {saddr} to {daddr}.')
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
         return True
@@ -433,7 +431,7 @@ class Module(Module, multiprocessing.Process):
         except ValueError:
             return False
 
-        ip_identification = self.rdb.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         if ('pastebin' in ip_identification
             and response_body_len > self.pastebin_downloads_threshold
             and method == 'GET'):
@@ -448,7 +446,7 @@ class Module(Module, multiprocessing.Process):
             description = (
                f'A downloaded file from pastebin.com. size: {response_body_len} MBs'
             )
-            self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
+            self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence,
                                      description, timestamp, category, source_target_tag=source_target_tag,
                                      profileid=profileid, twid=twid, uid=uid)
             return True
@@ -457,7 +455,7 @@ class Module(Module, multiprocessing.Process):
 
 
     def shutdown_gracefully(self):
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
 
@@ -486,7 +484,7 @@ class Module(Module, multiprocessing.Process):
             )
             # find the UA of this profileid if we don't have it
             # get the last used ua of this profile
-            cached_ua = self.rdb.get_user_agent_from_profile(
+            cached_ua = self.db.get_user_agent_from_profile(
                 profileid
             )
             if cached_ua:

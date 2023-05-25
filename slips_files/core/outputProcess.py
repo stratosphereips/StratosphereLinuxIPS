@@ -65,7 +65,7 @@ class OutputProcess(multiprocessing.Process):
             )
         self.done_reading_flows = False
         # are we in daemon of interactive mode
-        self.slips_mode = self.rdb.get_slips_mode()
+        self.slips_mode = self.db.get_slips_mode()
         # we update the stats printed by slips every 5seconds
         # this is the last time the stats was printed
         self.last_updated_stats_time = float("-inf")
@@ -256,7 +256,7 @@ class OutputProcess(multiprocessing.Process):
         When running on a pcap, interface, or taking flows from an
         external module, the total amount of flows are unknown
         """
-        if self.rdb.get_input_type() in ('pcap', 'interface', 'stdin'):
+        if self.db.get_input_type() in ('pcap', 'interface', 'stdin'):
             return True
 
         # whenever any of those is present, slips won't be able to get the
@@ -281,7 +281,7 @@ class OutputProcess(multiprocessing.Process):
             # no need to print the progress bar
             return
 
-        self.total_flows = int(self.rdb.get_total_flows())
+        self.total_flows = int(self.db.get_total_flows())
         # the bar_format arg is to disable ETA and unit display
         # dont use ncols so tqdm will adjust the bar size according to the terminal size
         self.progress_bar = tqdm(
@@ -324,7 +324,7 @@ class OutputProcess(multiprocessing.Process):
         self.log_line('[Output Process]', ' Stopping output process. '
                                         'Further evidence may be missing. '
                                         'Check alerts.log for full evidence list.')
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def remove_stats_from_progress_bar(self):
         # remove the stats from the progress bar
@@ -347,9 +347,9 @@ class OutputProcess(multiprocessing.Process):
         # only update the stats if 5 seconds passed
         self.last_updated_stats_time = now
         now = utils.convert_format(now, '%Y/%m/%d %H:%M:%S')
-        modified_ips_in_the_last_tw = self.rdb.get_modified_ips_in_the_last_tw()
-        profilesLen = self.rdb.getProfilesLen()
-        evidence_number = self.rdb.get_evidence_number() or 0
+        modified_ips_in_the_last_tw = self.db.get_modified_ips_in_the_last_tw()
+        profilesLen = self.db.getProfilesLen()
+        evidence_number = self.db.get_evidence_number() or 0
         msg = f'Analyzed IPs: ' \
               f'{profilesLen}. ' \
               f'Evidence Added: {evidence_number} ' \

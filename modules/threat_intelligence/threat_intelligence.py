@@ -22,9 +22,9 @@ class Module(Module, multiprocessing.Process, URLhaus):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         # Get a separator from the database
-        self.separator = self.rdb.get_field_separator()
-        self.c1 = self.rdb.subscribe('give_threat_intelligence')
-        self.c2 = self.rdb.subscribe('new_downloaded_file')
+        self.separator = self.db.get_field_separator()
+        self.c1 = self.db.subscribe('give_threat_intelligence')
+        self.c2 = self.db.subscribe('new_downloaded_file')
         self.channels = {
             'give_threat_intelligence': self.c1,
             'new_downloaded_file': self.c2,
@@ -67,7 +67,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         """
         Cache the IoC IP ranges instead of retrieving them from the db
         """
-        ip_ranges = self.rdb.get_malicious_ip_ranges()
+        ip_ranges = self.db.get_malicious_ip_ranges()
         self.cached_ipv6_ranges = {}
         self.cached_ipv4_ranges = {}
         for range in ip_ranges.keys():
@@ -118,7 +118,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         tags = asn_info.get('tags', False)
         source_target_tag = tags.capitalize() if tags else 'BlacklistedASN'
-        identification = self.rdb.get_ip_identification(ip)
+        identification = self.db.get_ip_identification(ip)
 
         description = f'Connection to IP: {ip} with blacklisted ASN: {asn} ' \
                       f'Description: {asn_info["description"]}, ' \
@@ -127,7 +127,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                       f'Tags: {tags} ' \
                       f'{identification}'
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -180,7 +180,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         # this ip (the one that triggered this alert only), we don't want other descriptions from other TI sources!
         # setting it to true results in the following alert
         # blacklisted ip description: <Spamhaus description> source: ipsum
-        ip_identification = self.rdb.get_ip_identification(ip, get_ti_data=False).strip()
+        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False).strip()
 
         if self.is_dns_response:
             description = (
@@ -205,16 +205,16 @@ class Module(Module, multiprocessing.Process, URLhaus):
         else:
             source_target_tag = 'BlacklistedIP'
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
         # mark this ip as malicious in our database
         ip_info = {'threatintelligence': ip_info}
-        self.rdb.setInfoForIPs(ip, ip_info)
+        self.db.setInfoForIPs(ip, ip_info)
 
         # add this ip to our MaliciousIPs hash in the database
-        self.rdb.set_malicious_ip(ip, profileid, twid)
+        self.db.set_malicious_ip(ip, profileid, twid)
 
     def set_evidence_malicious_domain(
         self,
@@ -262,7 +262,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if tags:
             description += f'with tags: {tags}. '
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, source_target_tag=source_target_tag, profileid=profileid,
                                  twid=twid, uid=uid)
 
@@ -373,18 +373,18 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     )
 
         # Add all loaded malicious ips to the database
-        self.rdb.add_ips_to_IoC(malicious_ips)
+        self.db.add_ips_to_IoC(malicious_ips)
         # Add all loaded malicious domains to the database
-        self.rdb.add_domains_to_IoC(malicious_domains)
-        self.rdb.add_ip_range_to_IoC(malicious_ip_ranges)
-        self.rdb.add_asn_to_IoC(malicious_asns)
+        self.db.add_domains_to_IoC(malicious_domains)
+        self.db.add_ip_range_to_IoC(malicious_ip_ranges)
+        self.db.add_asn_to_IoC(malicious_asns)
         return True
 
     def __delete_old_source_IPs(self, file):
         """
         When file is updated, delete the old IPs in the cache
         """
-        all_data = self.rdb.get_IPs_in_IoC()
+        all_data = self.db.get_IPs_in_IoC()
         old_data = []
         for ip_data in all_data.items():
             ip = ip_data[0]
@@ -392,13 +392,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
             if data['source'] == file:
                 old_data.append(ip)
         if old_data:
-            self.rdb.delete_ips_from_IoC_ips(old_data)
+            self.db.delete_ips_from_IoC_ips(old_data)
 
     def __delete_old_source_Domains(self, file):
         """
         When file is updated, delete the old Domains in the cache
         """
-        all_data = self.rdb.get_Domains_in_IoC()
+        all_data = self.db.get_Domains_in_IoC()
         old_data = []
         for domain_data in all_data.items():
             domain = domain_data[0]
@@ -406,7 +406,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             if data['source'] == file:
                 old_data.append(domain)
         if old_data:
-            self.rdb.delete_domains_from_IoC_domains(old_data)
+            self.db.delete_domains_from_IoC_domains(old_data)
 
     def __delete_old_source_data_from_database(self, data_file):
         """
@@ -469,7 +469,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     }
                 )
         # Add all loaded JA3 to the database
-        self.rdb.add_ja3_to_IoC(ja3_dict)
+        self.db.add_ja3_to_IoC(ja3_dict)
         return True
 
     def parse_jarm_file(self, path):
@@ -522,7 +522,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     }
                 )
         # Add all loaded JARM to the database
-        self.rdb.add_jarm_to_IoC(jarm_dict)
+        self.db.add_jarm_to_IoC(jarm_dict)
         return True
 
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
@@ -535,7 +535,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
         self.print(f'Loading local TI file {path_to_local_ti_file}', 2, 0)
         # Get what files are stored in cache db and their E-TAG to comapre with current files
-        data = self.rdb.get_TI_file_info(filename)
+        data = self.db.get_TI_file_info(filename)
         old_hash = data.get('hash', False)
 
         # In the case of the local file, we dont store the e-tag
@@ -574,7 +574,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
         return True
 
     def spamhaus(self, ip):
@@ -669,7 +669,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         attacker = file_info['flow']["md5"]
         threat_level = file_info["threat_level"]
         daddr = file_info['flow']["daddr"]
-        ip_identification = self.rdb.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         confidence = file_info["confidence"]
         threat_level = utils.threat_level_to_string(threat_level)
 
@@ -680,7 +680,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
             f'Score: {confidence}. {ip_identification}'
         )
 
-        self.rdb.setEvidence(evidence_type,
+        self.db.setEvidence(evidence_type,
                                  attacker_direction,
                                  attacker,
                                  threat_level,
@@ -763,7 +763,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
 
     def search_offline_for_ip(self, ip):
         """ Searches the TI files for the given ip """
-        ip_info = self.rdb.search_IP_in_IoC(ip)
+        ip_info = self.db.search_IP_in_IoC(ip)
         # check if it's a blacklisted ip
         return json.loads(ip_info) if ip_info else False
 
@@ -778,7 +778,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         Check if this ip has any of our blacklisted ASNs.
         blacklisted asns are taken from own_malicious_iocs.csv
         """
-        ip_info = self.rdb.getIPData(ip)
+        ip_info = self.db.getIPData(ip)
         if not ip_info:
             # we dont know the asn of this ip
             return
@@ -790,7 +790,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not asn:
             return
 
-        if asn_info := self.rdb.is_blacklisted_ASN(asn):
+        if asn_info := self.db.is_blacklisted_ASN(asn):
             asn_info = json.loads(asn_info)
             self.set_evidence_malicious_asn(
                 ip,
@@ -821,7 +821,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         for range in ranges_starting_with_octet:
             if ip_obj in ipaddress.ip_network(range):
                 # ip was found in one of the blacklisted ranges
-                ip_info = self.rdb.get_malicious_ip_ranges()[range]
+                ip_info = self.db.get_malicious_ip_ranges()[range]
                 ip_info = json.loads(ip_info)
                 self.set_evidence_malicious_ip(
                     ip,
@@ -840,7 +840,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         (
             domain_info,
             is_subdomain,
-        ) = self.rdb.is_domain_malicious(domain)
+        ) = self.db.is_domain_malicious(domain)
         if (
             domain_info is not False
         ):   # Dont change this condition. This is the only way it works
@@ -860,7 +860,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         if not ip_info:
             # not malicious
             return False
-        self.rdb.add_ips_to_IoC({
+        self.db.add_ips_to_IoC({
                 ip: json.dumps(ip_info)
         })
         self.set_evidence_malicious_ip(
@@ -889,7 +889,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 self.urlhaus.set_evidence_malicious_hash(blacklist_details)
             else:
                 self.set_evidence_malicious_hash(blacklist_details)
-        self.rdb.mark_as_analyzed_by_ti_module()
+        self.db.mark_as_analyzed_by_ti_module()
 
 
     def is_malicious_url(
@@ -943,12 +943,12 @@ class Module(Module, multiprocessing.Process, URLhaus):
         domain_info = {
             'threatintelligence': domain_info
         }
-        self.rdb.setInfoForDomains(
+        self.db.setInfoForDomains(
             domain, domain_info
         )
 
         # add this domain to our MaliciousDomains hash in the database
-        self.rdb.set_malicious_domain(
+        self.db.set_malicious_domain(
             domain, profileid, twid
         )
 
@@ -971,13 +971,13 @@ class Module(Module, multiprocessing.Process, URLhaus):
                 self.parse_local_ti_file(fullpath)
             # Store the new etag and time of file in the database
             malicious_file_info = {'hash': filehash}
-            self.rdb.set_TI_file_info(filename, malicious_file_info)
+            self.db.set_TI_file_info(filename, malicious_file_info)
             return True
 
 
     def have_pending_ips_in_queue(self):
         """ check if this module has pending ips/domains to analyse """
-        q_size = self.rdb.get_ti_queue_size()
+        q_size = self.db.get_ti_queue_size()
         if q_size is None:
             return False
         if int(q_size) > 0:
@@ -993,7 +993,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.update_local_file('own_malicious_JA3.csv')
         self.update_local_file('own_malicious_JARM.csv')
         self.circllu_calls_thread.start()
-        self.rdb.init_ti_queue()
+        self.db.init_ti_queue()
 
     def main(self):
         # The channel now can receive an IP address or a domain name
@@ -1047,7 +1047,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
                     profileid,
                     twid
                 )
-            self.rdb.mark_as_analyzed_by_ti_module()
+            self.db.mark_as_analyzed_by_ti_module()
 
         if msg:= self.get_msg('new_downloaded_file'):
             file_info = json.loads(msg['data'])

@@ -17,7 +17,6 @@ class UpdateManager(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         self.read_configuration()
-        # Start the DB
         # Update file manager
         self.update_manager = UpdateFileManager(self.outputqueue)
         # Timer to update the ThreatIntelligence files
@@ -46,7 +45,7 @@ class UpdateManager(Module, multiprocessing.Process):
         self.mac_db_update_manager.cancel()
         self.online_whitelist_update_timer.cancel()
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
         return True
 
     async def update_ti_files(self):
@@ -57,7 +56,7 @@ class UpdateManager(Module, multiprocessing.Process):
         update_finished = asyncio.create_task(self.update_manager.update())
         # wait for UpdateFileManager to finish before starting all the modules
         await update_finished
-        self.print(f'{self.rdb.get_loaded_ti_files()} TI files successfully loaded.')
+        self.print(f'{self.db.get_loaded_ti_files()} TI files successfully loaded.')
 
     def pre_main(self):
         utils.drop_root_privs()

@@ -1,13 +1,11 @@
 from slips_files.common.imports import *
 import platform
-import traceback
 import sys
 import os
 import shutil
 import json
 import subprocess
 import time
-import traceback
 
 class Module(Module, multiprocessing.Process):
     """Data should be passed to this module as a json encoded python dict,
@@ -18,10 +16,10 @@ class Module(Module, multiprocessing.Process):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue)
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.c1 = self.rdb.subscribe('new_blocking')
+        self.c1 = self.db.subscribe('new_blocking')
         self.channels = {
             'new_blocking': self.c1,
         }
@@ -54,7 +52,7 @@ class Module(Module, multiprocessing.Process):
             }
             # Example of passing blocking_data to this module:
             blocking_data = json.dumps(blocking_data)
-            self.rdb.publish('new_blocking', blocking_data)
+            self.db.publish('new_blocking', blocking_data)
             self.print('[test] Blocked ip.')
         else:
             self.print('[test] IP is already blocked')
@@ -327,7 +325,7 @@ class Module(Module, multiprocessing.Process):
         return False
 
     def shutdown_gracefully(self):
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
 
     def check_for_ips_to_unblock(self):
@@ -381,7 +379,7 @@ class Module(Module, multiprocessing.Process):
             #   }
             # Example of passing blocking_data to this module:
             #   blocking_data = json.dumps(blocking_data)
-            #   self.rdb.publish('new_blocking', blocking_data )
+            #   self.db.publish('new_blocking', blocking_data )
 
             # Decode(deserialize) the python dict into JSON formatted string
             data = json.loads(msg['data'])

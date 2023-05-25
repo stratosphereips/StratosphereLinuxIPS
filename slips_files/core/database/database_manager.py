@@ -693,6 +693,14 @@ class DBManager:
     def get_the_other_ip_version(self, *args):
         return self.rdb.get_the_other_ip_version(*args)
 
+    def get_separator(self):
+        return self.rdb.separator
+
+    def get_normal_label(self):
+        return self.rdb.normal_label
+
+    def get_malicious_label(self):
+        return self.rdb.malicious_label
 
     def init_tables(self, *args):
         return self.sqlite.init_tables(*args)

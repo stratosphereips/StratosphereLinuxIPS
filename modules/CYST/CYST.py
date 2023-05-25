@@ -1,7 +1,5 @@
 from slips_files.common.abstracts import Module
 import multiprocessing
-from slips_files.core.database.redis_db.database import RedisDB
-import sys
 import socket
 import json
 import os
@@ -15,9 +13,9 @@ class Module(Module, multiprocessing.Process):
 
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue):
+        super().__init__(outputqueue)
         self.port = None
-        self.c1 = self.rdb.subscribe('new_alert')
+        self.c1 = self.db.subscribe('new_alert')
         self.channels = {'new_alert': self.c1}
         self.cyst_UDS = '/run/slips.sock'
         self.conn_closed = False
@@ -127,15 +125,15 @@ class Module(Module, multiprocessing.Process):
     def shutdown_gracefully(self):
         self.close_connection()
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
         # if slips is done, slips shouldn't expect more flows or send evidence
         # it should terminate
-        self.rdb.publish('finished_modules', 'stop_slips')
+        self.db.publish('finished_modules', 'stop_slips')
         return
 
     def pre_main(self):
         # are the flows being read from the default inputprocess or from a custom module? like this one
-        if not self.rdb.is_cyst_enabled():
+        if not self.db.is_cyst_enabled():
             return 1
         # connect to cyst
         print(f"Initializing socket", 0, 1)
@@ -160,7 +158,7 @@ class Module(Module, multiprocessing.Process):
                 'flow': flow,
                 'module': self.name # to know where this flow is coming from aka what's the input module
                 }
-            self.rdb.publish('new_module_flow', json.dumps(to_send))
+            self.db.publish('new_module_flow', json.dumps(to_send))
 
         # check for connection before receiving
         if self.conn_closed:

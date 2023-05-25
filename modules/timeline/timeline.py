@@ -17,9 +17,9 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.separator = self.rdb.get_field_separator()
+        self.separator = self.db.get_field_separator()
         # Subscribe to 'new_flow' channel
-        self.c1 = self.rdb.subscribe('new_flow')
+        self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1,
         }
@@ -55,7 +55,7 @@ class Module(Module, multiprocessing.Process):
             proto = flow_dict['proto'].upper()
             dport_name = flow_dict.get('appproto', '')
             if not dport_name:
-                dport_name = self.rdb.get_port_info(
+                dport_name = self.db.get_port_info(
                     f'{str(dport)}/{proto.lower()}'
                 )
                 if dport_name:
@@ -106,7 +106,7 @@ class Module(Module, multiprocessing.Process):
                 if self.analysis_direction == 'all' and str(daddr) == str(
                         profile_ip
                 ):
-                    dns_resolution = self.rdb.get_dns_resolution(daddr)
+                    dns_resolution = self.db.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -157,7 +157,7 @@ class Module(Module, multiprocessing.Process):
                         critical_warning_dport_name = (
                             'Protocol not recognized by Slips nor Zeek.'
                         )
-                    dns_resolution = self.rdb.get_dns_resolution(daddr)
+                    dns_resolution = self.db.get_dns_resolution(daddr)
                     dns_resolution = dns_resolution.get('domains', [])
 
                     # we should take only one resolution, if there is more than 3, because otherwise it does not fit in the timeline.
@@ -257,7 +257,7 @@ class Module(Module, multiprocessing.Process):
             # Sometimes we need to wait a little to give time to Zeek to find the related flow since they are read very fast together.
             # This should be improved algorithmically probably
             time.sleep(0.05)
-            alt_flow_json = self.rdb.get_altflow_from_uid(
+            alt_flow_json = self.db.get_altflow_from_uid(
                 profileid, twid, uid
             )
 
@@ -346,7 +346,7 @@ class Module(Module, multiprocessing.Process):
             # Combine the activity of normal flows and activity of alternative flows and store in the DB for this profileid and twid
             activity.update(alt_activity)
             if activity:
-                self.rdb.add_timeline_line(
+                self.db.add_timeline_line(
                     profileid, twid, activity, timestamp
                 )
             self.print(
@@ -365,7 +365,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()

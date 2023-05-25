@@ -13,7 +13,7 @@ class Module(ABC):
     def __init__(self, outputqueue):
         self.outputqueue = outputqueue
         self.db = DBManager()
-        self.control_channel = self.rdb.subscribe('control_module')
+        self.control_channel = self.db.subscribe('control_module')
         self.msg_received = True
 
     def should_stop(self) -> bool:
@@ -27,7 +27,7 @@ class Module(ABC):
             # this module is still receiving msgs, don't stop
             return False
 
-        message = self.rdb.get_message(self.control_channel)
+        message = self.db.get_message(self.control_channel)
         if message and message['data'] == 'stop_process':
             self.shutdown_gracefully()
             return True
@@ -72,7 +72,7 @@ class Module(ABC):
         pass
 
     def get_msg(self, channel_name):
-        message = self.rdb.get_message(self.channels[channel_name])
+        message = self.db.get_message(self.channels[channel_name])
         if utils.is_msg_intended_for(message, channel_name):
             self.msg_received = True
             return message

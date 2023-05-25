@@ -26,9 +26,9 @@ class Module(Module, multiprocessing.Process):
         # This line might not be needed when running SLIPS,
         # but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.
-        self.c1 = self.rdb.subscribe('new_flow')
-        self.c2 = self.rdb.subscribe('new_dns')
-        self.c3 = self.rdb.subscribe('new_url')
+        self.c1 = self.db.subscribe('new_flow')
+        self.c2 = self.db.subscribe('new_dns')
+        self.c3 = self.db.subscribe('new_url')
         self.channels = {
             'new_flow': self.c1,
             'new_dns': self.c2,
@@ -37,8 +37,6 @@ class Module(Module, multiprocessing.Process):
 
         # Read the conf file
         self.__read_configuration()
-
-
         # query counter for debugging purposes
         self.counter = 0
         # Queue of API calls
@@ -122,8 +120,8 @@ class Module(Module, multiprocessing.Process):
                 'timestamp': ts
             }
 
-        self.rdb.setInfoForIPs(ip, data)
-        self.rdb.set_passive_dns(ip, passive_dns)
+        self.db.setInfoForIPs(ip, data)
+        self.db.set_passive_dns(ip, passive_dns)
 
     def get_url_vt_data(self, url):
         """
@@ -162,7 +160,7 @@ class Module(Module, multiprocessing.Process):
         # Score of this url didn't change
         vtdata = {'URL': score, 'timestamp': time.time()}
         data = {'VirusTotal': vtdata}
-        self.rdb.setInfoForURLs(url, data)
+        self.db.setInfoForURLs(url, data)
 
     def set_domain_data_in_DomainInfo(self, domain, cached_data):
         """
@@ -184,7 +182,7 @@ class Module(Module, multiprocessing.Process):
             data['asn'] = {
                 'number': f'AS{as_owner}'
             }
-        self.rdb.setInfoForDomains(domain, data)
+        self.db.setInfoForDomains(domain, data)
 
     def API_calls_thread(self):
         """
@@ -207,7 +205,7 @@ class Module(Module, multiprocessing.Process):
                 ioc = self.api_call_queue.pop(0)
                 ioc_type = self.get_ioc_type(ioc)
                 if ioc_type == 'ip':
-                    cached_data = self.rdb.getIPData(ioc)
+                    cached_data = self.db.getIPData(ioc)
                     # return an IPv4Address or IPv6Address object depending on the IP address passed as argument.
                     ip_addr = ipaddress.ip_address(ioc)
                     # if VT data of this IP (not multicast) is not in the IPInfo, ask VT.
@@ -218,12 +216,12 @@ class Module(Module, multiprocessing.Process):
                         self.set_vt_data_in_IPInfo(ioc, cached_data)
 
                 elif ioc_type == 'domain':
-                    cached_data = self.rdb.getDomainData(ioc)
+                    cached_data = self.db.getDomainData(ioc)
                     if not cached_data or 'VirusTotal' not in cached_data:
                         self.set_domain_data_in_DomainInfo(ioc, cached_data)
 
                 elif ioc_type == 'url':
-                    cached_data = self.rdb.getURLData(ioc)
+                    cached_data = self.db.getURLData(ioc)
                     # If VT data of this domain is not in the DomainInfo, ask VT
                     # If 'Virustotal' key is not in the DomainInfo
                     if not cached_data or 'VirusTotal' not in cached_data:
@@ -511,7 +509,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.read_api_key() or self.key in ('', None):
@@ -537,7 +535,7 @@ class Module(Module, multiprocessing.Process):
             for key, value in flow.items():
                 flow_data = json.loads(value)
             ip = flow_data['daddr']
-            cached_data = self.rdb.getIPData(ip)
+            cached_data = self.db.getIPData(ip)
             if not cached_data:
                 cached_data = {}
 
@@ -572,7 +570,7 @@ class Module(Module, multiprocessing.Process):
             )   # this is a dict {'uid':json flow data}
             domain = flow_data.get('query', False)
 
-            cached_data = self.rdb.getDomainData(domain)
+            cached_data = self.db.getDomainData(domain)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if domain and (
@@ -598,7 +596,7 @@ class Module(Module, multiprocessing.Process):
             # twid = data['twid']
             flow_data = json.loads(data['flow'])
             url = f'http://{flow_data["host"]}{flow_data.get("uri", "")}'
-            cached_data = self.rdb.getURLData(url)
+            cached_data = self.db.getURLData(url)
             # If VT data of this domain is not in the DomainInfo, ask VT
             # If 'Virustotal' key is not in the DomainInfo
             if not cached_data or 'VirusTotal' not in cached_data:

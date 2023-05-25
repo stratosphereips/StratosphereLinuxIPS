@@ -15,7 +15,7 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.c1 = self.rdb.subscribe('new_ip')
+        self.c1 = self.db.subscribe('new_ip')
         self.channels = {
             'new_ip': self.c1,
         }
@@ -88,7 +88,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
     def pre_main(self):
         utils.drop_root_privs()
         if not self.riskiq_email or not self.riskiq_key:
@@ -101,10 +101,10 @@ class Module(Module, multiprocessing.Process):
                 # return here means keep looping
                 return
             # Only get passive total dns data if we don't have it in the db
-            if self.rdb.get_passive_dns(ip):
+            if self.db.get_passive_dns(ip):
                 return
             # we don't have it in the db , get it from passive total
             if passive_dns := self.get_passive_dns(ip):
                 # we found data from passive total, store it in the db
-                self.rdb.set_passive_dns(ip, passive_dns)
+                self.db.set_passive_dns(ip, passive_dns)
 

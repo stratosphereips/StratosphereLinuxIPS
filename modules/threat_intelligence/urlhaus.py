@@ -12,8 +12,8 @@ class URLhaus():
     description = 'URLhaus lookups of URLs and hashes'
     authors = ['Alya Gomaa']
 
-    def __init__(self, rdb):
-        self.rdb = rdb
+    def __init__(self):
+        self.db = DBManager()
         self.create_urlhaus_session()
 
 
@@ -143,7 +143,7 @@ class URLhaus():
         attacker = flow["md5"]
         daddr = flow["daddr"]
 
-        ip_identification = self.rdb.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         # we have more info about the downloaded file
         # so we need a more detailed description
         description = f"Malicious downloaded file: {flow['md5']}. " \
@@ -162,7 +162,7 @@ class URLhaus():
 
         confidence = 0.7
 
-        self.rdb.setEvidence(evidence_type,
+        self.db.setEvidence(evidence_type,
                                  attacker_direction,
                                  attacker,
                                  threat_level,
@@ -207,5 +207,5 @@ class URLhaus():
         category = 'Malware'
         evidence_type = 'MaliciousURL'
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)

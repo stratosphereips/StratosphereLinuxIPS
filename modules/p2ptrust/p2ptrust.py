@@ -126,11 +126,11 @@ class Trust(Module, multiprocessing.Process):
         self.storage_name = 'IPsInfo'
         if rename_redis_ip_info:
             self.storage_name += str(self.port)
-        self.c1 = self.rdb.subscribe('report_to_peers')
+        self.c1 = self.db.subscribe('report_to_peers')
         # channel to send msgs to whenever slips needs info from other peers about an ip
-        self.c2 = self.rdb.subscribe(self.p2p_data_request_channel)
+        self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
-        self.c3 = self.rdb.subscribe(self.gopy_channel)
+        self.c3 = self.db.subscribe(self.gopy_channel)
         self.channels = {
             'report_to_peers': self.c1,
             self.p2p_data_request_channel: self.c2,
@@ -216,7 +216,6 @@ class Trust(Module, multiprocessing.Process):
             self.printer,
             self.trust_db,
             self.storage_name,
-            self.rdb,
             override_p2p=self.override_p2p,
             report_func=self.process_message_report,
             request_func=self.respond_to_message_request,
@@ -453,25 +452,25 @@ class Trust(Module, multiprocessing.Process):
         evidence_type = 'Malicious-IP-from-P2P-network'
 
         category = 'Anomaly.Traffic'
-        # dns_resolution = self.rdb.get_dns_resolution(ip)
+        # dns_resolution = self.db.get_dns_resolution(ip)
         # dns_resolution = dns_resolution.get('domains', [])
         # dns_resolution = f' ({dns_resolution[0:3]}), ' if dns_resolution else ''
         direction = 'from' if 'src' in ip_state else 'to'
         # we'll be using this to make the description more clear
         other_direction = 'to' if 'from' in direction else 'from'
 
-        ip_identification = self.rdb.get_ip_identification(ip)
+        ip_identification = self.db.get_ip_identification(ip)
         description = (
             f'connection {direction} blacklisted IP {ip} ({ip_identification}) '
             f'{other_direction} {profileid.split("_")[-1]}'
             f' Source: Slips P2P network.'
         )
 
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid, uid=uid)
 
         # add this ip to our MaliciousIPs hash in the database
-        self.rdb.set_malicious_ip(ip, profileid, twid)
+        self.db.set_malicious_ip(ip, profileid, twid)
 
     def handle_data_request(self, message_data: str) -> None:
         """
@@ -601,14 +600,14 @@ class Trust(Module, multiprocessing.Process):
         # All keys and data sent to this function is validated in go_director.py
         data = json.dumps(data)
         # give the report to evidenceProcess to decide whether to block or not
-        self.rdb.publish('new_blame', data)
+        self.db.publish('new_blame', data)
 
 
     def shutdown_gracefully(self):
         if self.start_pigeon:
             self.pigeon.send_signal(signal.SIGINT)
         self.trust_db.__del__()
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -627,7 +626,7 @@ class Trust(Module, multiprocessing.Process):
             self.rotator_thread.start()
 
         # should call self.update_callback
-        # self.c4 = self.rdb.subscribe(self.slips_update_channel)
+        # self.c4 = self.db.subscribe(self.slips_update_channel)
 
     def main(self):
         """main loop function"""
@@ -651,7 +650,7 @@ class Trust(Module, multiprocessing.Process):
             if not self.mutliaddress_printed:
                 # give the pigeon time to put the multiaddr in the db
                 time.sleep(2)
-                multiaddr = self.rdb.get_multiaddr()
+                multiaddr = self.db.get_multiaddr()
                 self.print(f"You Multiaddress is: {multiaddr}")
                 self.mutliaddress_printed = True
 

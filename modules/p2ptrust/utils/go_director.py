@@ -29,7 +29,6 @@ class GoDirector:
         printer: Printer,
         trustdb: TrustDB,
         storage_name: str,
-        rdb,
         override_p2p: bool = False,
         report_func=None,
         request_func=None,
@@ -61,7 +60,7 @@ class GoDirector:
         }
         self.key_type_processors = {'ip': validate_ip_address}
         self.read_configuration()
-        self.rdb = rdb
+        self.db = DBManager()
 
     def print(self, text: str, verbose: int = 1, debug: int = 0) -> None:
         self.printer.print(f'[TrustDB] {text}', verbose, debug)
@@ -423,13 +422,13 @@ class GoDirector:
             'report_time': utils.convert_format(report_time, utils.alerts_format),
         }
         report_info.update(evaluation)
-        self.rdb.store_p2p_report(key, report_info)
+        self.db.store_p2p_report(key, report_info)
 
         # create a new profile for the reported ip
         # with the width from slips.conf and the starttime as the report time
         if key_type == 'ip':
             profileid_of_attacker = f'profile_{key}'
-            self.rdb.addProfile(profileid_of_attacker, report_time, self.width)
+            self.db.addProfile(profileid_of_attacker, report_time, self.width)
             self.set_evidence_p2p_report(key, reporter, score, confidence, report_time, profileid_of_attacker)
 
     def set_evidence_p2p_report(self, ip, reporter, score, confidence, timestamp, profileid_of_attacker):
@@ -444,7 +443,7 @@ class GoDirector:
 
         # confidence depends on how long the connection
         # scale the confidence from 0 to 1, 1 means 24 hours long
-        ip_identification = self.rdb.get_ip_identification(ip, get_ti_data=False)
+        ip_identification = self.db.get_ip_identification(ip, get_ti_data=False)
         last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
 
         # this should never happen. if we have a report, we will have a reporter
@@ -456,15 +455,15 @@ class GoDirector:
         description = f'attacking another peer: {reporter_ip} ({reporter}). threat level: {threat_level} ' \
                       f'confidence: {confidence} {ip_identification}'
         # get the tw of this report time
-        if twid := self.rdb.getTWofTime(profileid_of_attacker, timestamp):
+        if twid := self.db.getTWofTime(profileid_of_attacker, timestamp):
             twid = twid[0]
         else:
             # create a new twid for the attacker profile that has the
             # report time to add this evidence to
-            twid = self.rdb.get_timewindow(timestamp, profileid_of_attacker)
+            twid = self.db.get_timewindow(timestamp, profileid_of_attacker)
 
         uid = ''
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid_of_attacker, twid=twid, uid=uid)
 
 

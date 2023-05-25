@@ -23,12 +23,10 @@ class Module(Module, multiprocessing.Process):
     def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
-        self.c1 = self.rdb.subscribe('new_letters')
+        self.c1 = self.db.subscribe('new_letters')
         self.channels = {
             'new_letters': self.c1,
         }
-
-
 
     def set_evidence(
         self,
@@ -53,14 +51,14 @@ class Module(Module, multiprocessing.Process):
         tupleid = tupleid.split('-')
         dstip, port, proto = tupleid[0], tupleid[1], tupleid[2]
         portproto = f'{port}/{proto}'
-        port_info = self.rdb.get_port_info(portproto)
-        ip_identification = self.rdb.get_ip_identification(dstip)
+        port_info = self.db.get_port_info(portproto)
+        ip_identification = self.db.get_ip_identification(dstip)
         description = (
             f'C&C channel, destination IP: {dstip} '
             f'port: {port_info.upper() if port_info else ""} {portproto} '
             f'score: {format(score, ".4f")}. {ip_identification}'
         )
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, categroy, source_target_tag=source_target_tag, port=port, proto=proto,
                                  profileid=profileid, twid=twid, uid=uid)
 
@@ -110,7 +108,7 @@ class Module(Module, multiprocessing.Process):
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
         return True
     def pre_main(self):
         utils.drop_root_privs()
@@ -184,7 +182,7 @@ class Module(Module, multiprocessing.Process):
                         'flow': flow,
                         'uid': uid,
                     }
-                    self.rdb.publish('check_jarm_hash', json.dumps(to_send))
+                    self.db.publish('check_jarm_hash', json.dumps(to_send))
 
             """
             elif 'udp' in tupleid.lower():

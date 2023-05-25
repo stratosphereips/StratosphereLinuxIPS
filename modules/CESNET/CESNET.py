@@ -20,7 +20,7 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         self.read_configuration()
-        self.c1 = self.rdb.subscribe('export_evidence')
+        self.c1 = self.db.subscribe('export_evidence')
         self.channels = {
             'export_evidence' : self.c1,
         }
@@ -263,11 +263,11 @@ class Module(Module, multiprocessing.Process):
 
                 src_ips.update({srcip: json.dumps(event_info)})
 
-        self.rdb.add_ips_to_IoC(src_ips)
+        self.db.add_ips_to_IoC(src_ips)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -295,13 +295,13 @@ class Module(Module, multiprocessing.Process):
 
     def main(self):
         if self.receive_from_warden:
-            last_update = self.rdb.get_last_warden_poll_time()
+            last_update = self.db.get_last_warden_poll_time()
             now = time.time()
             # did we wait the poll_delay period since last poll?
             if last_update + self.poll_delay < now:
                 self.import_alerts()
                 # set last poll time to now
-                self.rdb.set_last_warden_poll_time(now)
+                self.db.set_last_warden_poll_time(now)
 
         # in case of an interface or a file, push every time we get an alert
         msg = self.get_msg('export_evidence')

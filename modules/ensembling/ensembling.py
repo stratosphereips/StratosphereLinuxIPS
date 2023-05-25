@@ -1,7 +1,5 @@
 from slips_files.common.imports import *
-import sys
 import json
-import traceback
 
 class Module(Module, multiprocessing.Process):
     # Name: short name of the module. Do not use spaces
@@ -13,13 +11,13 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         # Retrieve the labels
-        self.normal_label = self.rdb.normal_label
-        self.malicious_label = self.rdb.malicious_label
-        self.c1 = self.rdb.subscribe('tw_closed')
+        self.normal_label = self.db.get_normal_label()
+        self.malicious_label = self.db.get_malicious_label()
+        self.c1 = self.db.subscribe('tw_closed')
         self.channels = {
             'tw_closed': self.c1
         }
-        self.separator = self.rdb.separator
+        self.separator = self.db.get_separator()
 
 
     def set_label_per_flow_dstip(self, profileid, twid):
@@ -32,7 +30,7 @@ class Module(Module, multiprocessing.Process):
         : return: None
         """
 
-        flows = self.rdb.get_all_flows_in_profileid_twid(profileid, twid)
+        flows = self.db.get_all_flows_in_profileid_twid(profileid, twid)
         dstip_labels_total = {}
         for flow_uid, flow_data in flows.items():
             flow_data = json.loads(flow_data)
@@ -55,7 +53,7 @@ class Module(Module, multiprocessing.Process):
                 malicious_label_total == normal_label_total == 0
                 or normal_label_total > malicious_label_total
             ):
-                self.rdb.set_first_stage_ensembling_label_to_flow(
+                self.db.set_first_stage_ensembling_label_to_flow(
                     profileid, twid, flow_uid, self.normal_label
                 )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
@@ -66,7 +64,7 @@ class Module(Module, multiprocessing.Process):
                     + 1
                 )
             else:
-                self.rdb.set_first_stage_ensembling_label_to_flow(
+                self.db.set_first_stage_ensembling_label_to_flow(
                     profileid, twid, flow_uid, self.malicious_label
                 )
                 # Second stage - calculate the amount of normal and malicious labels per daddr

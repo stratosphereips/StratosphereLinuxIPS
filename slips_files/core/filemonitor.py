@@ -26,17 +26,17 @@ from slips_files.common.imports import *
 class FileEventHandler(RegexMatchingEventHandler):
     REGEX = [r'.*\.log$', r'.*\.conf$']
 
-    def __init__(self, rdb, dir_to_monitor, input_type):
+    def __init__(self, dir_to_monitor, input_type):
         super().__init__(self.REGEX)
         self.dir_to_monitor = dir_to_monitor
         utils.drop_root_privs()
-        self.rdb = rdb
+        self.db = DBManager()
         self.input_type = input_type
 
     def on_created(self, event):
         filename, ext = os.path.splitext(event.src_path)
         if 'log' in ext:
-            self.rdb.add_zeek_file(filename + ext)
+            self.db.add_zeek_file(filename + ext)
 
     def on_moved(self, event):
         """this will be triggered everytime zeek renames all log files"""
@@ -44,7 +44,7 @@ class FileEventHandler(RegexMatchingEventHandler):
         if event.dest_path != 'True':
             to_send = {'old_file': event.dest_path, 'new_file': event.src_path}
             to_send = json.dumps(to_send)
-            self.rdb.publish('remove_old_files', to_send)
+            self.db.publish('remove_old_files', to_send)
             # give inputProc.py time to close the handle or delete the file
             time.sleep(1)
 
@@ -64,7 +64,7 @@ class FileEventHandler(RegexMatchingEventHandler):
                     while line := f.readline():
                         if 'termination' in line:
                             # this is how modules tell slips to terminate
-                            self.rdb.publish('finished_modules', 'stop_slips')
+                            self.db.publish('finished_modules', 'stop_slips')
                             break
         elif 'whitelist' in filename:
-            self.rdb.publish('reload_whitelist', 'reload')
+            self.db.publish('reload_whitelist', 'reload')

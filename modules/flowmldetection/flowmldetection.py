@@ -31,11 +31,11 @@ class Module(Module, multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         super().__init__(outputqueue)
         # Subscribe to the channel
-        self.c1 = self.rdb.subscribe('new_flow')
+        self.c1 = self.db.subscribe('new_flow')
         self.channels = {
             'new_flow': self.c1
         }
-        self.fieldseparator = self.rdb.get_field_separator()
+        self.fieldseparator = self.db.get_field_separator()
         # Set the output queue of our database instance
         # Read the configuration
         self.read_configuration()
@@ -214,11 +214,11 @@ class Module(Module, multiprocessing.Process):
         try:
             # We get all the flows so far
             # because this retraining happens in batches
-            flows = self.rdb.get_all_flows()
+            flows = self.db.get_all_flows()
 
             # Check how many different labels are in the DB
             # We need both normal and malware
-            labels = self.rdb.get_labels()
+            labels = self.db.get_labels()
             if len(labels) == 1:
                 # Only 1 label has flows
                 # There are not enough different labels, so insert two flows
@@ -374,16 +374,16 @@ class Module(Module, multiprocessing.Process):
         category = 'Anomaly.Traffic'
         attacker = f'{str(saddr)}:{str(sport)}-{str(daddr)}:{str(dport)}'
         evidence_type = 'MaliciousFlow'
-        ip_identification = self.rdb.get_ip_identification(daddr)
+        ip_identification = self.db.get_ip_identification(daddr)
         description = f'Malicious flow by ML. Src IP {saddr}:{sport} to {daddr}:{dport} {ip_identification}'
         timestamp = utils.convert_format(datetime.datetime.now(), utils.alerts_format)
-        self.rdb.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
+        self.db.setEvidence(evidence_type, attacker_direction, attacker, threat_level, confidence, description,
                                  timestamp, category, profileid=profileid, twid=twid)
 
     def shutdown_gracefully(self):
         # Confirm that the module is done processing
         self.store_model()
-        self.rdb.publish('finished_modules', self.name)
+        self.db.publish('finished_modules', self.name)
 
     def pre_main(self):
         utils.drop_root_privs()
@@ -412,7 +412,7 @@ class Module(Module, multiprocessing.Process):
 
                 # Is the amount in the DB of labels enough to retrain?
                 # Use labeled flows
-                labels = self.rdb.get_labels()
+                labels = self.db.get_labels()
                 sum_labeled_flows = sum(i[1] for i in labels)
                 if (
                     sum_labeled_flows >= self.minimum_lables_to_retrain
