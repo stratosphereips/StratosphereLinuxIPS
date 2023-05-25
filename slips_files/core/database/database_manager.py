@@ -539,6 +539,7 @@ class DBManager:
         return self.rdb.wasProfileTWModified(*args)
 
     def add_flow(self, *args):
+        #TODO del this
         return self.rdb.add_flow(*args)
 
     def add_software_to_profile(self, *args):
@@ -554,6 +555,7 @@ class DBManager:
         return self.rdb.add_out_notice(*args)
 
     def get_flow(self, *args):
+        #TODO delete this
         return self.rdb.get_flow(*args)
 
     def add_out_ssl(self, *args):
@@ -690,3 +692,43 @@ class DBManager:
 
     def get_the_other_ip_version(self, *args):
         return self.rdb.get_the_other_ip_version(*args)
+
+
+    def init_tables(self, *args):
+        return self.sqlite.init_tables(*args)
+
+    def _init_db(self, *args):
+        return self.sqlite._init_db(*args)
+
+    def create_table(self, *args):
+        return self.sqlite.create_table(*args)
+
+    def set_flow_label(self, *args):
+        return self.sqlite.set_flow_label(*args)
+
+    def get_flow(self, *args):
+        return self.sqlite.get_flow(*args)
+
+    def add_flow(self, *args):
+        return self.sqlite.add_flow(*args)
+
+    def add_altflow(self, *args):
+        return self.sqlite.add_altflow(*args)
+
+    def insert(self, *args):
+        return self.sqlite.insert(*args)
+
+    def update(self, *args):
+        return self.sqlite.update(*args)
+
+    def delete(self, *args):
+        return self.sqlite.delete(*args)
+
+    def select(self, *args):
+        return self.sqlite.select(*args)
+
+    def execute_query(self, *args):
+        return self.sqlite.execute_query(*args)
+
+    def close(self, *args):
+        return self.sqlite.close(*args)
