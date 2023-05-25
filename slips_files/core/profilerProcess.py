@@ -186,65 +186,39 @@ class ProfilerProcess(Module, multiprocessing.Process):
         """
         # These are the indexes for later fast processing
         line = new_line['data']
-        # use null instead of false because 0==False and starttime index
-        # won't be adde to the temp_dict at the end of this function
-        self.column_idx = {
-            'starttime': 'null',
-            'endtime': 'null',
-            'dur': 'null',
-            'proto': 'null',
-            'appproto': 'null',
-            'saddr': 'null',
-            'sport': 'null',
-            'dir': 'null',
-            'daddr': 'null',
-            'dport': 'null',
-            'state': 'null',
-            'pkts': 'null',
-            'spkts': 'null',
-            'dpkts': 'null',
-            'bytes': 'null',
-            'sbytes': 'null',
-            'dbytes': 'null',
-        }
-
+        self.column_idx = {}
+        # these are the fields as slips understands them {original_field_name, slips_field_name}
+        supported_fields = {
+                'time': 'starttime',
+                'endtime':'endtime',
+                'appproto': 'appproto',
+                'dur':'dur',
+                'proto':'proto',
+                'srca':'saddr',
+                'sport':'sport',
+                'dir':'dir',
+                'dsta':'daddr',
+                'dport':'dport',
+                'state':'state',
+                'totpkts':'pkts',
+                'totbytes':'bytes',
+                'srcbytes':'sbytes',
+                'dstbytes':'dbytes',
+                'srcpkts':'spkts',
+                'dstpkts':'dpkts',
+            }
         try:
             nline = line.strip().split(self.separator)
+            # parse the given nline, and try to map the fields we find to the fields slips
+            # undertsands from the dict above.
             for field in nline:
-                if 'time' in field.lower():
-                    self.column_idx['starttime'] = nline.index(field)
-                elif 'dur' in field.lower():
-                    self.column_idx['dur'] = nline.index(field)
-                elif 'proto' in field.lower():
-                    self.column_idx['proto'] = nline.index(field)
-                elif 'srca' in field.lower():
-                    self.column_idx['saddr'] = nline.index(field)
-                elif 'sport' in field.lower():
-                    self.column_idx['sport'] = nline.index(field)
-                elif 'dir' in field.lower():
-                    self.column_idx['dir'] = nline.index(field)
-                elif 'dsta' in field.lower():
-                    self.column_idx['daddr'] = nline.index(field)
-                elif 'dport' in field.lower():
-                    self.column_idx['dport'] = nline.index(field)
-                elif 'state' in field.lower():
-                    self.column_idx['state'] = nline.index(field)
-                elif 'totpkts' in field.lower():
-                    self.column_idx['pkts'] = nline.index(field)
-                elif 'totbytes' in field.lower():
-                    self.column_idx['bytes'] = nline.index(field)
-                elif 'srcbytes' in field.lower():
-                    self.column_idx['sbytes'] = nline.index(field)
-                elif 'srcpkts' in field.lower():
-                    self.column_idx['spkts'] = nline.index(field)
-                elif 'dstpkts' in field.lower():
-                    self.column_idx['dpkts'] = nline.index(field)
-            # Some of the fields were not found probably,
-            # so just delete them from the index if their value is False.
-            # If not we will believe that we have data on them
-            # We need a temp dict because we can not change the size of dict while analyzing it
-            temp_dict = {k: e for k, e in self.column_idx.items() if e != 'null'}
-            self.column_idx = temp_dict
+                for original_field, slips_field in supported_fields.items():
+                    if original_field in field.lower():
+                        # found 1 original field that slips supports. store its' slips
+                        # equivalent name and index in the column_index
+                        self.column_idx[slips_field] = nline.index(field)
+                        break
+
             return self.column_idx
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
