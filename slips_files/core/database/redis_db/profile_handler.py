@@ -1,20 +1,15 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database.sqlite_db.database import SQLiteDB
 from dataclasses import asdict
-import os
-import signal
 import redis
 import time
 import json
 from typing import Tuple
 import traceback
-import subprocess
-from datetime import datetime
 import ipaddress
 import sys
 import validators
-import ast
-from uuid import uuid4
 
 class ProfileHandler():
     """
@@ -22,6 +17,7 @@ class ProfileHandler():
     Contains all the logic related to flows, profiles and timewindows
     """
     name = 'DB'
+    sqlite = SQLiteDB('')
  
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
@@ -824,7 +820,7 @@ class ProfileHandler():
         """
         Add a module label to the flow
         """
-        flow = self.get_flow(profileid, twid, uid)
+        flow = self.sqlite.get_flow(uid)
         if flow and flow[uid]:
             data = json.loads(flow[uid])
             # here we dont care if add new module lablel or changing existing one
@@ -842,7 +838,8 @@ class ProfileHandler():
         """
         Get the label from the flow
         """
-        flow = self.get_flow(profileid, twid, uid)
+        # flow = self.get_flow(profileid, twid, uid)
+        flow = self.sqlite.get_flow(uid)
         if flow and flow.get(uid, False):
             flow = json.loads(flow[uid])
             return flow.get('module_labels', '')
@@ -877,7 +874,7 @@ class ProfileHandler():
         """
         Add a final label to the flow
         """
-        if flow := self.get_flow(profileid, twid, uid):
+        if flow := self.sqlite.get_flow(uid):
             data = json.loads(flow[uid])
             data['1_ensembling_label'] = ensembling_label
             data = json.dumps(data)
@@ -927,16 +924,6 @@ class ProfileHandler():
 
         # Convert to json string
         flow_dict = json.dumps(flow_dict)
-        # Store in the hash x.x.x.x_timewindowx_flows
-        value = self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}flows',
-            flow.uid,
-            flow_dict,
-        )
-        if not value:
-            # duplicate flow
-            return False
-
         # The key was not there before. So this flow is not repeated
         # Store the label in our uniq set, and increment it by 1
         if label:
@@ -966,6 +953,7 @@ class ProfileHandler():
         if flow.type_ != 'arp':
             self.publish('new_flow', to_send)
         return True
+
     def add_software_to_profile(
         self, profileid, flow
     ):
@@ -1821,7 +1809,7 @@ class ProfileHandler():
 
         twid_number: int = int(twid.split('timewindow')[-1])
         while twid_number > -1 and tws_to_search > 0:
-            flow = self.get_flow(profileid, f'timewindow{twid_number}', uid)
+            flow = self.sqlite.get_flow(uid)
 
             uid = next(iter(flow))
             if flow[uid]:

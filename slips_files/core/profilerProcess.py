@@ -1265,12 +1265,16 @@ class ProfilerProcess(Module, multiprocessing.Process):
             twid=self.twid,
             label=self.label,
         )
+
+        # store the original flow as benign in sqlite
         self.sqlite.add_flow(
             self.flow.uid,
             json.dumps(self.raw_flow),
             self.profileid,
             self.twid, 'benign'
-            )
+        )
+        res = self.sqlite.get_flow(self.flow.uid)
+
         self.publish_to_new_MAC(self.flow.smac, self.flow.saddr)
         self.publish_to_new_MAC(self.flow.dmac, self.flow.daddr)
 
@@ -1397,13 +1401,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.profileid,
             self.twid,
         )
-        # self.sqlite.add_flow(
-        #     self.flow.uid,
-        #     json.dumps(self.raw_flow),
-        #     self.profileid,
-        #     self.twid,
-        #     'benign')
-
 
     def handle_weird(self):
         """
@@ -1458,6 +1455,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
                 if flow in self.flow.type_:
                     cases[flow]()
             return False
+
 
         # if the flow type matched any of the ifs above,
         # mark this profile as modified

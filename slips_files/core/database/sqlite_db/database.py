@@ -49,8 +49,18 @@ class SQLiteDB():
                 # An error occurred during execution
                 print(f"Error executing query ({query}): {e}")
 
+
+    def get_flow(self, uid: str) -> dict:
+        """
+        Returns the flow with the given uid
+        the flow returned is read from conn.log
+        """
+        res = self.select('flows', condition=f'uid = "{uid}"')
+        res = res[0][1] if res else {}
+        return {uid: res}
+
     def add_flow(
-            self, uid:str, raw_flow: str, profileid: str, twid:str, label='benign'
+            self, uid: str, raw_flow: str, profileid: str, twid:str, label='benign'
             ):
         parameters = (profileid, twid, uid, utils.sanitize(raw_flow), label)
 

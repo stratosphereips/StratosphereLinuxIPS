@@ -582,7 +582,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
                 # TODO this is terrible and should be refactored
                 uid = all_uids
 
-            flow = self.rdb.get_flow(profileid, twid, uid)
+            flow = self.sqlite.get_flow(uid)
 
             # FP whitelisted alerts happen when the db returns an evidence
             # that isn't processed in this channel, in the tw_evidence below

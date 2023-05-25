@@ -451,8 +451,7 @@ class Main:
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
-            flush_db = True
-            self.rdb = RedisDB(self.redis_port, self.outputqueue, flush_db)
+            self.rdb = RedisDB(self.redis_port, self.outputqueue)
             self.sqlite = SQLiteDB(self.args.output)
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
