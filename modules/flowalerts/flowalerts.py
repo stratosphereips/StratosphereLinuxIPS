@@ -177,22 +177,14 @@ class Module(Module, multiprocessing.Process):
 
         if type(dur) == str:
             dur = float(dur)
-        module_name = 'flowalerts-long-connection'
+
         # If duration is above threshold, we should set an evidence
         if dur > self.long_connection_threshold:
-            # set "flowalerts-long-connection:malicious" label in the flow (needed for Ensembling module)
-
-            module_label = self.malicious_label
             self.helper.set_evidence_long_connection(
                 daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
             )
-        else:
-            # set "flowalerts-long-connection:normal" label in the flow (needed for Ensembling module)
-            module_label = self.normal_label
 
-        self.rdb.set_module_label_to_flow(
-            profileid, twid, uid, module_name, module_label
-        )
+
 
     def is_p2p(self, dport, proto, daddr):
         """
@@ -349,7 +341,8 @@ class Module(Module, multiprocessing.Process):
                 # get the conn.log with the same uid,
                 # returns {uid: {actual flow..}}
                 # always returns a dict, never returns None
-                flow: dict = self.rdb.get_flow(profileid, twid, uid)
+                # flow: dict = self.rdb.get_flow(profileid, twid, uid)
+                flow: dict = self.sqlite.get_flow(uid)
                 if flow := flow.get(uid):
                     flow = json.loads(flow)
                     if 'ts' in flow:
@@ -863,7 +856,8 @@ class Module(Module, multiprocessing.Process):
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
         """
-        original_ssh_flow = self.rdb.get_flow(profileid, twid, uid)
+        # this is supposedly the ssh flow read from conn.log
+        original_ssh_flow = self.sqlite.get_flow(uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(
