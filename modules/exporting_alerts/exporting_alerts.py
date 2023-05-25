@@ -21,9 +21,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Export alerts to slack or STIX format'
     authors = ['Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.port = None
         self.c1 = self.rdb.subscribe('export_evidence')
         self.channels = {

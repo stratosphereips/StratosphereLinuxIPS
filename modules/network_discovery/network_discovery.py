@@ -12,11 +12,11 @@ class PortScanProcess(Module, multiprocessing.Process):
     description = 'Detect Horizonal, Vertical Port scans, ICMP, and DHCP scans'
     authors = ['Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
-        self.horizontal_ps = HorizontalPortscan(rdb, sqlite)
-        self.vertical_ps = VerticalPortscan(rdb, sqlite)
+        super().__init__(outputqueue)
+        self.horizontal_ps = HorizontalPortscan()
+        self.vertical_ps = VerticalPortscan()
         self.outputqueue = outputqueue
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = self.rdb.get_field_separator()

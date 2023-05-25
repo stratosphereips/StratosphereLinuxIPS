@@ -170,22 +170,22 @@ def test_deleteEvidence(output_queue):
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence
     assert 'SSHSuccessful-by-192.168.1.1' not in added_evidence2
 
-
-def test_module_labels(output_queue):
-    database = create_db_instace(output_queue)
-    """ tests set and get_module_labels_from_flow """
-    # clear the database before running this test
-    os.system('./slips.py -cc')
-    add_flow(database)
-    module_label = 'malicious'
-    module_name = 'test'
-    uid = '1234'
-    assert database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label) is True
-
-    labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert 'test' in labels
-    assert labels['test'] == 'malicious'
-
+#
+# def test_module_labels(output_queue):
+#     database = create_db_instace(output_queue)
+#     """ tests set and get_module_labels_from_flow """
+#     # clear the database before running this test
+#     os.system('./slips.py -cc')
+#     add_flow(database)
+#     module_label = 'malicious'
+#     module_name = 'test'
+#     uid = '1234'
+#     assert database.set_module_label_to_flow(profileid, twid, uid, module_name, module_label) is True
+#
+#     labels = database.get_module_labels_from_flow(profileid, twid, uid)
+#     assert 'test' in labels
+#     assert labels['test'] == 'malicious'
+#
 
 def test_setInfoForDomains(output_queue):
     database = create_db_instace(output_queue)

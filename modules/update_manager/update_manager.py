@@ -13,15 +13,13 @@ class UpdateManager(Module, multiprocessing.Process):
     description = 'Update Threat Intelligence files'
     authors = ['Kamila Babayeva', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.read_configuration()
         # Start the DB
         # Update file manager
-        self.update_manager = UpdateFileManager(
-            self.outputqueue, rdb, sqlite
-        )
+        self.update_manager = UpdateFileManager(self.outputqueue)
         # Timer to update the ThreatIntelligence files
         self.timer_manager = InfiniteTimer(
             self.update_period, self.update_ti_files

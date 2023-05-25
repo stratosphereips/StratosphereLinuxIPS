@@ -13,11 +13,9 @@ import datetime
 
 
 class UpdateFileManager:
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         self.name = 'Update File Manager'
         self.outputqueue = outputqueue
-        self.sqlite = sqlite
-        self.rdb = rdb
         # Get a separator from the database
         self.separator = self.rdb.get_field_separator()
         self.read_configuration()

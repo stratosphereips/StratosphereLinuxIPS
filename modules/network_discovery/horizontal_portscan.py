@@ -7,9 +7,8 @@ import json
 import threading
 
 class HorizontalPortscan():
-    def __init__(self, rdb, sqlite):
-        self.rdb = rdb
-        self.sqlite = sqlite
+    def __init__(self, db):
+        self.db  = db
         # We need to know that after a detection, if we receive another flow
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.

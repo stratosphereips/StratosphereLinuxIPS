@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 # common imports for all modules
+from slips_files.core.database.database_manager import DBManager
 from slips_files.common.slips_utils import utils
 import sys
 import traceback
@@ -9,10 +10,9 @@ class Module(ABC):
     name = ''
     description = 'Template abstract module'
     authors = ['Template abstract Author']
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         self.outputqueue = outputqueue
-        self.rdb = rdb
-        self.sqlite = sqlite
+        self.db = DBManager()
         self.control_channel = self.rdb.subscribe('control_module')
         self.msg_received = True
 

@@ -48,9 +48,9 @@ class EvidenceProcess(Module, multiprocessing.Process):
     ):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.inputqueue = inputqueue
-        self.whitelist = Whitelist(outputqueue, rdb)
+        self.whitelist = Whitelist(outputqueue)
         self.separator = self.rdb.separator
         self.read_configuration()
         self.detection_threshold_in_this_width = self.detection_threshold * self.width / 60

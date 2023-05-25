@@ -44,6 +44,7 @@ class OutputProcess(multiprocessing.Process):
         multiprocessing.Process.__init__(self)
         self.verbose = verbose
         self.debug = debug
+        self.db = DBManager()
         ####### create the log files
         self.read_configuration()
         self.errors_logfile = stderr
@@ -64,7 +65,6 @@ class OutputProcess(multiprocessing.Process):
                 f'Verbosity: {str(self.verbose)}. Debugging: {str(self.debug)}'
             )
         self.done_reading_flows = False
-        self.rdb = rdb
         # are we in daemon of interactive mode
         self.slips_mode = self.rdb.get_slips_mode()
         # we update the stats printed by slips every 5seconds

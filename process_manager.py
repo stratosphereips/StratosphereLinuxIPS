@@ -135,15 +135,11 @@ class ProcessManager:
             if 'P2P Trust' == module_name:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.rdb,
-                    self.main.sqlite,
                     output_dir=self.main.args.output,
                 )
             else:
                 module = module_class(
                     self.main.outputqueue,
-                    self.main.rdb,
-                    self.main.sqlite,
                 )
             module.start()
             self.main.rdb.store_process_PID(

@@ -27,9 +27,9 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Sebastian Garcia']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         # Subscribe to the channel
         self.c1 = self.rdb.subscribe('new_flow')
         self.channels = {

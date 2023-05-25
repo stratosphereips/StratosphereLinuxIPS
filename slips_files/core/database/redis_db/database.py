@@ -1,5 +1,6 @@
 from slips_files.common.slips_utils import utils
 from slips_files.common.config_parser import ConfigParser
+from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.database.redis_db.ioc_handler import IoCHandler
 from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler

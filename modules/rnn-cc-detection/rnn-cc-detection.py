@@ -20,9 +20,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Detect C&C channels based on behavioral letters'
     authors = ['Sebastian Garcia', 'Kamila Babayeva', 'Ondrej Lukas']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.c1 = self.rdb.subscribe('new_letters')
         self.channels = {
             'new_letters': self.c1,

@@ -18,9 +18,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Block malicious IPs connecting to this device'
     authors = ['Sebastian Garcia, Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue)
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.c1 = self.rdb.subscribe('new_blocking')
         self.channels = {
             'new_blocking': self.c1,

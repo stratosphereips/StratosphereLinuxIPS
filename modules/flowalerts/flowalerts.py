@@ -24,9 +24,9 @@ class Module(Module, multiprocessing.Process):
     )
     authors = ['Kamila Babayeva', 'Sebastian Garcia', 'Alya Gomaa']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue)
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         # Read the configuration
         self.read_configuration()
         self.normal_label = self.rdb.normal_label
@@ -856,13 +856,14 @@ class Module(Module, multiprocessing.Process):
         Try Slips method to detect if SSH was successful by
         comparing all bytes sent and received to our threshold
         """
-        # this is supposedly the ssh flow read from conn.log
+        # this is the ssh flow read from conn.log not ssh.log
         original_ssh_flow = self.sqlite.get_flow(uid)
         original_flow_uid = next(iter(original_ssh_flow))
         if original_ssh_flow[original_flow_uid]:
             ssh_flow_dict = json.loads(
                 original_ssh_flow[original_flow_uid]
             )
+            print(f"@@@@@@@@@@@@@@@@ ssh_flow_dict {ssh_flow_dict}")
             size = ssh_flow_dict['allbytes']
             if size > self.ssh_succesful_detection_threshold:
                 daddr = ssh_flow_dict['daddr']

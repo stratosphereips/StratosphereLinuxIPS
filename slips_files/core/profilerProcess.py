@@ -42,11 +42,11 @@ class ProfilerProcess(Module, multiprocessing.Process):
     """A class to create the profiles for IPs and the rest of data"""
 
     def __init__(
-        self, inputqueue, outputqueue, verbose, debug, rdb, sqlite
+        self, inputqueue, outputqueue, verbose, debug
     ):
         self.name = 'Profiler'
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.inputqueue = inputqueue
         self.timeformat = None
         self.input_type = False

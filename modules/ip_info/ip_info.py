@@ -24,9 +24,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Get different info about an IP/MAC address'
     authors = ['Alya Gomaa', 'Sebastian Garcia']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         self.pending_mac_queries = multiprocessing.Queue()
         self.asn = ASN(self.rdb)
         self.JARM = JARM()

@@ -34,7 +34,7 @@ from slips_files.core.inputProcess import InputProcess
 from slips_files.core.outputProcess import OutputProcess
 from slips_files.core.profilerProcess import ProfilerProcess
 from slips_files.core.evidenceProcess import EvidenceProcess
-from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.core.database.database_manager import DBManager
 
 
 import signal
@@ -423,12 +423,7 @@ class Main:
             print('https://stratosphereips.org')
             print('-' * 27)
 
-
-
             self.setup_print_levels()
-            ##########################
-            # Creation of the threads
-            ##########################
 
             # get the port that is going to be used for this instance of slips
             if self.args.port:
@@ -451,8 +446,8 @@ class Main:
             # Output thread. outputprocess should be created first because it handles
             # the output of the rest of the threads.
             self.outputqueue = Queue()
-            self.rdb = RedisDB(self.redis_port, self.outputqueue)
-            self.sqlite = SQLiteDB(self.args.output)
+            self.db = DBManager(self.args.output, self.outputqueue, self.redis_port)
+
             # if stdout is redirected to a file,
             # tell outputProcess.py to redirect it's output as well
             current_stdout, stderr, slips_logfile = self.checker.check_output_redirection()
@@ -460,12 +455,10 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.rdb,
                 stdout=current_stdout,
                 stderr=stderr,
                 slips_logfile=slips_logfile,
             )
-            # this process starts the db
             output_process.start()
             self.rdb.store_process_PID('Output', int(output_process.pid))
 
@@ -525,9 +518,7 @@ class Main:
                 self.evidenceProcessQueue,
                 self.outputqueue,
                 self.args.output,
-                self.rdb,
-                self.sqlite,
-            )
+                )
             evidence_process.start()
             self.print(
                 f'Started {green("Evidence Process")} '
@@ -548,8 +539,6 @@ class Main:
                 self.outputqueue,
                 self.args.verbose,
                 self.args.debug,
-                self.rdb,
-                self.sqlite
             )
             profiler_process.start()
             self.print(
@@ -573,8 +562,6 @@ class Main:
                 self.zeek_bro,
                 self.zeek_folder,
                 self.line_type,
-                self.rdb,
-                self.sqlite,
             )
             inputProcess.start()
             self.print(

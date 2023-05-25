@@ -20,9 +20,9 @@ class Module(Module, multiprocessing.Process):
         'Sebastian Garcia',
     ]
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         # This line might not be needed when running SLIPS,
         # but when VT module is run standalone, it still uses the
         # database and this line is necessary. Do not delete it, instead move it to line 21.

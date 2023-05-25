@@ -21,9 +21,9 @@ class Module(Module, multiprocessing.Process):
     description = 'Template module'
     authors = ['Template Author']
 
-    def __init__(self, outputqueue, rdb, sqlite):
+    def __init__(self, outputqueue):
         multiprocessing.Process.__init__(self)
-        super().__init__(outputqueue, rdb, sqlite)
+        super().__init__(outputqueue)
         # To which channels do you wnat to subscribe? When a message
         # arrives on the channel the module will wakeup
         # The options change, so the last list is on the
