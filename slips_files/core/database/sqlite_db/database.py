@@ -9,17 +9,26 @@ class SQLiteDB():
     _obj = None
 
     def __new__(cls, output_dir):
+        # To treat the db as a singelton
         if cls._obj is None or not isinstance(cls._obj, cls):
             cls._obj = super(SQLiteDB, cls).__new__(SQLiteDB)
             cls._flows_db = os.path.join(output_dir, 'flows.sqlite')
             cls._init_db()
-            cls.conn = sqlite3.connect(cls._flows_db)
+            cls.conn = sqlite3.connect(cls._flows_db, check_same_thread=False)
             cls.cursor = cls.conn.cursor()
-            flows_schema = "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT"
-            cls.create_table('flows', flows_schema)
-
-        # To treat the db as a singelton
+            cls.init_tables()
         return cls._obj
+
+
+    @classmethod
+    def init_tables(cls):
+        """creates the tables we're gonna use"""
+        table_schema = {
+            'flows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT",
+            'altflows': "uid TEXT PRIMARY KEY, flow TEXT, label TEXT, profileid TEXT, twid TEXT"
+            }
+        for table_name, schema in table_schema.items():
+            cls.create_table(table_name, schema)
 
     @classmethod
     def _init_db(cls):
@@ -62,14 +71,26 @@ class SQLiteDB():
     def add_flow(
             self, uid: str, raw_flow: str, profileid: str, twid:str, label='benign'
             ):
-        parameters = (profileid, twid, uid, utils.sanitize(raw_flow), label)
 
-        self.conn.execute(
+        parameters = (profileid, twid, uid, utils.sanitize(raw_flow), label)
+        self.cursor.execute(
             'INSERT INTO flows (profileid, twid, uid, flow, label) '
             'VALUES (?, ?, ?, ?, ?);',
             parameters,
         )
         self.conn.commit()
+
+    def add_altflow(
+            self, uid: str, raw_flow: str, profileid: str, twid:str, label='benign'
+            ):
+        parameters = (profileid, twid, uid, utils.sanitize(str(raw_flow)), label)
+        self.cursor.execute(
+            'INSERT OR REPLACE INTO altflows (profileid, twid, uid, flow, label) '
+            'VALUES (?, ?, ?, ?, ?);',
+            parameters,
+        )
+        self.conn.commit()
+
 
     def insert(self, table_name, values):
         query = f"INSERT INTO {table_name} VALUES ({values})"
