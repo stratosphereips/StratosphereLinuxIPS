@@ -60,7 +60,6 @@ def test_check_long_connection(database, output_queue, dur, expected_label):
     )
     module_labels = database.get_module_labels_from_flow(profileid, twid, uid)
     assert 'flowalerts-long-connection' in module_labels
-    print(f"@@@@@@@@@@@@@@@@ module_labels: {module_labels}")
     assert module_labels['flowalerts-long-connection'] == expected_label
 
 

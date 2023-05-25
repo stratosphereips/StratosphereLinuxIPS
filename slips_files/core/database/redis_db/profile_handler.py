@@ -17,8 +17,7 @@ class ProfileHandler():
     Contains all the logic related to flows, profiles and timewindows
     """
     name = 'DB'
-    sqlite = SQLiteDB('')
- 
+
     def get_data_from_profile_tw(self, hash_key: str, key_name: str):
         try:
             """
@@ -213,13 +212,6 @@ class ProfileHandler():
         }
         # Convert to json string
         http_flow_dict = json.dumps(http_flow_dict)
-
-        self.r.hset(
-            f'{profileid}{ self.separator }{twid}{ self.separator }altflows',
-            flow.uid,
-            http_flow_dict,
-        )
-
         http_flow = {
             'profileid': profileid,
             'twid': twid,
@@ -289,12 +281,6 @@ class ProfileHandler():
 
         # Convert to json string
         dns_flow = json.dumps(dns_flow)
-        # Set the dns as alternative flow
-        self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            flow.uid,
-            dns_flow,
-        )
         # Publish the new dns received
         # TODO we should just send the DNS obj!
         to_send = {
@@ -743,7 +729,9 @@ class ProfileHandler():
             json.dumps(profileid_twid_data)
         )
         return True
+
     def get_altflow_from_uid(self, profileid, twid, uid):
+        #TODO move to sqlite
         """ Given a uid, get the alternative flow realted to it """
         return (
             self.r.hget(
@@ -826,11 +814,12 @@ class ProfileHandler():
             # here we dont care if add new module lablel or changing existing one
             data['module_labels'][module_name] = module_label
             data = json.dumps(data)
-            self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
-                uid,
-                data,
-            )
+            #TODO use sqlite
+            # self.r.hset(
+            #     profileid + self.separator + twid + self.separator + 'flows',
+            #     uid,
+            #     data,
+            # )
             return True
         return False
 
@@ -985,6 +974,7 @@ class ProfileHandler():
         gets total flows to process from the db
         """
         return self.r.hget('analysis', 'total_flows')
+
     def add_out_ssh(
         self,
         profileid,
@@ -1017,12 +1007,7 @@ class ProfileHandler():
         }
         # Convert to json string
         ssh_flow_dict = json.dumps(ssh_flow_dict)
-        # Set the dns as alternative flow
-        self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            flow.uid,
-            ssh_flow_dict,
-        )
+
         # Publish the new dns received
         to_send = {
             'profileid': profileid,
@@ -1070,17 +1055,16 @@ class ProfileHandler():
             'uid': flow.uid,
         }
         to_send = json.dumps(to_send)
-        self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            flow.uid,
-            notice_flow,
-        )
         self.publish('new_notice', to_send)
         self.print(f'Adding notice flow to DB: {notice_flow}', 3, 0)
-        self.give_threat_intelligence(profileid, twid,
-                                      'dstip', flow.starttime,
-                                      flow.uid, flow.daddr,
-                                      lookup=flow.daddr)
+        self.give_threat_intelligence(
+            profileid,
+            twid,
+            'dstip',
+            flow.starttime,
+            flow.uid,
+            flow.daddr,
+            lookup=flow.daddr)
 
     def get_flow(self, profileid, twid, uid):
         """
@@ -1131,11 +1115,6 @@ class ProfileHandler():
         # TODO do something with is_doh
         # Convert to json string
         ssl_flow = json.dumps(ssl_flow)
-        self.r.hset(
-            f'{profileid}{self.separator}{twid}{self.separator}altflows',
-            flow.uid,
-            ssl_flow,
-        )
         to_send = {
             'profileid': profileid,
             'twid': twid,

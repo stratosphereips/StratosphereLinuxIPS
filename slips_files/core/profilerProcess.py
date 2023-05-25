@@ -1284,13 +1284,27 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.twid,
             self.flow
         )
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
 
     def handle_http(self):
         self.rdb.add_out_http(
             self.profileid,
             self.twid,
             self.flow,
+        )
 
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
         )
 
     def handle_ssl(self):
@@ -1299,6 +1313,14 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.twid,
             self.flow
         )
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_ssh(self):
         self.rdb.add_out_ssh(
@@ -1306,6 +1328,14 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.twid,
             self.flow
         )
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_notice(self):
         self.rdb.add_out_notice(
@@ -1323,6 +1353,15 @@ class ProfilerProcess(Module, multiprocessing.Process):
         if used_port := self.flow.used_port:
             self.rdb.set_ftp_port(used_port)
 
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
+
     def handle_smtp(self):
         to_send = {
             'flow': asdict(self.flow),
@@ -1331,6 +1370,15 @@ class ProfilerProcess(Module, multiprocessing.Process):
         }
         to_send = json.dumps(to_send)
         self.rdb.publish('new_smtp', to_send)
+
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
 
     def handle_in_flows(self):
         """
@@ -1348,6 +1396,15 @@ class ProfilerProcess(Module, multiprocessing.Process):
         profile = self.rdb.add_software_to_profile(self.profileid, self.flow)
         self.publish_to_new_software()
 
+        self.sqlite.add_altflow(
+            self.flow.uid,
+            self.raw_flow,
+            self.profileid,
+            self.twid,
+            'benign'
+        )
+
+
     def handle_dhcp(self):
         if self.flow.smac:
             # send this to ip_info module to get vendor info about this MAC
@@ -1361,6 +1418,15 @@ class ProfilerProcess(Module, multiprocessing.Process):
             self.rdb.mark_profile_as_dhcp(self.profileid)
 
         self.publish_to_new_dhcp()
+        for uid in self.flow.uids:
+            self.sqlite.add_altflow(
+                uid,
+                self.raw_flow,
+                self.profileid,
+                self.twid,
+                'benign'
+            )
+
 
     def handle_files(self):
         """ Send files.log data to new_downloaded_file channel in vt module to see if it's malicious"""
@@ -1376,7 +1442,6 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.rdb.publish('new_downloaded_file', to_send)
 
     def handle_arp(self):
-        # todo this fun shoud be moved to the db
         to_send = {
             'flow': asdict(self.flow),
             'profileid': self.profileid,
@@ -1392,15 +1457,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         self.publish_to_new_MAC(
             self.flow.smac, self.flow.saddr
         )
-        #todo therse are add flow params
-
-
-        # Add the flow with all the fields interpreted
-        self.rdb.add_flow(
-            self.flow,
-            self.profileid,
-            self.twid,
-        )
+        #TODO we're not adding these flows to the sqlite db until we need them
 
     def handle_weird(self):
         """

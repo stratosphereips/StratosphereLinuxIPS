@@ -359,7 +359,6 @@ class ProcessManager:
                     # or slips was stuck looping for too long that the os sent an automatic sigint to kill slips
                     # pass to kill the remaining modules
                     pass
-
             # modules that aren't subscribed to any channel will always be killed and not stopped
             # comes here if the user pressed ctrl+c again
             self.kill_all(self.main.PIDs.copy())
@@ -376,6 +375,7 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.conf,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
+            self.main.sqlite.close()
 
             if self.main.mode == 'daemonized':
                 # if slips finished normally without stopping the daemon with -S
