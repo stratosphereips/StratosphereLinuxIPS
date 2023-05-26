@@ -802,38 +802,6 @@ class ProfileHandler():
             contacted_ips[daddr] = uid
         return contacted_ips
 
-    def set_module_label_to_flow(
-        self, profileid, twid, uid, module_name, module_label
-    ):
-        """
-        Add a module label to the flow
-        """
-        flow = self.sqlite.get_flow(uid)
-        if flow and flow[uid]:
-            data = json.loads(flow[uid])
-            # here we dont care if add new module lablel or changing existing one
-            data['module_labels'][module_name] = module_label
-            data = json.dumps(data)
-            #TODO use sqlite
-            # self.r.hset(
-            #     profileid + self.separator + twid + self.separator + 'flows',
-            #     uid,
-            #     data,
-            # )
-            return True
-        return False
-
-    def get_module_labels_from_flow(self, profileid, twid, uid):
-        """
-        Get the label from the flow
-        """
-        # flow = self.get_flow(profileid, twid, uid)
-        flow = self.sqlite.get_flow(uid)
-        if flow and flow.get(uid, False):
-            flow = json.loads(flow[uid])
-            return flow.get('module_labels', '')
-        else:
-            return {}
 
     def markProfileTWAsBlocked(self, profileid, twid):
         """Add this profile and tw to the list of blocked"""
@@ -856,21 +824,7 @@ class ProfileHandler():
         profile_tws = self.getBlockedProfTW(profileid)
         return twid in profile_tws
 
-    def set_first_stage_ensembling_label_to_flow(
-        self, profileid, twid, uid, ensembling_label
-    ):
-        """
-        Add a final label to the flow
-        """
-        if flow := self.sqlite.get_flow(uid):
-            data = json.loads(flow[uid])
-            data['1_ensembling_label'] = ensembling_label
-            data = json.dumps(data)
-            self.r.hset(
-                profileid + self.separator + twid + self.separator + 'flows',
-                uid,
-                data,
-            )
+
     def wasProfileTWModified(self, profileid, twid):
         """Retrieve from the db if this TW of this profile was modified"""
         data = self.r.zrank('ModifiedTW', profileid + self.separator + twid)
@@ -1065,19 +1019,6 @@ class ProfileHandler():
             flow.daddr,
             lookup=flow.daddr)
 
-    def get_flow(self, profileid, twid, uid):
-        """
-        Returns the flow in the specific time
-        The format is a dictionary
-        """
-        if not profileid:
-            # profileid is None if we're dealing with a profile
-            # outside of home_network when this param is given
-            return {}
-        temp = self.r.hget(
-            f'{profileid}{self.separator}{twid}{self.separator}flows', uid
-        )
-        return {uid: temp}
 
     def add_out_ssl(
         self,
@@ -1178,7 +1119,6 @@ class ProfileHandler():
         """Get a list of all the profiles"""
         profiles = self.r.smembers('profiles')
         return profiles if profiles != set() else {}
-
 
     def getTWsfromProfile(self, profileid):
         """
@@ -1774,31 +1714,15 @@ class ProfileHandler():
                 f'01|database|[DB] Error in add_tuple in database.py line {exception_line}'
             )
             self.print(f'01|database|[DB] {traceback.format_exc()}')
-    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
-        """
-        Search for the given uid in the given twid, or the tws before
-        :param go_back: how many hours back to search?
-        """
+
+    def get_tws_to_search(self, go_back):
         tws_to_search = float('inf')
 
         if go_back:
             hrs_to_search = float(go_back)
             tws_to_search = self.get_equivalent_tws(hrs_to_search)
+        return tws_to_search
 
-        twid_number: int = int(twid.split('timewindow')[-1])
-        while twid_number > -1 and tws_to_search > 0:
-            flow = self.sqlite.get_flow(uid)
-
-            uid = next(iter(flow))
-            if flow[uid]:
-                return flow
-
-            twid_number -= 1
-            # this reaches 0 when go_back is set to a number
-            tws_to_search -= 1
-
-        # uid isn't in this twid or any of the previous ones
-        return {uid: None}
 
     def get_profile_modules_labels(self, profileid):
         """

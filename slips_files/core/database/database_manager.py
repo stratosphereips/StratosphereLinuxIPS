@@ -517,12 +517,6 @@ class DBManager:
     def get_all_contacted_ips_in_profileid_twid(self, *args):
         return self.rdb.get_all_contacted_ips_in_profileid_twid(*args)
 
-    def set_module_label_to_flow(self, *args):
-        return self.rdb.set_module_label_to_flow(*args)
-
-    def get_module_labels_from_flow(self, *args):
-        return self.rdb.get_module_labels_from_flow(*args)
-
     def markProfileTWAsBlocked(self, *args):
         return self.rdb.markProfileTWAsBlocked(*args)
 
@@ -532,15 +526,8 @@ class DBManager:
     def checkBlockedProfTW(self, *args):
         return self.rdb.checkBlockedProfTW(*args)
 
-    def set_first_stage_ensembling_label_to_flow(self, *args):
-        return self.rdb.set_first_stage_ensembling_label_to_flow(*args)
-
     def wasProfileTWModified(self, *args):
         return self.rdb.wasProfileTWModified(*args)
-
-    def add_flow(self, *args, **kwargs):
-        #TODO del this
-        return self.rdb.add_flow(*args, **kwargs)
 
     def add_software_to_profile(self, *args):
         return self.rdb.add_software_to_profile(*args)
@@ -553,10 +540,6 @@ class DBManager:
 
     def add_out_notice(self, *args):
         return self.rdb.add_out_notice(*args)
-
-    def get_flow(self, *args):
-        #TODO delete this
-        return self.rdb.get_flow(*args)
 
     def add_out_ssl(self, *args):
         return self.rdb.add_out_ssl(*args)
@@ -654,8 +637,29 @@ class DBManager:
     def add_tuple(self, *args):
         return self.rdb.add_tuple(*args)
 
-    def search_tws_for_flow(self, *args, **kwargs):
-        return self.rdb.search_tws_for_flow(*args, **kwargs)
+    def search_tws_for_flow(self, profileid, twid, uid, go_back=False):
+        """
+        Search for the given uid in the given twid, or the tws before
+        :param go_back: how many hours back to search?
+        """
+
+        #TODO test this
+        tws_to_search = self.rdb.get_tws_to_search(go_back)
+
+        twid_number: int = int(twid.split('timewindow')[-1])
+        while twid_number > -1 and tws_to_search > 0:
+            flow = self.sqlite.get_flow(uid, twid=f'timewindow{twid_number}')
+
+            uid = next(iter(flow))
+            if flow[uid]:
+                return flow
+
+            twid_number -= 1
+            # this reaches 0 when go_back is set to a number
+            tws_to_search -= 1
+
+        # uid isn't in this twid or any of the previous ones
+        return {uid: None}
 
     def get_profile_modules_labels(self, *args):
         return self.rdb.get_profile_modules_labels(*args)
@@ -714,11 +718,15 @@ class DBManager:
     def set_flow_label(self, *args):
         return self.sqlite.set_flow_label(*args)
 
-    def get_flow(self, *args):
-        return self.sqlite.get_flow(*args)
+    def get_flow(self, *args, **kwargs):
+        return self.sqlite.get_flow(*args, **kwargs)
 
-    def add_flow(self, *args):
-        return self.sqlite.add_flow(*args)
+    def add_flow(self, *args, **kwargs):
+        # stores it in the db
+        self.sqlite.add_flow(*args, **kwargs)
+        # handles the channels and labels etc.
+        return self.rdb.add_flow(*args, **kwargs)
+
 
     def add_altflow(self, *args):
         return self.sqlite.add_altflow(*args)
