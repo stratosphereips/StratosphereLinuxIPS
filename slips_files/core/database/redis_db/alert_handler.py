@@ -3,7 +3,7 @@ import time
 import json
 from uuid import uuid4
 
-class AlertHandler():
+class AlertHandler:
     """
     Helper class for the Redis class in database.py
     Contains all the logic related to setting and retrieving evidence and alerts in the db

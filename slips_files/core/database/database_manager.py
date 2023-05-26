@@ -20,7 +20,7 @@ class DBManager:
             cls.sqlite = SQLiteDB(output_dir)
             cls.rdb = RedisDB(redis_port, output_queue)
 
-            return cls._obj
+        return cls._obj
 
     def publish(self, *args):
         return self.rdb.publish(*args)
@@ -31,11 +31,11 @@ class DBManager:
     def publish_stop(self, *args):
         return self.rdb.publish_stop(*args)
 
-    def get_message(self, *args):
-        return self.rdb.get_message(*args)
+    def get_message(self, *args, **kwargs):
+        return self.rdb.get_message(*args, **kwargs)
 
-    def print(self, *args):
-        return self.rdb.print(*args)
+    def print(self, *args, **kwargs):
+        return self.rdb.print(*args, **kwargs)
 
     def getIPData(self, *args):
         return self.rdb.getIPData(*args)
@@ -43,8 +43,8 @@ class DBManager:
     def set_new_ip(self, *args):
         return self.rdb.set_new_ip(*args)
 
-    def ask_for_ip_info(self, *args):
-        return self.rdb.ask_for_ip_info(*args)
+    def ask_for_ip_info(self, *args, **kwargs):
+        return self.rdb.ask_for_ip_info(*args, **kwargs)
 
     def update_times_contacted(self, *args):
         return self.rdb.update_times_contacted(*args)
@@ -283,8 +283,8 @@ class DBManager:
     def get_zeek_path(self, *args):
         return self.rdb.get_zeek_path(*args)
 
-    def store_std_file(self, *args):
-        return self.rdb.store_std_file(*args)
+    def store_std_file(self, *args, **kwargs):
+        return self.rdb.store_std_file(*args, **kwargs)
 
     def get_stdfile(self, *args):
         return self.rdb.get_stdfile(*args)
@@ -308,8 +308,8 @@ class DBManager:
     def get_flows_causing_evidence(self, *args):
         return self.rdb.get_flows_causing_evidence(*args)
 
-    def setEvidence(self, *args):
-        return self.rdb.setEvidence(*args)
+    def setEvidence(self, *args, **kwargs):
+        return self.rdb.setEvidence(*args, **kwargs)
 
     def init_evidence_number(self, *args):
         return self.rdb.init_evidence_number(*args)
@@ -362,8 +362,8 @@ class DBManager:
     def get_ti_queue_size(self, *args):
         return self.rdb.get_ti_queue_size(*args)
 
-    def give_threat_intelligence(self, *args):
-        return self.rdb.give_threat_intelligence(*args)
+    def give_threat_intelligence(self, *args, **kwargs):
+        return self.rdb.give_threat_intelligence(*args, **kwargs)
 
     def delete_ips_from_IoC_ips(self, *args):
         return self.rdb.delete_ips_from_IoC_ips(*args)
@@ -461,8 +461,8 @@ class DBManager:
     def setNewDomain(self, *args):
         return self.rdb.setNewDomain(*args)
 
-    def setInfoForDomains(self, *args):
-        return self.rdb.setInfoForDomains(*args)
+    def setInfoForDomains(self, *args, **kwargs):
+        return self.rdb.setInfoForDomains(*args, **kwargs)
 
     def setInfoForURLs(self, *args):
         return self.rdb.setInfoForURLs(*args)
@@ -538,9 +538,9 @@ class DBManager:
     def wasProfileTWModified(self, *args):
         return self.rdb.wasProfileTWModified(*args)
 
-    def add_flow(self, *args):
+    def add_flow(self, *args, **kwargs):
         #TODO del this
-        return self.rdb.add_flow(*args)
+        return self.rdb.add_flow(*args, **kwargs)
 
     def add_software_to_profile(self, *args):
         return self.rdb.add_software_to_profile(*args)
@@ -654,8 +654,8 @@ class DBManager:
     def add_tuple(self, *args):
         return self.rdb.add_tuple(*args)
 
-    def search_tws_for_flow(self, *args):
-        return self.rdb.search_tws_for_flow(*args)
+    def search_tws_for_flow(self, *args, **kwargs):
+        return self.rdb.search_tws_for_flow(*args, **kwargs)
 
     def get_profile_modules_labels(self, *args):
         return self.rdb.get_profile_modules_labels(*args)

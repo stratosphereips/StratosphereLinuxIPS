@@ -342,6 +342,7 @@ class IoCHandler():
 
     def delete_file_info(self, file):
         self.rcache.hdel('TI_files_info', file)
+
     def getURLData(self, url):
         """
         Return information about this URL
@@ -354,7 +355,6 @@ class IoCHandler():
         data = self.rcache.hget('URLsInfo', url)
         data = json.loads(data) if data else False
         return data
-
 
     def setNewURL(self, url: str):
         """

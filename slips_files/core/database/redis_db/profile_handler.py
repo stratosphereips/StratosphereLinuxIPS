@@ -842,7 +842,6 @@ class ProfileHandler():
         self.r.hset('BlockedProfTW', profileid, json.dumps(tws))
 
 
-
     def getBlockedProfTW(self, profileid):
         """Return all the list of blocked tws"""
         if tws := self.r.hget('BlockedProfTW', profileid):
