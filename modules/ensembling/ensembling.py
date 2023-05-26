@@ -53,9 +53,9 @@ class Module(Module, multiprocessing.Process):
                 malicious_label_total == normal_label_total == 0
                 or normal_label_total > malicious_label_total
             ):
-                self.db.set_first_stage_ensembling_label_to_flow(
-                    profileid, twid, flow_uid, self.normal_label
-                )
+                # self.db.set_first_stage_ensembling_label_to_flow(
+                #     profileid, twid, flow_uid, self.normal_label
+                # )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
                 dstip_labels_total[flow_data['daddr']][self.normal_label] = (
                     dstip_labels_total[flow_data['daddr']].get(
@@ -64,9 +64,9 @@ class Module(Module, multiprocessing.Process):
                     + 1
                 )
             else:
-                self.db.set_first_stage_ensembling_label_to_flow(
-                    profileid, twid, flow_uid, self.malicious_label
-                )
+                # self.db.set_first_stage_ensembling_label_to_flow(
+                #     profileid, twid, flow_uid, self.malicious_label
+                # )
                 # Second stage - calculate the amount of normal and malicious labels per daddr
                 dstip_labels_total[flow_data['daddr']][
                     self.malicious_label
