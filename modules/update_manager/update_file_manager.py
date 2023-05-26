@@ -16,6 +16,7 @@ class UpdateFileManager:
     def __init__(self, outputqueue):
         self.name = 'Update File Manager'
         self.outputqueue = outputqueue
+        self.db = DBManager()
         # Get a separator from the database
         self.separator = self.db.get_field_separator()
         self.read_configuration()

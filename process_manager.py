@@ -142,7 +142,7 @@ class ProcessManager:
                     self.main.outputqueue,
                 )
             module.start()
-            self.main.rdb.store_process_PID(
+            self.main.db.store_process_PID(
                 module_name, int(module.pid)
             )
             description = modules_to_call[module_name]['description']
@@ -223,7 +223,7 @@ class ProcessManager:
         ]
         if self.main.args.blocking:
             modules_to_be_killed_last.append('Blocking')
-        if 'exporting_alerts' not in self.main.rdb.get_disabled_modules():
+        if 'exporting_alerts' not in self.main.db.get_disabled_modules():
             modules_to_be_killed_last.append('Exporting Alerts')
         return modules_to_be_killed_last
 
@@ -241,26 +241,26 @@ class ProcessManager:
 
             wait_for_modules_to_finish  = self.main.conf.wait_for_modules_to_finish()
             # close all tws
-            self.main.rdb.check_TW_to_close(close_all=True)
+            self.main.db.check_TW_to_close(close_all=True)
 
             # set analysis end date
             end_date = self.main.metadata_man.set_analysis_end_date()
 
-            start_time = self.main.rdb.get_slips_start_time()
+            start_time = self.main.db.get_slips_start_time()
             analysis_time = utils.get_time_diff(start_time, end_date, return_type='minutes')
             print(f'[Main] Analysis finished in {analysis_time:.2f} minutes')
 
             # Stop the modules that are subscribed to channels
-            self.main.rdb.publish_stop()
+            self.main.db.publish_stop()
 
             # get dict of PIDs spawned by slips
-            self.main.PIDs = self.main.rdb.get_pids()
+            self.main.PIDs = self.main.db.get_pids()
 
             # we don't want to kill this process
             self.main.PIDs.pop('slips.py', None)
 
             if self.main.mode == 'daemonized':
-                profilesLen = self.main.rdb.getProfilesLen()
+                profilesLen = self.main.db.getProfilesLen()
                 self.main.daemon.print(f'Total analyzed IPs: {profilesLen}.')
 
             modules_to_be_killed_last: list = self.get_modules_to_be_killed_last()
