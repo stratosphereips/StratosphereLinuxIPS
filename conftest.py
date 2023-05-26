@@ -5,6 +5,7 @@ for example: setting up the database, input_queue, output_queue, etc..
 import pytest
 import os, sys, inspect
 from multiprocessing import Queue
+from slips_files.core.database.database_manager import DBManager
 
 
 # add parent dir to path for imports to work
@@ -45,7 +46,6 @@ def profiler_queue():
 
 @pytest.fixture
 def database(output_queue):
-    from slips_files.core.database.redis_db.database import RedisDB
-    rdb = RedisDB(1234, output_queue)
-    rdb.print = do_nothing
-    return rdb
+    db = DBManager('output/', output_queue, 1234)
+    db.print = do_nothing
+    return db
