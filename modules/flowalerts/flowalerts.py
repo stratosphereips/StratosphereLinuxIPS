@@ -367,8 +367,7 @@ class Module(Module, multiprocessing.Process):
             return False
 
         # orig_bytes is number of payload bytes downloaded
-        downloaded_bytes = flow.get('allbytes', 0) - flow.get('sbytes',0)
-
+        downloaded_bytes = flow.get('resp_bytes', 0)
         if downloaded_bytes >= self.pastebin_downloads_threshold:
             self.helper.set_evidence_pastebin_download(daddr, downloaded_bytes, ts, profileid, twid, uid)
             return True
@@ -860,11 +859,11 @@ class Module(Module, multiprocessing.Process):
             ssh_flow_dict = json.loads(
                 original_ssh_flow[original_flow_uid]
             )
-            print(f"@@@@@@@@@@@@@@@@ ssh_flow_dict {ssh_flow_dict}")
-            size = ssh_flow_dict['allbytes']
+            # size = ssh_flow_dict['allbytes']
+            size = ssh_flow_dict['orig_bytes'] + ssh_flow_dict['resp_bytes']
             if size > self.ssh_succesful_detection_threshold:
-                daddr = ssh_flow_dict['daddr']
-                saddr = ssh_flow_dict['saddr']
+                daddr = ssh_flow_dict['id.orig_h']
+                saddr = ssh_flow_dict['id.resp_h']
                 # Set the evidence because there is no
                 # easier way to show how Slips detected
                 # the successful ssh and not Zeek

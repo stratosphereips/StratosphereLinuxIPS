@@ -572,15 +572,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
             proto = data.get('proto', False)
             source_target_tag = data.get('source_target_tag', False)
             evidence_ID = data.get('ID', False)
-            if type(all_uids) == list:
-                # more than 1 flow caused the evidence
-                uid = all_uids[-1]
-            else:
-                # all_uids is just 1 str uid
-                # TODO this is terrible and should be refactored
-                uid = all_uids
-
-            flow = self.db.get_flow(uid)
 
             # FP whitelisted alerts happen when the db returns an evidence
             # that isn't processed in this channel, in the tw_evidence below
@@ -588,7 +579,7 @@ class EvidenceProcess(Module, multiprocessing.Process):
             self.db.mark_evidence_as_processed(evidence_ID)
 
             # Ignore alert if IP is whitelisted
-            if flow and self.whitelist.is_whitelisted_evidence(
+            if self.whitelist.is_whitelisted_evidence(
                 srcip, attacker, attacker_direction, description
             ):
                 self.db.cache_whitelisted_evidence_ID(evidence_ID)
