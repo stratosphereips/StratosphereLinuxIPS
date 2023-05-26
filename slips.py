@@ -657,7 +657,7 @@ class Main:
                     intervals_to_wait -= 1
 
 
-                self.db.pubsub.check_health()
+                self.db.check_health()
         except KeyboardInterrupt:
             # the EINTR error code happens if a signal occurred while the system call was in progress
             # comes here if zeek terminates while slips is still working

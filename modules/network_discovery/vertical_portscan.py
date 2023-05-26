@@ -13,9 +13,6 @@ class VerticalPortscan():
         # that does not modify the count for the detection, we are not
         # re-detecting again only because the threshold was overcomed last time.
         self.cache_det_thresholds = {}
-        # Retrieve malicious/benigh labels
-        self.normal_label = self.db.normal_label
-        self.malicious_label = self.db.malicious_label
         # Get from the database the separator used to separate the IP and the word profile
         self.fieldseparator = self.db.get_field_separator()
         # The minimum amount of ports to scan in vertical scan

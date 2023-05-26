@@ -36,7 +36,7 @@ class Module(Module, multiprocessing.Process, URLhaus):
         self.circllu_calls_thread = threading.Thread(
             target=self.make_pending_query, daemon=True
         )
-        self.urlhaus = URLhaus(self.rdb)
+        self.urlhaus = URLhaus()
 
     def make_pending_query(self):
         """

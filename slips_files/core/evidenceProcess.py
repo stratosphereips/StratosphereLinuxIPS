@@ -43,8 +43,6 @@ class EvidenceProcess(Module, multiprocessing.Process):
         inputqueue,
         outputqueue,
         output_dir,
-        rdb,
-        sqlite
     ):
         self.name = 'Evidence'
         multiprocessing.Process.__init__(self)

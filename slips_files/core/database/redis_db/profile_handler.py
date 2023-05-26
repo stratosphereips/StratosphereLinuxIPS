@@ -1848,7 +1848,7 @@ class ProfileHandler():
             # profileid is None if we're dealing with a profile
             # outside of home_network when this param is given
             return False
-        srcip = profileid.split('_')[1]
+        srcip = profileid.split('_')[-1]
         ip = False
         if validators.ipv4(srcip):
             ip = self.get_ipv6_from_profile(profileid)

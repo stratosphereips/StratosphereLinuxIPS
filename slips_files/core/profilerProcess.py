@@ -1258,17 +1258,10 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # Add the srcport
         port_type = 'Src'
         self.db.add_port(self.profileid, self.twid, self.flow, role, port_type)
-        # Add the flow with all the fields interpreted
-        self.db.add_flow(
-            self.flow,
-            profileid=self.profileid,
-            twid=self.twid,
-            label=self.label,
-        )
-
         # store the original flow as benign in sqlite
         self.db.add_flow(
-            self.flow.uid,
+            self.flow,
+
             json.dumps(self.raw_flow),
             self.profileid,
             self.twid, 'benign'
@@ -1554,6 +1547,7 @@ class ProfilerProcess(Module, multiprocessing.Process):
         # Add the flow with all the fields interpreted
         self.db.add_flow(
             self.flow,
+            json.dumps(self.raw_flow),
             profileid=profileid,
             twid=twid,
             label=self.label,

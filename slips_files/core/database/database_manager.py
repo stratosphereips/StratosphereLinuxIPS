@@ -628,6 +628,9 @@ class DBManager:
     def check_TW_to_close(self, *args):
         return self.rdb.check_TW_to_close(*args)
 
+    def check_health(self):
+        self.rdb.pubsub.check_health()
+
     def markProfileTWAsClosed(self, *args):
         return self.rdb.markProfileTWAsClosed(*args)
 
@@ -721,11 +724,16 @@ class DBManager:
     def get_flow(self, *args, **kwargs):
         return self.sqlite.get_flow(*args, **kwargs)
 
-    def add_flow(self, *args, **kwargs):
+    def add_flow(self, flow, raw_flow: str, profileid: str, twid:str, label='benign'):
         # stores it in the db
-        self.sqlite.add_flow(*args, **kwargs)
+        self.sqlite.add_flow(flow.uid, raw_flow, profileid, twid, label=label)
         # handles the channels and labels etc.
-        return self.rdb.add_flow(*args, **kwargs)
+        return self.rdb.add_flow(
+            flow,
+            profileid=profileid,
+            twid=twid,
+            label=label
+        )
 
 
     def add_altflow(self, *args):
