@@ -2,59 +2,20 @@
 This file tests 2 different config files other than slips' default config/slips.conf
 test/test.conf and tests/test2.conf
 """
+from tests.common_test_utils import (
+        is_evidence_present,
+        create_output_dir,
+        has_errors,
+        check_for_text,
+        get_db_manager
+)
+
 import pytest
 from ...slips import *
-from slips_files.core.database.redis_db.database import RedisDB
-from pathlib import Path
 import shutil
-import redis
+
+
 alerts_file = 'alerts.log'
-
-
-def connect_to_redis(port, output_queue):
-    return RedisDB(port, output_queue, False)
-
-def is_evidence_present(log_file, expected_evidence):
-    """Function to read the log file line by line and returns when it finds the expected evidence"""
-    with open(log_file, 'r') as f:
-        while line := f.readline():
-            if expected_evidence in line:
-                return True
-        # evidence not found in any line
-        return False
-
-def create_output_dir(dirname):
-    """
-    creates this output dir inside output/integration_tests/
-    returns a full path to the created output dir
-    """
-
-    path = Path(os.path.join('output/integration_tests/', dirname))
-    # clear output dir before running the test
-    if os.path.exists(path):
-        shutil.rmtree(path)
-
-    path.mkdir(parents=True, exist_ok=True)
-
-    return path
-
-def has_errors(output_dir):
-    """function to parse slips_output file and check for errors"""
-    error_files = ('slips_output.txt', 'errors.log')
-    error_files = [os.path.join(output_dir, file) for file in error_files]
-
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
-    for file in error_files:
-        with open(file, 'r') as f:
-            for line in f:
-                if '<class' in line or 'error' in line:
-                    # connection errors shouldn't fail the integration tests
-                    if 'Connection error' in line or 'while downloading' in line:
-                        continue
-                    return True
-
-    return False
-
 
 def create_Main_instance(input_information):
     """returns an instance of Main() class in slips.py"""
@@ -64,14 +25,6 @@ def create_Main_instance(input_information):
     main.line_type = False
     return main
 
-def check_for_text(txt, output_dir):
-    """function to parse slips_output file and check for a given string"""
-    slips_output = os.path.join(output_dir, 'slips_output.txt')
-    with open(slips_output, 'r') as f:
-        for line in f:
-            if txt in line:
-                return True
-    return False
 
 @pytest.mark.parametrize(
     'pcap_path, expected_profiles, output_dir, redis_port',
@@ -91,6 +44,8 @@ def test_conf_file(
     In this test we're using tests/test.conf
     """
     output_dir = create_output_dir(output_dir)
+    output_dir = create_output_dir(output_dir)
+
     output_file = os.path.join(output_dir, 'slips_output.txt')
     command = f'./slips.py ' \
               f'-t ' \
@@ -104,8 +59,8 @@ def test_conf_file(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port, output_queue)
-    profiles =int(database.getProfilesLen())
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    profiles = int(database.getProfilesLen())
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
 
@@ -173,7 +128,7 @@ def test_conf_file2(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port, output_queue)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
 
     # test 1 homenet ip
     # the only profile we should have is the one in home_network parameter

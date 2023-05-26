@@ -2,96 +2,25 @@
 This file tests all kinds of input in our dataset/
 It checks a random evidence and the total number of profiles in every file
 """
+from tests.common_test_utils import (
+        get_total_profiles,
+        is_evidence_present,
+        create_output_dir,
+        has_errors,
+        get_db_manager,
+)
 import pytest
 from ...slips import *
-from pathlib import Path
 import shutil
-import redis
+
 alerts_file = 'alerts.log'
-integration_tests_dir = 'output/integration_tests/'
-#create the integration tests dir
-
-if not os.path.exists(integration_tests_dir):
-    path = Path(integration_tests_dir)
-    path.mkdir(parents=True, exist_ok=True)
 
 
-def connect_to_redis(port):
-    db = redis.StrictRedis(
-            host='localhost',
-            port=port,
-            db=0,
-            charset='utf-8',
-            socket_keepalive=True,
-            decode_responses=True,
-            retry_on_timeout=True,
-            health_check_interval=20,
-        )
-    return db
-
-def get_total_profiles(db):
-    return int(db.scard('profiles'))
-
-def is_evidence_present(log_file, expected_evidence):
-    """Function to read the log file line by line and returns when it finds the expected evidence"""
-    with open(log_file, 'r') as f:
-        while line := f.readline():
-            if expected_evidence in line:
-                return True
-        # evidence not found in any line
-        return False
-
-def create_output_dir(dirname):
-    """
-    creates this output dir inside output/integration_tests/
-    returns a full path to the created output dir
-    """
-
-    path = Path(os.path.join(integration_tests_dir, dirname))
-    # clear output dir before running the test
-    if os.path.exists(path):
-        shutil.rmtree(path)
-
-    path.mkdir(parents=True, exist_ok=True)
-
-    return path
-
-def has_errors(output_dir):
-    """function to parse slips_output file and check for errors"""
-    error_files = ('slips_output.txt', 'errors.log')
-    error_files = [os.path.join(output_dir, file) for file in error_files]
-
-    # we can't redirect stderr to a file and check it because we catch all exceptions in slips
-    for file in error_files:
-        with open(file, 'r') as f:
-            for line in f:
-                if '<class' in line or 'error' in line or 'Error' in line or 'Traceback' in line:
-                    # connection errors shouldn't fail the integration tests
-                    if (
-                            'Connection error' in line
-                            or 'while downloading' in line
-                    ):
-                        continue
-                    return True
-
-    return False
-
-
-def check_for_text(txt, output_dir):
-    """function to parse slips_output file and check for a given string"""
-    slips_output = os.path.join(output_dir, 'slips_output.txt')
-    with open(slips_output, 'r') as f:
-        for line in f:
-            if txt in line:
-                return True
-    return False
 
 def run_slips(cmd):
     """runs slips and waits for it to end"""
     slips = subprocess.Popen(
         cmd,
-        # stdout=handle_,
-        # stderr=handle_,
         stdin=subprocess.PIPE,
         shell=True
     )
@@ -130,7 +59,7 @@ def test_pcap(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    db = connect_to_redis(redis_port)
+    db = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(db)
     assert profiles > expected_profiles
 
@@ -195,7 +124,7 @@ def test_binetflow(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -282,7 +211,7 @@ def test_zeek_dir(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -331,7 +260,7 @@ def test_zeek_conn_log(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -380,7 +309,7 @@ def test_suricata(
 
     assert has_errors(output_dir) is False
 
-    database = connect_to_redis(redis_port)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     #todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
     assert profiles > 10
@@ -416,7 +345,7 @@ def test_nfdump(
     # this function returns when slips is done
     run_slips(command)
 
-    database = connect_to_redis(redis_port)
+    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't

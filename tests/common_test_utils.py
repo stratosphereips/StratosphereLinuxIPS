@@ -5,6 +5,14 @@ import shutil
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 
+integration_tests_dir = 'output/integration_tests/'
+
+
+#create the integration tests dir
+if not os.path.exists(integration_tests_dir):
+    path = Path(integration_tests_dir)
+    path.mkdir(parents=True, exist_ok=True)
+
 def do_nothing(*args):
     """Used to override the print function because using the self.print causes broken pipes"""
     pass
@@ -27,7 +35,7 @@ def is_evidence_present(log_file, expected_evidence):
         # evidence not found in any line
         return False
 
-def create_output_dir(dirname, integration_tests_dir):
+def create_output_dir(dirname):
     """
     creates this output dir inside output/integration_tests/
     returns a full path to the created output dir
