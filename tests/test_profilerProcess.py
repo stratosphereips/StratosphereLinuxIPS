@@ -1,19 +1,11 @@
 """Unit test for slips_files/core/profilerProcess.py"""
 from slips_files.core.profilerProcess import ProfilerProcess
-from slips_files.core.database.redis_db.database import RedisDB
-
+from tests.common_test_utils import do_nothing, get_db_manager
 import subprocess
 import pytest
 import json
 
 
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-def create_db_instace(output_queue, port):
-    db = RedisDB(port, output_queue, True)
-    db.print = do_nothing
-    return db
 
 def create_profilerProcess_instance(output_queue, input_queue, database):
     """Create an instance of profilerProcess.py
@@ -24,7 +16,7 @@ def create_profilerProcess_instance(output_queue, input_queue, database):
         output_queue,
         1,
         0,
-        create_db_instace(output_queue, 6380)
+        get_db_manager(output_queue, 6380)
     )
 
     # override the self.print function to avoid broken pipes

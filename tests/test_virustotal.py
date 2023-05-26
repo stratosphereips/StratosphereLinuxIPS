@@ -4,13 +4,10 @@
 #####       if more than 4 calls to _api_query in a row winn cause unit tests to fail
 
 from ..modules.virustotal.virustotal import Module
+from tests.common_test_utils import do_nothing
 import pytest
 import requests
 import json
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
 
 
 def get_vt_key():

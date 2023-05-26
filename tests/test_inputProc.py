@@ -1,6 +1,6 @@
 import pytest
 from slips_files.core.inputProcess import InputProcess
-from slips_files.core.database.redis_db.database import RedisDB
+from tests.common_test_utils import do_nothing, get_db_manager
 import shutil
 import os
 
@@ -8,9 +8,6 @@ import os
 zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 redis_port = 6531
 
-def do_nothing(*arg):
-    """Used to override the print function because using the print causes broken pipes"""
-    pass
 
 def check_zeek_or_bro():
     """
@@ -25,10 +22,6 @@ def check_zeek_or_bro():
         return False
 
     return zeek_bro
-def create_db(output_queue, port):
-    db = RedisDB(port, output_queue, True)
-    db.print = do_nothing
-    return db
 
 def create_inputProcess_instance(
     output_queue, profiler_queue, input_information, input_type
@@ -47,7 +40,7 @@ def create_inputProcess_instance(
         check_zeek_or_bro(),
         zeek_tmp_dir,
         False,
-        create_db(output_queue, redis_port)
+        get_db_manager(output_queue, redis_port)
     )
 
     inputProcess.bro_timeout = 1

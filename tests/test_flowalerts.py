@@ -1,6 +1,7 @@
 """Unit test for modules/flowalerts/flowalerts.py"""
 from slips_files.core.flows.zeek import Conn
 from ..modules.flowalerts.flowalerts import Module
+from tests.common_test_utils import do_nothing
 import pytest
 import binascii
 import base64
@@ -19,11 +20,6 @@ dst_profileid = f'profile_{daddr}'
 
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode('utf-8')
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
 
 def create_flowalerts_instance(output_queue, database):
     """Create an instance of flowalerts.py

@@ -1,18 +1,16 @@
 """Unit test for modules/threat_intelligence/threat_intelligence.py"""
 from ..modules.threat_intelligence.threat_intelligence import Module
+from tests.common_test_utils import do_nothing
 import os
 import pytest
 
 
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
 
 
-def create_threatintel_instance(output_queue, database):
+def create_threatintel_instance(output_queue):
     """Create an instance of threatintel.py
     needed by every other test in this file"""
-    threatintel = Module(output_queue, database)
+    threatintel = Module(output_queue)
     # override the self.print function to avoid broken pipes
     threatintel.print = do_nothing
     return threatintel

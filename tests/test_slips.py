@@ -1,19 +1,8 @@
 """Unit test for ../slips.py"""
-from ..slips import *
+from tests.common_test_utils import do_nothing, IS_IN_A_DOCKER_CONTAINER
 from ..redis_manager import RedisManager
 from ..process_manager import ProcessManager
-import os
-import argparse
-import subprocess
-import time
-import pytest
-
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
-
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
+from ..slips import *
 
 
 # Main Class tests

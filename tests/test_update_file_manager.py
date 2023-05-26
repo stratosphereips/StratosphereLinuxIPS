@@ -1,10 +1,7 @@
 """Unit test for modules/update_manager/update_file_manager.py"""
 from ..modules.update_manager.update_file_manager import UpdateFileManager
+from tests.common_test_utils import do_nothing
 import json
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
 
 
 def create_update_manager_instance(output_queue, database):

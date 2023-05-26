@@ -1,5 +1,6 @@
 """Unit test for modules/http_analyzer/http_analyzer.py"""
 from ..modules.http_analyzer.http_analyzer import Module
+from tests.common_test_utils import do_nothing
 import random
 
 # dummy params used for testing
@@ -18,15 +19,11 @@ def get_random_MAC():
                              random.randint(0, 255),
                              random.randint(0, 255))
 
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
 
 def create_http_analyzer_instance(output_queue, database):
     """Create an instance of http_analyzer.py
     needed by every other test in this file"""
-    http_analyzer = Module(output_queue, database)
+    http_analyzer = Module(output_queue)
     # override the self.print function to avoid broken pipes
     http_analyzer.print = do_nothing
     return http_analyzer

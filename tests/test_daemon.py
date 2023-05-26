@@ -2,14 +2,7 @@
 """Unit test for ../dameon.py"""
 from ..slips import *
 import os
-
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
-
-
-def do_nothing(*args):
-    """Used to override the print function because using
-     the self.print causes broken pipes"""
-    pass
+from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER
 
 
 # def create_main_instance():

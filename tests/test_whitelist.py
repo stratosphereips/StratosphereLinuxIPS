@@ -1,17 +1,12 @@
 from slips_files.core.whitelist import Whitelist
+from tests.common_test_utils import do_nothing
 import pytest
 
 
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
-
-def create_whitelist_instance(output_queue, database):
+def create_whitelist_instance(output_queue):
     """Create an instance of whitelist.py
     needed by every other test in this file"""
-    whitelist = Whitelist(output_queue, database)
+    whitelist = Whitelist(output_queue)
     # override the self.print function to avoid broken pipes
     whitelist.print = do_nothing
     whitelist.whitelist_path = 'tests/test_whitelist.conf'

@@ -1,15 +1,9 @@
 """Unit test for ../arp.py"""
 from ..modules.arp.arp import Module
-
+from tests.common_test_utils import do_nothing
 # random values for testing
 profileid = 'profile_192.168.1.1'
 twid = 'timewindow1'
-
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
-
 
 def create_ARP_instance(output_queue, database):
     """Create an instance of arp.py

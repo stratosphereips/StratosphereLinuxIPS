@@ -1,11 +1,8 @@
 """Unit test for modules/ip_info/ip_info.py"""
+from tests.common_test_utils import do_nothing, get_db_manager
 from ..modules.ip_info.ip_info import Module
 from ..modules.ip_info.asn_info import ASN
 import maxminddb
-
-def do_nothing(*args):
-    """Used to override the print function because using the self.print causes broken pipes"""
-    pass
 
 
 def create_ip_info_instance(output_queue, database):

@@ -2,6 +2,7 @@
 this file needs sudoroot to run
 """
 from ..modules.blocking.blocking import Module
+from tests.common_test_utils import IS_IN_A_DOCKER_CONTAINER, do_nothing
 import platform
 import pytest
 import os
@@ -16,7 +17,6 @@ def has_netadmin_cap():
 
 
 IS_DEPENDENCY_IMAGE = os.environ.get('IS_DEPENDENCY_IMAGE', False)
-IS_IN_A_DOCKER_CONTAINER = os.environ.get('IS_IN_A_DOCKER_CONTAINER', False)
 # ignore all tests if not using linux
 linuxOS = pytest.mark.skipif(
     platform.system() != 'Linux',
@@ -36,12 +36,6 @@ has_net_admin_cap = pytest.mark.skipif(
     IS_IN_A_DOCKER_CONTAINER and not has_netadmin_cap() ,
     reason='Blocking is supported only with --cap-add=NET_ADMIN',
 )
-
-
-
-def do_nothing(*args):
-    """Used to override the print function because using the print causes broken pipes"""
-    pass
 
 
 def create_blocking_instance(output_queue, database):
