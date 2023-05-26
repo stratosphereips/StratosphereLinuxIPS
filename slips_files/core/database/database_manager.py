@@ -761,4 +761,6 @@ class DBManager:
         return self.sqlite.execute_query(*args, **kwargs)
 
     def close(self, *args, **kwargs):
-        return self.sqlite.close(*args, **kwargs)
+        self.rdb.r.close()
+        self.rdb.rcache.close()
+        self.sqlite.close(*args, **kwargs)

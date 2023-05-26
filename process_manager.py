@@ -371,7 +371,7 @@ class ProcessManager:
             # if delete_zeek_files is set to yes in slips.conf,
             # delete zeek_files/ dir
             self.main.delete_zeek_files()
-            self.main.sqlite.close()
+            self.main.db.close()
 
             if self.main.mode == 'daemonized':
                 # if slips finished normally without stopping the daemon with -S
