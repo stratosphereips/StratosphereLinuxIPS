@@ -1,21 +1,24 @@
+# from ..slips import Main
+import slips
 from modules.update_manager.update_file_manager import UpdateFileManager
 import modules.leak_detector.leak_detector as leak_detector_module
+from slips_files.core.database.database_manager import DBManager
 from slips_files.core.profilerProcess import ProfilerProcess
 import modules.threat_intelligence.threat_intelligence as ti
 import modules.flowalerts.flowalerts as flowalerts_module
 from slips_files.core.inputProcess import InputProcess
 import modules.blocking.blocking as blocking_module
 import modules.http_analyzer.http_analyzer as http
+import modules.ip_info.ip_info as ip_info_module
 from slips_files.common.slips_utils import utils
 from slips_files.core.whitelist import Whitelist
 from tests.common_test_utils import do_nothing
 import modules.virustotal.virustotal as vt
 from process_manager import ProcessManager
 from redis_manager import RedisManager
-import modules.ip_info.ip_info as ip_info
 import modules.ip_info.asn_info as asn
+from multiprocessing import Queue
 import modules.arp.arp as arp
-from slips import Main
 import shutil
 import os
 
@@ -40,24 +43,33 @@ class ModuleFactory:
     def __init__(self):
         # used to create a different port for inputproc tests
         self.redis_port = 6531
+        self.output_queue = Queue()
+        self.profiler_queue = Queue()
+        self.input_queue = Queue()
+
+    def create_db_manager_obj(self, port, output_dir='output/'):
+        db = DBManager(output_dir, self.output_queue, port)
+        db.print = do_nothing
+        return db
+
 
     def create_main_obj(self, input_information):
         """returns an instance of Main() class in slips.py"""
-        main = Main(testing=True)
+        main = slips.Main(testing=True)
         main.input_information = input_information
         main.input_type = 'pcap'
         main.line_type = False
         return main
 
 
-    def create_http_analyzer_obj(self, output_queue):
-        http_analyzer = http.Module(output_queue)
+    def create_http_analyzer_obj(self):
+        http_analyzer = http.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         http_analyzer.print = do_nothing
         return http_analyzer
 
-    def create_virustotal_obj(self, output_queue):
-        virustotal = vt.Module(output_queue)
+    def create_virustotal_obj(self):
+        virustotal = vt.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         virustotal.print = do_nothing
         virustotal.__read_configuration = read_configuration
@@ -66,33 +78,34 @@ class ModuleFactory:
         )
         return virustotal
 
-    def create_ARP_obj(self, output_queue):
-        ARP = arp.Module(output_queue)
+    def create_arp_obj(self):
+        ARP = arp.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         ARP.print = do_nothing
         return ARP
-    @classmethod
-    def create_blocking_obj( output_queue):
-        blocking = blocking_module.Module(output_queue)
+
+    def create_blocking_obj(self):
+        blocking = blocking_module.Module(self.output_queue)
         # override the print function to avoid broken pipes
         blocking.print = do_nothing
         return blocking
 
-    def create_flowalerts_obj(output_queue):
-        flowalerts = flowalerts_module.Module(output_queue)
+    def create_flowalerts_obj(self):
+        flowalerts = flowalerts_module.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         flowalerts.print = do_nothing
         return flowalerts
+
     def create_inputProcess_obj(
-        self, output_queue, profiler_queue, input_information, input_type
+        self, input_information, input_type
     ):
         self.redis_port +=1
 
         zeek_tmp_dir = os.path.join(os.getcwd(), 'zeek_dir_for_testing' )
 
         inputProcess = InputProcess(
-            output_queue,
-            profiler_queue,
+            self.output_queue,
+            self.profiler_queue,
             input_type,
             input_information,
             None,
@@ -110,23 +123,22 @@ class ModuleFactory:
         return inputProcess
 
 
-    def create_ip_info_obj(output_queue):
+    def create_ip_info_obj(self):
+        ip_info = ip_info_module.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         ip_info.print = do_nothing
         return ip_info
 
-    def create_ASN_Info_obj(self):
+    def create_asn_obj(self):
         return asn.ASN()
 
-    @staticmethod
-    def create_leak_detector_obj(output_queue):
+    def create_leak_detector_obj(self):
         # this file will be used for storing the module output
         # and deleted when the tests are done
         test_pcap = 'dataset/test7-malicious.pcap'
         yara_rules_path = 'tests/yara_rules_for_testing/rules/'
         compiled_yara_rules_path = 'tests/yara_rules_for_testing/compiled/'
-        compiled_test_rule = f'{compiled_yara_rules_path}test_rule.yara_compiled'
-        leak_detector = leak_detector_module.Module(output_queue)
+        leak_detector = leak_detector_module.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         leak_detector.print = do_nothing
         # this is the path containing 1 yara rule for testing, it matches every pcap
@@ -136,12 +148,10 @@ class ModuleFactory:
         return leak_detector
 
 
-    @staticmethod
-    def create_profilerProcess_obj(self, output_queue, input_queue):
-
+    def create_profilerProcess_obj(self):
         profilerProcess = ProfilerProcess(
-            input_queue,
-            output_queue,
+            self.input_queue,
+            self.output_queue,
             1, 0,
         )
 
@@ -150,34 +160,29 @@ class ModuleFactory:
         profilerProcess.whitelist_path = 'tests/test_whitelist.conf'
         return profilerProcess
 
-    @staticmethod
-    def create_redis_manager_obj(main):
+    def create_redis_manager_obj(self, main):
         return RedisManager(main)
 
     def create_process_manager_obj(self):
         return ProcessManager(self.create_main_obj(''))
 
-    @staticmethod
-    def create_utils_obj():
+    def create_utils_obj(self):
         return utils
 
-    @staticmethod
-    def create_threatintel_obj(output_queue):
-        threatintel = ti.Module(output_queue)
+    def create_threatintel_obj(self):
+        threatintel = ti.Module(self.output_queue)
         # override the self.print function to avoid broken pipes
         threatintel.print = do_nothing
         return threatintel
 
-    @staticmethod
-    def create_update_manager_obj(output_queue):
-        update_manager = UpdateFileManager(output_queue)
+    def create_update_manager_obj(self):
+        update_manager = UpdateFileManager(self.output_queue)
         # override the self.print function to avoid broken pipes
         update_manager.print = do_nothing
         return update_manager
 
-    @staticmethod
-    def create_whitelist_obj(output_queue):
-        whitelist = Whitelist(output_queue)
+    def create_whitelist_obj(self):
+        whitelist = Whitelist(self.output_queue)
         # override the self.print function to avoid broken pipes
         whitelist.print = do_nothing
         whitelist.whitelist_path = 'tests/test_whitelist.conf'
