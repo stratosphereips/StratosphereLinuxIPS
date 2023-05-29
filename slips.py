@@ -315,7 +315,11 @@ class Main:
         )
         # Get command output
         cmd_result = cmd_result.stdout.decode('utf-8')
-        if 'pcap capture file' in cmd_result and os.path.isfile(given_path):
+        if (
+                ('pcap capture file' in cmd_result
+                or 'pcapng capture file' in cmd_result)
+                and os.path.isfile(given_path)
+        ):
             input_type = 'pcap'
         elif (
                 ('dBase' in cmd_result
