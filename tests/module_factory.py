@@ -1,5 +1,4 @@
-# from ..slips import Main
-import slips
+from slips import Main
 from modules.update_manager.update_file_manager import UpdateFileManager
 import modules.leak_detector.leak_detector as leak_detector_module
 from slips_files.core.database.database_manager import DBManager
@@ -25,6 +24,7 @@ import os
 
 def read_configuration():
     return
+
 def check_zeek_or_bro():
     """
     Check if we have zeek or bro
@@ -49,13 +49,14 @@ class ModuleFactory:
 
     def create_db_manager_obj(self, port, output_dir='output/'):
         db = DBManager(output_dir, self.output_queue, port)
+        db.r = db.rdb.r
         db.print = do_nothing
         return db
 
 
     def create_main_obj(self, input_information):
         """returns an instance of Main() class in slips.py"""
-        main = slips.Main(testing=True)
+        main = Main(testing=True)
         main.input_information = input_information
         main.input_type = 'pcap'
         main.line_type = False

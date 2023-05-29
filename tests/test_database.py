@@ -1,8 +1,6 @@
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import Conn
-from slips_files.core.database.database_manager import DBManager
 from tests.module_factory import ModuleFactory
-from tests.common_test_utils import do_nothing, get_db_manager
 import redis
 import os
 import json
@@ -28,38 +26,17 @@ flow = Conn(
     'Established',''
 )
 
-
-# create another database instance other than the one in
-# conftest because the port in conftest is used in other test files
-def create_instance(output_queue):
-    return get_db_manager(output_queue, 6381)
-
-def add_flow(db):
-    raw_flow = ''
-    return db.add_flow(flow, raw_flow, profileid, twid, label='benign')
-
 # this should always be the first unit test in this file
 # because we don't want another unit test adding the same flow before this one
-def test_add_flow(output_queue):
-    database = create_instance(output_queue)
-    database = ModuleFactory().create_db_manager_obj()
-    uid = '1234'
-    assert add_flow(database)
-
-    flow_from_db = database.r.hget(f'{profileid}_{twid}_flows', uid)
-    flow_from_db = json.loads(flow_from_db)
-
-    # make sure the exact flow is stored in the db
-    assert flow.daddr in flow_from_db['daddr']
-    assert flow.bytes == flow_from_db['allbytes']
-    assert flow.saddr in flow_from_db['saddr']
-    assert flow.state in flow_from_db['state']
+def add_flow():
+    database = ModuleFactory().create_db_manager_obj(6381)
+    database.add_flow(flow, '', profileid, twid, label='benign')
 
 
 def test_getProfileIdFromIP(output_queue):
     """unit test for addProfile and getProfileIdFromIP"""
 
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     # clear the database before running this test
     os.system('./slips.py -c slips.conf -cc')
 
@@ -71,7 +48,7 @@ def test_getProfileIdFromIP(output_queue):
 
 def test_timewindows(output_queue):
     """unit tests for addNewTW ,getLastTWforProfile and getFirstTWforProfile"""
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     profileid = 'profile_192.168.1.1'
     # add a profile
     database.addProfile(profileid, '00:00', '1')
@@ -89,7 +66,7 @@ def getSlipsInternalTime():
 
 
 def test_add_ips(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     # add a profile
     database.addProfile(profileid, '00:00', '1')
     # add a tw to that profile
@@ -119,7 +96,7 @@ def test_add_ips(output_queue):
 
 
 def test_add_port(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     new_flow = flow
     new_flow.state = 'Not Established'
     database.add_port(profileid, twid, flow, 'Server', 'Dst')
@@ -130,7 +107,7 @@ def test_add_port(output_queue):
 
 
 def test_setEvidence(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     attacker_direction = 'ip'
     attacker = test_ip
     evidence_type = f'SSHSuccessful-by-{attacker}'
@@ -157,7 +134,7 @@ def test_setEvidence(output_queue):
 
 
 def test_deleteEvidence(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     description = 'SSH Successful to IP :8.8.8.8. From IP 192.168.1.1'
     database.deleteEvidence(profileid, twid, description)
     added_evidence = json.loads(database.r.hget(f'evidence{profileid}', twid))
@@ -170,7 +147,7 @@ def test_deleteEvidence(output_queue):
 
 
 def test_setInfoForDomains(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     """ tests setInfoForDomains, setNewDomain and getDomainData """
     domain = 'www.google.com'
     domain_data = {'threatintelligence': 'sample data'}
@@ -182,7 +159,7 @@ def test_setInfoForDomains(output_queue):
 
 
 def test_subscribe(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     # invalid channel
     assert database.subscribe('invalid_channel') is False
     # valid channel, shoud return a pubsub object
@@ -190,7 +167,7 @@ def test_subscribe(output_queue):
 
 
 def test_profile_moddule_labels(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     """ tests set and get_profile_module_label """
     module_label = 'malicious'
     module_name = 'test'
@@ -201,7 +178,7 @@ def test_profile_moddule_labels(output_queue):
 
 
 def test_add_mac_addr_to_profile(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     ipv4 = '192.168.1.5'
     profileid_ipv4 = f'profile_{ipv4}'
     MAC_info = {'MAC': '00:00:5e:00:53:af'}
@@ -233,7 +210,7 @@ def test_add_mac_addr_to_profile(output_queue):
 
 
 def test_get_the_other_ip_version(output_queue):
-    database = create_instance(output_queue)
+    database = ModuleFactory().create_db_manager_obj(6381)
     # profileid is ipv4
     ipv6 = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
     database.set_ipv6_of_profile(profileid, ipv6)

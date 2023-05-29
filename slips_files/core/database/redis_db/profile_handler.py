@@ -745,6 +745,8 @@ class ProfileHandler():
         """
         Return a list of all the flows in this profileid and twid
         """
+        #TODO move to sqlite
+
         if data := self.r.hgetall(
             profileid + self.separator + twid + self.separator + 'flows'
         ):

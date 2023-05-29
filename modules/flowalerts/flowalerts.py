@@ -180,8 +180,7 @@ class Module(Module, multiprocessing.Process):
             self.helper.set_evidence_long_connection(
                 daddr, dur, profileid, twid, uid, timestamp, ip_state='dstip'
             )
-
-
+            return True
 
     def is_p2p(self, dport, proto, daddr):
         """

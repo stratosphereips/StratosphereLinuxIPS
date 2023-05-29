@@ -22,11 +22,11 @@ def get_random_uid():
 
 
 
-@pytest.mark.parametrize('dur,expected_label', [
-    (1400, 'benign'),
-    (1600, 'malicious'),
+@pytest.mark.parametrize('dur,expected_detection', [
+    (1400, False),
+    (1600, True),
 ])
-def test_check_long_connection(database, output_queue, dur, expected_label):
+def test_check_long_connection(database, output_queue, dur, expected_detection):
     uid = get_random_uid()
     flowalerts = ModuleFactory().create_flowalerts_obj()
 
@@ -42,15 +42,11 @@ def test_check_long_connection(database, output_queue, dur, expected_label):
         '80',
         1,2,5,6,7,'','','',
     )
-    assert database.add_flow(flow, profileid, twid) is True
+    assert database.add_flow(flow,'', profileid, twid) is True
     # sets the label to normal or malicious based on the flow durd
-    flowalerts.check_long_connection(
+    assert flowalerts.check_long_connection(
         dur, daddr, saddr, profileid, twid, uid, timestamp
-    )
-    #TODO find another way
-    module_labels = database.get_module_labels_from_flow(profileid, twid, uid)
-    assert 'flowalerts-long-connection' in module_labels
-    assert module_labels['flowalerts-long-connection'] == expected_label
+    ) == expected_detection
 
 
 

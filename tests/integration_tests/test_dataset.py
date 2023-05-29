@@ -7,8 +7,8 @@ from tests.common_test_utils import (
         is_evidence_present,
         create_output_dir,
         has_errors,
-        get_db_manager,
 )
+from tests.module_factory import ModuleFactory
 import pytest
 from ...slips import *
 import shutil
@@ -51,7 +51,8 @@ def test_pcap(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    db = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    db = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
+    
     profiles = get_total_profiles(db)
     assert profiles > expected_profiles
 
@@ -116,7 +117,7 @@ def test_binetflow(
 
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -203,7 +204,7 @@ def test_zeek_dir(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -252,7 +253,7 @@ def test_zeek_conn_log(
     run_slips(command)
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert profiles > expected_profiles
 
@@ -301,7 +302,7 @@ def test_suricata(
 
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     #todo the profiles should be way more than 10, maybe 76, but it varies each run, we need to sy why
     assert profiles > 10
@@ -337,7 +338,7 @@ def test_nfdump(
     # this function returns when slips is done
     run_slips(command)
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = get_total_profiles(database)
     assert has_errors(output_dir) is False
     # make sure slips generated profiles for this file (can't

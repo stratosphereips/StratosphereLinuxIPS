@@ -7,7 +7,6 @@ from tests.common_test_utils import (
         create_output_dir,
         has_errors,
         check_for_text,
-        get_db_manager
 )
 
 import pytest
@@ -59,7 +58,7 @@ def test_conf_file(
 
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
     profiles = int(database.getProfilesLen())
     # expected_profiles is more than 50 because we're using direction = all
     assert profiles > expected_profiles
@@ -128,7 +127,7 @@ def test_conf_file2(
 
     assert has_errors(output_dir) is False
 
-    database = get_db_manager(output_queue, redis_port, output_dir=output_dir)
+    database = ModuleFactory().create_db_manager_obj(redis_port, output_dir=output_dir)
 
     # test 1 homenet ip
     # the only profile we should have is the one in home_network parameter

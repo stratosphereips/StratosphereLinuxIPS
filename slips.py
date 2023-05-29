@@ -72,9 +72,9 @@ class Main:
         self.checker = Checker(self)
         self.conf = ConfigParser()
         self.version = self.get_slips_version()
-        self.args = self.conf.get_args()
         # in testing mode we manually set the following params
         if not testing:
+            self.args = self.conf.get_args()
             self.pid = os.getpid()
             self.checker.check_given_flags()
             if not self.args.stopdaemon:
